@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一次関数ゲーム</title>
+<style>
+  :root { --accent: #6c63ff; }
+  body.lv1 { --accent: #6c63ff; }
+  body.lv2 { --accent: #ff7a3d; }
+  body.lv3 { --accent: #2ecc71; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Hiragino Sans", "Meiryo", sans-serif;
+    background: #1a1a2e;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 16px; gap: 12px;
+  }
+  h1 { color: #e0e0ff; font-size: 22px; letter-spacing: 2px; }
+  .layout { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+  #stage { background: #f0f6ff; border: 3px solid var(--accent); border-radius: 10px; display: block; }
+  .panel {
+    background: #16213e; border: 2px solid var(--accent); border-radius: 14px;
+    padding: 18px; width: 240px; color: #e0e0ff; display: flex; flex-direction: column; gap: 10px;
+  }
+  .info-row { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
+  .info-val { font-size: 24px; font-weight: bold; color: #ffb84d; }
+  #probBar { height: 10px; background: #333; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+  #probBarFill { height: 100%; background: var(--accent); border-radius: 6px; transition: width 0.1s linear; }
+  .sep { border: none; border-top: 1px solid #334; }
+  .fixed-slope { background: #3a2a1a; border: 2px solid #ffb84d; border-radius: 10px; padding: 8px; text-align: center; font-size: 15px; color: #ffb84d; font-weight: bold; }
+  .fixed-slope span { font-size: 22px; color: #fff; }
+  .formula-box {
+    background: #0f3460; border-radius: 10px; padding: 10px; text-align: center;
+    font-size: 20px; font-weight: bold; color: #fff; letter-spacing: 1px; min-height: 44px;
+  }
+  .grp-label { font-size: 13px; font-weight: bold; color: #aaa; margin: 2px 0; }
+  .choices { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
+  .choice-btn {
+    padding: 9px 4px; font-size: 16px; font-weight: bold; border: 2px solid var(--accent);
+    border-radius: 9px; background: #0f3460; color: #e0e0ff; cursor: pointer;
+    transition: background 0.15s, transform 0.1s; text-align: center;
+  }
+  .choice-btn:hover:not(:disabled) { background: var(--accent); transform: scale(1.05); }
+  .choice-btn.selected { background: var(--accent); border-color: #ffd700; color: #fff; }
+  .choice-btn.correct  { background: #27ae60 !important; border-color: #ffd700 !important; color:#fff; }
+  .choice-btn.wrong    { background: #c0392b !important; border-color: #e74c3c !important; color:#fff; }
+  .choice-btn:disabled { cursor: default; opacity: 0.85; }
+  .shoot-btn {
+    width: 100%; padding: 13px; font-size: 18px; font-weight: bold; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; cursor: pointer; transition: opacity 0.2s; letter-spacing: 1px;
+  }
+  .shoot-btn:hover:not(:disabled) { opacity: 0.85; }
+  .shoot-btn:disabled { opacity: 0.35; cursor: default; }
+  #message { text-align: center; font-size: 19px; font-weight: bold; min-height: 26px; }
+  .input-row { display: flex; gap: 6px; align-items: center; }
+  .input-row input {
+    flex: 1; padding: 8px 10px; font-size: 18px; border: 2px solid var(--accent); border-radius: 8px;
+    background: #0f3460; color: #fff; text-align: center; outline: none;
+  }
+  .input-row input:focus { border-color: #ffd700; }
+  .hint { font-size: 11px; color: #888; text-align: center; margin-top: 4px; }
+  .mode-toggle { display: flex; gap: 6px; }
+  .mode-btn {
+    flex: 1; padding: 6px; font-size: 12px; font-weight: bold; border: 2px solid var(--accent);
+    border-radius: 8px; background: #0f3460; color: #aaa; cursor: pointer;
+  }
+  .mode-btn.active { background: var(--accent); color: #fff; }
+  .menu-link { font-size: 12px; color: #889; text-align: center; cursor: pointer; text-decoration: underline; }
+
+  /* オーバーレイ共通 */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.82); display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
+  .overlay-box { background: #16213e; border: 3px solid #6c63ff; border-radius: 18px; padding: 30px 32px; text-align: center; color: #e0e0ff; max-width: 420px; width: 100%; }
+  .overlay-box h2 { font-size: 30px; margin-bottom: 6px; color: #fff; }
+  .overlay-box .subtitle { font-size: 14px; color: #b8b8e0; margin-bottom: 22px; line-height: 1.6; }
+
+  .section-title { font-size: 13px; color: #888; text-align: left; margin: 0 0 8px 2px; font-weight: bold; letter-spacing: 1px; }
+
+  /* レベル選択カード */
+  .level-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .level-card {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
+    border: 2px solid #334; background: #0f1a33; cursor: pointer; transition: all 0.15s; text-align: left;
+  }
+  .level-card:hover { border-color: #667; }
+  .level-card.selected { border-color: #ffd700; background: #1a2a4a; }
+  .level-icon { font-size: 30px; width: 44px; text-align: center; }
+  .level-info { flex: 1; }
+  .level-name { font-size: 17px; font-weight: bold; color: #fff; }
+  .level-desc { font-size: 12px; color: #99a; margin-top: 2px; line-height: 1.4; }
+  .level-badge { font-size: 12px; font-weight: bold; padding: 3px 9px; border-radius: 6px; color: #fff; }
+  .b1 { background: #6c63ff; } .b2 { background: #ff7a3d; } .b3 { background: #2ecc71; }
+
+  /* タイム選択 */
+  .time-list { display: flex; gap: 10px; margin-bottom: 24px; }
+  .time-btn {
+    flex: 1; padding: 12px 6px; border-radius: 10px; border: 2px solid #334; background: #0f1a33;
+    color: #ccd; font-size: 17px; font-weight: bold; cursor: pointer; transition: all 0.15s;
+  }
+  .time-btn:hover { border-color: #667; }
+  .time-btn.selected { border-color: #ffd700; background: #1a2a4a; color: #fff; }
+  .time-btn small { display: block; font-size: 11px; color: #99a; font-weight: normal; margin-top: 2px; }
+
+  .start-btn {
+    width: 100%; padding: 16px; font-size: 20px; font-weight: bold; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #6c63ff, #ff7a3d); color: #fff; cursor: pointer; letter-spacing: 2px;
+  }
+  .start-btn:hover { opacity: 0.9; }
+
+  .big-score { font-size: 56px; font-weight: bold; color: #fff; margin: 10px 0 4px; }
+  .big-score small { font-size: 22px; color: #aaa; }
+  .result-btns { display: flex; gap: 10px; margin-top: 18px; }
+  .result-btns button {
+    flex: 1; padding: 14px; font-size: 16px; font-weight: bold; border: none; border-radius: 10px; cursor: pointer; color: #fff;
+  }
+  .btn-again { background: linear-gradient(135deg, #6c63ff, #ff7a3d); }
+  .btn-menu  { background: #445; }
+  .result-btns button:hover { opacity: 0.88; }
+</style>
+</head>
+<body class="lv1">
+
+<h1>🎯 一次関数ゲーム</h1>
+
+<div class="layout">
+  <canvas id="stage" width="480" height="480"></canvas>
+
+  <div class="panel">
+    <div>
+      <div class="info-row">
+        <span>⏱ この問題</span>
+        <span class="info-val" id="timeDisp">10</span>
+      </div>
+      <div id="probBar"><div id="probBarFill" style="width:100%"></div></div>
+    </div>
+
+    <div class="info-row"><span>問題</span><span><b id="probNum">1</b> / 10</span></div>
+    <div class="info-row"><span>💯 得点</span><span class="info-val" id="score">0</span></div>
+
+    <hr class="sep">
+
+    <div class="fixed-slope" id="fixedSlopeBox" style="display:none;">傾き a = <span id="fixedA"></span>（固定）</div>
+    <div class="formula-box" id="formulaBox">y = ?x</div>
+
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="modeChoice" onclick="setMode('choice')">選ぶ</button>
+      <button class="mode-btn"        id="modeInput"  onclick="setMode('input')">キーボード</button>
+    </div>
+
+    <!-- 選択式 -->
+    <div id="choiceArea">
+      <div id="rowSingle" style="display:none;"><div id="singleChoices" class="choices"></div></div>
+      <div id="rowA" style="display:none;"><div class="grp-label">傾き a</div><div id="aChoices" class="choices"></div></div>
+      <div id="rowB" style="display:none;"><div class="grp-label">切片 b</div><div id="bChoices" class="choices"></div></div>
+    </div>
+
+    <!-- キーボード式 -->
+    <div id="inputArea" style="display:none;">
+      <div class="input-row" id="inRowSingle" style="display:none; margin-bottom:8px;">
+        <span id="inSingleLabel" style="font-size:18px; width:30px;">a =</span>
+        <input type="text" id="inSingle" placeholder="">
+      </div>
+      <div class="input-row" id="inRowA" style="display:none; margin-bottom:8px;">
+        <span style="font-size:18px; width:30px;">a =</span><input type="text" id="inA" placeholder="傾き">
+      </div>
+      <div class="input-row" id="inRowB" style="display:none;">
+        <span style="font-size:18px; width:30px;">b =</span><input type="text" id="inB" placeholder="切片">
+      </div>
+      <div class="hint" id="inHint"></div>
+    </div>
+
+    <button class="shoot-btn" id="shootBtn" disabled>🚀 発射！</button>
+    <div id="message"></div>
+    <div class="menu-link" onclick="showMenu()">≡ メニューに戻る</div>
+  </div>
+</div>
+
+<!-- スタート画面 -->
+<div class="overlay" id="menu">
+  <div class="overlay-box">
+    <h2>🎯 一次関数ゲーム</h2>
+    <div class="subtitle">かたむきや切片を決めて、円盤を撃ち落とそう！</div>
+
+    <div class="section-title">レベルをえらぶ</div>
+    <div class="level-list">
+      <div class="level-card selected" data-level="1" onclick="pickLevel(1)">
+        <div class="level-icon">📈</div>
+        <div class="level-info">
+          <div class="level-name">レベル1 <span class="level-badge b1">かたむき</span></div>
+          <div class="level-desc">かたむき a をあてる（y = ax）</div>
+        </div>
+      </div>
+      <div class="level-card" data-level="2" onclick="pickLevel(2)">
+        <div class="level-icon">📊</div>
+        <div class="level-info">
+          <div class="level-name">レベル2 <span class="level-badge b2">切片</span></div>
+          <div class="level-desc">傾き固定・切片 b をあてる（y = ax + b）</div>
+        </div>
+      </div>
+      <div class="level-card" data-level="3" onclick="pickLevel(3)">
+        <div class="level-icon">🎯</div>
+        <div class="level-info">
+          <div class="level-name">レベル3 <span class="level-badge b3">2個同時</span></div>
+          <div class="level-desc">傾き a と切片 b の両方・円盤2個を撃墜！</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">1問のタイムをえらぶ</div>
+    <div class="time-list">
+      <button class="time-btn selected" data-time="10" onclick="pickTime(10)">10秒<small>むずかしい</small></button>
+      <button class="time-btn" data-time="20" onclick="pickTime(20)">20秒<small>ふつう</small></button>
+      <button class="time-btn" data-time="30" onclick="pickTime(30)">30秒<small>やさしい</small></button>
+    </div>
+
+    <button class="start-btn" onclick="startGame()">▶ スタート</button>
+  </div>
+</div>
+
+<!-- 結果画面 -->
+<div class="overlay" id="result" style="display:none;">
+  <div class="overlay-box" id="resultBox"></div>
+</div>
+
+<script>
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const SCALE = 22;
+const cx = W / 2, cy = H / 2;
+function toSX(x){ return cx + x * SCALE; }
+function toSY(y){ return cy - y * SCALE; }
+
+const TOTAL = 10;
+const HIT_DIST = 0.45;
+const ACCENTS = { 1:'#6c63ff', 2:'#ff7a3d', 3:'#2ecc71' };
+
+// 問題データ
+const INT_SLOPES  = [-4, -3, -2, -1, 1, 2, 3, 4];
+const FRAC_SLOPES = [ {num:1,den:2},{num:1,den:3},{num:2,den:3},{num:-1,den:2},{num:-1,den:3},{num:-2,den:3} ];
+const FIX_SLOPES  = [-2, -1, 1, 2];
+const FIX_FRAC    = [ {num:1,den:2},{num:1,den:3},{num:2,den:3},{num:-1,den:2} ];
+const INTERCEPTS  = [-5,-4,-3,-2,-1,0,1,2,3,4,5];
+const A_POOL      = [-3,-2,-1,1,2,3];
+const B_POOL      = [-5,-4,-3,-2,-1,0,1,2,3,4,5];
+
+// メニュー選択
+let selLevel = 1;
+let selTime = 10;
+
+// ゲーム状態
+let level = 1;
+let PROBLEM_TIME = 10;
+let state = 'menu';
+let problemIndex = 0, score = 0;
+let problemTimer = 10;
+let lastTime = null, rafId = null;
+let inputMode = 'choice';
+
+// 問題ごと
+let target = null, targets = [];
+let correctSlope = null, fixedSlope = null, correctIntercept = 0, correctA = 0, correctB = 0;
+let slopePool = [];
+let selSlope = null, selIntercept = null, selA = null, selB = null;
+let beam = null, shotFired = false, resolving = false;
+
+// 要素
+const shootBtn    = document.getElementById('shootBtn');
+const messageEl   = document.getElementById('message');
+const scoreEl     = document.getElementById('score');
+const probNumEl   = document.getElementById('probNum');
+const timeDispEl  = document.getElementById('timeDisp');
+const probFill    = document.getElementById('probBarFill');
+const fixedSlopeBox = document.getElementById('fixedSlopeBox');
+const fixedAEl    = document.getElementById('fixedA');
+const formulaBox  = document.getElementById('formulaBox');
+const choiceArea  = document.getElementById('choiceArea');
+const inputArea   = document.getElementById('inputArea');
+const rowSingle   = document.getElementById('rowSingle');
+const rowA        = document.getElementById('rowA');
+const rowB        = document.getElementById('rowB');
+const singleChoices = document.getElementById('singleChoices');
+const aChoices    = document.getElementById('aChoices');
+const bChoices    = document.getElementById('bChoices');
+const inRowSingle = document.getElementById('inRowSingle');
+const inRowA      = document.getElementById('inRowA');
+const inRowB      = document.getElementById('inRowB');
+const inSingle    = document.getElementById('inSingle');
+const inSingleLabel = document.getElementById('inSingleLabel');
+const inA         = document.getElementById('inA');
+const inB         = document.getElementById('inB');
+const inHint      = document.getElementById('inHint');
+const menuEl      = document.getElementById('menu');
+const resultEl    = document.getElementById('result');
+
+// ===== メニュー操作 =====
+function pickLevel(l){
+  selLevel = l;
+  document.querySelectorAll('.level-card').forEach(c => c.classList.toggle('selected', +c.dataset.level === l));
+}
+function pickTime(t){
+  selTime = t;
+  document.querySelectorAll('.time-btn').forEach(b => b.classList.toggle('selected', +b.dataset.time === t));
+}
+function showMenu(){
+  state = 'menu';
+  if(rafId) cancelAnimationFrame(rafId);
+  resultEl.style.display = 'none';
+  menuEl.style.display = 'flex';
+  drawGrid();
+}
+
+// ===== 便利関数 =====
+function makeInt(v){ return {val:v, label:String(v)}; }
+function makeFrac(f){ return {val:f.num/f.den, label:`${f.num}/${f.den}`, den:f.den, num:f.num}; }
+function parseFrac(str){
+  str=(str||'').trim(); if(!str) return null;
+  if(str.includes('/')){ const p=str.split('/'); const n=parseFloat(p[0]),d=parseFloat(p[1]); return (!isNaN(n)&&!isNaN(d)&&d!==0)?n/d:null; }
+  const v=parseFloat(str); return isNaN(v)?null:v;
+}
+
+function setMode(mode){
+  inputMode = mode;
+  document.getElementById('modeChoice').classList.toggle('active', mode==='choice');
+  document.getElementById('modeInput').classList.toggle('active', mode==='input');
+  selSlope=null; selIntercept=null; selA=null; selB=null;
+  buildInputUI();
+  updateFormula();
+  updateShootBtn();
+}
+
+// ===== 式・発射可否 =====
+function updateFormula(){
+  if(level===1){
+    formulaBox.textContent = 'y = ' + (selSlope ? selSlope.label : '?') + ' × x';
+  } else if(level===2){
+    formulaBox.textContent = eqStr(fixedSlope.label, selIntercept);
+  } else {
+    const a = selA===null ? '?' : selA;
+    let bt = selB===null ? '+ ?' : (selB>=0 ? '+ '+selB : '− '+Math.abs(selB));
+    formulaBox.textContent = `y = ${a}x ${bt}`;
+  }
+}
+function eqStr(aLabel, b){
+  if(b === null || b === undefined) return `y = ${aLabel}x + ?`;
+  if(b === 0) return `y = ${aLabel}x`;
+  return `y = ${aLabel}x ${b>0?'+':'−'} ${Math.abs(b)}`;
+}
+function updateShootBtn(){
+  let ready;
+  if(level===1) ready = selSlope !== null;
+  else if(level===2) ready = selIntercept !== null;
+  else ready = (selA !== null && selB !== null);
+  shootBtn.disabled = shotFired || !ready;
+}
+
+// ===== 問題生成 =====
+function newProblem(){
+  resolving=false; shotFired=false; beam=null;
+  problemTimer = PROBLEM_TIME;
+  probNumEl.textContent = problemIndex + 1;
+  selSlope=null; selIntercept=null; selA=null; selB=null;
+  messageEl.textContent = '';
+  const isFrac = problemIndex >= 8;
+
+  if(level===1){
+    if(isFrac){
+      correctSlope = makeFrac(FRAC_SLOPES[Math.floor(Math.random()*FRAC_SLOPES.length)]);
+      slopePool = FRAC_SLOPES.map(makeFrac);
+      const k = Math.random()<0.5 ? -2 : 2;
+      target = { x: correctSlope.den*k, y: correctSlope.num*k, hit:false };
+    } else {
+      const v = INT_SLOPES[Math.floor(Math.random()*INT_SLOPES.length)];
+      correctSlope = makeInt(v);
+      slopePool = INT_SLOPES.map(makeInt);
+      let tx, ty;
+      do { tx = Math.floor(Math.random()*9)-4; ty = v*tx; } while(tx===0 || Math.abs(ty)>9);
+      target = { x:tx, y:ty, hit:false };
+    }
+  } else if(level===2){
+    fixedSlope = isFrac
+      ? makeFrac(FIX_FRAC[Math.floor(Math.random()*FIX_FRAC.length)])
+      : makeInt(FIX_SLOPES[Math.floor(Math.random()*FIX_SLOPES.length)]);
+    correctIntercept = INTERCEPTS[Math.floor(Math.random()*INTERCEPTS.length)];
+    let tx, ty, g=0;
+    do {
+      if(fixedSlope.den){ const k=[-2,-1,1,2][Math.floor(Math.random()*4)]; tx = fixedSlope.den*k; }
+      else { tx = Math.floor(Math.random()*9)-4; if(tx===0) tx=3; }
+      ty = Math.round(fixedSlope.val*tx + correctIntercept); g++;
+    } while((Math.abs(ty)>9 || Math.abs(tx)>10) && g<60);
+    target = { x:tx, y:ty, hit:false };
+  } else {
+    let xs;
+    do {
+      correctA = A_POOL[Math.floor(Math.random()*A_POOL.length)];
+      correctB = B_POOL[Math.floor(Math.random()*B_POOL.length)];
+      xs = [-4,-3,-2,-1,1,2,3,4].filter(x => Math.abs(correctA*x+correctB) <= 9);
+    } while(xs.length < 2);
+    for(let i=xs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [xs[i],xs[j]]=[xs[j],xs[i]]; }
+    targets = [
+      { x:xs[0], y:correctA*xs[0]+correctB, hit:false },
+      { x:xs[1], y:correctA*xs[1]+correctB, hit:false }
+    ];
+  }
+
+  buildInputUI();
+  updateFormula();
+  updateShootBtn();
+}
+
+// ===== 入力UI構築 =====
+function buildInputUI(){
+  // 傾き固定表示（Lv2のみ）
+  fixedSlopeBox.style.display = (level===2) ? 'block' : 'none';
+  if(level===2) fixedAEl.textContent = fixedSlope.label;
+
+  // 選択式 / キーボード式 の枠
+  choiceArea.style.display = (inputMode==='choice') ? 'block' : 'none';
+  inputArea.style.display  = (inputMode==='input')  ? 'block' : 'none';
+
+  // 行の表示を一旦全部消す
+  rowSingle.style.display='none'; rowA.style.display='none'; rowB.style.display='none';
+  inRowSingle.style.display='none'; inRowA.style.display='none'; inRowB.style.display='none';
+
+  if(inputMode==='choice'){
+    if(level===1){
+      rowSingle.style.display='block';
+      buildSingle(slopePool, true);
+    } else if(level===2){
+      rowSingle.style.display='block';
+      buildSingle(INTERCEPTS, false);
+    } else {
+      rowA.style.display='block'; rowB.style.display='block';
+      buildRow(aChoices, A_POOL, correctA, pickA, '');
+      buildRow(bChoices, B_POOL, correctB, pickB, '');
+    }
+  } else {
+    inHint.textContent = '';
+    if(level===1){
+      inRowSingle.style.display='flex'; inSingleLabel.textContent='a ='; inSingle.value=''; inSingle.placeholder='例: 2 や 1/2';
+      inHint.textContent = '分数は「1/2」のように入力';
+    } else if(level===2){
+      inRowSingle.style.display='flex'; inSingleLabel.textContent='b ='; inSingle.value=''; inSingle.placeholder='例: 3';
+      inHint.textContent = '切片 b を整数で入力';
+    } else {
+      inRowA.style.display='flex'; inRowB.style.display='flex'; inA.value=''; inB.value='';
+    }
+  }
+}
+
+function buildSingle(pool, isObj){
+  const correctVal = isObj ? correctSlope.val : correctIntercept;
+  let others = (isObj ? pool.map(p=>p) : pool).filter(p => (isObj?p.val:p) !== correctVal);
+  for(let i=others.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [others[i],others[j]]=[others[j],others[i]]; }
+  const correctItem = isObj ? correctSlope : correctIntercept;
+  let list = [correctItem, ...others.slice(0,5)];
+  for(let i=list.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [list[i],list[j]]=[list[j],list[i]]; }
+
+  singleChoices.innerHTML = '';
+  list.forEach(item => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    if(isObj){ btn.textContent = item.label; btn.dataset.val = item.val; btn.dataset.label = item.label; }
+    else { btn.textContent = 'b = ' + item; btn.dataset.val = item; }
+    btn.onclick = () => pickSingle(item, btn, isObj);
+    singleChoices.appendChild(btn);
+  });
+}
+
+function buildRow(container, pool, correct, onPick, prefix){
+  let others = pool.filter(v => v !== correct);
+  for(let i=others.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [others[i],others[j]]=[others[j],others[i]]; }
+  let list = [correct, ...others.slice(0,5)];
+  for(let i=list.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [list[i],list[j]]=[list[j],list[i]]; }
+  container.innerHTML = '';
+  list.forEach(v => {
+    const btn = document.createElement('button');
+    btn.className='choice-btn'; btn.textContent=prefix+v; btn.dataset.val=v;
+    btn.onclick = () => onPick(v, btn);
+    container.appendChild(btn);
+  });
+}
+
+// 選択ハンドラ
+function pickSingle(item, btn, isObj){
+  if(shotFired) return;
+  if(isObj) selSlope = { val:item.val, label:item.label };
+  else selIntercept = item;
+  singleChoices.querySelectorAll('.choice-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  updateFormula(); updateShootBtn();
+}
+function pickA(v, btn){ if(shotFired) return; selA=v; aChoices.querySelectorAll('.choice-btn').forEach(b=>b.classList.remove('selected')); btn.classList.add('selected'); updateFormula(); updateShootBtn(); }
+function pickB(v, btn){ if(shotFired) return; selB=v; bChoices.querySelectorAll('.choice-btn').forEach(b=>b.classList.remove('selected')); btn.classList.add('selected'); updateFormula(); updateShootBtn(); }
+
+// キーボード入力
+inSingle.addEventListener('input', () => {
+  if(shotFired) return;
+  if(level===1){ const v=parseFrac(inSingle.value); selSlope = v!==null ? {val:v, label:inSingle.value.trim()} : null; }
+  else { const v=parseInt(inSingle.value); selIntercept = isNaN(v)?null:v; }
+  updateFormula(); updateShootBtn();
+});
+inA.addEventListener('input', ()=>{ if(shotFired) return; const v=parseInt(inA.value); selA=isNaN(v)?null:v; updateFormula(); updateShootBtn(); });
+inB.addEventListener('input', ()=>{ if(shotFired) return; const v=parseInt(inB.value); selB=isNaN(v)?null:v; updateFormula(); updateShootBtn(); });
+
+// ===== 描画 =====
+function drawGrid(){
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#cfe0f7'; ctx.lineWidth=1;
+  for(let i=-11;i<=11;i++){
+    ctx.beginPath(); ctx.moveTo(toSX(i),0); ctx.lineTo(toSX(i),H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,toSY(i)); ctx.lineTo(W,toSY(i)); ctx.stroke();
+  }
+  ctx.strokeStyle='#333'; ctx.lineWidth=2.5;
+  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(W,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,H); ctx.stroke();
+  ctx.fillStyle='#333';
+  ctx.beginPath(); ctx.moveTo(W-4,cy); ctx.lineTo(W-14,cy-6); ctx.lineTo(W-14,cy+6); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx,4); ctx.lineTo(cx-6,14); ctx.lineTo(cx+6,14); ctx.fill();
+  ctx.fillStyle='#666'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  for(let i=-10;i<=10;i+=2){ if(i===0) continue; ctx.fillText(i, toSX(i), cy+15); }
+  ctx.textAlign='left';
+  for(let i=-10;i<=10;i+=2){ if(i===0) continue; ctx.fillText(i, cx+4, toSY(i)+4); }
+  ctx.fillStyle='#555'; ctx.font='bold 14px sans-serif';
+  ctx.fillText('x', W-10, cy-8); ctx.fillText('y', cx+8, 12);
+}
+
+function drawLine(a, b, dash, showIntercept){
+  ctx.save();
+  ctx.strokeStyle = ACCENTS[level] + '80';
+  ctx.lineWidth = 2; if(dash) ctx.setLineDash([7,6]);
+  ctx.beginPath();
+  ctx.moveTo(toSX(-11), toSY(a*-11 + b));
+  ctx.lineTo(toSX(11),  toSY(a*11 + b));
+  ctx.stroke();
+  ctx.restore();
+  if(showIntercept){
+    ctx.beginPath(); ctx.arc(toSX(0), toSY(b), 5, 0, Math.PI*2);
+    ctx.fillStyle = ACCENTS[level]; ctx.fill();
+  }
+}
+
+function drawPreview(){
+  if(beam) return;
+  if(level===1 && selSlope!==null) drawLine(selSlope.val, 0, true, false);
+  else if(level===2 && selIntercept!==null) drawLine(fixedSlope.val, selIntercept, true, true);
+  else if(level===3 && selA!==null && selB!==null) drawLine(selA, selB, true, true);
+}
+
+function drawCannon(slope, bY){
+  const angle = -Math.atan(slope);
+  const col = ACCENTS[level];
+  ctx.save();
+  ctx.translate(toSX(0), toSY(bY));
+  ctx.rotate(angle);
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.roundRect(12,-8,16,16,3); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(-16,-16,32,32,7); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath(); ctx.roundRect(-11,-12,22,8,4); ctx.fill();
+  ctx.restore();
+}
+
+function drawUFO(t){
+  const sx=toSX(t.x), sy=toSY(t.y), r=0.5*SCALE;
+  ctx.save(); ctx.translate(sx,sy);
+  ctx.fillStyle = t.hit ? '#2ecc71' : '#a8324a';
+  ctx.beginPath(); ctx.ellipse(0,0,r*1.9,r*0.45,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = t.hit ? '#1a7a44' : '#1a1a40';
+  ctx.beginPath(); ctx.ellipse(0,0,r*0.95,r*0.85,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.22)';
+  ctx.beginPath(); ctx.ellipse(-r*0.25,-r*0.32,r*0.3,r*0.18,-0.3,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='#333'; ctx.font='bold 13px sans-serif'; ctx.textAlign='left';
+  ctx.fillText(`(${t.x}, ${t.y})`, sx + r*1.9 + 6, sy - 4);
+}
+
+function drawBeam(){
+  if(!beam) return;
+  const a=beam.a, b=beam.b;
+  const x0 = (level===3) ? beam.startX : 0;
+  ctx.beginPath();
+  ctx.moveTo(toSX(x0), toSY(a*x0 + b));
+  ctx.lineTo(toSX(beam.cx), toSY(a*beam.cx + b));
+  ctx.strokeStyle='#ff7a3d'; ctx.lineWidth=4; ctx.stroke();
+  ctx.beginPath(); ctx.arc(toSX(beam.cx), toSY(a*beam.cx + b), 8, 0, Math.PI*2);
+  ctx.fillStyle='#ffd54a'; ctx.fill();
+}
+
+function drawScene(){
+  drawGrid();
+  if(state!=='playing') return;
+  drawPreview();
+  if(level===3) targets.forEach(drawUFO);
+  else if(target) drawUFO(target);
+  drawBeam();
+  if(level===1) drawCannon(selSlope?selSlope.val:0, 0);
+  else if(level===2) drawCannon(fixedSlope.val, selIntercept!==null?selIntercept:0);
+  else drawCannon(selA!==null?selA:0, selB!==null?selB:0);
+}
+
+// ===== 発射 =====
+function shoot(){
+  if(state!=='playing' || beam || shotFired) return;
+  if(level===1){
+    if(selSlope===null) return;
+    beam = { a:selSlope.val, b:0, cx:0, dir:target.x>=0?1:-1, speed:0.16 };
+  } else if(level===2){
+    if(selIntercept===null) return;
+    beam = { a:fixedSlope.val, b:selIntercept, cx:0, dir:target.x>=0?1:-1, speed:0.16 };
+  } else {
+    if(selA===null || selB===null) return;
+    beam = { a:selA, b:selB, cx:-9, startX:-9, speed:0.22 };
+  }
+  shotFired = true;
+  updateShootBtn();
+  highlightAnswers();
+}
+
+function highlightAnswers(){
+  if(inputMode!=='choice') return;
+  if(level===1){
+    singleChoices.querySelectorAll('.choice-btn').forEach(b=>{
+      b.disabled=true; const v=parseFloat(b.dataset.val);
+      if(Math.abs(v-correctSlope.val)<1e-6) b.classList.add('correct');
+      else if(selSlope && Math.abs(v-selSlope.val)<1e-6) b.classList.add('wrong');
+    });
+  } else if(level===2){
+    singleChoices.querySelectorAll('.choice-btn').forEach(b=>{
+      b.disabled=true; const v=parseInt(b.dataset.val);
+      if(v===correctIntercept) b.classList.add('correct');
+      else if(v===selIntercept && selIntercept!==correctIntercept) b.classList.add('wrong');
+    });
+  } else {
+    aChoices.querySelectorAll('.choice-btn').forEach(b=>{
+      b.disabled=true; const v=parseInt(b.dataset.val);
+      if(v===correctA) b.classList.add('correct'); else if(v===selA && selA!==correctA) b.classList.add('wrong');
+    });
+    bChoices.querySelectorAll('.choice-btn').forEach(b=>{
+      b.disabled=true; const v=parseInt(b.dataset.val);
+      if(v===correctB) b.classList.add('correct'); else if(v===selB && selB!==correctB) b.classList.add('wrong');
+    });
+  }
+}
+
+function updateBeam(){
+  if(!beam) return;
+  if(level===3){
+    beam.cx += beam.speed;
+    const cyNow = beam.a*beam.cx + beam.b;
+    targets.forEach(t=>{ if(!t.hit && Math.hypot(beam.cx-t.x, cyNow-t.y)<HIT_DIST) t.hit=true; });
+    if(beam.cx > 9){ beam=null; finalizeLv3(); }
+    return;
+  }
+  // Lv1,2
+  beam.cx += beam.dir*beam.speed;
+  beam.cy = beam.a*beam.cx + beam.b;
+  const dist = Math.hypot(beam.cx-target.x, beam.cy-target.y);
+  if(dist < HIT_DIST){
+    target.hit=true; score+=10; scoreEl.textContent=score;
+    messageEl.textContent='🎉 命中！ +10点'; messageEl.style.color='#2ecc71';
+    beam=null; drawScene(); scheduleNext(1000); return;
+  }
+  if(Math.abs(beam.cx)>11 || Math.abs(beam.cy)>11){
+    const ans = (level===1) ? ('a='+correctSlope.label) : ('b='+correctIntercept);
+    messageEl.textContent='😢 ハズレ… 正解は '+ans; messageEl.style.color='#ff6b6b';
+    beam=null; drawScene(); scheduleNext(1200); return;
+  }
+}
+
+function finalizeLv3(){
+  const hits = targets.filter(t=>t.hit).length;
+  score += hits*5; scoreEl.textContent=score;
+  if(hits===2){ messageEl.textContent='🎉 2個命中！ +10点'; messageEl.style.color='#2ecc71'; }
+  else if(hits===1){ messageEl.textContent='😲 1個命中 +5点（正解 a='+correctA+', b='+correctB+'）'; messageEl.style.color='#ffb84d'; }
+  else { messageEl.textContent='😢 ハズレ… 正解は a='+correctA+', b='+correctB; messageEl.style.color='#ff6b6b'; }
+  drawScene(); scheduleNext(1300);
+}
+
+function scheduleNext(delay){
+  if(resolving) return;
+  resolving = true;
+  setTimeout(advance, delay);
+}
+function advance(){
+  problemIndex++;
+  if(problemIndex >= TOTAL){ endGame(); return; }
+  newProblem(); drawScene();
+}
+
+// ===== ループ =====
+function gameLoop(ts){
+  if(state!=='playing') return;
+  if(!lastTime) lastTime=ts;
+  const dt=(ts-lastTime)/1000; lastTime=ts;
+
+  if(!shotFired && !resolving){
+    problemTimer -= dt;
+    if(problemTimer <= 0){
+      problemTimer=0; shotFired=true;
+      let ans;
+      if(level===1) ans='a='+correctSlope.label;
+      else if(level===2) ans='b='+correctIntercept;
+      else ans='a='+correctA+', b='+correctB;
+      messageEl.textContent='⏰ 時間切れ！ 正解は '+ans; messageEl.style.color='#ffb84d';
+      scheduleNext(1200);
+    }
+  }
+  timeDispEl.textContent = Math.ceil(Math.max(problemTimer,0));
+  probFill.style.width = (Math.max(problemTimer,0)/PROBLEM_TIME*100)+'%';
+
+  updateBeam(); drawScene();
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+// ===== 開始・終了 =====
+function startGame(){
+  level = selLevel;
+  PROBLEM_TIME = selTime;
+  document.body.className = 'lv'+level;
+  menuEl.style.display='none';
+  resultEl.style.display='none';
+  state='playing';
+  problemIndex=0; score=0; scoreEl.textContent='0';
+  lastTime=null; inputMode='choice';
+  document.getElementById('modeChoice').classList.add('active');
+  document.getElementById('modeInput').classList.remove('active');
+  newProblem(); drawScene();
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+function endGame(){
+  state='gameover';
+  if(rafId) cancelAnimationFrame(rafId);
+  let rank;
+  if(score>=100) rank='🏆 パーフェクト！天才！';
+  else if(score>=70) rank='🥇 すばらしい！';
+  else if(score>=40) rank='🥈 よくできました！';
+  else rank='🥉 もう一度チャレンジ！';
+  const lvName = {1:'レベル1（かたむき）',2:'レベル2（切片）',3:'レベル3（2個同時）'}[level];
+  document.getElementById('resultBox').innerHTML = `
+    <h2>🎉 ゲーム終了！</h2>
+    <div class="subtitle">${lvName} ・ 1問 ${PROBLEM_TIME}秒</div>
+    <div style="color:#ffb84d; font-size:18px; font-weight:bold; margin-bottom:4px;">${rank}</div>
+    <div class="big-score">${score}<small> / 100点</small></div>
+    <div class="result-btns">
+      <button class="btn-again" onclick="startGame()">🔄 もう一度</button>
+      <button class="btn-menu" onclick="showMenu()">≡ メニュー</button>
+    </div>
+  `;
+  resultEl.style.display='flex';
+}
+
+shootBtn.addEventListener('click', shoot);
+drawGrid();
+</script>
+</body>
+</html>
