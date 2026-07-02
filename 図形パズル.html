@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>図形パズルをつくってあそぼう</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    background: #f4f6f8;
+    color: #333;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+  }
+  header {
+    background: #2f9e8f;
+    color: #fff;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header .icon {
+    background: #fff;
+    color: #2f9e8f;
+    font-weight: bold;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 13px;
+    line-height: 1.1;
+    text-align: center;
+  }
+  header h1 { font-size: 20px; margin: 0; }
+
+  .figbar {
+    padding: 10px 20px;
+    background: #eef4f3;
+    border-bottom: 1px solid #dde6e4;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .figbar .label { font-weight: bold; color: #2f7a6f; margin-right: 4px; }
+  .figbar button.fig {
+    background: #fff;
+    color: #333;
+    border: 2px solid #cbd8d5;
+    border-radius: 10px;
+    padding: 6px 14px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .figbar button.fig:hover { border-color: #2f9e8f; }
+  .figbar button.fig.active {
+    background: #2f9e8f;
+    color: #fff;
+    border-color: #2f9e8f;
+  }
+
+  .toolbar {
+    padding: 12px 20px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  .toolbar button {
+    background: #2f9e8f;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .toolbar button:hover { background: #268073; }
+  .toolbar button.gray { background: #888; }
+  .toolbar button.gray:hover { background: #666; }
+  .toolbar button.orange { background: #e08a2f; }
+  .toolbar button.orange:hover { background: #c2761f; }
+  .toolbar .hint { font-size: 13px; color: #666; margin-left: auto; }
+
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 940px;
+    height: 640px;
+    margin: 16px auto;
+    background:
+      linear-gradient(#e8eef0 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, #e8eef0 1px, transparent 1px) 0 0 / 40px 40px,
+      #fff;
+    border: 2px solid #d0d8dc;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  /* お手本（影絵）レイヤー */
+  svg.shadow {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  svg.shadow polygon {
+    fill: #c9d3d8;
+    stroke: #aab6bc;
+    stroke-width: 1.5;
+  }
+  svg.shadow.hidden { display: none; }
+
+  svg.piece {
+    position: absolute;
+    top: 0; left: 0;
+    overflow: visible;
+    cursor: grab;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.18));
+  }
+  svg.piece.dragging { cursor: grabbing; }
+  svg.piece polygon {
+    stroke: rgba(255,255,255,0.5);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+
+  .msg {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    background: #ffcf3f;
+    color: #6b4e00;
+    padding: 10px 26px;
+    border-radius: 24px;
+    font-weight: bold;
+    font-size: 20px;
+    opacity: 0;
+    transition: all .3s;
+    pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  }
+  .msg.show { opacity: 1; transform: translateX(-50%) scale(1); }
+</style>
+</head>
+<body>
+<header>
+  <span class="icon">おうちで<br>ミュージアム</span>
+  <h1>図形パズルをつくってあそぼう</h1>
+</header>
+
+<div class="figbar" id="figbar">
+  <span class="label">お手本をえらぶ：</span>
+  <!-- ボタンはJSで生成 -->
+</div>
+
+<div class="toolbar">
+  <button id="shuffleBtn">ピースをちらす</button>
+  <button class="orange" id="answerBtn">こたえを見る</button>
+  <button class="gray" id="outlineBtn">お手本をかくす</button>
+  <span class="hint">ドラッグで動かす／ダブルクリックで45°回転／右クリックで裏返す</span>
+</div>
+
+<div class="stage" id="stage">
+  <svg class="shadow" id="shadow" viewBox="0 0 940 640" preserveAspectRatio="none"></svg>
+  <div class="msg" id="msg">やったね！かんせい！</div>
+</div>
+
+<script>
+const stage = document.getElementById('stage');
+const shadowSvg = document.getElementById('shadow');
+const msg = document.getElementById('msg');
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+// ===== 7ピースの定義（大きな四角＝400×400を隙間なく分割した正確な座標）=====
+const TANGRAM = [
+  { id:'bigTop',  color:'#2f9e8f', pts:[[0,0],[400,0],[200,200]] },              // 大三角(緑)
+  { id:'bigLeft', color:'#e14b5a', pts:[[0,0],[200,200],[0,400]] },              // 大三角(赤)
+  { id:'smTopR',  color:'#8e5aa6', pts:[[400,0],[400,200],[300,100]] },          // 小三角(紫)
+  { id:'square',  color:'#f0a63f', pts:[[200,200],[300,100],[400,200],[300,300]] }, // 正方形(オレンジ)
+  { id:'smMid',   color:'#e88a8f', pts:[[200,200],[100,300],[300,300]] },        // 小三角(ピンク)
+  { id:'para',    color:'#3f6fd1', pts:[[0,400],[200,400],[300,300],[100,300]] }, // 平行四辺形(青)
+  { id:'medBR',   color:'#7db93f', pts:[[200,400],[400,400],[400,200]] },        // 中三角(黄緑)
+];
+
+// ===== 幾何ユーティリティ =====
+function rotatePt(x, y, deg){
+  const r = deg*Math.PI/180, c = Math.cos(r), s = Math.sin(r);
+  return [x*c - y*s, x*s + y*c];
+}
+// 配置指定{piece, rot, flip, tx, ty}から、そのピースの絶対頂点座標を作る
+function polyFromPlacement(pl){
+  return TANGRAM[pl.piece].pts.map(([x,y])=>{
+    let px = pl.flip ? -x : x;
+    let [rx, ry] = rotatePt(px, y, pl.rot||0);
+    return [rx + (pl.tx||0), ry + (pl.ty||0)];
+  });
+}
+function centroidOf(polys){
+  let sx=0, sy=0, n=0;
+  for(const poly of polys) for(const [x,y] of poly){ sx+=x; sy+=y; n++; }
+  return [sx/n, sy/n];
+}
+// 図形全体をステージ中央に来るように平行移動
+function centerPolys(polys){
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  for(const poly of polys) for(const [x,y] of poly){
+    minX=Math.min(minX,x); minY=Math.min(minY,y);
+    maxX=Math.max(maxX,x); maxY=Math.max(maxY,y);
+  }
+  const ox = (stage.clientWidth - (minX+maxX))/2;
+  const oy = (stage.clientHeight - (minY+maxY))/2;
+  return polys.map(poly=>poly.map(([x,y])=>[x+ox, y+oy]));
+}
+
+// ===== お手本（図形）データ =====
+// 各図形は7ピースを隙間・重なりなく並べた「影絵」。polys=各ピースの絶対座標。
+// すべて専用ツールで検証済み（必ず完成できる）。
+const FIGURES = {"square":{"name":"四角","polys":[[[0,0],[400,0],[200,200]],[[0,0],[200,200],[0,400]],[[400,0],[400,200],[300,100]],[[200,200],[300,100],[400,200],[300,300]],[[200,200],[100,300],[300,300]],[[0,400],[200,400],[300,300],[100,300]],[[200,400],[400,400],[400,200]]]},"triangle":{"name":"大きな三角","polys":[[[400,0],[800,0],[600,200]],[[400,0],[200,200],[0,0]],[[300,100],[300,300],[200,200]],[[300,300],[400,200],[500,300],[400,400]],[[500,300],[600,200],[400,200]],[[300,300],[300,100],[400,0],[400,200]],[[400,0],[400,200],[600,200]]]},"house":{"name":"いえ","polys":[[[0,400],[0,200],[100,300]],[[200,0],[200,400],[0,200]],[[0,400],[100,300],[200,400],[100,500]],[[200,600],[300,500],[100,500]],[[100,500],[300,500],[400,400],[200,400]],[[200,400],[400,400],[400,200]],[[200,0],[400,200],[200,400]]]},"dog":{"name":"いぬ","polys":[[[-133.3,66.7],[66.7,66.7],[66.7,-133.3]],[[208.1,-74.8],[208.1,66.7],[66.7,66.7],[66.7,-74.8]],[[66.7,-74.8],[208.1,-216.2],[208.1,-74.8]],[[308.1,-174.8],[208.1,-74.8],[208.1,-274.8]],[[-333.3,66.7],[-133.3,66.7],[-33.3,-33.3],[-233.3,-33.3]],[[-333.3,66.7],[-133.3,266.7],[66.7,66.7]],[[266.7,266.7],[-133.3,266.7],[66.7,66.7]]]},"rabbit":{"name":"うさぎ","polys":[[[-200,-66.7],[200,-66.7],[0,133.3]],[[-200,-66.7],[-58.6,-66.7],[-58.6,-208.1],[-200,-208.1]],[[-58.6,-66.7],[-58.6,-266.7],[141.4,-266.7]],[[0,-408.1],[141.4,-266.7],[0,-266.7]],[[-200,-66.7],[-341.4,-66.7],[-200,-208.1]],[[-82.8,216.2],[200,216.2],[200,-66.7]],[[300,233.3],[300,33.3],[200,-66.7],[200,133.3]]]},"bird":{"name":"とり","polys":[[[-66.7,-200],[133.3,0],[-66.7,200]],[[33.3,300],[-66.7,200],[33.3,100],[133.3,200]],[[-66.7,-82.8],[-208.1,58.6],[-66.7,200]],[[133.3,0],[33.3,100],[233.3,100]],[[-66.7,400],[-66.7,200],[-166.7,100],[-166.7,300]],[[-66.7,-82.8],[-208.1,58.6],[-208.1,-82.8]],[[-490.9,200],[-208.1,-82.8],[-208.1,200]]]},"fish":{"name":"さかな","polys":[[[-100,0],[0,-100],[100,0],[0,100]],[[-241.4,141.4],[-100,0],[41.4,141.4]],[[-382.8,282.8],[-382.8,0],[-100,0]],[[-382.8,0],[-665.7,282.8],[-382.8,282.8]],[[200,-100],[0,-100],[100,0]],[[-100,0],[0,-100],[-200,-100]],[[-100,-200],[100,-200],[200,-100],[0,-100]]]}};
+
+let currentFig = 'square';
+let targetPolys = [];   // 現在のお手本の各ピースの絶対座標（センタリング済み）
+
+// ===== 全体の縮尺（せまい画面でもすべての図形が収まるように少し小さく）=====
+const SCALE = 0.8;
+TANGRAM.forEach(t=>{ t.pts = t.pts.map(([x,y])=>[x*SCALE, y*SCALE]); });
+for(const k in FIGURES){ FIGURES[k].polys = FIGURES[k].polys.map(poly=>poly.map(([x,y])=>[x*SCALE, y*SCALE])); }
+
+// ===== ピース生成 =====
+const pieces = [];
+function makePiece(def, idx){
+  const xs=def.pts.map(p=>p[0]), ys=def.pts.map(p=>p[1]);
+  const minX=Math.min(...xs), minY=Math.min(...ys);
+  const maxX=Math.max(...xs), maxY=Math.max(...ys);
+  const w=maxX-minX, h=maxY-minY;
+  const local = def.pts.map(p=>[p[0]-minX, p[1]-minY]);
+
+  const svg = document.createElementNS(SVGNS,'svg');
+  svg.setAttribute('class','piece');
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  const poly = document.createElementNS(SVGNS,'polygon');
+  poly.setAttribute('points', local.map(p=>p.join(',')).join(' '));
+  poly.setAttribute('fill', def.color);
+  svg.appendChild(poly);
+
+  const state = { idx, el:svg, w, h, local, x:0, y:0, rot:0, flip:1 };
+  svg.__state = state;
+  state.apply = ()=>{
+    svg.style.left = state.x+'px';
+    svg.style.top = state.y+'px';
+    svg.style.transformOrigin = '50% 50%';
+    svg.style.transform = `rotate(${state.rot}deg) scaleX(${state.flip})`;
+  };
+
+  // ドラッグ
+  let start=null;
+  svg.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    stage.appendChild(svg);       // 最前面へ
+    svg.classList.add('dragging');
+    const p=getPoint(e);
+    start={px:p.x, py:p.y, ox:state.x, oy:state.y};
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+  function move(e){
+    if(!start) return;
+    const p=getPoint(e);
+    state.x = start.ox + (p.x-start.px);
+    state.y = start.oy + (p.y-start.py);
+    state.apply();
+  }
+  function up(){
+    start=null;
+    svg.classList.remove('dragging');
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    checkComplete();
+  }
+  svg.addEventListener('dblclick', e=>{ e.preventDefault(); state.rot=(state.rot+45)%360; state.apply(); checkComplete(); });
+  svg.addEventListener('contextmenu', e=>{ e.preventDefault(); state.flip*=-1; state.apply(); checkComplete(); });
+
+  stage.appendChild(svg);
+  pieces.push(state);
+}
+function getPoint(e){
+  const r = stage.getBoundingClientRect();
+  return { x:e.clientX-r.left, y:e.clientY-r.top };
+}
+TANGRAM.forEach(makePiece);
+
+// ピースの現在の絶対頂点を計算（CSS transformと一致させる）
+function pieceVertices(s){
+  const cx=s.w/2, cy=s.h/2;
+  return s.local.map(([lx,ly])=>{
+    let dx=(lx-cx)*s.flip, dy=(ly-cy);
+    const [rx,ry]=rotatePt(dx,dy,s.rot);
+    return [s.x+cx+rx, s.y+cy+ry];
+  });
+}
+
+// ===== お手本の読み込み =====
+function shapeKey(poly){
+  // 辺の長さを並べたものでピース形状を識別
+  const L=[];
+  for(let i=0;i<poly.length;i++){
+    const a=poly[i], b=poly[(i+1)%poly.length];
+    L.push(Math.round(Math.hypot(b[0]-a[0], b[1]-a[1])/5));
+  }
+  return L.slice().sort((x,y)=>x-y).join(',')+'|'+poly.length;
+}
+
+function loadFigure(name){
+  currentFig = name;
+  const fig = FIGURES[name];
+  let polys = (fig.polys || fig.placements.map(polyFromPlacement)).map(p=>p.map(q=>q.slice()));
+  targetPolys = centerPolys(polys);
+  drawShadow();
+  updateFigButtons();
+  shuffle();
+}
+
+function drawShadow(){
+  // シャドウSVGの座標系をステージの実ピクセルに合わせる（ゆがみ防止）
+  shadowSvg.setAttribute('viewBox', `0 0 ${stage.clientWidth} ${stage.clientHeight}`);
+  shadowSvg.innerHTML='';
+  for(const poly of targetPolys){
+    const el=document.createElementNS(SVGNS,'polygon');
+    el.setAttribute('points', poly.map(p=>p.join(',')).join(' '));
+    shadowSvg.appendChild(el);
+  }
+}
+
+// ===== こたえを見る（ピースをお手本に合わせる）=====
+function solve(){
+  const used = new Array(pieces.length).fill(false);
+  for(const tgt of targetPolys){
+    const tKey = shapeKey(tgt);
+    const tc = polyCentroid(tgt);
+    let done=false;
+    for(let pi=0; pi<pieces.length && !done; pi++){
+      if(used[pi]) continue;
+      const s=pieces[pi];
+      // このピースの形が合うか
+      const baseKey = shapeKey(s.local.map(p=>p.slice()));
+      if(baseKey!==tKey) continue;
+      // 回転・反転を総当たりで合わせる
+      for(let flip of [1,-1]){
+        for(let rot=0; rot<360 && !done; rot+=45){
+          // s.x=0,s.y=0 のときの頂点 = testVertices。ここへ off を足すと tgt に一致させたい
+          const test = testVertices(s, rot, flip);
+          const off = [tc[0]-polyCentroid(test)[0], tc[1]-polyCentroid(test)[1]];
+          const moved = test.map(([x,y])=>[x+off[0], y+off[1]]);
+          if(polyMatch(moved, tgt, 8)){
+            // pieceVertices(s) = testVertices + (s.x, s.y) なので s.x=off でぴったり合う
+            s.rot=rot; s.flip=flip; s.x=off[0]; s.y=off[1];
+            s.apply();
+            used[pi]=true; done=true;
+          }
+        }
+      }
+    }
+  }
+  checkComplete();
+}
+// 回転・反転のみ適用した頂点（s.x=0,s.y=0 のときの pieceVertices と同じ）
+function testVertices(s, rot, flip){
+  const cx=s.w/2, cy=s.h/2;
+  return s.local.map(([lx,ly])=>{
+    let dx=(lx-cx)*flip, dy=(ly-cy);
+    const [rx,ry]=rotatePt(dx,dy,rot);
+    return [cx+rx, cy+ry];
+  });
+}
+function polyCentroid(poly){
+  let sx=0,sy=0; for(const [x,y] of poly){ sx+=x; sy+=y; } return [sx/poly.length, sy/poly.length];
+}
+function polyMatch(a, b, tol){
+  if(a.length!==b.length) return false;
+  const usedB=new Array(b.length).fill(false);
+  for(const pa of a){
+    let ok=false;
+    for(let j=0;j<b.length;j++){
+      if(usedB[j]) continue;
+      if(Math.hypot(pa[0]-b[j][0], pa[1]-b[j][1])<tol){ usedB[j]=true; ok=true; break; }
+    }
+    if(!ok) return false;
+  }
+  return true;
+}
+
+// ===== 完成チェック =====
+function checkComplete(){
+  const used=new Array(targetPolys.length).fill(false);
+  let matched=0;
+  for(const s of pieces){
+    const v=pieceVertices(s);
+    for(let t=0;t<targetPolys.length;t++){
+      if(used[t]) continue;
+      if(polyMatch(v, targetPolys[t], 24)){ used[t]=true; matched++; break; }
+    }
+  }
+  if(matched===targetPolys.length) showMsg(); else hideMsg();
+}
+function showMsg(){ msg.classList.add('show'); }
+function hideMsg(){ msg.classList.remove('show'); }
+
+// ===== ピースをちらす =====
+function shuffle(){
+  const W=stage.clientWidth, H=stage.clientHeight;
+  for(const s of pieces){
+    s.x = Math.random()*(W - s.w - 20) + 10;
+    s.y = Math.random()*(H - s.h - 20) + 10;
+    s.rot = Math.floor(Math.random()*8)*45;
+    s.flip = 1;
+    s.apply();
+  }
+  hideMsg();
+}
+
+// ===== お手本ボタン =====
+const figbar = document.getElementById('figbar');
+function updateFigButtons(){
+  [...figbar.querySelectorAll('button.fig')].forEach(b=>{
+    b.classList.toggle('active', b.dataset.fig===currentFig);
+  });
+}
+function buildFigButtons(){
+  for(const key in FIGURES){
+    const b=document.createElement('button');
+    b.className='fig';
+    b.textContent=FIGURES[key].name;
+    b.dataset.fig=key;
+    b.addEventListener('click', ()=>loadFigure(key));
+    figbar.appendChild(b);
+  }
+}
+
+// ===== ボタン =====
+document.getElementById('shuffleBtn').addEventListener('click', shuffle);
+document.getElementById('answerBtn').addEventListener('click', solve);
+const outlineBtn=document.getElementById('outlineBtn');
+outlineBtn.addEventListener('click', ()=>{
+  shadowSvg.classList.toggle('hidden');
+  outlineBtn.textContent = shadowSvg.classList.contains('hidden') ? 'お手本をみせる' : 'お手本をかくす';
+});
+
+// ===== 起動 =====
+buildFigButtons();
+window.addEventListener('load', ()=>{ loadFigure('square'); });
+</script>
+</body>
+</html>
