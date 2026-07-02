@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ハートブレイクパズル</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    background: #fbf3f4;
+    color: #333;
+    -webkit-user-select: none; user-select: none;
+    touch-action: none;
+  }
+  header {
+    background: #c94a5a; color: #fff;
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header .icon {
+    background: #fff; color: #c94a5a; font-weight: bold;
+    border-radius: 8px; padding: 4px 10px; font-size: 20px;
+  }
+  header h1 { font-size: 20px; margin: 0; }
+
+  .toolbar {
+    padding: 12px 20px; background: #fff;
+    border-bottom: 1px solid #eadfe0;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  }
+  .toolbar button {
+    background: #c94a5a; color: #fff; border: none; border-radius: 8px;
+    padding: 8px 16px; font-size: 15px; cursor: pointer; transition: background .2s;
+  }
+  .toolbar button:hover { background: #b03a4a; }
+  .toolbar button.gray { background: #999; }
+  .toolbar button.gray:hover { background: #777; }
+  .toolbar button.orange { background: #e08a2f; }
+  .toolbar button.orange:hover { background: #c2761f; }
+  .toolbar .hint { font-size: 13px; color: #777; margin-left: auto; }
+
+  .stage {
+    position: relative; width: 100%; max-width: 940px; height: 640px;
+    margin: 16px auto;
+    background:
+      linear-gradient(#f3e6e8 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, #f3e6e8 1px, transparent 1px) 0 0 / 40px 40px,
+      #fff;
+    border: 2px solid #ecdcdd; border-radius: 12px; overflow: hidden;
+  }
+  svg.shadow {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  svg.shadow polygon { fill: #eccfd3; stroke: #dcbcc1; stroke-width: 1.5; }
+  svg.shadow.hidden { display: none; }
+
+  svg.piece {
+    position: absolute; top: 0; left: 0; overflow: visible; cursor: grab;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.18));
+  }
+  svg.piece.dragging { cursor: grabbing; }
+  svg.piece polygon { stroke: rgba(255,255,255,0.45); stroke-width: 1.5; stroke-linejoin: round; }
+
+  .msg {
+    position: absolute; top: 14px; left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    background: #ffcf3f; color: #6b4e00;
+    padding: 10px 26px; border-radius: 24px; font-weight: bold; font-size: 20px;
+    opacity: 0; transition: all .3s; pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  }
+  .msg.show { opacity: 1; transform: translateX(-50%) scale(1); }
+</style>
+</head>
+<body>
+<header>
+  <span class="icon">♥</span>
+  <h1>ハートブレイクパズル</h1>
+</header>
+
+<div class="toolbar">
+  <button id="shuffleBtn">ピースをちらす</button>
+  <button class="orange" id="answerBtn">こたえを見る</button>
+  <button class="gray" id="outlineBtn">お手本をかくす</button>
+  <span class="hint">ドラッグで動かす／ダブルクリックで45°回転／右クリックで裏返す</span>
+</div>
+
+<div class="stage" id="stage">
+  <svg class="shadow" id="shadow" preserveAspectRatio="none"></svg>
+  <div class="msg" id="msg">やったね！ハートかんせい！</div>
+</div>
+
+<script>
+const stage = document.getElementById('stage');
+const shadowSvg = document.getElementById('shadow');
+const msg = document.getElementById('msg');
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+// 9ピース（傾けた正方形の7ピース＋左右のふくらみ）。local=形、home=完成時の左上位置。
+const HEART_PIECES = [{"id":"bigTop","color":"#e2586a","local":[[0,0],[282.84,282.84],[0,282.84]],"home":{"x":282.84,"y":0}},{"id":"bigLeft","color":"#d64a5c","local":[[282.84,0],[282.84,282.84],[0,282.84]],"home":{"x":0,"y":0}},{"id":"smTopR","color":"#e2586a","local":[[141.42,0],[0,141.42],[0,0]],"home":{"x":424.26,"y":282.84}},{"id":"square","color":"#c94a5a","local":[[0,0],[141.42,0],[141.42,141.42],[0,141.42]],"home":{"x":282.84,"y":282.84}},{"id":"smMid","color":"#d64a5c","local":[[141.42,0],[0,0],[141.42,141.42]],"home":{"x":141.42,"y":282.84}},{"id":"para","color":"#e2586a","local":[[0,0],[141.42,141.42],[282.84,141.42],[141.42,0]],"home":{"x":0,"y":282.84}},{"id":"medBR","color":"#d64a5c","local":[[0,0],[141.42,141.42],[282.84,0]],"home":{"x":141.42,"y":424.26}},{"id":"humpTop","color":"#c94a5a","local":[[0,58.58],[30.31,33.71],[64.88,15.22],[102.4,3.84],[141.42,0],[180.44,3.84],[217.96,15.22],[252.54,33.71],[282.84,58.58],[307.72,88.89],[326.2,123.46],[337.58,160.98],[341.42,200],[337.58,239.02],[326.2,276.54],[307.72,311.11],[282.84,341.42]],"home":{"x":282.84,"y":-58.58}},{"id":"humpLeft","color":"#e2586a","local":[[341.42,58.58],[311.11,33.71],[276.54,15.22],[239.02,3.84],[200,0],[160.98,3.84],[123.46,15.22],[88.89,33.71],[58.58,58.58],[33.71,88.89],[15.22,123.46],[3.84,160.98],[0,200],[3.84,239.02],[15.22,276.54],[33.71,311.11],[58.58,341.42]],"home":{"x":-58.58,"y":-58.58}}];
+
+function rotatePt(x,y,deg){ const r=deg*Math.PI/180,c=Math.cos(r),s=Math.sin(r); return [x*c-y*s, x*s+y*c]; }
+
+// 全体を少し小さくして、せまい画面でも余白をもって収まるように
+const SCALE = 0.78;
+for(const p of HEART_PIECES){
+  p.local = p.local.map(([x,y])=>[x*SCALE, y*SCALE]);
+  p.home = { x:p.home.x*SCALE, y:p.home.y*SCALE };
+}
+
+// 全体をステージ中央に寄せるオフセットを計算
+let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+for(const p of HEART_PIECES) for(const [lx,ly] of p.local){
+  const x=lx+p.home.x, y=ly+p.home.y;
+  minX=Math.min(minX,x); minY=Math.min(minY,y); maxX=Math.max(maxX,x); maxY=Math.max(maxY,y);
+}
+function centerOffset(){
+  return { ox:(stage.clientWidth-(minX+maxX))/2, oy:(stage.clientHeight-(minY+maxY))/2 };
+}
+
+// ===== ピース生成 =====
+const pieces = [];
+HEART_PIECES.forEach((def, idx)=>{
+  const xs=def.local.map(p=>p[0]), ys=def.local.map(p=>p[1]);
+  const w=Math.max(...xs), h=Math.max(...ys);
+  const svg=document.createElementNS(SVGNS,'svg');
+  svg.setAttribute('class','piece');
+  svg.setAttribute('width',w); svg.setAttribute('height',h);
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  const poly=document.createElementNS(SVGNS,'polygon');
+  poly.setAttribute('points', def.local.map(p=>p.join(',')).join(' '));
+  poly.setAttribute('fill', def.color);
+  svg.appendChild(poly);
+
+  const s={ idx, el:svg, w, h, local:def.local, home:def.home, x:0,y:0,rot:0,flip:1 };
+  svg.__state=s;
+  s.apply=()=>{ svg.style.left=s.x+'px'; svg.style.top=s.y+'px'; svg.style.transformOrigin='50% 50%'; svg.style.transform=`rotate(${s.rot}deg) scaleX(${s.flip})`; };
+
+  let start=null;
+  svg.addEventListener('pointerdown', e=>{
+    e.preventDefault(); stage.appendChild(svg); svg.classList.add('dragging');
+    const p=getPoint(e); start={px:p.x,py:p.y,ox:s.x,oy:s.y};
+    window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+  });
+  function move(e){ if(!start)return; const p=getPoint(e); s.x=start.ox+(p.x-start.px); s.y=start.oy+(p.y-start.py); s.apply(); }
+  function up(){ start=null; svg.classList.remove('dragging'); window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); checkComplete(); }
+  svg.addEventListener('dblclick', e=>{ e.preventDefault(); s.rot=(s.rot+45)%360; s.apply(); checkComplete(); });
+  svg.addEventListener('contextmenu', e=>{ e.preventDefault(); s.flip*=-1; s.apply(); checkComplete(); });
+
+  stage.appendChild(svg);
+  pieces.push(s);
+});
+function getPoint(e){ const r=stage.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+
+// ピースの現在の絶対頂点
+function pieceVertices(s){
+  const cx=s.w/2, cy=s.h/2;
+  return s.local.map(([lx,ly])=>{ let dx=(lx-cx)*s.flip, dy=(ly-cy); const [rx,ry]=rotatePt(dx,dy,s.rot); return [s.x+cx+rx, s.y+cy+ry]; });
+}
+
+// お手本(影絵)の各ピース絶対座標
+let targetPolys=[];
+function buildTargets(){
+  const {ox,oy}=centerOffset();
+  targetPolys = HEART_PIECES.map(p=>p.local.map(([lx,ly])=>[lx+p.home.x+ox, ly+p.home.y+oy]));
+}
+function drawShadow(){
+  shadowSvg.setAttribute('viewBox', `0 0 ${stage.clientWidth} ${stage.clientHeight}`);
+  shadowSvg.innerHTML='';
+  for(const poly of targetPolys){
+    const el=document.createElementNS(SVGNS,'polygon');
+    el.setAttribute('points', poly.map(p=>p.join(',')).join(' '));
+    shadowSvg.appendChild(el);
+  }
+}
+
+// ===== こたえを見る =====
+function solve(){
+  const {ox,oy}=centerOffset();
+  for(const s of pieces){
+    s.rot=0; s.flip=1;
+    s.x = s.home.x + ox;
+    s.y = s.home.y + oy;
+    s.apply();
+  }
+  checkComplete();
+}
+
+// ===== ピースをちらす =====
+function shuffle(){
+  const W=stage.clientWidth, H=stage.clientHeight;
+  for(const s of pieces){
+    s.x=Math.random()*(W-s.w-20)+10;
+    s.y=Math.random()*(H-s.h-20)+10;
+    s.rot=Math.floor(Math.random()*8)*45;
+    s.flip=1; s.apply();
+  }
+  hideMsg();
+}
+
+// ===== 完成チェック（同じ形のピースが入れ替わってもOK）=====
+function polyMatch(a,b,tol){
+  if(a.length!==b.length) return false;
+  const used=new Array(b.length).fill(false);
+  for(const pa of a){ let ok=false;
+    for(let j=0;j<b.length;j++){ if(used[j])continue; if(Math.hypot(pa[0]-b[j][0],pa[1]-b[j][1])<tol){used[j]=true;ok=true;break;} }
+    if(!ok) return false;
+  }
+  return true;
+}
+function checkComplete(){
+  const used=new Array(targetPolys.length).fill(false);
+  let matched=0;
+  for(const s of pieces){
+    const v=pieceVertices(s);
+    for(let t=0;t<targetPolys.length;t++){
+      if(used[t])continue;
+      if(polyMatch(v,targetPolys[t],26)){ used[t]=true; matched++; break; }
+    }
+  }
+  if(matched===targetPolys.length) showMsg(); else hideMsg();
+}
+function showMsg(){ msg.classList.add('show'); }
+function hideMsg(){ msg.classList.remove('show'); }
+
+// ===== ボタン =====
+document.getElementById('shuffleBtn').addEventListener('click', shuffle);
+document.getElementById('answerBtn').addEventListener('click', solve);
+const outlineBtn=document.getElementById('outlineBtn');
+outlineBtn.addEventListener('click', ()=>{
+  shadowSvg.classList.toggle('hidden');
+  outlineBtn.textContent = shadowSvg.classList.contains('hidden') ? 'お手本をみせる' : 'お手本をかくす';
+});
+
+// ===== 起動 =====
+window.addEventListener('load', ()=>{ buildTargets(); drawShadow(); shuffle(); });
+</script>
+</body>
+</html>
