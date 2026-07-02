@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word文書 写真ぼかしツール</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f0f4f8; color: #333; min-height: 100vh; }
+
+  header { background: #2c5282; color: white; padding: 20px 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  header h1 { font-size: 22px; font-weight: 700; }
+  header p { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+
+  main { max-width: 960px; margin: 32px auto; padding: 0 16px; }
+
+  .card { background: white; border-radius: 12px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 24px; }
+
+  /* Step indicator */
+  .steps { display: flex; gap: 0; margin-bottom: 32px; }
+  .step { flex: 1; text-align: center; position: relative; }
+  .step-num { width: 36px; height: 36px; border-radius: 50%; background: #e2e8f0; color: #718096; font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; transition: all 0.3s; }
+  .step-label { font-size: 12px; color: #718096; }
+  .step.active .step-num { background: #2c5282; color: white; }
+  .step.active .step-label { color: #2c5282; font-weight: 600; }
+  .step.done .step-num { background: #38a169; color: white; }
+  .step::after { content: ''; position: absolute; top: 18px; left: 50%; width: 100%; height: 2px; background: #e2e8f0; z-index: 0; }
+  .step:last-child::after { display: none; }
+  .step-num { z-index: 1; position: relative; }
+
+  /* Upload zone */
+  .upload-zone { border: 3px dashed #cbd5e0; border-radius: 10px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.2s; background: #f7fafc; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: #2c5282; background: #ebf4ff; }
+  .upload-zone .icon { font-size: 48px; margin-bottom: 12px; }
+  .upload-zone h2 { font-size: 18px; color: #2d3748; margin-bottom: 8px; }
+  .upload-zone p { font-size: 14px; color: #718096; }
+  .upload-zone .btn-upload { margin-top: 16px; display: inline-block; background: #2c5282; color: white; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+
+  /* Image grid */
+  .section-title { font-size: 16px; font-weight: 700; color: #2d3748; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .section-title span { background: #2c5282; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+
+  .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+  .image-card { border: 3px solid #e2e8f0; border-radius: 10px; overflow: hidden; cursor: pointer; transition: all 0.2s; position: relative; background: #f7fafc; }
+  .image-card:hover { border-color: #90cdf4; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .image-card.selected { border-color: #2c5282; box-shadow: 0 0 0 3px rgba(44,82,130,0.2); }
+  .image-card img { width: 100%; height: 140px; object-fit: cover; display: block; }
+  .image-card .img-label { padding: 8px 10px; font-size: 12px; color: #4a5568; font-weight: 500; }
+  .image-card .check { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%; background: white; border: 2px solid #cbd5e0; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all 0.2s; }
+  .image-card.selected .check { background: #2c5282; border-color: #2c5282; color: white; }
+
+  .select-all-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .btn-select-all { font-size: 13px; color: #2c5282; background: none; border: 1px solid #2c5282; border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+  .btn-select-all:hover { background: #ebf4ff; }
+  .selected-count { font-size: 13px; color: #718096; }
+
+  /* Blur control */
+  .blur-control { background: #f7fafc; border-radius: 10px; padding: 20px; }
+  .blur-row { display: flex; align-items: center; gap: 16px; }
+  .blur-row label { font-size: 14px; font-weight: 600; color: #2d3748; min-width: 80px; }
+  input[type=range] { flex: 1; height: 6px; accent-color: #2c5282; }
+  .blur-value { font-size: 15px; font-weight: 700; color: #2c5282; min-width: 50px; text-align: right; }
+  .blur-hints { display: flex; justify-content: space-between; font-size: 11px; color: #a0aec0; margin-top: 4px; padding: 0 2px; }
+
+  /* Preview */
+  .preview-wrap { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+  .preview-item { text-align: center; }
+  .preview-item p { font-size: 12px; color: #718096; margin-bottom: 6px; }
+  .preview-item canvas, .preview-item img { width: 200px; height: 130px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; display: block; }
+
+  /* Action buttons */
+  .action-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .btn { padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; transition: all 0.2s; }
+  .btn-primary { background: #2c5282; color: white; }
+  .btn-primary:hover { background: #2a4a7f; }
+  .btn-primary:disabled { background: #a0aec0; cursor: not-allowed; }
+  .btn-secondary { background: #e2e8f0; color: #4a5568; }
+  .btn-secondary:hover { background: #cbd5e0; }
+
+  /* Progress */
+  .progress-bar { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 12px; }
+  .progress-fill { height: 100%; background: #2c5282; border-radius: 4px; transition: width 0.3s; width: 0%; }
+  .status-msg { font-size: 13px; color: #718096; margin-top: 8px; }
+
+  .hidden { display: none !important; }
+  .success-msg { background: #c6f6d5; color: #276749; border-radius: 8px; padding: 14px 18px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📄 Word文書 写真ぼかしツール</h1>
+  <p>Word文書（.docx）内の写真を選んでぼかしをかけます</p>
+</header>
+
+<main>
+  <!-- Steps -->
+  <div class="steps">
+    <div class="step active" id="step1"><div class="step-num">1</div><div class="step-label">ファイル選択</div></div>
+    <div class="step" id="step2"><div class="step-num">2</div><div class="step-label">写真を選ぶ</div></div>
+    <div class="step" id="step3"><div class="step-num">3</div><div class="step-label">ぼかし調整</div></div>
+    <div class="step" id="step4"><div class="step-num">4</div><div class="step-label">保存</div></div>
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="card" id="section-upload">
+    <div class="section-title"><span>1</span>Wordファイルを選択</div>
+    <div class="upload-zone" id="upload-zone">
+      <div class="icon">📂</div>
+      <h2>ここにファイルをドロップ</h2>
+      <p>または下のボタンをクリックして選択</p>
+      <div class="btn-upload" onclick="document.getElementById('file-input').click()">ファイルを選ぶ (.docx)</div>
+    </div>
+    <input type="file" id="file-input" accept=".docx" class="hidden">
+    <p id="file-name" style="margin-top:12px;font-size:13px;color:#718096;"></p>
+  </div>
+
+  <!-- Step 2: Select images -->
+  <div class="card hidden" id="section-images">
+    <div class="section-title"><span>2</span>ぼかしをかける写真を選択</div>
+    <div class="select-all-row">
+      <button class="btn-select-all" onclick="toggleSelectAll()">すべて選択 / 解除</button>
+      <span class="selected-count" id="selected-count">0枚選択中</span>
+    </div>
+    <div class="image-grid" id="image-grid"></div>
+  </div>
+
+  <!-- Step 3: Blur control + preview -->
+  <div class="card hidden" id="section-blur">
+    <div class="section-title"><span>3</span>ぼかしの強さを調整</div>
+    <div class="blur-control">
+      <div class="blur-row">
+        <label>ぼかし強度</label>
+        <input type="range" id="blur-slider" min="1" max="30" value="8" oninput="updateBlurPreview()">
+        <span class="blur-value" id="blur-val">8</span>
+      </div>
+      <div class="blur-hints"><span>弱め</span><span>中程度</span><span>強め</span></div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <p style="font-size:13px;color:#718096;margin-bottom:12px;">プレビュー（選択した写真の1枚目）</p>
+      <div class="preview-wrap">
+        <div class="preview-item"><p>元の写真</p><img id="preview-orig" src=""></div>
+        <div style="display:flex;align-items:center;font-size:24px;color:#cbd5e0;">→</div>
+        <div class="preview-item"><p>ぼかし後</p><canvas id="preview-canvas"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Apply & Download -->
+  <div class="card" id="section-action" style="display:none;">
+    <div class="section-title"><span>4</span>ぼかしを適用して保存</div>
+    <div class="action-row">
+      <button class="btn btn-primary" id="btn-apply" onclick="applyBlur()">ぼかしを適用してダウンロード</button>
+      <button class="btn btn-secondary" onclick="resetAll()">最初からやり直す</button>
+    </div>
+    <div class="progress-bar hidden" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <p class="status-msg hidden" id="status-msg"></p>
+    <div class="success-msg hidden" id="success-msg">✅ 完了！ファイルがダウンロードされました。</div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+let zipData = null;
+let originalFileName = '';
+let images = []; // {name, blob, url, selected}
+let selectedIndices = new Set();
+
+// Upload handling
+const fileInput = document.getElementById('file-input');
+const uploadZone = document.getElementById('upload-zone');
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+async function handleFile(file) {
+  if (!file || !file.name.endsWith('.docx')) {
+    alert('.docx ファイルを選択してください');
+    return;
+  }
+  originalFileName = file.name.replace('.docx', '');
+  document.getElementById('file-name').textContent = '読み込み中: ' + file.name;
+
+  const arrayBuffer = await file.arrayBuffer();
+  zipData = await JSZip.loadAsync(arrayBuffer);
+
+  // Extract images
+  images = [];
+  selectedIndices = new Set();
+  const mediaFolder = zipData.folder('word/media');
+  if (!mediaFolder) { alert('この文書に画像が見つかりませんでした。'); return; }
+
+  const imgExts = /\.(png|jpe?g|gif|bmp|webp)$/i;
+  const promises = [];
+  zipData.forEach((path, file) => {
+    if (path.startsWith('word/media/') && imgExts.test(path)) {
+      promises.push(file.async('blob').then(blob => ({ name: path.replace('word/media/', ''), blob, path })));
+    }
+  });
+
+  const rawImages = await Promise.all(promises);
+  rawImages.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+  images = rawImages.map(r => ({ ...r, url: URL.createObjectURL(r.blob) }));
+
+  document.getElementById('file-name').textContent = '✔ ' + file.name + '（写真 ' + images.length + '枚）';
+  renderImageGrid();
+  setStep(2);
+  document.getElementById('section-images').classList.remove('hidden');
+  document.getElementById('section-blur').classList.remove('hidden');
+  document.getElementById('section-action').style.display = '';
+}
+
+function renderImageGrid() {
+  const grid = document.getElementById('image-grid');
+  grid.innerHTML = '';
+  images.forEach((img, i) => {
+    const card = document.createElement('div');
+    card.className = 'image-card' + (selectedIndices.has(i) ? ' selected' : '');
+    card.innerHTML = `<img src="${img.url}" loading="lazy"><div class="img-label">${img.name}</div><div class="check">${selectedIndices.has(i) ? '✓' : ''}</div>`;
+    card.onclick = () => toggleSelect(i);
+    grid.appendChild(card);
+  });
+  updateCount();
+}
+
+function toggleSelect(i) {
+  if (selectedIndices.has(i)) selectedIndices.delete(i);
+  else selectedIndices.add(i);
+  renderImageGrid();
+  updatePreview();
+}
+
+function toggleSelectAll() {
+  if (selectedIndices.size === images.length) selectedIndices.clear();
+  else images.forEach((_, i) => selectedIndices.add(i));
+  renderImageGrid();
+  updatePreview();
+}
+
+function updateCount() {
+  document.getElementById('selected-count').textContent = selectedIndices.size + '枚選択中';
+}
+
+// Blur preview
+async function updateBlurPreview() {
+  const val = document.getElementById('blur-slider').value;
+  document.getElementById('blur-val').textContent = val;
+
+  const firstSelected = [...selectedIndices][0];
+  if (firstSelected === undefined) return;
+
+  const img = images[firstSelected];
+  const origEl = document.getElementById('preview-orig');
+  origEl.src = img.url;
+
+  const canvas = document.getElementById('preview-canvas');
+  const bmp = await createImageBitmap(img.blob);
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  const ctx = canvas.getContext('2d');
+  ctx.filter = `blur(${val * 2}px)`;
+  ctx.drawImage(bmp, 0, 0);
+  ctx.filter = 'none';
+}
+
+function updateBlurPreview_debounced() { clearTimeout(window._pt); window._pt = setTimeout(updateBlurPreview, 80); }
+document.getElementById('blur-slider').oninput = function() {
+  document.getElementById('blur-val').textContent = this.value;
+  updateBlurPreview_debounced();
+};
+
+// Apply blur and download
+async function applyBlur() {
+  if (selectedIndices.size === 0) { alert('ぼかしをかける写真を選んでください。'); return; }
+
+  const blurRadius = parseInt(document.getElementById('blur-slider').value) * 2;
+  const btn = document.getElementById('btn-apply');
+  btn.disabled = true;
+  document.getElementById('progress-bar').classList.remove('hidden');
+  document.getElementById('status-msg').classList.remove('hidden');
+  document.getElementById('success-msg').classList.add('hidden');
+
+  const total = selectedIndices.size;
+  let done = 0;
+
+  for (const i of selectedIndices) {
+    const img = images[i];
+    setStatus(`処理中: ${img.name} (${done + 1}/${total})`);
+    setProgress((done / total) * 90);
+
+    // Draw with blur on canvas
+    const bmp = await createImageBitmap(img.blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    const ctx = canvas.getContext('2d');
+    ctx.filter = `blur(${blurRadius}px)`;
+    ctx.drawImage(bmp, 0, 0);
+    ctx.filter = 'none';
+
+    // Convert to blob
+    const isJpeg = /\.jpe?g$/i.test(img.name);
+    const mimeType = isJpeg ? 'image/jpeg' : 'image/png';
+    const quality = isJpeg ? 0.92 : undefined;
+
+    const newBlob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, quality));
+    const newBuffer = await newBlob.arrayBuffer();
+    zipData.file(img.path, newBuffer);
+    done++;
+  }
+
+  setProgress(95);
+  setStatus('ファイルを生成中...');
+  const outBlob = await zipData.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  setProgress(100);
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(outBlob);
+  a.download = originalFileName + '_ぼかし.docx';
+  a.click();
+
+  setStatus('');
+  document.getElementById('success-msg').classList.remove('hidden');
+  btn.disabled = false;
+  setStep(4);
+}
+
+function setProgress(val) { document.getElementById('progress-fill').style.width = val + '%'; }
+function setStatus(msg) { document.getElementById('status-msg').textContent = msg; }
+
+function setStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('step' + i);
+    el.classList.remove('active', 'done');
+    if (i < n) el.classList.add('done');
+    else if (i === n) el.classList.add('active');
+  }
+}
+
+function resetAll() {
+  zipData = null; images = []; selectedIndices = new Set();
+  document.getElementById('section-images').classList.add('hidden');
+  document.getElementById('section-blur').classList.add('hidden');
+  document.getElementById('section-action').style.display = 'none';
+  document.getElementById('file-name').textContent = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('success-msg').classList.add('hidden');
+  document.getElementById('progress-bar').classList.add('hidden');
+  setStep(1);
+}
+</script>
+</body>
+</html>
