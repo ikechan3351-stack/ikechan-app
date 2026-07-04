@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>図形パズルをつくってあそぼう</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    background: #f4f6f8;
+    color: #333;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+  }
+  header {
+    background: #2f9e8f;
+    color: #fff;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header .icon {
+    background: #fff;
+    color: #2f9e8f;
+    font-weight: bold;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 13px;
+    line-height: 1.1;
+    text-align: center;
+  }
+  header h1 { font-size: 20px; margin: 0; }
+
+  .figbar {
+    padding: 10px 20px;
+    background: #eef4f3;
+    border-bottom: 1px solid #dde6e4;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .figbar .label { font-weight: bold; color: #2f7a6f; margin-right: 4px; }
+  .figbar button.fig {
+    background: #fff;
+    color: #333;
+    border: 2px solid #cbd8d5;
+    border-radius: 10px;
+    padding: 6px 14px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .figbar button.fig:hover { border-color: #2f9e8f; }
+  .figbar button.fig.active {
+    background: #2f9e8f;
+    color: #fff;
+    border-color: #2f9e8f;
+  }
+  .figbar button.hint {
+    margin-left: auto;
+    background: #fff;
+    color: #e08a2f;
+    border: 2px solid #e08a2f;
+    border-radius: 10px;
+    padding: 6px 14px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .figbar button.hint.active {
+    background: #e08a2f;
+    color: #fff;
+  }
+
+  .toolbar {
+    padding: 12px 20px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  .toolbar button {
+    background: #2f9e8f;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .toolbar button:hover { background: #268073; }
+  .toolbar button.gray { background: #888; }
+  .toolbar button.gray:hover { background: #666; }
+  .toolbar button.orange { background: #e08a2f; }
+  .toolbar button.orange:hover { background: #c2761f; }
+  .toolbar .hint { font-size: 13px; color: #666; margin-left: auto; }
+
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 940px;
+    height: 640px;
+    margin: 16px auto;
+    background: #fff;
+    border: 2px solid #d0d8dc;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  /* お手本を置くグリッド枠（ボード） */
+  .board {
+    position: absolute;
+    border: 3px dashed #b9c6cb;
+    border-radius: 10px;
+    background:
+      linear-gradient(#e4ecee 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, #e4ecee 1px, transparent 1px) 0 0 / 40px 40px,
+      #fbfdfd;
+    pointer-events: none;
+  }
+  .board.nogrid {
+    background: #fbfdfd;
+  }
+  /* お手本（影絵）レイヤー */
+  svg.shadow {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  /* もんだい（シルエット）：ピースの区切り線は見せず、外枠だけ */
+  svg.shadow polygon.rim {
+    fill: #a9b8be;
+    stroke: #a9b8be;
+    stroke-width: 6;
+    stroke-linejoin: round;
+  }
+  svg.shadow polygon.inner {
+    fill: #dde6e9;
+    stroke: #dde6e9;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+  /* ヒント：ピースの区切り線を表示 */
+  svg.shadow.hint polygon.inner {
+    stroke: #9fb0b7;
+    stroke-width: 2;
+    stroke-dasharray: 5 4;
+  }
+  svg.shadow.hidden { display: none; }
+
+  svg.piece {
+    position: absolute;
+    top: 0; left: 0;
+    overflow: visible;
+    cursor: grab;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.18));
+  }
+  svg.piece.dragging { cursor: grabbing; }
+  svg.piece polygon {
+    stroke: rgba(255,255,255,0.5);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+  svg.piece .rot-handle { cursor: grab; display: none; }
+  svg.piece.selected .rot-handle { display: block; }
+  svg.piece.dragging .rot-handle { cursor: grabbing; }
+
+  .msg {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    background: #ffcf3f;
+    color: #6b4e00;
+    padding: 10px 26px;
+    border-radius: 24px;
+    font-weight: bold;
+    font-size: 20px;
+    opacity: 0;
+    transition: all .3s;
+    pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  }
+  .msg.show { opacity: 1; transform: translateX(-50%) scale(1); }
+</style>
+</head>
+<body>
+<header>
+  <span class="icon">おうちで<br>ミュージアム</span>
+  <h1>図形パズルをつくってあそぼう</h1>
+</header>
+
+<div class="figbar" id="figbar">
+  <span class="label">もんだいをえらぶ：</span>
+  <!-- もんだいボタンはJSで生成（ヒントボタンの前に挿入される） -->
+  <button class="hint" id="hintBtn">ヒント</button>
+</div>
+
+<div class="toolbar">
+  <button id="shuffleBtn">ピースをちらす</button>
+  <button class="orange" id="answerBtn">こたえを見る</button>
+  <button class="gray" id="outlineBtn">もんだいをかくす</button>
+  <button class="gray" id="gridBtn">グリッドをかくす</button>
+  <span class="hint">ドラッグで動かす／クリックすると〇印が出て回転できる／右クリックで裏返す</span>
+</div>
+
+<div class="stage" id="stage">
+  <div class="board" id="board"></div>
+  <svg class="shadow" id="shadow" viewBox="0 0 940 640" preserveAspectRatio="none"></svg>
+  <div class="msg" id="msg">やったね！かんせい！</div>
+</div>
+
+<script>
+const stage = document.getElementById('stage');
+const shadowSvg = document.getElementById('shadow');
+const msg = document.getElementById('msg');
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+// ===== 7ピースの定義（大きな四角＝400×400を隙間なく分割した正確な座標）=====
+const TANGRAM = [
+  { id:'bigTop',  color:'#2f9e8f', pts:[[0,0],[400,0],[200,200]] },              // 大三角(緑)
+  { id:'bigLeft', color:'#e14b5a', pts:[[0,0],[200,200],[0,400]] },              // 大三角(赤)
+  { id:'smTopR',  color:'#8e5aa6', pts:[[400,0],[400,200],[300,100]] },          // 小三角(紫)
+  { id:'square',  color:'#f0a63f', pts:[[200,200],[300,100],[400,200],[300,300]] }, // 正方形(オレンジ)
+  { id:'smMid',   color:'#e88a8f', pts:[[200,200],[100,300],[300,300]] },        // 小三角(ピンク)
+  { id:'para',    color:'#3f6fd1', pts:[[0,400],[200,400],[300,300],[100,300]] }, // 平行四辺形(青)
+  { id:'medBR',   color:'#7db93f', pts:[[200,400],[400,400],[400,200]] },        // 中三角(黄緑)
+];
+
+// ===== 幾何ユーティリティ =====
+function rotatePt(x, y, deg){
+  const r = deg*Math.PI/180, c = Math.cos(r), s = Math.sin(r);
+  return [x*c - y*s, x*s + y*c];
+}
+// 配置指定{piece, rot, flip, tx, ty}から、そのピースの絶対頂点座標を作る
+function polyFromPlacement(pl){
+  return TANGRAM[pl.piece].pts.map(([x,y])=>{
+    let px = pl.flip ? -x : x;
+    let [rx, ry] = rotatePt(px, y, pl.rot||0);
+    return [rx + (pl.tx||0), ry + (pl.ty||0)];
+  });
+}
+function centroidOf(polys){
+  let sx=0, sy=0, n=0;
+  for(const poly of polys) for(const [x,y] of poly){ sx+=x; sy+=y; n++; }
+  return [sx/n, sy/n];
+}
+// 図形全体をステージ中央に来るように平行移動
+function centerPolys(polys){
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  for(const poly of polys) for(const [x,y] of poly){
+    minX=Math.min(minX,x); minY=Math.min(minY,y);
+    maxX=Math.max(maxX,x); maxY=Math.max(maxY,y);
+  }
+  const ox = (stage.clientWidth - (minX+maxX))/2;
+  const oy = (stage.clientHeight - (minY+maxY))/2;
+  return polys.map(poly=>poly.map(([x,y])=>[x+ox, y+oy]));
+}
+
+// ===== お手本（図形）データ =====
+// 各図形は7ピースを隙間・重なりなく並べた「影絵」。polys=各ピースの絶対座標。
+// すべて専用ツールで検証済み（必ず完成できる）。
+const FIGURES = {"square":{"name":"四角","polys":[[[0,0],[400,0],[200,200]],[[0,0],[200,200],[0,400]],[[400,0],[400,200],[300,100]],[[200,200],[300,100],[400,200],[300,300]],[[200,200],[100,300],[300,300]],[[0,400],[200,400],[300,300],[100,300]],[[200,400],[400,400],[400,200]]]},"triangle":{"name":"大きな三角","polys":[[[400,0],[800,0],[600,200]],[[400,0],[200,200],[0,0]],[[300,100],[300,300],[200,200]],[[300,300],[400,200],[500,300],[400,400]],[[500,300],[600,200],[400,200]],[[300,300],[300,100],[400,0],[400,200]],[[400,0],[400,200],[600,200]]]},"cat":{"name":"ねこ","polys":[[[0,-100],[100,0],[0,100],[-100,0]],[[-100,0],[0,-100],[-100,-200]],[[100,0],[0,-100],[100,-200]],[[-200,300],[200,300],[0,100]],[[-200,300],[200,300],[0,500]],[[0,500],[200,300],[200,500]],[[200,300],[200,500],[300,600],[300,400]]]},"fish":{"name":"さかな","polys":[[[0,0],[282.84,0],[0,282.84]],[[282.84,0],[282.84,282.84],[0,282.84]],[[282.84,0],[282.84,282.84],[424.26,141.42]],[[0,0],[0,141.42],[-141.42,0]],[[0,141.42],[0,282.84],[-141.42,282.84]],[[40,0],[240,0],[140,-100],[-60,-100]],[[71,282.84],[212.42,282.84],[212.42,424.26],[71,424.26]]]}};
+
+let currentFig = 'square';
+let targetPolys = [];   // 現在のお手本の各ピースの絶対座標（センタリング済み）
+
+// ===== 全体の縮尺（グリッド枠の外にピースを置く余白を作るため小さめに）=====
+const SCALE = 0.6;
+TANGRAM.forEach(t=>{ t.pts = t.pts.map(([x,y])=>[x*SCALE, y*SCALE]); });
+for(const k in FIGURES){ FIGURES[k].polys = FIGURES[k].polys.map(poly=>poly.map(([x,y])=>[x*SCALE, y*SCALE])); }
+
+// ===== ピース生成 =====
+const pieces = [];
+function makePiece(def, idx){
+  const xs=def.pts.map(p=>p[0]), ys=def.pts.map(p=>p[1]);
+  const minX=Math.min(...xs), minY=Math.min(...ys);
+  const maxX=Math.max(...xs), maxY=Math.max(...ys);
+  const w=maxX-minX, h=maxY-minY;
+  const local = def.pts.map(p=>[p[0]-minX, p[1]-minY]);
+
+  const svg = document.createElementNS(SVGNS,'svg');
+  svg.setAttribute('class','piece');
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  const poly = document.createElementNS(SVGNS,'polygon');
+  poly.setAttribute('points', local.map(p=>p.join(',')).join(' '));
+  poly.setAttribute('fill', def.color);
+  svg.appendChild(poly);
+
+  // 回転ハンドル（中心から一番遠い頂点に置く丸い印）
+  const cx0=w/2, cy0=h/2;
+  let far=local[0], fd=-1;
+  for(const p of local){ const d=Math.hypot(p[0]-cx0,p[1]-cy0); if(d>fd){fd=d; far=p;} }
+  const hHit=document.createElementNS(SVGNS,'circle');
+  hHit.setAttribute('cx',far[0]); hHit.setAttribute('cy',far[1]); hHit.setAttribute('r',20);
+  hHit.setAttribute('fill','transparent'); hHit.setAttribute('class','rot-handle');
+  const hRing=document.createElementNS(SVGNS,'circle');
+  hRing.setAttribute('cx',far[0]); hRing.setAttribute('cy',far[1]); hRing.setAttribute('r',11);
+  hRing.setAttribute('fill','rgba(255,255,255,0.9)'); hRing.setAttribute('stroke','#444');
+  hRing.setAttribute('stroke-width','2'); hRing.setAttribute('class','rot-handle');
+  const hDot=document.createElementNS(SVGNS,'circle');
+  hDot.setAttribute('cx',far[0]); hDot.setAttribute('cy',far[1]); hDot.setAttribute('r',3.5);
+  hDot.setAttribute('fill','#444'); hDot.setAttribute('class','rot-handle');
+  svg.appendChild(hRing); svg.appendChild(hDot); svg.appendChild(hHit);
+
+  const state = { idx, el:svg, w, h, local, x:0, y:0, rot:0, flip:1 };
+  svg.__state = state;
+  state.apply = ()=>{
+    svg.style.left = state.x+'px';
+    svg.style.top = state.y+'px';
+    svg.style.transformOrigin = '50% 50%';
+    svg.style.transform = `rotate(${state.rot}deg) scaleX(${state.flip})`;
+  };
+
+  // ドラッグ（本体＝移動／ハンドル＝回転）
+  let mode=null, start=null;
+  svg.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    stage.appendChild(svg);       // 最前面へ
+    selectPiece(svg);             // このピースだけ〇印を表示
+    const p=getPoint(e);
+    if(e.target.classList.contains('rot-handle')){
+      mode='rotate';
+      const cx=state.x+w/2, cy=state.y+h/2;
+      start={ ang:Math.atan2(p.y-cy, p.x-cx), rot0:state.rot, moved:false };
+    } else {
+      mode='move';
+      svg.classList.add('dragging');
+      start={ px:p.x, py:p.y, ox:state.x, oy:state.y };
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+  function move(e){
+    if(!start) return;
+    const p=getPoint(e);
+    if(mode==='move'){
+      state.x = start.ox + (p.x-start.px);
+      state.y = start.oy + (p.y-start.py);
+    } else {
+      const cx=state.x+w/2, cy=state.y+h/2;
+      const ang=Math.atan2(p.y-cy, p.x-cx);
+      state.rot = start.rot0 + (ang-start.ang)*180/Math.PI;
+      start.moved=true;
+    }
+    state.apply();
+  }
+  function up(){
+    svg.classList.remove('dragging');
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    if(mode==='rotate'){
+      if(!start.moved) state.rot += 45;          // ハンドルを軽くタップ→45°
+      state.rot = Math.round(state.rot/45)*45;    // 指を離すと45°刻みにピタッ
+      state.rot = ((state.rot%360)+360)%360;
+      state.apply();
+    }
+    mode=null; start=null;
+    checkComplete();
+  }
+  svg.addEventListener('contextmenu', e=>{ e.preventDefault(); state.flip*=-1; state.apply(); checkComplete(); });
+
+  stage.appendChild(svg);
+  pieces.push(state);
+}
+function getPoint(e){
+  const r = stage.getBoundingClientRect();
+  return { x:e.clientX-r.left, y:e.clientY-r.top };
+}
+TANGRAM.forEach(makePiece);
+
+// ピースの選択（選んだピースだけ回転ハンドルを表示）
+function selectPiece(el){
+  for(const s of pieces) s.el.classList.toggle('selected', s.el===el);
+}
+// 何もない場所をクリックしたら選択解除
+stage.addEventListener('pointerdown', e=>{
+  if(e.target===stage || e.target.closest('svg.shadow')) selectPiece(null);
+});
+
+// ピースの現在の絶対頂点を計算（CSS transformと一致させる）
+function pieceVertices(s){
+  const cx=s.w/2, cy=s.h/2;
+  return s.local.map(([lx,ly])=>{
+    let dx=(lx-cx)*s.flip, dy=(ly-cy);
+    const [rx,ry]=rotatePt(dx,dy,s.rot);
+    return [s.x+cx+rx, s.y+cy+ry];
+  });
+}
+
+// ===== お手本の読み込み =====
+function shapeKey(poly){
+  // 辺の長さを並べたものでピース形状を識別
+  const L=[];
+  for(let i=0;i<poly.length;i++){
+    const a=poly[i], b=poly[(i+1)%poly.length];
+    L.push(Math.round(Math.hypot(b[0]-a[0], b[1]-a[1])/5));
+  }
+  return L.slice().sort((x,y)=>x-y).join(',')+'|'+poly.length;
+}
+
+let boardRect = null;  // グリッド枠の範囲（ステージ座標）
+function loadFigure(name){
+  currentFig = name;
+  const fig = FIGURES[name];
+  let polys = (fig.polys || fig.placements.map(polyFromPlacement)).map(p=>p.map(q=>q.slice()));
+  targetPolys = centerPolys(polys);
+  layoutBoard();
+  drawShadow();
+  updateFigButtons();
+  // 新しいもんだいではヒントをリセット
+  shadowSvg.classList.remove('hint');
+  const hb=document.getElementById('hintBtn');
+  if(hb) hb.classList.remove('active');
+  shuffle();
+}
+
+// お手本のまわりにグリッド枠（ボード）を配置
+function layoutBoard(){
+  const board = document.getElementById('board');
+  let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;
+  for(const poly of targetPolys) for(const [x,y] of poly){
+    x1=Math.min(x1,x); y1=Math.min(y1,y); x2=Math.max(x2,x); y2=Math.max(y2,y);
+  }
+  const pad = 30;
+  boardRect = { x1:x1-pad, y1:y1-pad, x2:x2+pad, y2:y2+pad };
+  board.style.left = boardRect.x1+'px';
+  board.style.top = boardRect.y1+'px';
+  board.style.width = (boardRect.x2-boardRect.x1)+'px';
+  board.style.height = (boardRect.y2-boardRect.y1)+'px';
+}
+
+function drawShadow(){
+  // シャドウSVGの座標系をステージの実ピクセルに合わせる（ゆがみ防止）
+  shadowSvg.setAttribute('viewBox', `0 0 ${stage.clientWidth} ${stage.clientHeight}`);
+  shadowSvg.innerHTML='';
+  // 2層で描く：下層(rim)で外枠の縁取りを作り、上層(inner)で内側を塗りつぶす。
+  // ピースの区切り線は見えず、形の外枠だけが残る。
+  for(const cls of ['rim','inner']){
+    for(const poly of targetPolys){
+      const el=document.createElementNS(SVGNS,'polygon');
+      el.setAttribute('points', poly.map(p=>p.join(',')).join(' '));
+      el.setAttribute('class', cls);
+      shadowSvg.appendChild(el);
+    }
+  }
+}
+
+// ===== こたえを見る（ピースをお手本に合わせる）=====
+function solve(){
+  const used = new Array(pieces.length).fill(false);
+  for(const tgt of targetPolys){
+    const tKey = shapeKey(tgt);
+    const tc = polyCentroid(tgt);
+    let done=false;
+    for(let pi=0; pi<pieces.length && !done; pi++){
+      if(used[pi]) continue;
+      const s=pieces[pi];
+      // このピースの形が合うか
+      const baseKey = shapeKey(s.local.map(p=>p.slice()));
+      if(baseKey!==tKey) continue;
+      // 回転・反転を総当たりで合わせる
+      for(let flip of [1,-1]){
+        for(let rot=0; rot<360 && !done; rot+=45){
+          // s.x=0,s.y=0 のときの頂点 = testVertices。ここへ off を足すと tgt に一致させたい
+          const test = testVertices(s, rot, flip);
+          const off = [tc[0]-polyCentroid(test)[0], tc[1]-polyCentroid(test)[1]];
+          const moved = test.map(([x,y])=>[x+off[0], y+off[1]]);
+          if(polyMatch(moved, tgt, 8)){
+            // pieceVertices(s) = testVertices + (s.x, s.y) なので s.x=off でぴったり合う
+            s.rot=rot; s.flip=flip; s.x=off[0]; s.y=off[1];
+            s.apply();
+            used[pi]=true; done=true;
+          }
+        }
+      }
+    }
+  }
+  checkComplete();
+}
+// 回転・反転のみ適用した頂点（s.x=0,s.y=0 のときの pieceVertices と同じ）
+function testVertices(s, rot, flip){
+  const cx=s.w/2, cy=s.h/2;
+  return s.local.map(([lx,ly])=>{
+    let dx=(lx-cx)*flip, dy=(ly-cy);
+    const [rx,ry]=rotatePt(dx,dy,rot);
+    return [cx+rx, cy+ry];
+  });
+}
+function polyCentroid(poly){
+  let sx=0,sy=0; for(const [x,y] of poly){ sx+=x; sy+=y; } return [sx/poly.length, sy/poly.length];
+}
+function polyMatch(a, b, tol){
+  if(a.length!==b.length) return false;
+  const usedB=new Array(b.length).fill(false);
+  for(const pa of a){
+    let ok=false;
+    for(let j=0;j<b.length;j++){
+      if(usedB[j]) continue;
+      if(Math.hypot(pa[0]-b[j][0], pa[1]-b[j][1])<tol){ usedB[j]=true; ok=true; break; }
+    }
+    if(!ok) return false;
+  }
+  return true;
+}
+
+// ===== 完成チェック =====
+function checkComplete(){
+  const used=new Array(targetPolys.length).fill(false);
+  let matched=0;
+  for(const s of pieces){
+    const v=pieceVertices(s);
+    for(let t=0;t<targetPolys.length;t++){
+      if(used[t]) continue;
+      if(polyMatch(v, targetPolys[t], 24)){ used[t]=true; matched++; break; }
+    }
+  }
+  if(matched===targetPolys.length) showMsg(); else hideMsg();
+}
+function showMsg(){ msg.classList.add('show'); }
+function hideMsg(){ msg.classList.remove('show'); }
+
+// ===== ピースをちらす（お手本と重ならないよう端のほうへ）=====
+function rectOverlap(x, y, w, h, bb){
+  const ox = Math.max(0, Math.min(x+w, bb.x2) - Math.max(x, bb.x1));
+  const oy = Math.max(0, Math.min(y+h, bb.y2) - Math.max(y, bb.y1));
+  return ox*oy;
+}
+function shuffle(){
+  const W=stage.clientWidth, H=stage.clientHeight;
+  const bb = boardRect;  // グリッド枠の外に置く
+  const placed=[];
+  for(const s of pieces){
+    // 候補位置をたくさん試し、グリッド枠・他ピースと一番重ならない場所を選ぶ
+    let best=null, bestScore=Infinity;
+    for(let t=0; t<300; t++){
+      const x = Math.random()*(W - s.w - 20) + 10;
+      const y = Math.random()*(H - s.h - 20) + 10;
+      let score = 0;
+      if(bb) score += rectOverlap(x, y, s.w, s.h, bb) * 1000;  // 枠の中は事実上禁止
+      for(const r of placed) score += rectOverlap(x, y, s.w, s.h, r);
+      if(score < bestScore){ bestScore=score; best={x,y}; }
+      if(score === 0) break;
+    }
+    s.x = best.x;
+    s.y = best.y;
+    s.rot = Math.floor(Math.random()*8)*45;
+    s.flip = 1;
+    s.apply();
+    placed.push({x1:best.x, y1:best.y, x2:best.x+s.w, y2:best.y+s.h});
+  }
+  hideMsg();
+}
+
+// ===== お手本ボタン =====
+const figbar = document.getElementById('figbar');
+function updateFigButtons(){
+  [...figbar.querySelectorAll('button.fig')].forEach(b=>{
+    b.classList.toggle('active', b.dataset.fig===currentFig);
+  });
+}
+function buildFigButtons(){
+  const hintBtn=document.getElementById('hintBtn');
+  for(const key in FIGURES){
+    const b=document.createElement('button');
+    b.className='fig';
+    b.textContent=FIGURES[key].name;
+    b.dataset.fig=key;
+    b.addEventListener('click', ()=>loadFigure(key));
+    figbar.insertBefore(b, hintBtn);  // ヒントボタンは右端に残す
+  }
+}
+
+// ===== ボタン =====
+document.getElementById('shuffleBtn').addEventListener('click', shuffle);
+document.getElementById('answerBtn').addEventListener('click', solve);
+const outlineBtn=document.getElementById('outlineBtn');
+outlineBtn.addEventListener('click', ()=>{
+  shadowSvg.classList.toggle('hidden');
+  outlineBtn.textContent = shadowSvg.classList.contains('hidden') ? 'もんだいをみせる' : 'もんだいをかくす';
+});
+const gridBtn=document.getElementById('gridBtn');
+gridBtn.addEventListener('click', ()=>{
+  const board=document.getElementById('board');
+  board.classList.toggle('nogrid');
+  gridBtn.textContent = board.classList.contains('nogrid') ? 'グリッドをみせる' : 'グリッドをかくす';
+});
+// ヒント：ピースの区切り線を表示／非表示
+const hintBtn=document.getElementById('hintBtn');
+hintBtn.addEventListener('click', ()=>{
+  shadowSvg.classList.toggle('hint');
+  hintBtn.classList.toggle('active', shadowSvg.classList.contains('hint'));
+});
+
+// ===== 起動 =====
+buildFigButtons();
+window.addEventListener('load', ()=>{ loadFigure('square'); });
+// 画面サイズが変わったら、もんだい・グリッド枠を中央に置き直す（ピースはそのまま）
+window.addEventListener('resize', ()=>{
+  if(!currentFig) return;
+  const fig = FIGURES[currentFig];
+  targetPolys = centerPolys(fig.polys.map(p=>p.map(q=>q.slice())));
+  layoutBoard();
+  drawShadow();
+});
+</script>
+</body>
+</html>

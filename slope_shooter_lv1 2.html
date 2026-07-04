@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>傾きシューター Lv.1</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Hiragino Sans", "Meiryo", sans-serif;
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 16px;
+    gap: 12px;
+  }
+  h1 { color: #e0e0ff; font-size: 22px; letter-spacing: 2px; }
+
+  .layout {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  #stage {
+    background: #f0f6ff;
+    border: 3px solid #6c63ff;
+    border-radius: 10px;
+    display: block;
+    cursor: default;
+  }
+
+  /* 右パネル */
+  .panel {
+    background: #16213e;
+    border: 2px solid #6c63ff;
+    border-radius: 14px;
+    padding: 18px;
+    width: 230px;
+    color: #e0e0ff;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 15px;
+  }
+  .info-val { font-size: 24px; font-weight: bold; color: #ffb84d; }
+  #timerBar { height: 12px; background: #333; border-radius: 6px; overflow: hidden; }
+  #timerBarFill {
+    height: 100%;
+    background: linear-gradient(90deg, #6c63ff, #ff7a3d);
+    border-radius: 6px;
+    transition: width 0.15s linear;
+  }
+  #probBar { height: 8px; background: #333; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+  #probBarFill {
+    height: 100%;
+    background: #ff7a3d;
+    border-radius: 6px;
+    transition: width 0.15s linear;
+  }
+  .sep { border: none; border-top: 1px solid #334; }
+
+  /* 式表示 */
+  .formula-box {
+    background: #0f3460;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    font-size: 20px;
+    font-weight: bold;
+    color: #fff;
+    letter-spacing: 1px;
+    min-height: 44px;
+  }
+
+  /* 5択ボタン */
+  .choices {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .choice-btn {
+    padding: 10px 6px;
+    font-size: 17px;
+    font-weight: bold;
+    border: 2px solid #6c63ff;
+    border-radius: 10px;
+    background: #0f3460;
+    color: #e0e0ff;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    text-align: center;
+  }
+  .choice-btn:hover:not(:disabled) { background: #6c63ff; transform: scale(1.05); }
+  .choice-btn.selected { background: #6c63ff; border-color: #ffd700; color: #fff; }
+  .choice-btn.correct  { background: #27ae60 !important; border-color: #2ecc71 !important; }
+  .choice-btn.wrong    { background: #c0392b !important; border-color: #e74c3c !important; }
+  .choice-btn:disabled { cursor: default; opacity: 0.8; }
+  /* 5個目は全幅 */
+  .choices .choice-btn:last-child:nth-child(odd) { grid-column: span 2; }
+
+  /* 発射ボタン */
+  .shoot-btn {
+    width: 100%;
+    padding: 13px;
+    font-size: 18px;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6c63ff, #ff7a3d);
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    letter-spacing: 1px;
+  }
+  .shoot-btn:hover:not(:disabled) { opacity: 0.85; }
+  .shoot-btn:disabled { opacity: 0.35; cursor: default; }
+
+  #message { text-align: center; font-size: 22px; font-weight: bold; min-height: 30px; }
+
+  /* キーボード入力モード */
+  .input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .input-row input {
+    flex: 1;
+    padding: 8px 10px;
+    font-size: 18px;
+    border: 2px solid #6c63ff;
+    border-radius: 8px;
+    background: #0f3460;
+    color: #fff;
+    text-align: center;
+    outline: none;
+  }
+  .input-row input:focus { border-color: #ffd700; }
+
+  /* モード切替 */
+  .mode-toggle {
+    display: flex;
+    gap: 6px;
+  }
+  .mode-btn {
+    flex: 1;
+    padding: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    border: 2px solid #6c63ff;
+    border-radius: 8px;
+    background: #0f3460;
+    color: #aaa;
+    cursor: pointer;
+  }
+  .mode-btn.active { background: #6c63ff; color: #fff; }
+
+  /* オーバーレイ */
+  #overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.78);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10;
+  }
+  .overlay-box {
+    background: #16213e; border: 3px solid #6c63ff;
+    border-radius: 16px; padding: 36px 40px;
+    text-align: center; color: #e0e0ff;
+    max-width: 340px; width: 90%;
+  }
+  .overlay-box h2 { font-size: 26px; margin-bottom: 10px; color: #ffb84d; }
+  .overlay-box p  { font-size: 15px; color: #aaa; margin-bottom: 16px; line-height: 1.7; }
+  .big-score { font-size: 54px; font-weight: bold; color: #fff; margin: 8px 0 20px; }
+  .overlay-btn {
+    padding: 14px 36px; font-size: 18px; font-weight: bold;
+    border: none; border-radius: 10px;
+    background: linear-gradient(135deg, #6c63ff, #ff7a3d);
+    color: #fff; cursor: pointer; letter-spacing: 1px;
+  }
+  .overlay-btn:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<h1>🎯 傾きシューター Lv.1</h1>
+
+<div class="layout">
+  <canvas id="stage" width="480" height="480"></canvas>
+
+  <div class="panel">
+    <!-- 全体タイマー -->
+    <div>
+      <div class="info-row">
+        <span>⏱ のこり</span>
+        <span class="info-val" id="timeDisp">2:00</span>
+      </div>
+      <div id="timerBar"><div id="timerBarFill" style="width:100%"></div></div>
+    </div>
+
+    <!-- 問題タイマー -->
+    <div>
+      <div class="info-row" style="font-size:13px;color:#aaa;">
+        <span>問題切替まで</span>
+        <span id="nextDisp" style="color:#ff7a3d;font-weight:bold;">6秒</span>
+      </div>
+      <div id="probBar"><div id="probBarFill" style="width:100%"></div></div>
+    </div>
+
+    <!-- 的中数 -->
+    <div class="info-row">
+      <span>🎯 的中数</span>
+      <span class="info-val" id="hitCount">0</span>
+    </div>
+
+    <hr class="sep">
+
+    <!-- 式 -->
+    <div class="formula-box" id="formulaBox">y = ? x</div>
+
+    <!-- モード切替 -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="modeChoice" onclick="setMode('choice')">5択</button>
+      <button class="mode-btn"        id="modeInput"  onclick="setMode('input')">キーボード</button>
+    </div>
+
+    <!-- 5択 -->
+    <div id="choicesArea" class="choices"></div>
+
+    <!-- キーボード入力（初期非表示） -->
+    <div id="inputArea" style="display:none;">
+      <div class="input-row">
+        <span style="font-size:18px;">a =</span>
+        <input type="number" id="slopeInput" placeholder="例: 2" step="1">
+      </div>
+    </div>
+
+    <!-- 発射 -->
+    <button class="shoot-btn" id="shootBtn" disabled>🚀 発射！</button>
+
+    <div id="message"></div>
+  </div>
+</div>
+
+<!-- オーバーレイ -->
+<div id="overlay">
+  <div class="overlay-box" id="overlayBox">
+    <h2>🎯 傾きシューター</h2>
+    <p>
+      直線 <b>y = ax</b> で的をねらえ！<br>
+      的の座標から傾きを考えて選ぼう<br><br>
+      ⏱ <b>2分間</b>で何問当てられる？<br>
+      6秒ごとに的が変わるよ
+    </p>
+    <button class="overlay-btn" onclick="startGame()">▶ スタート</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const SCALE = 38;
+const cx = W / 2, cy = H / 2;
+
+function toSX(x) { return cx + x * SCALE; }
+function toSY(y) { return cy - y * SCALE; }
+
+// ゲーム状態
+let state = 'idle';
+let hitCount = 0;
+let gameTimer = 120;
+let probTimer = 6;
+let lastTime = null;
+let rafId = null;
+let target = null;
+let correctSlope = 0;
+let selectedSlope = null;
+let beam = null;
+let shotFired = false;
+let inputMode = 'choice'; // 'choice' or 'input'
+let beamAfterEnd = false;
+
+const shootBtn    = document.getElementById('shootBtn');
+const messageEl   = document.getElementById('message');
+const hitCountEl  = document.getElementById('hitCount');
+const timeDispEl  = document.getElementById('timeDisp');
+const nextDispEl  = document.getElementById('nextDisp');
+const timerFill   = document.getElementById('timerBarFill');
+const probFill    = document.getElementById('probBarFill');
+const formulaBox  = document.getElementById('formulaBox');
+const choicesArea = document.getElementById('choicesArea');
+const inputArea   = document.getElementById('inputArea');
+const slopeInput  = document.getElementById('slopeInput');
+const overlay     = document.getElementById('overlay');
+
+function setMode(mode) {
+  inputMode = mode;
+  document.getElementById('modeChoice').classList.toggle('active', mode === 'choice');
+  document.getElementById('modeInput').classList.toggle('active', mode === 'input');
+  choicesArea.style.display = mode === 'choice' ? 'grid' : 'none';
+  inputArea.style.display   = mode === 'input'  ? 'block' : 'none';
+  selectedSlope = null;
+  shootBtn.disabled = true;
+}
+
+// --- 的の生成（的座標を整数にし傾きが整数になるようにする）---
+const SLOPE_POOL = [-3, -2, -1, 1, 2, 3];
+
+function newProblem() {
+  // 傾きを先に決め、座標を生成
+  correctSlope = SLOPE_POOL[Math.floor(Math.random() * SLOPE_POOL.length)];
+  // x: -4〜4の整数（0以外）
+  let tx, ty;
+  do {
+    tx = Math.floor(Math.random() * 8) - 4;
+    ty = correctSlope * tx;
+  } while (tx === 0 || Math.abs(ty) > 5);
+  target = { x: tx, y: ty, r: 0.52, hit: false };
+
+  // 式表示（傾き未知）
+  formulaBox.textContent = 'y = ? × x';
+
+  // 選択肢生成
+  buildChoices();
+  selectedSlope = null;
+  shootBtn.disabled = true;
+  slopeInput.value = '';
+  messageEl.textContent = '';
+  messageEl.style.color = '#fff';
+}
+
+function buildChoices() {
+  // 正解 + 4つのダミー（重複なし）
+  const pool = [...SLOPE_POOL];
+  const others = pool.filter(v => v !== correctSlope);
+  // シャッフル
+  for (let i = others.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [others[i], others[j]] = [others[j], others[i]];
+  }
+  const choices = [correctSlope, ...others.slice(0, 4)];
+  // シャッフル
+  for (let i = choices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [choices[i], choices[j]] = [choices[j], choices[i]];
+  }
+
+  choicesArea.innerHTML = '';
+  choices.forEach(v => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = 'a = ' + v;
+    btn.dataset.val = v;
+    btn.onclick = () => selectChoice(v, btn);
+    choicesArea.appendChild(btn);
+  });
+}
+
+function selectChoice(v, btn) {
+  if (shotFired) return;
+  selectedSlope = v;
+  choicesArea.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  formulaBox.textContent = 'y = ' + v + ' × x';
+  shootBtn.disabled = false;
+}
+
+// キーボードモードでの入力確認
+slopeInput.addEventListener('input', () => {
+  const v = parseInt(slopeInput.value);
+  if (!isNaN(v)) {
+    selectedSlope = v;
+    formulaBox.textContent = 'y = ' + v + ' × x';
+    shootBtn.disabled = false;
+  } else {
+    selectedSlope = null;
+    shootBtn.disabled = true;
+  }
+});
+
+// --- 描画関数 ---
+function drawGrid() {
+  ctx.clearRect(0, 0, W, H);
+  // グリッド線
+  ctx.strokeStyle = '#cfe0f7';
+  ctx.lineWidth = 1;
+  for (let i = -6; i <= 6; i++) {
+    ctx.beginPath(); ctx.moveTo(toSX(i), 0);    ctx.lineTo(toSX(i), H);    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, toSY(i));     ctx.lineTo(W, toSY(i));    ctx.stroke();
+  }
+  // 軸
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+  // 矢印
+  ctx.fillStyle = '#333';
+  // x矢印
+  ctx.beginPath(); ctx.moveTo(W-4, cy); ctx.lineTo(W-14, cy-6); ctx.lineTo(W-14, cy+6); ctx.fill();
+  // y矢印
+  ctx.beginPath(); ctx.moveTo(cx, 4); ctx.lineTo(cx-6, 14); ctx.lineTo(cx+6, 14); ctx.fill();
+  // 数字ラベル
+  ctx.fillStyle = '#666';
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center';
+  for (let i = -5; i <= 5; i++) {
+    if (i === 0) continue;
+    ctx.fillText(i, toSX(i), cy + 16);
+  }
+  ctx.textAlign = 'left';
+  for (let i = -5; i <= 5; i++) {
+    if (i === 0) continue;
+    ctx.fillText(i, cx + 6, toSY(i) + 4);
+  }
+  ctx.fillStyle = '#555';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('x', W - 10, cy - 8);
+  ctx.fillText('y', cx + 8, 12);
+}
+
+function drawPreviewLine() {
+  if (selectedSlope === null) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(108,99,255,0.35)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([7, 6]);
+  ctx.beginPath();
+  ctx.moveTo(toSX(-6), toSY(selectedSlope * -6));
+  ctx.lineTo(toSX(6),  toSY(selectedSlope * 6));
+  ctx.stroke();
+  ctx.restore();
+}
+
+// 大砲スプライト
+function drawCannon(slope) {
+  const angle = -Math.atan(slope); // キャンバスY反転
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  // 台座
+  ctx.fillStyle = '#9b59b6';
+  ctx.beginPath();
+  ctx.ellipse(0, 4, 16, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 砲身
+  ctx.fillStyle = '#8e44ad';
+  ctx.beginPath();
+  ctx.roundRect(2, -7, 34, 14, 5);
+  ctx.fill();
+  // 砲口リング
+  ctx.strokeStyle = '#d7bde2';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(36, 0, 7, 0, Math.PI * 2);
+  ctx.stroke();
+  // 本体ハイライト
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(0, -2, 12, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// UFO的スプライト
+function drawUFO(tx, ty, hit) {
+  const sx = toSX(tx), sy = toSY(ty);
+  const r = target.r * SCALE;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // 影
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.beginPath();
+  ctx.ellipse(0, r * 0.55, r * 0.9, r * 0.25, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 本体（円盤）
+  const bodyColor = hit ? '#27ae60' : '#2c3e50';
+  ctx.fillStyle = bodyColor;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 縁の光
+  ctx.strokeStyle = hit ? '#2ecc71' : '#e74c3c';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.45, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // ドーム
+  ctx.fillStyle = hit ? '#52c41a' : '#1a237e';
+  ctx.beginPath();
+  ctx.ellipse(0, -r * 0.18, r * 0.52, r * 0.38, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+
+  // ドームハイライト
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.12, -r * 0.28, r * 0.22, r * 0.15, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 電飾（小さい丸）
+  const lights = hit
+    ? ['#ffd700', '#fff', '#ffd700', '#fff']
+    : ['#ff0040', '#00ffff', '#ff0040', '#00ffff'];
+  lights.forEach((c, i) => {
+    const a = (i / lights.length) * Math.PI * 2;
+    const lx = Math.cos(a) * r * 0.78;
+    const ly = Math.sin(a) * r * 0.43 * 0.6;
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.restore();
+
+  // 座標ラベル
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`(${tx}, ${ty})`, sx + r + 6, sy - r * 0.3);
+}
+
+function drawBeam() {
+  if (!beam) return;
+  // 軌跡
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(toSX(beam.cx), toSY(beam.cy));
+  ctx.strokeStyle = '#ff7a3d';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  // 玉
+  ctx.beginPath();
+  ctx.arc(toSX(beam.cx), toSY(beam.cy), 8, 0, Math.PI * 2);
+  const grad = ctx.createRadialGradient(
+    toSX(beam.cx)-2, toSY(beam.cy)-2, 1,
+    toSX(beam.cx), toSY(beam.cy), 8
+  );
+  grad.addColorStop(0, '#fff');
+  grad.addColorStop(1, '#ff7a3d');
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
+function drawScene() {
+  drawGrid();
+  if (state !== 'playing') return;
+  drawPreviewLine();
+  if (target) drawUFO(target.x, target.y, target.hit);
+  drawBeam();
+  drawCannon(selectedSlope !== null ? selectedSlope : 0);
+}
+
+// --- 発射 ---
+function shoot() {
+  if (state !== 'playing' || beam || shotFired) return;
+  if (selectedSlope === null) return;
+
+  const a = selectedSlope;
+  const dir = target.x >= 0 ? 1 : -1;
+  beam = { a, cx: 0, cy: 0, dir, speed: 0.13 };
+  shotFired = true;
+  shootBtn.disabled = true;
+
+  // 5択ボタンを判定色に
+  if (inputMode === 'choice') {
+    choicesArea.querySelectorAll('.choice-btn').forEach(b => {
+      b.disabled = true;
+      const v = parseInt(b.dataset.val);
+      if (v === correctSlope) b.classList.add('correct');
+      else if (v === selectedSlope && selectedSlope !== correctSlope) b.classList.add('wrong');
+    });
+  }
+}
+
+function updateBeam() {
+  if (!beam) return;
+  beam.cx += beam.dir * beam.speed;
+  beam.cy = beam.a * beam.cx;
+
+  const dist = Math.hypot(beam.cx - target.x, beam.cy - target.y);
+  if (dist < target.r + 0.22) {
+    target.hit = true;
+    hitCount++;
+    hitCountEl.textContent = hitCount;
+    messageEl.textContent = '🎉 命中！';
+    messageEl.style.color = '#2ecc71';
+    beam = null;
+    drawScene();
+    setTimeout(nextProblem, 1000);
+    return;
+  }
+
+  if (Math.abs(beam.cx) > 7 || Math.abs(beam.cy) > 7) {
+    messageEl.textContent = '😢 ハズレ… 正解は a=' + correctSlope;
+    messageEl.style.color = '#ff6b6b';
+    beam = null;
+    drawScene();
+    return;
+  }
+}
+
+// --- 次の問題 ---
+function nextProblem() {
+  if (state !== 'playing') return;
+  beam = null;
+  shotFired = false;
+  probTimer = 6;
+  newProblem();
+  drawScene();
+}
+
+// --- ゲームループ ---
+function gameLoop(ts) {
+  if (state !== 'playing') return;
+  if (!lastTime) lastTime = ts;
+  const dt = (ts - lastTime) / 1000;
+  lastTime = ts;
+
+  gameTimer -= dt;
+  probTimer -= dt;
+
+  if (gameTimer <= 0) { gameTimer = 0; endGame(); return; }
+
+  if (probTimer <= 0 && !beam) {
+    if (!shotFired) {
+      messageEl.textContent = '⏰ 時間切れ！正解は a=' + correctSlope;
+      messageEl.style.color = '#ffb84d';
+    }
+    nextProblem();
+  }
+
+  // HUD
+  const m = Math.floor(gameTimer / 60);
+  const s = Math.floor(gameTimer % 60);
+  timeDispEl.textContent = m + ':' + String(s).padStart(2, '0');
+  timerFill.style.width = (gameTimer / 120 * 100) + '%';
+  const pt = Math.max(probTimer, 0);
+  nextDispEl.textContent = Math.ceil(pt) + '秒';
+  probFill.style.width = (pt / 6 * 100) + '%';
+
+  updateBeam();
+  drawScene();
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+// --- スタート ---
+function startGame() {
+  overlay.style.display = 'none';
+  state = 'playing';
+  hitCount = 0;
+  gameTimer = 120;
+  probTimer = 6;
+  lastTime = null;
+  beam = null;
+  shotFired = false;
+  selectedSlope = null;
+  hitCountEl.textContent = '0';
+  messageEl.textContent = '';
+  shootBtn.disabled = true;
+  newProblem();
+  drawScene();
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+// --- 終了 ---
+function endGame() {
+  state = 'gameover';
+  if (rafId) cancelAnimationFrame(rafId);
+
+  let rank = '';
+  if      (hitCount >= 15) rank = '🏆 天才シューター！';
+  else if (hitCount >= 10) rank = '🥇 すばらしい！';
+  else if (hitCount >= 6 ) rank = '🥈 なかなかよかった！';
+  else                     rank = '🥉 もう一度チャレンジ！';
+
+  document.getElementById('overlayBox').innerHTML = `
+    <h2>⏱ 時間切れ！</h2>
+    <p>${rank}</p>
+    <div class="big-score">${hitCount} 的中</div>
+    <button class="overlay-btn" onclick="startGame()">🔄 もう一度</button>
+  `;
+  overlay.style.display = 'flex';
+}
+
+shootBtn.addEventListener('click', shoot);
+
+// 初期描画
+drawGrid();
+</script>
+</body>
+</html>

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ハートブレイクパズル</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    background: #fbf3f4;
+    color: #333;
+    -webkit-user-select: none; user-select: none;
+    touch-action: none;
+  }
+  header {
+    background: #c94a5a; color: #fff;
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header .icon {
+    background: #fff; color: #c94a5a; font-weight: bold;
+    border-radius: 8px; padding: 4px 10px; font-size: 20px;
+  }
+  header h1 { font-size: 20px; margin: 0; }
+
+  .toolbar {
+    padding: 12px 20px; background: #fff;
+    border-bottom: 1px solid #eadfe0;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  }
+  .toolbar button {
+    background: #c94a5a; color: #fff; border: none; border-radius: 8px;
+    padding: 8px 16px; font-size: 15px; cursor: pointer; transition: background .2s;
+  }
+  .toolbar button:hover { background: #b03a4a; }
+  .toolbar button.gray { background: #999; }
+  .toolbar button.gray:hover { background: #777; }
+  .toolbar button.orange { background: #e08a2f; }
+  .toolbar button.orange:hover { background: #c2761f; }
+  .toolbar .hint { font-size: 13px; color: #777; margin-left: auto; }
+
+  .stage {
+    position: relative; width: 100%; max-width: 940px; height: 640px;
+    margin: 16px auto;
+    background: #fff;
+    border: 2px solid #ecdcdd; border-radius: 12px; overflow: hidden;
+  }
+  /* お手本を置くグリッド枠（ボード） */
+  .board {
+    position: absolute;
+    border: 3px dashed #e0c3c8;
+    border-radius: 10px;
+    background:
+      linear-gradient(#f6e8ea 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, #f6e8ea 1px, transparent 1px) 0 0 / 40px 40px,
+      #fffbfb;
+    pointer-events: none;
+  }
+  .board.nogrid {
+    background: #fffbfb;
+  }
+  svg.shadow {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  /* もんだい（シルエット）：ピースの区切り線は見せず、外枠だけ */
+  svg.shadow polygon.rim { fill: #d9aeb5; stroke: #d9aeb5; stroke-width: 6; stroke-linejoin: round; }
+  svg.shadow polygon.inner { fill: #f5e3e6; stroke: #f5e3e6; stroke-width: 1.5; stroke-linejoin: round; }
+  /* ヒント：ピースの区切り線を表示 */
+  svg.shadow.hint polygon.inner { stroke: #cf9aa3; stroke-width: 2; stroke-dasharray: 5 4; }
+  svg.shadow.hidden { display: none; }
+
+  svg.piece {
+    position: absolute; top: 0; left: 0; overflow: visible; cursor: grab;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.18));
+  }
+  svg.piece.dragging { cursor: grabbing; }
+  svg.piece polygon { stroke: rgba(255,255,255,0.45); stroke-width: 1.5; stroke-linejoin: round; }
+  svg.piece .rot-handle { cursor: grab; display: none; }
+  svg.piece.selected .rot-handle { display: block; }
+  svg.piece.dragging .rot-handle { cursor: grabbing; }
+
+  .msg {
+    position: absolute; top: 14px; left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    background: #ffcf3f; color: #6b4e00;
+    padding: 10px 26px; border-radius: 24px; font-weight: bold; font-size: 20px;
+    opacity: 0; transition: all .3s; pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  }
+  .msg.show { opacity: 1; transform: translateX(-50%) scale(1); }
+</style>
+</head>
+<body>
+<header>
+  <span class="icon">♥</span>
+  <h1>ハートブレイクパズル</h1>
+</header>
+
+<div class="toolbar">
+  <button id="shuffleBtn">ピースをちらす</button>
+  <button class="orange" id="hintBtn">ヒント</button>
+  <button class="orange" id="answerBtn">こたえを見る</button>
+  <button class="gray" id="outlineBtn">お手本をかくす</button>
+  <button class="gray" id="gridBtn">グリッドをかくす</button>
+  <span class="hint">ドラッグで動かす／クリックすると〇印が出て回転できる／右クリックで裏返す</span>
+</div>
+
+<div class="stage" id="stage">
+  <div class="board" id="board"></div>
+  <svg class="shadow" id="shadow" preserveAspectRatio="none"></svg>
+  <div class="msg" id="msg">やったね！ハートかんせい！</div>
+</div>
+
+<script>
+const stage = document.getElementById('stage');
+const shadowSvg = document.getElementById('shadow');
+const msg = document.getElementById('msg');
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+// 9ピース（傾けた正方形の7ピース＋左右のふくらみ）。local=形、home=完成時の左上位置。
+const HEART_PIECES = [{"id":"bigTop","color":"#e2586a","local":[[0,0],[282.84,282.84],[0,282.84]],"home":{"x":282.84,"y":0}},{"id":"bigLeft","color":"#d64a5c","local":[[282.84,0],[282.84,282.84],[0,282.84]],"home":{"x":0,"y":0}},{"id":"smTopR","color":"#e2586a","local":[[141.42,0],[0,141.42],[0,0]],"home":{"x":424.26,"y":282.84}},{"id":"square","color":"#c94a5a","local":[[0,0],[141.42,0],[141.42,141.42],[0,141.42]],"home":{"x":282.84,"y":282.84}},{"id":"smMid","color":"#d64a5c","local":[[141.42,0],[0,0],[141.42,141.42]],"home":{"x":141.42,"y":282.84}},{"id":"para","color":"#e2586a","local":[[0,0],[141.42,141.42],[282.84,141.42],[141.42,0]],"home":{"x":0,"y":282.84}},{"id":"medBR","color":"#d64a5c","local":[[0,0],[141.42,141.42],[282.84,0]],"home":{"x":141.42,"y":424.26}},{"id":"humpTop","color":"#c94a5a","local":[[0,58.58],[30.31,33.71],[64.88,15.22],[102.4,3.84],[141.42,0],[180.44,3.84],[217.96,15.22],[252.54,33.71],[282.84,58.58],[307.72,88.89],[326.2,123.46],[337.58,160.98],[341.42,200],[337.58,239.02],[326.2,276.54],[307.72,311.11],[282.84,341.42]],"home":{"x":282.84,"y":-58.58}},{"id":"humpLeft","color":"#e2586a","local":[[341.42,58.58],[311.11,33.71],[276.54,15.22],[239.02,3.84],[200,0],[160.98,3.84],[123.46,15.22],[88.89,33.71],[58.58,58.58],[33.71,88.89],[15.22,123.46],[3.84,160.98],[0,200],[3.84,239.02],[15.22,276.54],[33.71,311.11],[58.58,341.42]],"home":{"x":-58.58,"y":-58.58}}];
+
+function rotatePt(x,y,deg){ const r=deg*Math.PI/180,c=Math.cos(r),s=Math.sin(r); return [x*c-y*s, x*s+y*c]; }
+
+// 全体を少し小さくして、グリッド枠の外にピースを置く余白を作る
+const SCALE = 0.6;
+for(const p of HEART_PIECES){
+  p.local = p.local.map(([x,y])=>[x*SCALE, y*SCALE]);
+  p.home = { x:p.home.x*SCALE, y:p.home.y*SCALE };
+}
+
+// 全体をステージ中央に寄せるオフセットを計算
+let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+for(const p of HEART_PIECES) for(const [lx,ly] of p.local){
+  const x=lx+p.home.x, y=ly+p.home.y;
+  minX=Math.min(minX,x); minY=Math.min(minY,y); maxX=Math.max(maxX,x); maxY=Math.max(maxY,y);
+}
+function centerOffset(){
+  return { ox:(stage.clientWidth-(minX+maxX))/2, oy:(stage.clientHeight-(minY+maxY))/2 };
+}
+
+// ===== ピース生成 =====
+const pieces = [];
+HEART_PIECES.forEach((def, idx)=>{
+  const xs=def.local.map(p=>p[0]), ys=def.local.map(p=>p[1]);
+  const w=Math.max(...xs), h=Math.max(...ys);
+  const svg=document.createElementNS(SVGNS,'svg');
+  svg.setAttribute('class','piece');
+  svg.setAttribute('width',w); svg.setAttribute('height',h);
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  const poly=document.createElementNS(SVGNS,'polygon');
+  poly.setAttribute('points', def.local.map(p=>p.join(',')).join(' '));
+  poly.setAttribute('fill', def.color);
+  svg.appendChild(poly);
+
+  // 回転ハンドル（中心から一番遠い頂点に置く丸い印）
+  const cx0=w/2, cy0=h/2;
+  let far=def.local[0], fd=-1;
+  for(const p of def.local){ const d=Math.hypot(p[0]-cx0,p[1]-cy0); if(d>fd){fd=d; far=p;} }
+  for(const [r,fill,stroke,sw] of [[20,'transparent',null,0],[11,'rgba(255,255,255,0.9)','#7a2233',2],[3.5,'#7a2233',null,0]]){
+    const cir=document.createElementNS(SVGNS,'circle');
+    cir.setAttribute('cx',far[0]); cir.setAttribute('cy',far[1]); cir.setAttribute('r',r);
+    cir.setAttribute('fill',fill); if(stroke){cir.setAttribute('stroke',stroke); cir.setAttribute('stroke-width',sw);}
+    cir.setAttribute('class','rot-handle'); svg.appendChild(cir);
+  }
+
+  const s={ idx, el:svg, w, h, local:def.local, home:def.home, x:0,y:0,rot:0,flip:1 };
+  svg.__state=s;
+  s.apply=()=>{ svg.style.left=s.x+'px'; svg.style.top=s.y+'px'; svg.style.transformOrigin='50% 50%'; svg.style.transform=`rotate(${s.rot}deg) scaleX(${s.flip})`; };
+
+  // 本体＝移動／ハンドル＝回転
+  let mode=null, start=null;
+  svg.addEventListener('pointerdown', e=>{
+    e.preventDefault(); stage.appendChild(svg);
+    selectPiece(svg);             // このピースだけ〇印を表示
+    const p=getPoint(e);
+    if(e.target.classList.contains('rot-handle')){
+      mode='rotate';
+      const cx=s.x+w/2, cy=s.y+h/2;
+      start={ ang:Math.atan2(p.y-cy,p.x-cx), rot0:s.rot, moved:false };
+    } else {
+      mode='move'; svg.classList.add('dragging');
+      start={px:p.x,py:p.y,ox:s.x,oy:s.y};
+    }
+    window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+  });
+  function move(e){
+    if(!start)return; const p=getPoint(e);
+    if(mode==='move'){ s.x=start.ox+(p.x-start.px); s.y=start.oy+(p.y-start.py); }
+    else { const cx=s.x+w/2, cy=s.y+h/2; const ang=Math.atan2(p.y-cy,p.x-cx); s.rot=start.rot0+(ang-start.ang)*180/Math.PI; start.moved=true; }
+    s.apply();
+  }
+  function up(){
+    svg.classList.remove('dragging');
+    window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up);
+    if(mode==='rotate'){
+      if(!start.moved) s.rot+=45;
+      s.rot=Math.round(s.rot/45)*45; s.rot=((s.rot%360)+360)%360; s.apply();
+    }
+    mode=null; start=null; checkComplete();
+  }
+  svg.addEventListener('contextmenu', e=>{ e.preventDefault(); s.flip*=-1; s.apply(); checkComplete(); });
+
+  stage.appendChild(svg);
+  pieces.push(s);
+});
+function getPoint(e){ const r=stage.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+
+// ピースの選択（選んだピースだけ回転ハンドルを表示）
+function selectPiece(el){
+  for(const s of pieces) s.el.classList.toggle('selected', s.el===el);
+}
+// 何もない場所をクリックしたら選択解除
+stage.addEventListener('pointerdown', e=>{
+  if(e.target===stage) selectPiece(null);
+});
+
+// ピースの現在の絶対頂点
+function pieceVertices(s){
+  const cx=s.w/2, cy=s.h/2;
+  return s.local.map(([lx,ly])=>{ let dx=(lx-cx)*s.flip, dy=(ly-cy); const [rx,ry]=rotatePt(dx,dy,s.rot); return [s.x+cx+rx, s.y+cy+ry]; });
+}
+
+// お手本(影絵)の各ピース絶対座標
+let targetPolys=[];
+let boardRect=null;  // グリッド枠の範囲（ステージ座標）
+function buildTargets(){
+  const {ox,oy}=centerOffset();
+  targetPolys = HEART_PIECES.map(p=>p.local.map(([lx,ly])=>[lx+p.home.x+ox, ly+p.home.y+oy]));
+  // お手本のまわりにグリッド枠（ボード）を配置
+  const board=document.getElementById('board');
+  let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;
+  for(const poly of targetPolys) for(const [x,y] of poly){
+    x1=Math.min(x1,x); y1=Math.min(y1,y); x2=Math.max(x2,x); y2=Math.max(y2,y);
+  }
+  const pad=30;
+  boardRect={ x1:x1-pad, y1:y1-pad, x2:x2+pad, y2:y2+pad };
+  board.style.left=boardRect.x1+'px';
+  board.style.top=boardRect.y1+'px';
+  board.style.width=(boardRect.x2-boardRect.x1)+'px';
+  board.style.height=(boardRect.y2-boardRect.y1)+'px';
+}
+function drawShadow(){
+  shadowSvg.setAttribute('viewBox', `0 0 ${stage.clientWidth} ${stage.clientHeight}`);
+  shadowSvg.innerHTML='';
+  // 2層で描く：下層(rim)で外枠の縁取り、上層(inner)で内側を塗りつぶす。
+  // ピースの区切り線は見えず、ハートの外枠だけが残る。
+  for(const cls of ['rim','inner']){
+    for(const poly of targetPolys){
+      const el=document.createElementNS(SVGNS,'polygon');
+      el.setAttribute('points', poly.map(p=>p.join(',')).join(' '));
+      el.setAttribute('class', cls);
+      shadowSvg.appendChild(el);
+    }
+  }
+}
+
+// ===== こたえを見る =====
+function solve(){
+  const {ox,oy}=centerOffset();
+  for(const s of pieces){
+    s.rot=0; s.flip=1;
+    s.x = s.home.x + ox;
+    s.y = s.home.y + oy;
+    s.apply();
+  }
+  checkComplete();
+}
+
+// ===== ピースをちらす（お手本と重ならないよう端のほうへ）=====
+function rectOverlap(x, y, w, h, bb){
+  const ox = Math.max(0, Math.min(x+w, bb.x2) - Math.max(x, bb.x1));
+  const oy = Math.max(0, Math.min(y+h, bb.y2) - Math.max(y, bb.y1));
+  return ox*oy;
+}
+function shuffle(){
+  const W=stage.clientWidth, H=stage.clientHeight;
+  const bb = boardRect;  // グリッド枠の外に置く
+  const placed=[];
+  for(const s of pieces){
+    // 候補位置をたくさん試し、グリッド枠・他ピースと一番重ならない場所を選ぶ
+    let best=null, bestScore=Infinity;
+    for(let t=0; t<300; t++){
+      const x = Math.random()*(W - s.w - 20) + 10;
+      const y = Math.random()*(H - s.h - 20) + 10;
+      let score = 0;
+      if(bb) score += rectOverlap(x, y, s.w, s.h, bb) * 1000;  // 枠の中は事実上禁止
+      for(const r of placed) score += rectOverlap(x, y, s.w, s.h, r);
+      if(score < bestScore){ bestScore=score; best={x,y}; }
+      if(score === 0) break;
+    }
+    s.x=best.x; s.y=best.y;
+    s.rot=Math.floor(Math.random()*8)*45;
+    s.flip=1; s.apply();
+    placed.push({x1:best.x, y1:best.y, x2:best.x+s.w, y2:best.y+s.h});
+  }
+  hideMsg();
+}
+
+// ===== 完成チェック（同じ形のピースが入れ替わってもOK）=====
+function polyMatch(a,b,tol){
+  if(a.length!==b.length) return false;
+  const used=new Array(b.length).fill(false);
+  for(const pa of a){ let ok=false;
+    for(let j=0;j<b.length;j++){ if(used[j])continue; if(Math.hypot(pa[0]-b[j][0],pa[1]-b[j][1])<tol){used[j]=true;ok=true;break;} }
+    if(!ok) return false;
+  }
+  return true;
+}
+function checkComplete(){
+  const used=new Array(targetPolys.length).fill(false);
+  let matched=0;
+  for(const s of pieces){
+    const v=pieceVertices(s);
+    for(let t=0;t<targetPolys.length;t++){
+      if(used[t])continue;
+      if(polyMatch(v,targetPolys[t],26)){ used[t]=true; matched++; break; }
+    }
+  }
+  if(matched===targetPolys.length) showMsg(); else hideMsg();
+}
+function showMsg(){ msg.classList.add('show'); }
+function hideMsg(){ msg.classList.remove('show'); }
+
+// ===== ボタン =====
+document.getElementById('shuffleBtn').addEventListener('click', shuffle);
+document.getElementById('answerBtn').addEventListener('click', solve);
+const outlineBtn=document.getElementById('outlineBtn');
+outlineBtn.addEventListener('click', ()=>{
+  shadowSvg.classList.toggle('hidden');
+  outlineBtn.textContent = shadowSvg.classList.contains('hidden') ? 'お手本をみせる' : 'お手本をかくす';
+});
+const gridBtn=document.getElementById('gridBtn');
+gridBtn.addEventListener('click', ()=>{
+  const board=document.getElementById('board');
+  board.classList.toggle('nogrid');
+  gridBtn.textContent = board.classList.contains('nogrid') ? 'グリッドをみせる' : 'グリッドをかくす';
+});
+// ヒント：ピースの区切り線を表示／非表示
+const hintBtn=document.getElementById('hintBtn');
+hintBtn.addEventListener('click', ()=>{
+  shadowSvg.classList.toggle('hint');
+  hintBtn.textContent = shadowSvg.classList.contains('hint') ? 'ヒントをけす' : 'ヒント';
+});
+
+// ===== 起動 =====
+window.addEventListener('load', ()=>{ buildTargets(); drawShadow(); shuffle(); });
+// 画面サイズが変わったら、もんだい・グリッド枠を中央に置き直す（ピースはそのまま）
+window.addEventListener('resize', ()=>{ buildTargets(); drawShadow(); });
+</script>
+</body>
+</html>
