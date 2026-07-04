@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>フォルダー内画像 ぼかしツール</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f0f4f8; color: #333; min-height: 100vh; }
+
+  header { background: #2d6a4f; color: white; padding: 18px 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 20px; font-weight: 700; }
+  header p { font-size: 13px; opacity: 0.8; margin-top: 3px; }
+
+  main { max-width: 1100px; margin: 28px auto; padding: 0 16px; display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+  @media (max-width: 768px) { main { grid-template-columns: 1fr; } }
+
+  .card { background: white; border-radius: 12px; padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
+
+  /* Sidebar */
+  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+  .folder-btn { width: 100%; padding: 14px; background: #2d6a4f; color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s; }
+  .folder-btn:hover { background: #245a41; }
+
+  .folder-info { font-size: 13px; color: #555; background: #f0faf4; border-radius: 8px; padding: 10px 14px; border: 1px solid #b7e4c7; display: none; }
+  .folder-info strong { color: #2d6a4f; display: block; margin-bottom: 2px; word-break: break-all; }
+
+  .section-label { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 10px; }
+
+  /* Blur slider */
+  .blur-panel { }
+  input[type=range] { width: 100%; height: 6px; accent-color: #2d6a4f; margin: 8px 0 2px; }
+  .blur-row { display: flex; justify-content: space-between; align-items: center; }
+  .blur-num { font-size: 20px; font-weight: 800; color: #2d6a4f; }
+  .blur-hints { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; }
+
+  /* Preview */
+  .preview-panel { }
+  .preview-imgs { display: flex; gap: 8px; margin-top: 8px; }
+  .preview-imgs > div { flex: 1; text-align: center; }
+  .preview-imgs p { font-size: 11px; color: #999; margin-bottom: 4px; }
+  .preview-imgs canvas, .preview-imgs img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; display: block; }
+  .no-preview { font-size: 12px; color: #bbb; text-align: center; padding: 20px 0; }
+
+  /* Apply button */
+  .apply-section { }
+  .btn-apply { width: 100%; padding: 13px; background: #2d6a4f; color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+  .btn-apply:hover:not(:disabled) { background: #245a41; }
+  .btn-apply:disabled { background: #a0aec0; cursor: not-allowed; }
+  .save-mode { margin-top: 10px; }
+  .save-mode label { font-size: 12px; color: #555; display: flex; align-items: center; gap: 6px; margin-bottom: 5px; cursor: pointer; }
+  .save-mode input[type=radio] { accent-color: #2d6a4f; }
+
+  .progress-bar { height: 7px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 10px; display: none; }
+  .progress-fill { height: 100%; background: #2d6a4f; border-radius: 4px; transition: width 0.2s; width: 0%; }
+  .status { font-size: 12px; color: #718096; margin-top: 6px; min-height: 18px; }
+  .success { background: #c6f6d5; color: #276749; border-radius: 7px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-top: 8px; display: none; }
+
+  /* Main image grid */
+  .grid-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+  .grid-header h2 { font-size: 15px; font-weight: 700; color: #2d3748; }
+  .grid-actions { display: flex; gap: 8px; }
+  .btn-sm { padding: 6px 14px; border-radius: 7px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; }
+  .btn-outline { background: white; border: 1.5px solid #2d6a4f; color: #2d6a4f; }
+  .btn-outline:hover { background: #f0faf4; }
+
+  .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .img-card { border: 3px solid #e2e8f0; border-radius: 10px; overflow: hidden; cursor: pointer; transition: all 0.18s; background: #fafafa; position: relative; }
+  .img-card:hover { border-color: #74c69d; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+  .img-card.selected { border-color: #2d6a4f; box-shadow: 0 0 0 3px rgba(45,106,79,0.18); }
+  .img-card.blurred-done { opacity: 0.7; }
+  .img-card img { width: 100%; height: 120px; object-fit: cover; display: block; }
+  .img-card .lbl { padding: 6px 8px; font-size: 11px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .img-card .check { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; background: white; border: 2px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 13px; transition: all 0.18s; }
+  .img-card.selected .check { background: #2d6a4f; border-color: #2d6a4f; color: white; }
+  .img-card .done-badge { position: absolute; top: 6px; left: 6px; background: #38a169; color: white; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; display: none; }
+  .img-card.blurred-done .done-badge { display: block; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: #bbb; }
+  .empty-state .icon { font-size: 56px; margin-bottom: 12px; }
+  .empty-state p { font-size: 15px; }
+
+  .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .filter-row input { flex: 1; min-width: 140px; padding: 7px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 13px; }
+  .filter-row input:focus { outline: none; border-color: #74c69d; }
+  .count-badge { background: #e8f5e9; color: #2d6a4f; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🖼 フォルダー画像 ぼかしツール</h1>
+    <p>フォルダーを指定して、画像を選んでぼかしをかけます</p>
+  </div>
+</header>
+
+<main>
+  <!-- Left: image grid -->
+  <div>
+    <div class="card">
+      <div class="grid-header">
+        <div>
+          <h2 id="grid-title">フォルダーを選択してください</h2>
+          <div class="filter-row" id="filter-row" style="margin-top:8px;display:none;">
+            <input type="text" id="search-box" placeholder="ファイル名で絞り込み..." oninput="renderGrid()">
+            <span class="count-badge" id="count-badge">0枚</span>
+          </div>
+        </div>
+        <div class="grid-actions" id="grid-actions" style="display:none;">
+          <button class="btn-sm btn-outline" onclick="selectAll()">全選択</button>
+          <button class="btn-sm btn-outline" onclick="clearAll()">全解除</button>
+        </div>
+      </div>
+
+      <div id="empty-state" class="empty-state">
+        <div class="icon">📁</div>
+        <p>左のボタンでフォルダーを選んでください</p>
+      </div>
+      <div class="image-grid" id="image-grid" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- Right: sidebar -->
+  <div class="sidebar">
+
+    <!-- Folder select -->
+    <div class="card">
+      <div class="section-label">📁 フォルダー選択</div>
+      <button class="folder-btn" onclick="selectFolder()">
+        <span>フォルダーを選ぶ</span>
+      </button>
+      <!-- Fallback for non-Chrome browsers -->
+      <input type="file" id="folder-input" webkitdirectory multiple accept="image/*" class="hidden" onchange="handleFolderInput(this.files)">
+      <div class="folder-info" id="folder-info">
+        <strong id="folder-name"></strong>
+        <span id="folder-count"></span>
+      </div>
+    </div>
+
+    <!-- Blur control -->
+    <div class="card blur-panel">
+      <div class="section-label">🌀 ぼかしの強さ</div>
+      <div class="blur-row">
+        <span style="font-size:13px;color:#777;">弱</span>
+        <span class="blur-num" id="blur-num">8</span>
+        <span style="font-size:13px;color:#777;">強</span>
+      </div>
+      <input type="range" id="blur-slider" min="1" max="30" value="8" oninput="onBlurChange()">
+      <div class="blur-hints"><span>軽め</span><span>中程度</span><span>強め</span></div>
+    </div>
+
+    <!-- Preview -->
+    <div class="card preview-panel">
+      <div class="section-label">👁 プレビュー</div>
+      <div id="no-preview" class="no-preview">写真を選択するとプレビューが表示されます</div>
+      <div class="preview-imgs hidden" id="preview-imgs">
+        <div><p>元の写真</p><img id="prev-orig" src=""></div>
+        <div><p>ぼかし後</p><canvas id="prev-canvas"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Apply -->
+    <div class="card apply-section">
+      <div class="section-label">💾 保存方法</div>
+      <div class="save-mode">
+        <label><input type="radio" name="save-mode" value="overwrite" checked> 元のファイルを上書き保存</label>
+        <label><input type="radio" name="save-mode" value="subfolder"> 「ぼかし済み」フォルダーに保存</label>
+        <label><input type="radio" name="save-mode" value="download"> ダウンロード（zip）</label>
+      </div>
+      <button class="btn-apply" id="btn-apply" onclick="applyBlur()" style="margin-top:14px;" disabled>
+        ぼかしを適用
+      </button>
+      <div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="status" id="status"></div>
+      <div class="success" id="success">✅ 完了しました！</div>
+    </div>
+
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+let allImages = []; // {name, file, url, handle (optional), selected, done}
+let dirHandle = null;
+let previewIndex = -1;
+
+// --- Folder selection ---
+async function selectFolder() {
+  if (window.showDirectoryPicker) {
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      const files = [];
+      for await (const [name, handle] of dirHandle.entries()) {
+        if (handle.kind === 'file' && /\.(png|jpe?g|gif|bmp|webp)$/i.test(name)) {
+          const file = await handle.getFile();
+          files.push({ name, file, handle });
+        }
+      }
+      files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+      loadImages(files, dirHandle.name);
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        // Fallback
+        document.getElementById('folder-input').click();
+      }
+    }
+  } else {
+    document.getElementById('folder-input').click();
+  }
+}
+
+function handleFolderInput(files) {
+  const imgFiles = Array.from(files).filter(f => /\.(png|jpe?g|gif|bmp|webp)$/i.test(f.name));
+  imgFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const items = imgFiles.map(f => ({ name: f.name, file: f, handle: null }));
+  const folderName = imgFiles[0]?.webkitRelativePath?.split('/')[0] || 'フォルダー';
+  loadImages(items, folderName);
+}
+
+function loadImages(items, folderName) {
+  allImages = items.map(item => ({
+    name: item.name,
+    file: item.file,
+    handle: item.handle || null,
+    url: URL.createObjectURL(item.file),
+    selected: false,
+    done: false
+  }));
+
+  document.getElementById('folder-name').textContent = folderName;
+  document.getElementById('folder-count').textContent = '画像 ' + allImages.length + '枚';
+  document.getElementById('folder-info').style.display = '';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('image-grid').style.display = '';
+  document.getElementById('filter-row').style.display = '';
+  document.getElementById('grid-actions').style.display = '';
+  document.getElementById('grid-title').textContent = folderName;
+  document.getElementById('success').style.display = 'none';
+  renderGrid();
+  updateApplyBtn();
+}
+
+// --- Grid ---
+function renderGrid() {
+  const query = document.getElementById('search-box').value.toLowerCase();
+  const filtered = allImages.filter(img => !query || img.name.toLowerCase().includes(query));
+  document.getElementById('count-badge').textContent = filtered.length + '枚';
+
+  const grid = document.getElementById('image-grid');
+  grid.innerHTML = '';
+  filtered.forEach(img => {
+    const idx = allImages.indexOf(img);
+    const card = document.createElement('div');
+    card.className = 'img-card' + (img.selected ? ' selected' : '') + (img.done ? ' blurred-done' : '');
+    card.innerHTML = `
+      <img src="${img.url}" loading="lazy">
+      <div class="lbl">${img.name}</div>
+      <div class="check">${img.selected ? '✓' : ''}</div>
+      <div class="done-badge">ぼかし済</div>
+    `;
+    card.onclick = () => { toggleSelect(idx); };
+    grid.appendChild(card);
+  });
+}
+
+function toggleSelect(idx) {
+  allImages[idx].selected = !allImages[idx].selected;
+  if (allImages[idx].selected && previewIndex === -1) setPreview(idx);
+  else if (allImages[idx].selected) setPreview(idx);
+  renderGrid();
+  updateApplyBtn();
+}
+
+function selectAll() {
+  allImages.forEach((img, i) => { img.selected = true; });
+  if (allImages.length > 0) setPreview(0);
+  renderGrid(); updateApplyBtn();
+}
+
+function clearAll() {
+  allImages.forEach(img => { img.selected = false; });
+  renderGrid(); updateApplyBtn();
+}
+
+function updateApplyBtn() {
+  const count = allImages.filter(i => i.selected).length;
+  const btn = document.getElementById('btn-apply');
+  btn.disabled = count === 0;
+  btn.textContent = count > 0 ? `ぼかしを適用（${count}枚）` : 'ぼかしを適用';
+}
+
+// --- Preview ---
+async function setPreview(idx) {
+  previewIndex = idx;
+  const img = allImages[idx];
+  document.getElementById('no-preview').style.display = 'none';
+  document.getElementById('preview-imgs').classList.remove('hidden');
+  document.getElementById('prev-orig').src = img.url;
+  await drawBlurPreview(img.file);
+}
+
+async function drawBlurPreview(file) {
+  const radius = parseInt(document.getElementById('blur-slider').value) * 2;
+  const bmp = await createImageBitmap(file);
+  const canvas = document.getElementById('prev-canvas');
+  canvas.width = bmp.width; canvas.height = bmp.height;
+  const ctx = canvas.getContext('2d');
+  ctx.filter = `blur(${radius}px)`;
+  ctx.drawImage(bmp, 0, 0);
+  ctx.filter = 'none';
+}
+
+function onBlurChange() {
+  document.getElementById('blur-num').textContent = document.getElementById('blur-slider').value;
+  if (previewIndex >= 0) {
+    clearTimeout(window._pt);
+    window._pt = setTimeout(() => drawBlurPreview(allImages[previewIndex].file), 80);
+  }
+}
+
+// --- Apply blur ---
+async function applyBlur() {
+  const targets = allImages.filter(img => img.selected);
+  const mode = document.querySelector('input[name=save-mode]:checked').value;
+  const blurRadius = parseInt(document.getElementById('blur-slider').value) * 2;
+
+  if (mode === 'overwrite' && !dirHandle) {
+    alert('上書き保存にはフォルダー選択APIが必要です。\n保存方法を「ダウンロード」に変更してください。');
+    return;
+  }
+  if (mode === 'subfolder' && !dirHandle) {
+    alert('サブフォルダー保存にはフォルダー選択APIが必要です。\n保存方法を「ダウンロード」に変更してください。');
+    return;
+  }
+
+  if (mode === 'overwrite') {
+    const ok = confirm(`${targets.length}枚の画像を上書き保存します。元のファイルは変更されます。よろしいですか？`);
+    if (!ok) return;
+  }
+
+  const btn = document.getElementById('btn-apply');
+  btn.disabled = true;
+  document.getElementById('progress-bar').style.display = '';
+  document.getElementById('success').style.display = 'none';
+  setStatus('処理中...');
+
+  let subDir = null;
+  if (mode === 'subfolder') {
+    try { subDir = await dirHandle.getDirectoryHandle('ぼかし済み', { create: true }); }
+    catch(e) { alert('サブフォルダー作成に失敗しました。'); btn.disabled = false; return; }
+  }
+
+  const zip = mode === 'download' ? new JSZip() : null;
+
+  for (let i = 0; i < targets.length; i++) {
+    const img = targets[i];
+    setStatus(`処理中: ${img.name} (${i+1}/${targets.length})`);
+    setProgress(i / targets.length * 90);
+
+    const bmp = await createImageBitmap(img.file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width; canvas.height = bmp.height;
+    const ctx = canvas.getContext('2d');
+    ctx.filter = `blur(${blurRadius}px)`;
+    ctx.drawImage(bmp, 0, 0);
+
+    const isJpeg = /\.jpe?g$/i.test(img.name);
+    const mimeType = isJpeg ? 'image/jpeg' : 'image/png';
+    const blob = await new Promise(r => canvas.toBlob(r, mimeType, 0.92));
+
+    if (mode === 'overwrite') {
+      const writable = await img.handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      // Refresh URL
+      img.url = URL.createObjectURL(blob);
+    } else if (mode === 'subfolder') {
+      const newHandle = await subDir.getFileHandle(img.name, { create: true });
+      const writable = await newHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    } else if (mode === 'download') {
+      const buf = await blob.arrayBuffer();
+      zip.file(img.name, buf);
+    }
+
+    img.done = true;
+  }
+
+  setProgress(98);
+
+  if (mode === 'download') {
+    setStatus('ZIPを生成中...');
+    const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(zipBlob);
+    a.download = 'blurred_images.zip';
+    a.click();
+  }
+
+  setProgress(100);
+  setStatus('');
+  document.getElementById('success').style.display = '';
+  document.getElementById('success').textContent =
+    mode === 'overwrite' ? `✅ ${targets.length}枚を上書き保存しました！` :
+    mode === 'subfolder' ? `✅ 「ぼかし済み」フォルダーに${targets.length}枚を保存しました！` :
+    `✅ ${targets.length}枚をダウンロードしました！`;
+
+  btn.disabled = false;
+  renderGrid();
+  updateApplyBtn();
+}
+
+function setProgress(val) { document.getElementById('progress-fill').style.width = val + '%'; }
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+</script>
+</body>
+</html>
