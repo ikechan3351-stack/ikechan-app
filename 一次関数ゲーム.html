@@ -120,7 +120,11 @@
 </head>
 <body class="lv1">
 
-<h1>🎯 一次関数ゲーム</h1>
+<div style="display:flex; align-items:center; gap:12px;">
+  <h1>🎯 一次関数ゲーム</h1>
+  <button id="soundToggle" onclick="toggleSound()" title="音の ON / OFF"
+    style="background:#16213e; border:2px solid #6c63ff; color:#fff; font-size:18px; width:40px; height:40px; border-radius:8px; cursor:pointer;">🔊</button>
+</div>
 
 <div class="layout">
   <canvas id="stage" width="480" height="480"></canvas>
@@ -305,6 +309,7 @@ function pickTime(t){
 function showMenu(){
   state = 'menu';
   if(rafId) cancelAnimationFrame(rafId);
+  stopBGM();
   resultEl.style.display = 'none';
   menuEl.style.display = 'flex';
   drawGrid();
@@ -613,6 +618,7 @@ function shoot(){
     beam = { a:selA, b:selB, cx:-9, startX:-9, speed:0.22 };
   }
   shotFired = true;
+  playShoot();
   updateShootBtn();
   highlightAnswers();
 }
@@ -658,11 +664,13 @@ function updateBeam(){
   const dist = Math.hypot(beam.cx-target.x, beam.cy-target.y);
   if(dist < HIT_DIST){
     target.hit=true; score+=10; scoreEl.textContent=score;
+    playHit();
     messageEl.textContent='🎉 命中！ +10点'; messageEl.style.color='#2ecc71';
     beam=null; drawScene(); scheduleNext(1000); return;
   }
   if(Math.abs(beam.cx)>11 || Math.abs(beam.cy)>11){
     const ans = (level===1) ? ('a='+correctSlope.label) : ('b='+correctIntercept);
+    playMiss();
     messageEl.textContent='😢 ハズレ… 正解は '+ans; messageEl.style.color='#ff6b6b';
     beam=null; drawScene(); scheduleNext(1200); return;
   }
@@ -671,6 +679,7 @@ function updateBeam(){
 function finalizeLv3(){
   const hits = targets.filter(t=>t.hit).length;
   score += hits*5; scoreEl.textContent=score;
+  if(hits>0) playHit(); else playMiss();
   if(hits===2){ messageEl.textContent='🎉 2個命中！ +10点'; messageEl.style.color='#2ecc71'; }
   else if(hits===1){ messageEl.textContent='😲 1個命中 +5点（正解 a='+correctA+', b='+correctB+'）'; messageEl.style.color='#ffb84d'; }
   else { messageEl.textContent='😢 ハズレ… 正解は a='+correctA+', b='+correctB; messageEl.style.color='#ff6b6b'; }
@@ -703,6 +712,7 @@ function gameLoop(ts){
       else if(level===2) ans='b='+correctIntercept;
       else ans='a='+correctA+', b='+correctB;
       messageEl.textContent='⏰ 時間切れ！ 正解は '+ans; messageEl.style.color='#ffb84d';
+      playMiss();
       scheduleNext(1200);
     }
   }
@@ -725,6 +735,7 @@ function startGame(){
   lastTime=null; inputMode='choice';
   document.getElementById('modeChoice').classList.add('active');
   document.getElementById('modeInput').classList.remove('active');
+  initAudio(); startBGM();
   newProblem(); drawScene();
   rafId = requestAnimationFrame(gameLoop);
 }
@@ -732,6 +743,7 @@ function startGame(){
 function endGame(){
   state='gameover';
   if(rafId) cancelAnimationFrame(rafId);
+  stopBGM(); playFanfare();
   let rank;
   if(score>=100) rank='🏆 パーフェクト！天才！';
   else if(score>=70) rank='🥇 すばらしい！';
@@ -749,6 +761,70 @@ function endGame(){
     </div>
   `;
   resultEl.style.display='flex';
+}
+
+// ===== サウンド（Web Audio APIで生成・外部ファイル不要）=====
+let audioCtx = null, masterGain = null, soundOn = true, bgmTimer = null, bgmIdx = 0;
+const BGM_NOTES = [523,0,659,0,784,659,523,0, 587,0,494,0,392,0,440,0,
+                   523,0,659,0,784,880,784,0, 659,0,523,0,587,0,523,0];
+
+function initAudio(){
+  if(audioCtx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  audioCtx = new AC();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = soundOn ? 1 : 0;
+  masterGain.connect(audioCtx.destination);
+}
+function resumeAudio(){ if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); }
+
+function beep(freq, dur, type, vol, sweepTo){
+  if(!audioCtx || !masterGain) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type || 'square';
+  osc.frequency.setValueAtTime(freq, t);
+  if(sweepTo) osc.frequency.exponentialRampToValueAtTime(Math.max(sweepTo,1), t + dur);
+  g.gain.setValueAtTime(vol || 0.2, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(g); g.connect(masterGain);
+  osc.start(t); osc.stop(t + dur);
+}
+function playShoot(){ resumeAudio(); beep(720, 0.16, 'square', 0.18, 220); }
+function playMiss(){ resumeAudio(); beep(300, 0.14, 'sawtooth', 0.14, 180); setTimeout(()=>beep(190, 0.2, 'sawtooth', 0.14, 110), 110); }
+function playHit(){
+  resumeAudio();
+  if(!audioCtx || !masterGain) return;
+  const t = audioCtx.currentTime;
+  const buf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.4), audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++){ const k = 1 - i/d.length; d[i] = (Math.random()*2-1) * k * k; }
+  const noise = audioCtx.createBufferSource(); noise.buffer = buf;
+  const lp = audioCtx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200;
+  const ng = audioCtx.createGain(); ng.gain.value = 0.45;
+  noise.connect(lp); lp.connect(ng); ng.connect(masterGain);
+  noise.start(t);
+  beep(130, 0.35, 'sine', 0.35, 45);
+}
+function playFanfare(){
+  resumeAudio();
+  [523,659,784,1047].forEach((f,i)=> setTimeout(()=>beep(f, 0.28, 'square', 0.22), i*150));
+}
+function startBGM(){
+  if(bgmTimer) return;
+  bgmIdx = 0;
+  bgmTimer = setInterval(()=>{
+    const f = BGM_NOTES[bgmIdx % BGM_NOTES.length];
+    if(f > 0) beep(f, 0.16, 'triangle', 0.06);
+    bgmIdx++;
+  }, 200);
+}
+function stopBGM(){ if(bgmTimer){ clearInterval(bgmTimer); bgmTimer = null; } }
+function toggleSound(){
+  soundOn = !soundOn;
+  if(masterGain) masterGain.gain.value = soundOn ? 1 : 0;
+  document.getElementById('soundToggle').textContent = soundOn ? '🔊' : '🔇';
 }
 
 shootBtn.addEventListener('click', shoot);
