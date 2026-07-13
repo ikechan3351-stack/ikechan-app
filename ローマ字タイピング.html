@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ローマ字タイピング</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #fff8e1 0%, #ffe0b2 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #e65100; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #bf360c; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #e65100; text-align: center; }
+  .panel { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 10px; }
+
+  .level-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .level-btn {
+    border: 2px solid #ffcc80; background: #fff; border-radius: 12px;
+    padding: 8px 16px; font-size: 0.95rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .level-btn.active { background: #ef6c00; border-color: #ef6c00; color: #fff; }
+  .level-btn small { display: block; font-size: 0.7rem; font-weight: normal; }
+
+  .hud {
+    display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap;
+    background: #fff; border-radius: 12px; padding: 8px 14px;
+    font-size: 0.92rem; font-weight: bold; color: #333; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .hud .val { color: #e65100; }
+  .hud label { font-weight: normal; font-size: 0.82rem; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+  .hud select { font-size: 0.82rem; padding: 2px; border-radius: 6px; border: 1px solid #ccc; }
+
+  .stage {
+    position: relative;
+    background: #fff; border-radius: 16px; padding: 20px 16px 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    min-height: 170px;
+  }
+  .kana-line { font-size: 2.2rem; font-weight: bold; letter-spacing: 2px; color: #333; text-align: center; line-height: 1.3; }
+  .kana-line .done { color: #fb8c00; }
+  .roma-line {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 1.7rem; letter-spacing: 1px; color: #9e9e9e; text-align: center; word-break: break-all;
+    min-height: 2.2rem;
+  }
+  .roma-line .done { color: #2e7d32; font-weight: bold; }
+  .roma-line .now { color: #d84315; font-weight: bold; text-decoration: underline; }
+  .roma-line.hidden-roma { visibility: hidden; }
+  .stage.miss-flash { animation: missShake 0.25s; }
+  @keyframes missShake {
+    25% { transform: translateX(-7px); background: #ffebee; }
+    75% { transform: translateX(7px); background: #ffebee; }
+  }
+  .word-count { font-size: 0.85rem; color: #888; }
+
+  .ime-warn {
+    display: none;
+    background: #ffebee; color: #b71c1c; border-radius: 10px; padding: 8px 14px;
+    font-size: 0.9rem; font-weight: bold; text-align: center;
+  }
+  .ime-warn.show { display: block; animation: blink 0.6s infinite alternate; }
+  @keyframes blink { from { opacity: 1; } to { opacity: 0.6; } }
+
+  .kb { display: flex; flex-direction: column; gap: 5px; align-items: center; padding: 4px 0 2px; }
+  .kb-row { display: flex; gap: 5px; justify-content: center; }
+  .key {
+    width: 44px; height: 44px; border-radius: 8px; border: 1px solid #d7ccc8;
+    display: flex; align-items: center; justify-content: center; position: relative;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 1.05rem; font-weight: bold; color: #5d4037;
+    cursor: pointer; user-select: none; touch-action: manipulation;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .key:active { transform: translateY(1px); box-shadow: none; }
+  .key.home::after { content: ''; position: absolute; bottom: 5px; width: 12px; height: 3px; border-radius: 2px; background: #8d6e63; }
+  .key.space { width: 250px; }
+  .key.next {
+    background: #ff7043 !important; color: #fff; border-color: #ff5722;
+    animation: pop 0.55s infinite alternate;
+  }
+  @keyframes pop { from { transform: scale(1); } to { transform: scale(1.13); } }
+  .f-pinky  { background: #fbdce4; }
+  .f-ring   { background: #fde7c3; }
+  .f-middle { background: #fcf5c7; }
+  .f-index  { background: #d3ecd5; }
+  .f-thumb  { background: #eeeeee; }
+
+  .overlay {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.94); border-radius: 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    text-align: center; z-index: 5; cursor: pointer;
+  }
+  .overlay.hidden { display: none; }
+  .overlay .big { font-size: 1.7rem; font-weight: bold; color: #bf360c; }
+  .overlay .stars { font-size: 2.2rem; letter-spacing: 6px; }
+  .overlay .detail { font-size: 1rem; color: #444; line-height: 1.6; }
+  .overlay .go { font-size: 1rem; color: #e65100; font-weight: bold; margin-top: 4px; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #bf360c; }
+  .help ul { margin: 0; padding-left: 20px; }
+
+  @media (max-width: 620px) {
+    .key { width: 30px; height: 34px; font-size: 0.85rem; }
+    .key.space { width: 160px; }
+    .kana-line { font-size: 1.6rem; }
+    .roma-line { font-size: 1.25rem; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>⌨️ ローマ字タイピング</h1>
+<p class="subtitle">ローマ字とキーボードのれんしゅうをしよう!</p>
+
+<div class="panel">
+
+  <div class="level-row">
+    <button class="level-btn active" data-level="1">レベル1<small>みじかいことば</small></button>
+    <button class="level-btn" data-level="2">レベル2<small>「ん」「っ」「しゃ」</small></button>
+    <button class="level-btn" data-level="3">レベル3<small>あいさつ・ぶんしょう</small></button>
+  </div>
+
+  <div class="hud">
+    <span>もんだい <span class="val" id="hudWord">-</span></span>
+    <span>ミス <span class="val" id="hudMiss">0</span></span>
+    <span>タイム <span class="val" id="hudTime">0:00</span></span>
+    <label><input type="checkbox" id="chkRoma" checked> ローマ字を見る</label>
+    <label><input type="checkbox" id="chkKb" checked> キーボードを見る</label>
+    <label><input type="checkbox" id="chkSound" checked> 音</label>
+    <label>書き方 <select id="selStyle">
+      <option value="kunrei">くんれい式(学校)</option>
+      <option value="hepburn">ヘボン式</option>
+    </select></label>
+  </div>
+
+  <div class="ime-warn" id="imeWarn">⚠ 日本語入力になっているみたい!「半角/全角」キーをおして、英数字モードにしてね</div>
+
+  <div class="stage" id="stage">
+    <div class="word-count" id="wordCount"></div>
+    <div class="kana-line" id="kanaLine"></div>
+    <div class="roma-line" id="romaLine"></div>
+    <div class="overlay" id="overlay">
+      <div class="big" id="ovTitle">ローマ字タイピング</div>
+      <div class="stars" id="ovStars"></div>
+      <div class="detail" id="ovDetail">ひらがなのことばを、ローマ字でうちこもう!</div>
+      <div class="go" id="ovGo">スペースキーをおしてスタート!(タップでもOK)</div>
+    </div>
+  </div>
+
+  <div class="kb" id="kb"></div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li>画面のことばを、ローマ字でうちこもう。<b>次におすキーがオレンジ色に光る</b>よ。</li>
+      <li>「し」は <b>si</b> でも <b>shi</b> でもOK!「ふ」は <b>hu</b> でも <b>fu</b> でもOK!</li>
+      <li>「っ」は次の音のさいしょの字を2回(きって → ki<b>tt</b>e)、「ん」は <b>nn</b>(ことばのとちゅうでは n 1回でもOK)。</li>
+      <li>キーボードの色は<b>ゆびのたんとう</b>だよ。人さしゆびを <b>F</b> と <b>J</b>(ぽっちのあるキー)におくのがきほん!</li>
+      <li>うまくいかないときは、にゅうりょくモードが「半角英数」になっているかたしかめてね。</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // ===== ローマ字テーブル(先頭が くんれい式 の書き方) =====
+  const ROMA = {
+    'あ':['a'],'い':['i'],'う':['u'],'え':['e'],'お':['o'],
+    'か':['ka'],'き':['ki'],'く':['ku'],'け':['ke'],'こ':['ko'],
+    'が':['ga'],'ぎ':['gi'],'ぐ':['gu'],'げ':['ge'],'ご':['go'],
+    'さ':['sa'],'し':['si','shi'],'す':['su'],'せ':['se'],'そ':['so'],
+    'ざ':['za'],'じ':['zi','ji'],'ず':['zu'],'ぜ':['ze'],'ぞ':['zo'],
+    'た':['ta'],'ち':['ti','chi'],'つ':['tu','tsu'],'て':['te'],'と':['to'],
+    'だ':['da'],'ぢ':['di'],'づ':['du'],'で':['de'],'ど':['do'],
+    'な':['na'],'に':['ni'],'ぬ':['nu'],'ね':['ne'],'の':['no'],
+    'は':['ha'],'ひ':['hi'],'ふ':['hu','fu'],'へ':['he'],'ほ':['ho'],
+    'ば':['ba'],'び':['bi'],'ぶ':['bu'],'べ':['be'],'ぼ':['bo'],
+    'ぱ':['pa'],'ぴ':['pi'],'ぷ':['pu'],'ぺ':['pe'],'ぽ':['po'],
+    'ま':['ma'],'み':['mi'],'む':['mu'],'め':['me'],'も':['mo'],
+    'や':['ya'],'ゆ':['yu'],'よ':['yo'],
+    'ら':['ra'],'り':['ri'],'る':['ru'],'れ':['re'],'ろ':['ro'],
+    'わ':['wa'],'を':['wo'],'ー':['-'],
+    'きゃ':['kya'],'きゅ':['kyu'],'きょ':['kyo'],
+    'ぎゃ':['gya'],'ぎゅ':['gyu'],'ぎょ':['gyo'],
+    'しゃ':['sya','sha'],'しゅ':['syu','shu'],'しょ':['syo','sho'],
+    'じゃ':['zya','ja','jya'],'じゅ':['zyu','ju','jyu'],'じょ':['zyo','jo','jyo'],
+    'ちゃ':['tya','cha'],'ちゅ':['tyu','chu'],'ちょ':['tyo','cho'],
+    'にゃ':['nya'],'にゅ':['nyu'],'にょ':['nyo'],
+    'ひゃ':['hya'],'ひゅ':['hyu'],'ひょ':['hyo'],
+    'びゃ':['bya'],'びゅ':['byu'],'びょ':['byo'],
+    'ぴゃ':['pya'],'ぴゅ':['pyu'],'ぴょ':['pyo'],
+    'みゃ':['mya'],'みゅ':['myu'],'みょ':['myo'],
+    'りゃ':['rya'],'りゅ':['ryu'],'りょ':['ryo']
+  };
+  // ヘボン式でこのまれる書き方
+  const HEPBURN = {
+    'し':'shi','じ':'ji','ち':'chi','つ':'tsu','ふ':'fu',
+    'しゃ':'sha','しゅ':'shu','しょ':'sho',
+    'じゃ':'ja','じゅ':'ju','じょ':'jo',
+    'ちゃ':'cha','ちゅ':'chu','ちょ':'cho'
+  };
+  const VOWELS = 'aiueo';
+
+  // ===== ことばリスト =====
+  const WORDS = {
+    1: ['ねこ','いぬ','とり','うみ','やま','はな','そら','つき','ほし','かさ','くつ','ふね','たこ','いか','うた','えき','かわ','もり','くも','あめ','ゆき','さる','くま','うさぎ','たぬき','きつね','めがね','さくら','すいか','みどり','たまご','さかな'],
+    2: ['りんご','みかん','ぱんだ','きって','がっこう','せんせい','しんぶん','でんしゃ','じてんしゃ','きんぎょ','きょうしつ','おちゃ','しゃしん','ぎゅうにゅう','らーめん','えんぴつ','ざっし','さんすう','おんがく','としょかん','ひゃくえん','びょういん','きゅうしょく','なっとう','ぎょうざ','けんだま','しょうぼうしゃ','きゅうきゅうしゃ'],
+    3: ['おはようございます','こんにちは','こんばんは','ありがとうございます','さようなら','いただきます','ごちそうさまでした','おやすみなさい','がんばってください','きょうはいいてんきです','わたしはしょうがくせいです','ほんをよむのがすきです','みんなであそびましょう']
+  };
+  const ROUND_LEN = { 1: 8, 2: 8, 3: 5 };
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    if (!$('chkSound').checked) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type, vol] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      gn.gain.setValueAtTime(vol || 0.15, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  }
+  const sndKey  = () => beep([[1250, 0, 0.04, 'square', 0.05]]);
+  const sndMiss = () => beep([[170, 0, 0.15, 'square']]);
+  const sndWord = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  // ===== ことば → 入力ユニットに分ける =====
+  function parseWord(w) {
+    const units = [];
+    for (let i = 0; i < w.length; i++) {
+      const two = w.slice(i, i + 2);
+      if (ROMA[two] && two.length === 2) { units.push({ kana: two, sp: ROMA[two] }); i++; }
+      else if (w[i] === 'っ') units.push({ kana: 'っ', sokuon: true });
+      else if (w[i] === 'ん') units.push({ kana: 'ん', hatsuon: true });
+      else units.push({ kana: w[i], sp: ROMA[w[i]] });
+    }
+    // 「っ」「ん」は次のユニットを見て打ち方を決める(うしろから)
+    for (let i = units.length - 1; i >= 0; i--) {
+      const u = units[i], nx = units[i + 1];
+      if (u.sokuon) {
+        const cons = nx ? [...new Set(nx.sp.map(s => s[0]))].filter(c => !VOWELS.includes(c) && c !== '-') : [];
+        u.sp = [...cons, 'ltu', 'xtu', 'ltsu'];
+      } else if (u.hatsuon) {
+        const nOK = nx && nx.sp.every(s => !VOWELS.includes(s[0]) && s[0] !== 'y' && s[0] !== 'n');
+        u.sp = nOK ? ['n', 'nn'] : ['nn'];
+      }
+    }
+    return units;
+  }
+  function prefSpelling(units, i) {
+    const u = units[i];
+    if (u.sokuon) return prefSpelling(units, i + 1)[0];
+    if (u.hatsuon) return u.sp[0];
+    if ($('selStyle').value === 'hepburn' && HEPBURN[u.kana]) return HEPBURN[u.kana];
+    return u.sp[0];
+  }
+
+  // ===== ゲームの状態 =====
+  const st = {
+    level: 1, state: 'ready',      // ready | play | result
+    list: [], wi: 0,               // 出題リストと今の番号
+    units: [], ui: 0, partial: '', typed: [],
+    miss: 0, hit: 0, startT: 0, timerId: null
+  };
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function newRound() {
+    st.list = shuffle([...WORDS[st.level]]).slice(0, ROUND_LEN[st.level]);
+    st.wi = 0; st.miss = 0; st.hit = 0; st.startT = 0;
+    clearInterval(st.timerId); st.timerId = null;
+    $('hudTime').textContent = '0:00';
+    $('hudMiss').textContent = '0';
+    st.state = 'play';
+    $('overlay').classList.add('hidden');
+    loadWord();
+  }
+  function loadWord() {
+    st.units = parseWord(st.list[st.wi]);
+    st.ui = 0; st.partial = ''; st.typed = [];
+    render();
+  }
+
+  // ===== 判定(本物のパソコンと同じルール) =====
+  function curCandidate() {
+    const u = st.units[st.ui];
+    const pref = prefSpelling(st.units, st.ui);
+    const ordered = [pref, ...u.sp.filter(s => s !== pref)];
+    return ordered.find(s => s.startsWith(st.partial)) || u.sp[0];
+  }
+  function advanceUnit() {
+    st.typed.push(st.partial);
+    st.ui++; st.partial = '';
+  }
+  function step(c) {
+    const u = st.units[st.ui];
+    if (!u) return false;
+    const np = st.partial + c;
+    if (u.sp.some(s => s.startsWith(np))) {
+      st.partial = np;
+      // これ以上のばせる書き方がなければ、この文字は完成
+      if (u.sp.includes(np) && !u.sp.some(s => s !== np && s.startsWith(np))) advanceUnit();
+      return true;
+    }
+    // いまの文字が完成ずみ(例:「ん」を n 1回)なら、次の文字として判定しなおす
+    if (u.sp.includes(st.partial) && st.ui < st.units.length - 1) {
+      advanceUnit();
+      return step(c);
+    }
+    return false;
+  }
+
+  function onChar(c) {
+    if (st.state !== 'play') return;
+    if (!st.startT) {
+      st.startT = Date.now();
+      st.timerId = setInterval(() => {
+        const s = Math.floor((Date.now() - st.startT) / 1000);
+        $('hudTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+      }, 500);
+    }
+    if (step(c)) {
+      st.hit++;
+      sndKey();
+      if (st.ui >= st.units.length) {   // ことば完成!
+        sndWord();
+        st.wi++;
+        if (st.wi >= st.list.length) { finish(); return; }
+        setTimeout(loadWord, 250);
+        renderDone();
+        return;
+      }
+    } else {
+      st.miss++;
+      sndMiss();
+      $('hudMiss').textContent = st.miss;
+      const stage = $('stage');
+      stage.classList.remove('miss-flash'); void stage.offsetWidth;
+      stage.classList.add('miss-flash');
+    }
+    render();
+  }
+
+  function finish() {
+    st.state = 'result';
+    clearInterval(st.timerId);
+    const ms = Date.now() - st.startT;
+    const sec = Math.floor(ms / 1000);
+    const acc = st.hit + st.miss > 0 ? Math.round(st.hit / (st.hit + st.miss) * 100) : 100;
+    const stars = st.miss === 0 ? 3 : acc >= 90 ? 2 : 1;
+    $('ovTitle').textContent = ['', 'クリア!', 'すごい!🎉', 'かんぺき!👑'][stars];
+    $('ovStars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+    $('ovDetail').innerHTML =
+      `タイム ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} / ミス ${st.miss}回<br>せいかくりつ ${acc}%`;
+    $('ovGo').textContent = 'スペースキーでもう一回!(タップでもOK)';
+    $('overlay').classList.remove('hidden');
+    setKbNext(null);
+    sndDone();
+  }
+
+  // ===== 画面の表示 =====
+  function render() {
+    $('wordCount').textContent = `もんだい ${st.wi + 1} / ${st.list.length}`;
+    $('hudWord').textContent = `${st.wi + 1}/${st.list.length}`;
+    // ひらがな(打ちおわった文字に色)
+    const doneKana = st.units.slice(0, st.ui).map(u => u.kana).join('');
+    const restKana = st.units.slice(st.ui).map(u => u.kana).join('');
+    $('kanaLine').innerHTML = `<span class="done">${doneKana}</span>${restKana}`;
+    // ローマ字
+    const done = st.typed.join('');
+    const cand = st.units[st.ui] ? curCandidate() : '';
+    const now = st.partial;
+    const restNow = cand.slice(now.length);
+    let future = '';
+    for (let i = st.ui + 1; i < st.units.length; i++) future += prefSpelling(st.units, i);
+    $('romaLine').innerHTML =
+      `<span class="done">${done}${now}</span><span class="now">${restNow}</span>${future}`;
+    $('romaLine').classList.toggle('hidden-roma', !$('chkRoma').checked);
+    setKbNext(restNow ? restNow[0] : (future ? future[0] : null));
+  }
+  function renderDone() {
+    $('kanaLine').innerHTML = `<span class="done">${st.list[st.wi - 1]}</span> ⭕`;
+    $('romaLine').innerHTML = `<span class="done">${st.typed.join('')}</span>`;
+    setKbNext(null);
+  }
+
+  // ===== キーボードの絵 =====
+  const FINGER = {};
+  'qaz1'.split('').forEach(k => FINGER[k] = 'f-pinky');
+  'wsx2'.split('').forEach(k => FINGER[k] = 'f-ring');
+  'edc3'.split('').forEach(k => FINGER[k] = 'f-middle');
+  'rfvtgb45'.split('').forEach(k => FINGER[k] = 'f-index');
+  'yhnujm67'.split('').forEach(k => FINGER[k] = 'f-index');
+  'ik,8'.split('').forEach(k => FINGER[k] = 'f-middle');
+  'ol.9'.split('').forEach(k => FINGER[k] = 'f-ring');
+  'p;-0'.split('').forEach(k => FINGER[k] = 'f-pinky');
+  const keyEls = {};
+  function buildKb() {
+    const rows = ['1234567890-', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm', ' '];
+    const kb = $('kb');
+    for (const row of rows) {
+      const div = document.createElement('div');
+      div.className = 'kb-row';
+      for (const ch of row) {
+        const k = document.createElement('div');
+        k.className = 'key ' + (ch === ' ' ? 'space f-thumb' : (FINGER[ch] || ''));
+        if (ch === 'f' || ch === 'j') k.classList.add('home');
+        k.textContent = ch === ' ' ? 'スペース' : ch.toUpperCase();
+        k.addEventListener('pointerdown', (ev) => { ev.preventDefault(); pressKey(ch); });
+        div.appendChild(k);
+        keyEls[ch] = k;
+      }
+      kb.appendChild(div);
+    }
+  }
+  function setKbNext(ch) {
+    document.querySelectorAll('.key.next').forEach(k => k.classList.remove('next'));
+    if (ch && keyEls[ch]) keyEls[ch].classList.add('next');
+  }
+
+  // ===== 入力 =====
+  function pressKey(ch) {
+    if (ch === ' ') {
+      if (st.state !== 'play') newRound();
+      return;
+    }
+    onChar(ch);
+  }
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Process' || ev.isComposing) {   // 日本語入力になっている
+      $('imeWarn').classList.add('show');
+      return;
+    }
+    $('imeWarn').classList.remove('show');
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const k = ev.key.toLowerCase();
+    if (k === ' ') { ev.preventDefault(); pressKey(' '); return; }
+    if (/^[a-z-]$/.test(k)) pressKey(k);
+  });
+  $('overlay').addEventListener('pointerdown', () => { if (st.state !== 'play') newRound(); });
+
+  // ===== UI =====
+  document.querySelectorAll('.level-btn').forEach(b => b.addEventListener('click', () => {
+    st.level = +b.dataset.level;
+    document.querySelectorAll('.level-btn').forEach(x => x.classList.toggle('active', x === b));
+    newRound();
+  }));
+  $('chkRoma').addEventListener('change', () => { if (st.state === 'play') render(); });
+  $('chkKb').addEventListener('change', () => { $('kb').style.display = $('chkKb').checked ? '' : 'none'; });
+  $('selStyle').addEventListener('change', () => { if (st.state === 'play') render(); });
+
+  buildKb();
+})();
+</script>
+
+</body>
+</html>
