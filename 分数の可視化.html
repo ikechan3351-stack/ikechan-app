@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分数の可視化ツール</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e0f2f1 0%, #b2dfdb 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #00695c; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #004d40; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #00695c; text-align: center; }
+  .panel { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 10px; }
+
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    border: 2px solid #80cbc4; background: #fff; border-radius: 12px;
+    padding: 8px 18px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: #00796b; border-color: #00796b; color: #fff; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+  .card h3 { margin: 0 0 8px; font-size: 0.95rem; color: #00695c; }
+
+  .stepper-row { display: flex; gap: 30px; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .stepper { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .stepper .who { font-size: 0.85rem; font-weight: bold; }
+  .st-line { display: flex; align-items: center; gap: 8px; }
+  .st-btn {
+    width: 40px; height: 40px; border-radius: 10px; border: none; font-size: 1.3rem; font-weight: bold;
+    background: #e0f2f1; color: #00695c; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .st-btn:active { transform: translateY(1px); box-shadow: none; }
+  .st-num { font-size: 1.9rem; font-weight: bold; width: 52px; text-align: center; }
+  .st-bar { width: 120px; height: 4px; border-radius: 2px; margin: 2px 0; }
+  .op-btn {
+    width: 56px; height: 56px; border-radius: 14px; border: 2px solid #80cbc4; background: #fff;
+    font-size: 1.8rem; font-weight: bold; color: #00695c; cursor: pointer; touch-action: manipulation;
+  }
+
+  .viz { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .pizza-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .viz svg { max-width: 100%; height: auto; }
+  .caption { font-size: 0.85rem; color: #666; text-align: center; }
+
+  .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; line-height: 1.15; font-weight: bold; margin: 0 3px; }
+  .frac .fn { border-bottom: 3px solid currentColor; padding: 0 7px; }
+  .frac .fd { padding: 0 7px; }
+  .big-sentence { font-size: 1.5rem; text-align: center; color: #333; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px; }
+  .cmp-sign { font-size: 2.2rem; font-weight: bold; color: #d84315; margin: 0 10px; }
+
+  .info-line { font-size: 1.05rem; color: #444; text-align: center; line-height: 2; }
+  .info-line b { color: #00695c; }
+
+  .step-controls { display: flex; gap: 10px; justify-content: center; margin-top: 4px; }
+  .step-btn {
+    border: none; background: #00796b; color: #fff; border-radius: 12px;
+    padding: 10px 26px; font-size: 1.05rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .step-btn:disabled { background: #b0bec5; box-shadow: none; }
+  .step-btn.sub { background: #fff; color: #00796b; border: 2px solid #80cbc4; box-shadow: none; }
+  .hidden { display: none; }
+  .reveal { animation: fadeIn 0.5s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+
+  .warn { color: #c62828; font-weight: bold; font-size: 1.1rem; text-align: center; }
+  label.chk { display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 0.92rem; cursor: pointer; color: #333; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #004d40; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>🍕 分数の可視化ツール</h1>
+<p class="subtitle">分数を「見て」わかろう!ピザ・テープ図・数直線で大かつやく!</p>
+
+<div class="panel">
+
+  <div class="mode-row">
+    <button class="mode-btn active" data-mode="view">👀 見る</button>
+    <button class="mode-btn" data-mode="compare">⚖️ くらべる</button>
+    <button class="mode-btn" data-mode="calc">➕ たし算・ひき算</button>
+  </div>
+
+  <div class="card">
+    <div class="stepper-row" id="stepperRow"></div>
+    <div id="extraControls"></div>
+  </div>
+
+  <div id="content"></div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>+ − ボタン</b>で分子(上)と分母(下)をかえると、絵がすぐにかわるよ。</li>
+      <li><b>見る</b>:1つの分数をピザ・テープ図・数直線で見られるよ。1より大きい分数(仮分数)もOK!</li>
+      <li><b>くらべる</b>:「分母をそろえて見る」にチェックを入れると、<b>通分</b>のひみつがわかるよ。</li>
+      <li><b>たし算・ひき算</b>:「つぎへ」をおすと、①そのまま → ②分母をそろえる(通分) → ③答え、のじゅんに出てくるよ。授業の説明にぴったり!</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const COL_A = '#ef5350', COL_B = '#42a5f5', COL_R = '#66bb6a';
+
+  const st = {
+    mode: 'view',
+    A: { n: 3, d: 4 },
+    B: { n: 2, d: 3 },
+    op: '+',
+    step: 0,
+    align: false
+  };
+
+  const gcd = (a, b) => b ? gcd(b, a % b) : a;
+  const lcm = (a, b) => a * b / gcd(a, b);
+
+  // ===== 部品:分数のHTML =====
+  const fracHTML = (n, d, color) =>
+    `<span class="frac" style="color:${color || '#333'}"><span class="fn">${n}</span><span class="fd">${d}</span></span>`;
+
+  // ===== 部品:ピザ(円グラフ) =====
+  // filled/slices ぬる、boldEvery ごとに太い線(通分の「もとの区切り」用)
+  function pizzaSVG(filled, slices, color, size, boldEvery) {
+    size = size || 150;
+    const r = size / 2 - 4, cx = size / 2, cy = size / 2;
+    let out = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+    if (slices === 1) {
+      out += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${filled >= 1 ? color : '#f5f5f5'}" stroke="#607d8b" stroke-width="2"/>`;
+    } else {
+      for (let i = 0; i < slices; i++) {
+        const a1 = -Math.PI / 2 + i * 2 * Math.PI / slices;
+        const a2 = -Math.PI / 2 + (i + 1) * 2 * Math.PI / slices;
+        const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+        const x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2);
+        out += `<path d="M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 0 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z"
+          fill="${i < filled ? color : '#f5f5f5'}" stroke="#90a4ae" stroke-width="1"/>`;
+      }
+      // もとの区切りの太い線
+      if (boldEvery) {
+        for (let i = 0; i < slices; i += boldEvery) {
+          const a = -Math.PI / 2 + i * 2 * Math.PI / slices;
+          out += `<line x1="${cx}" y1="${cy}" x2="${(cx + r * Math.cos(a)).toFixed(2)}" y2="${(cy + r * Math.sin(a)).toFixed(2)}" stroke="#37474f" stroke-width="2.5"/>`;
+        }
+      }
+      out += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#607d8b" stroke-width="2"/>`;
+    }
+    return out + '</svg>';
+  }
+  // 1より大きい分数 → ピザ何まいかに分けて表示
+  function pizzasHTML(n, d, color, size, boldEvery) {
+    const count = Math.max(1, Math.ceil(n / d));
+    let out = '<div class="pizza-row">';
+    let rest = n;
+    for (let i = 0; i < count; i++) {
+      out += pizzaSVG(Math.min(rest, d), d, color, size, boldEvery);
+      rest -= d;
+    }
+    return out + '</div>';
+  }
+
+  // ===== 部品:テープ図 =====
+  function tapeSVG(n, d, color, width, boldEvery) {
+    width = width || 620;
+    const wholes = Math.max(1, Math.ceil(n / d));
+    const h = 38, gap = 8, unitW = (width - gap * (wholes - 1)) / wholes;
+    let out = `<svg width="${width}" height="${h}" viewBox="0 0 ${width} ${h}">`;
+    let rest = n;
+    for (let w = 0; w < wholes; w++) {
+      const x0 = w * (unitW + gap);
+      const cellW = unitW / d;
+      for (let i = 0; i < d; i++) {
+        out += `<rect x="${(x0 + i * cellW).toFixed(2)}" y="2" width="${cellW.toFixed(2)}" height="${h - 4}"
+          fill="${i < rest ? color : '#f5f5f5'}" stroke="#90a4ae" stroke-width="1"/>`;
+      }
+      if (boldEvery) {
+        for (let i = 0; i <= d; i += boldEvery) {
+          const x = x0 + i * cellW;
+          out += `<line x1="${x.toFixed(2)}" y1="0" x2="${x.toFixed(2)}" y2="${h}" stroke="#37474f" stroke-width="2.5"/>`;
+        }
+      }
+      out += `<rect x="${x0.toFixed(2)}" y="2" width="${unitW.toFixed(2)}" height="${h - 4}" fill="none" stroke="#607d8b" stroke-width="2"/>`;
+      rest -= d;
+    }
+    return out + '</svg>';
+  }
+
+  // ===== 部品:数直線 =====
+  function numberLineSVG(n, d, color, width) {
+    width = width || 640;
+    const wholes = Math.max(1, Math.ceil(n / d));
+    const h = 64, pad = 24, y = 34;
+    const unitW = (width - pad * 2) / wholes;
+    let out = `<svg width="${width}" height="${h}" viewBox="0 0 ${width} ${h}">
+      <line x1="${pad}" y1="${y}" x2="${width - pad}" y2="${y}" stroke="#455a64" stroke-width="2.5"/>`;
+    for (let w = 0; w <= wholes; w++) {
+      const x = pad + w * unitW;
+      out += `<line x1="${x}" y1="${y - 12}" x2="${x}" y2="${y + 12}" stroke="#455a64" stroke-width="2.5"/>
+        <text x="${x}" y="${y + 28}" text-anchor="middle" font-size="14" font-weight="bold" fill="#455a64">${w}</text>`;
+    }
+    for (let w = 0; w < wholes; w++) {
+      for (let i = 1; i < d; i++) {
+        const x = pad + w * unitW + i * unitW / d;
+        out += `<line x1="${x.toFixed(2)}" y1="${y - 6}" x2="${x.toFixed(2)}" y2="${y + 6}" stroke="#90a4ae" stroke-width="1.5"/>`;
+      }
+    }
+    const px = pad + (n / d) * unitW;
+    out += `<circle cx="${px.toFixed(2)}" cy="${y}" r="7" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <text x="${px.toFixed(2)}" y="${y - 18}" text-anchor="middle" font-size="15" font-weight="bold" fill="${color}">${n}/${d}</text>`;
+    return out + '</svg>';
+  }
+
+  // ===== 部品:分数ステッパー =====
+  function stepperHTML(key, label, color) {
+    const f = st[key];
+    return `<div class="stepper" data-key="${key}">
+      <span class="who" style="color:${color}">${label}</span>
+      <div class="st-line">
+        <button class="st-btn" data-t="n" data-v="-1">−</button>
+        <span class="st-num" style="color:${color}">${f.n}</span>
+        <button class="st-btn" data-t="n" data-v="1">+</button>
+      </div>
+      <div class="st-bar" style="background:${color}"></div>
+      <div class="st-line">
+        <button class="st-btn" data-t="d" data-v="-1">−</button>
+        <span class="st-num" style="color:${color}">${f.d}</span>
+        <button class="st-btn" data-t="d" data-v="1">+</button>
+      </div>
+    </div>`;
+  }
+
+  // ===== 分数のことば =====
+  function mixedText(n, d) {
+    if (n < d) return null;
+    if (n % d === 0) return `${n / d}`;
+    return `${Math.floor(n / d)} と ${n % d}/${d}`;
+  }
+  function decimalText(n, d) {
+    const v = n / d;
+    const r = Math.round(v * 1000) / 1000;
+    const exact = Math.abs(v - r) < 1e-12;
+    return (exact ? '= ' : '≒ ') + r;
+  }
+  function simplify(n, d) {
+    const g = gcd(n || d, d);
+    return [n / g, d / g];
+  }
+
+  // ===== 画面:見る =====
+  function renderView() {
+    const { n, d } = st.A;
+    let info = '';
+    const mx = mixedText(n, d);
+    if (mx) info += `帯分数にすると <b>${mx}</b> 　`;
+    const [sn, sd] = simplify(n, d);
+    if (n > 0 && sd !== d) info += `約分すると <b>${sn}/${sd}</b> 　`;
+    const eqs = [];
+    for (let k = 2; d * k <= 24 && eqs.length < 4; k++) eqs.push(`${n * k}/${d * k}`);
+    const eqLine = n > 0 ? `<div>等しい分数: <b>${n}/${d} = ${eqs.join(' = ')}</b></div>` : '';
+    $('content').innerHTML = `
+      <div class="card viz">
+        ${pizzasHTML(n, d, COL_A)}
+        ${tapeSVG(n, d, COL_A)}
+        ${numberLineSVG(n, d, COL_A)}
+        <div class="info-line">
+          <div>${fracHTML(n, d, COL_A)} は、1を <b>${d}こ</b> に分けたものの <b>${n}こ分</b> 　 小数で ${decimalText(n, d)}</div>
+          ${info ? `<div>${info}</div>` : ''}${eqLine}
+        </div>
+      </div>`;
+  }
+
+  // ===== 画面:くらべる =====
+  function renderCompare() {
+    const a = st.A, b = st.B;
+    const L = lcm(a.d, b.d);
+    const va = a.n / a.d, vb = b.n / b.d;
+    const sign = va > vb ? '&gt;' : va < vb ? '&lt;' : '=';
+    const bold = st.align;
+    const aSlices = bold ? L : a.d, aFill = bold ? a.n * L / a.d : a.n;
+    const bSlices = bold ? L : b.d, bFill = bold ? b.n * L / b.d : b.n;
+    $('content').innerHTML = `
+      <div class="card viz">
+        <div class="pizza-row">
+          <div style="text-align:center">${pizzaSVG(aFill, aSlices, COL_A, 170, bold ? L / a.d : 0)}<div class="caption">${a.n}/${a.d}${bold ? ` = ${a.n * L / a.d}/${L}` : ''}</div></div>
+          <div style="text-align:center">${pizzaSVG(bFill, bSlices, COL_B, 170, bold ? L / b.d : 0)}<div class="caption">${b.n}/${b.d}${bold ? ` = ${b.n * L / b.d}/${L}` : ''}</div></div>
+        </div>
+        ${tapeSVG(aFill, aSlices, COL_A, 620, bold ? L / a.d : 0)}
+        ${tapeSVG(bFill, bSlices, COL_B, 620, bold ? L / b.d : 0)}
+        <div class="big-sentence">
+          ${fracHTML(a.n, a.d, COL_A)}<span class="cmp-sign">${sign}</span>${fracHTML(b.n, b.d, COL_B)}
+        </div>
+        ${bold ? `<div class="info-line">分母を <b>${L}</b> にそろえると… <b style="color:${COL_A}">${a.n * L / a.d}/${L}</b> と <b style="color:${COL_B}">${b.n * L / b.d}/${L}</b> → ${sign === '=' ? '同じ大きさ!' : 'どちらが大きいか、ひと目でわかる!'}</div>` : ''}
+      </div>`;
+  }
+
+  // ===== 画面:たし算・ひき算 =====
+  function renderCalc() {
+    const a = st.A, b = st.B;
+    const L = lcm(a.d, b.d);
+    const an = a.n * L / a.d, bn = b.n * L / b.d;
+    const isMinus = st.op === '−';
+    const rn = isMinus ? an - bn : an + bn;
+    const html = [];
+
+    // ① そのまま
+    html.push(`
+      <div class="card viz">
+        <h3>① そのまま見てみよう</h3>
+        <div class="pizza-row">
+          <div style="text-align:center">${pizzaSVG(a.n, a.d, COL_A, 160)}<div class="caption">${a.n}/${a.d}</div></div>
+          <div style="font-size:2rem;font-weight:bold">${st.op}</div>
+          <div style="text-align:center">${pizzaSVG(b.n, b.d, COL_B, 160)}<div class="caption">${b.n}/${b.d}</div></div>
+        </div>
+        <div class="info-line">${a.d === b.d ? '分母が同じだから、このままたせるね!' : '切り方(分母)がちがうから、このままでは計算できない…!'}</div>
+      </div>`);
+
+    // ② 通分
+    if (a.d !== b.d) {
+      html.push(`
+      <div class="card viz ${st.step < 1 ? 'hidden' : 'reveal'}" id="step1">
+        <h3>② 分母をそろえよう(通分)</h3>
+        <div class="pizza-row">
+          <div style="text-align:center">${pizzaSVG(an, L, COL_A, 160, L / a.d)}<div class="caption">${a.n}/${a.d} = <b>${an}/${L}</b>(1切れを${L / a.d}つに)</div></div>
+          <div style="font-size:2rem;font-weight:bold">${st.op}</div>
+          <div style="text-align:center">${pizzaSVG(bn, L, COL_B, 160, L / b.d)}<div class="caption">${b.n}/${b.d} = <b>${bn}/${L}</b>(1切れを${L / b.d}つに)</div></div>
+        </div>
+        <div class="info-line">切り方を <b>${L}等分</b> にそろえた!ぬってある広さは<b>もとのまま</b>だよ。</div>
+      </div>`);
+    }
+
+    // ③ 答え
+    const finalStep = a.d !== b.d ? 2 : 1;
+    if (rn < 0) {
+      html.push(`<div class="card ${st.step < finalStep ? 'hidden' : 'reveal'}" id="step2">
+        <div class="warn">ひけないよ!${fracHTML(a.n, a.d, COL_A)} より ${fracHTML(b.n, b.d, COL_B)} のほうが大きいみたい…数をかえてみよう</div>
+      </div>`);
+    } else {
+      const [sn, sd] = simplify(rn, L);
+      const mx = rn > L ? mixedText(rn, L) : null;
+      let ansLine = `${fracHTML(a.n, a.d, COL_A)} ${st.op} ${fracHTML(b.n, b.d, COL_B)}`;
+      if (a.d !== b.d) ansLine += ` = ${fracHTML(an, L, COL_A)} ${st.op} ${fracHTML(bn, L, COL_B)}`;
+      ansLine += ` = ${fracHTML(rn, L, COL_R)}`;
+      if (rn > 0 && rn % L === 0) {
+        // ちょうど整数になるとき(4/4 = 1 など)
+        ansLine += ` = <b style="color:${COL_R}">${rn / L}</b>`;
+      } else if (sd !== L && rn > 0) {
+        ansLine += ` = ${fracHTML(sn, sd, COL_R)}<span style="font-size:0.85rem;color:#666">(約分)</span>`;
+      }
+      html.push(`
+      <div class="card viz ${st.step < finalStep ? 'hidden' : 'reveal'}" id="step2">
+        <h3>${a.d !== b.d ? '③' : '②'} 答え!</h3>
+        ${pizzasHTML(rn, L, COL_R, 150, L > 1 ? 0 : 0)}
+        <div class="big-sentence">${ansLine}</div>
+        ${mx ? `<div class="info-line">帯分数にすると <b>${mx}</b></div>` : ''}
+      </div>`);
+    }
+
+    html.push(`
+      <div class="step-controls">
+        <button class="step-btn" id="btnNext" ${st.step >= finalStep ? 'disabled' : ''}>つぎへ ▶</button>
+        <button class="step-btn sub" id="btnReset">さいしょから</button>
+      </div>`);
+
+    $('content').innerHTML = html.join('');
+    const bn2 = $('btnNext');
+    if (bn2) bn2.addEventListener('click', () => { st.step++; renderAll(); });
+    const br = $('btnReset');
+    if (br) br.addEventListener('click', () => { st.step = 0; renderAll(); });
+  }
+
+  // ===== ステッパーと追加コントロール =====
+  function renderControls() {
+    let out = '';
+    if (st.mode === 'view') {
+      out = stepperHTML('A', '分数', COL_A);
+    } else if (st.mode === 'compare') {
+      out = stepperHTML('A', 'あか', COL_A) + stepperHTML('B', 'あお', COL_B);
+    } else {
+      out = stepperHTML('A', 'あか', COL_A) +
+        `<button class="op-btn" id="opBtn">${st.op}</button>` +
+        stepperHTML('B', 'あお', COL_B);
+    }
+    $('stepperRow').innerHTML = out;
+    $('extraControls').innerHTML = st.mode === 'compare'
+      ? `<label class="chk" style="margin-top:10px"><input type="checkbox" id="chkAlign" ${st.align ? 'checked' : ''}> 分母をそろえて見る(通分)</label>`
+      : '';
+
+    document.querySelectorAll('.stepper .st-btn').forEach(b => b.addEventListener('click', () => {
+      const key = b.closest('.stepper').dataset.key;
+      const f = st[key];
+      const t = b.dataset.t, v = +b.dataset.v;
+      if (t === 'd') {
+        f.d = Math.min(12, Math.max(2, f.d + v));
+      } else {
+        const maxN = st.mode === 'view' ? f.d * 3 : f.d;
+        f.n = Math.min(maxN, Math.max(0, f.n + v));
+      }
+      // 分母をこえた分子はそろえる(くらべる・計算モード)
+      if (st.mode !== 'view') { st.A.n = Math.min(st.A.n, st.A.d); st.B.n = Math.min(st.B.n, st.B.d); }
+      st.step = 0;
+      renderAll();
+    }));
+    const ob = $('opBtn');
+    if (ob) ob.addEventListener('click', () => { st.op = st.op === '+' ? '−' : '+'; st.step = 0; renderAll(); });
+    const ca = $('chkAlign');
+    if (ca) ca.addEventListener('change', () => { st.align = ca.checked; renderAll(); });
+  }
+
+  function renderAll() {
+    renderControls();
+    if (st.mode === 'view') renderView();
+    else if (st.mode === 'compare') renderCompare();
+    else renderCalc();
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+    st.mode = b.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.toggle('active', x === b));
+    if (st.mode !== 'view') { st.A.n = Math.min(st.A.n, st.A.d); st.B.n = Math.min(st.B.n, st.B.d); }
+    st.step = 0;
+    renderAll();
+  }));
+
+  renderAll();
+})();
+</script>
+
+</body>
+</html>
