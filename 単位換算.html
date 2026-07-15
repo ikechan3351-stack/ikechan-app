@@ -55,6 +55,26 @@
   }
   .unit-label { color: #00695c; }
   .hint-line { font-size: 1rem; color: #ef6c00; font-weight: bold; min-height: 1.4rem; }
+  .hud button {
+    border: none; background: #fff8e1; color: #e65100; border: 2px solid #ffd54f;
+    border-radius: 999px; padding: 5px 12px; font-weight: bold; font-size: 0.85rem;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .song-card {
+    background: #fff8e1; border: 2px solid #ffd54f; border-radius: 12px; padding: 10px 14px;
+  }
+  .song-lines { text-align: center; font-weight: bold; color: #e65100; font-size: 1.02rem; line-height: 1.8; }
+  .ladder { display: flex; justify-content: center; align-items: stretch; gap: 2px; flex-wrap: wrap; margin-top: 8px; }
+  .lad-cell {
+    border-radius: 8px; padding: 4px 7px; text-align: center; font-size: 0.72rem;
+    background: #f5f5f5; color: #9e9e9e; min-width: 50px;
+  }
+  .lad-cell b { display: block; font-size: 0.82rem; }
+  .lad-cell.on { background: #ffecb3; color: #6d4c41; }
+  .lad-cell.end { background: #00838f; color: #fff; }
+  .lad-arrow { display: flex; align-items: center; font-size: 0.68rem; color: #ccc; font-weight: bold; }
+  .lad-arrow.on { color: #e65100; }
+  .lad-cap { text-align: center; font-size: 0.82rem; color: #6d4c41; font-weight: bold; margin-top: 6px; }
   .mark { font-size: 1.4rem; min-height: 1.8rem; font-weight: bold; }
   .mark.ok { color: #2e7d32; }
   .mark.ng { color: #c62828; }
@@ -130,12 +150,20 @@
     <span>タイム <span class="val" id="hudTime">0:00</span></span>
     <label><input type="checkbox" id="chkHint"> ヒントを表示</label>
     <label><input type="checkbox" id="chkSound" checked> 音</label>
+    <button id="btnSong">🎵 おぼえうた</button>
+  </div>
+
+  <div class="song-card" id="songCard" style="display:none">
+    <div class="song-lines">🎵 キロキロと、ヘクトデカけたメートルが<br>デシに追われてセンチミリミリ 🎵</div>
+    <div class="ladder" id="songLadder"></div>
+    <div class="lad-cap">となりのへやへ1つうごくごとに「×10」(もどるときは「÷10」)だよ!</div>
   </div>
 
   <div class="stage" id="stage">
     <div class="word-count" id="wordCount"></div>
     <div class="q-line"><span id="qText"></span><span class="ans-box" id="ansBox"></span><span class="unit-label" id="unitLabel"></span></div>
     <div class="hint-line" id="hintLine"></div>
+    <div class="ladder" id="ladderLine"></div>
     <div class="mark" id="mark"></div>
     <div class="overlay" id="overlay">
       <div class="big" id="ovTitle">単位換算トレーニング</div>
@@ -153,6 +181,7 @@
     <ul>
       <li>答えを数字でうって、<b>OK(エンターキー)</b>でこたえ合わせ!小数の答えは「<b>.</b>」キーをつかってね。</li>
       <li>まちがえると<b>ヒント(1km = 1000m など)</b>が出るよ。さいしょから見たいときは「ヒントを表示」にチェック!</li>
+      <li>「<b>🎵 おぼえうた</b>」ボタンで「<b>キロキロと、ヘクトデカけたメートルが デシに追われてセンチミリミリ</b>」のうたと単位のはしごが見られるよ。となりへ1つで×10!</li>
       <li><b>むずかしい</b>には「1km 200m = ?m」や「4500m = ?km」みたいな問題も出るよ。</li>
       <li>3回まちがえると答えが出て次の問題へ。さいごに<b>ふりかえり</b>でにがてをチェック!</li>
       <li>長さ・かさ・重さは小2〜3、時間は小3、面積は小4でならうよ。</li>
@@ -174,6 +203,54 @@
     time:   { name: '時間', units: [['秒', 1], ['分', 60], ['時間', 3600]] },
     area:   { name: '面積', units: [['cm²', 1], ['m²', 10000], ['a', 1000000], ['ha', 100000000], ['km²', 10000000000]] }
   };
+
+  // ===== おぼえうた「キロキロと」のはしご =====
+  // キロ(×1000) ヘクト(×100) デカ(×10) もとの単位 デシ(1/10) センチ(1/100) ミリ(1/1000)
+  const LADDER = [
+    { pos: 3, name: 'キロ' }, { pos: 2, name: 'ヘクト' }, { pos: 1, name: 'デカ' },
+    { pos: 0, name: '' },     // もとの単位(カテゴリごと)
+    { pos: -1, name: 'デシ' }, { pos: -2, name: 'センチ' }, { pos: -3, name: 'ミリ' }
+  ];
+  const LAD_POS = {
+    length: { km: 3, m: 0, cm: -2, mm: -3 },
+    volume: { L: 0, dL: -1, mL: -3 },
+    weight: { kg: 3, g: 0 }
+  };
+  const LAD_UNITS = {
+    length: { 3: 'km', 0: 'm', '-2': 'cm', '-3': 'mm' },
+    volume: { 0: 'L', '-1': 'dL', '-3': 'mL' },
+    weight: { 3: 'kg', 0: 'g' }
+  };
+  const LAD_BASE = { length: 'メートル', volume: 'リットル', weight: 'グラム' };
+
+  // cat=null なら「おぼえうた」用(全部うすく表示)
+  function ladderHTML(cat, bigU, smallU) {
+    let hi = null, lo = null;
+    if (cat) {
+      const p1 = LAD_POS[cat][bigU], p2 = LAD_POS[cat][smallU];
+      hi = Math.max(p1, p2); lo = Math.min(p1, p2);
+    }
+    let out = '';
+    LADDER.forEach((c, i) => {
+      if (i > 0) {
+        const prev = LADDER[i - 1];
+        const on = cat && prev.pos <= hi && c.pos >= lo;
+        out += `<span class="lad-arrow ${on ? 'on' : ''}">×10→</span>`;
+      }
+      const name = c.pos === 0 ? (cat ? LAD_BASE[cat] : 'メートル・リットル・グラム') : c.name;
+      const unit = cat ? (LAD_UNITS[cat][c.pos] || '') : { 3: 'km・kg', 0: 'm・L・g', '-1': 'dL', '-2': 'cm', '-3': 'mm・mL' }[c.pos] || '';
+      const cls = !cat ? 'on' : (c.pos === hi || c.pos === lo) ? 'end' : (c.pos < hi && c.pos > lo) ? 'on' : '';
+      out += `<span class="lad-cell ${cls}"><b>${name}</b>${unit || '&nbsp;'}</span>`;
+    });
+    if (cat) {
+      const steps = hi - lo;
+      out += `<span class="lad-cap" style="width:100%">「${bigU} → ${smallU}」は ×10 が ${steps}回 → ${Math.pow(10, steps)}倍!</span>`;
+    }
+    return out;
+  }
+  function updateLadder(q, show) {
+    $('ladderLine').innerHTML = (show && q && q.lad) ? ladderHTML(q.lad.cat, q.lad.big, q.lad.small) : '';
+  }
 
   // ===== 効果音 =====
   let audioCtx = null;
@@ -216,6 +293,11 @@
     const [si, bi, ratio] = pick(pairs);
     const small = units[si][0], big = units[bi][0];
     const hint = `1 ${big} = ${fmtN(ratio)} ${small}`;
+    // おぼえうたのはしごが使えるペアか(km↔m、L↔mL、kg↔g など)
+    const ladOf = (b, s) =>
+      (LAD_POS[catKey] && LAD_POS[catKey][b] !== undefined && LAD_POS[catKey][s] !== undefined)
+        ? { cat: catKey, big: b, small: s } : null;
+    const lad = ladOf(big, small);
 
     if (diff === 3) {
       const isTime = catKey === 'time';
@@ -232,26 +314,26 @@
         else if (cr === 60) b = rnd(1, 59);
         else if (cr >= 100) b = rnd(1, 99);
         else b = rnd(1, cr - 1);
-        return { text: `${a} ${cb[0]} ${b} ${cs[0]} =`, unit: cs[0], ans: a * cr + b, hint: `1 ${cb[0]} = ${fmtN(cr)} ${cs[0]}` };
+        return { text: `${a} ${cb[0]} ${b} ${cs[0]} =`, unit: cs[0], ans: a * cr + b, hint: `1 ${cb[0]} = ${fmtN(cr)} ${cs[0]}`, lad: ladOf(cb[0], cs[0]) };
       }
       if (kind === 'decimalQ') {
         // 3.5km = ?m(答えは整数)
         const n = rnd(11, 99);
         const nn = n % 10 === 0 ? n + 5 : n;
-        return { text: `${nn / 10} ${big} =`, unit: small, ans: nn * ratio / 10, hint };
+        return { text: `${nn / 10} ${big} =`, unit: small, ans: nn * ratio / 10, hint, lad };
       }
       // 4500m = ?km(答えが小数)
       const n2 = rnd(11, 99);
       const nn2 = n2 % 10 === 0 ? n2 + 5 : n2;
-      return { text: `${fmtN(nn2 * ratio / 10)} ${small} =`, unit: big, ans: nn2 / 10, hint };
+      return { text: `${fmtN(nn2 * ratio / 10)} ${small} =`, unit: big, ans: nn2 / 10, hint, lad };
     }
 
     // やさしい・ふつう:整数の答え
     const toSmall = Math.random() < 0.5;
     const maxN = diff === 1 ? 9 : 30;
     const n = rnd(1, maxN);
-    if (toSmall) return { text: `${n} ${big} =`, unit: small, ans: n * ratio, hint };
-    return { text: `${fmtN(n * ratio)} ${small} =`, unit: big, ans: n, hint };
+    if (toSmall) return { text: `${n} ${big} =`, unit: small, ans: n * ratio, hint, lad };
+    return { text: `${fmtN(n * ratio)} ${small} =`, unit: big, ans: n, hint, lad };
   }
 
   // ===== ゲームの状態 =====
@@ -285,6 +367,7 @@
     $('unitLabel').textContent = q.unit;
     $('mark').textContent = ''; $('mark').className = 'mark';
     $('hintLine').textContent = $('chkHint').checked ? '💡 ' + q.hint : '';
+    updateLadder(q, $('chkHint').checked);
     render();
   }
   function render() {
@@ -316,6 +399,7 @@
       st.miss++; st.tries++;
       $('hudMiss').textContent = st.miss;
       $('hintLine').textContent = '💡 ' + q.hint;   // まちがえたらヒントを出す
+      updateLadder(q, true);                         // おぼえうたのはしごも出す
       const stage = $('stage');
       stage.classList.remove('miss-flash'); void stage.offsetWidth;
       stage.classList.add('miss-flash');
@@ -419,7 +503,14 @@
   $('chkHint').addEventListener('change', () => {
     if (st.state === 'play') {
       $('hintLine').textContent = $('chkHint').checked ? '💡 ' + st.qs[st.qi].hint : '';
+      updateLadder(st.qs[st.qi], $('chkHint').checked);
     }
+  });
+  // おぼえうたカードの表示切りかえ
+  $('songLadder').innerHTML = ladderHTML(null);
+  $('btnSong').addEventListener('click', () => {
+    const c = $('songCard');
+    c.style.display = c.style.display === 'none' ? '' : 'none';
   });
 })();
 </script>
