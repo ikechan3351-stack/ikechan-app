@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地図記号クイズ</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #efebe9 0%, #d7ccc8 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #5d4037; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #3e2723; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #6d4c41; text-align: center; }
+  .panel { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 10px; }
+
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    border: 2px solid #bcaaa4; background: #fff; border-radius: 12px;
+    padding: 8px 16px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: #5d4037; border-color: #5d4037; color: #fff; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+
+  /* ===== 図鑑 ===== */
+  .zukan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
+  .z-card {
+    border: 2px solid #d7ccc8; border-radius: 12px; padding: 6px 2px 4px; text-align: center;
+    cursor: pointer; background: #fff; touch-action: manipulation;
+  }
+  .z-card.sel { border-color: #5d4037; background: #efebe9; }
+  .z-card .z-name { font-size: 0.72rem; font-weight: bold; color: #4e342e; }
+  .z-detail {
+    margin-top: 10px; background: #efebe9; border-radius: 12px; padding: 12px;
+    display: flex; gap: 14px; align-items: center; min-height: 110px;
+  }
+  .z-detail .big { flex-shrink: 0; background: #fff; border-radius: 10px; padding: 6px; }
+  .z-detail .z-title { font-size: 1.25rem; font-weight: bold; color: #3e2723; }
+  .z-detail .z-kana { font-size: 0.85rem; color: #795548; }
+  .z-detail .z-origin { font-size: 0.92rem; color: #444; margin-top: 4px; line-height: 1.6; }
+
+  /* ===== クイズ ===== */
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .chip {
+    border: 2px solid #bcaaa4; background: #fff; border-radius: 999px;
+    padding: 6px 14px; font-size: 0.9rem; font-weight: bold; color: #333; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: #5d4037; border-color: #5d4037; color: #fff; }
+  .hud {
+    display: flex; gap: 16px; justify-content: center; align-items: center; flex-wrap: wrap;
+    font-size: 0.95rem; font-weight: bold; color: #333; margin-top: 8px;
+  }
+  .hud .val { color: #5d4037; }
+  .hud label { font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+
+  .stage {
+    position: relative; margin-top: 8px;
+    background: #efebe9; border-radius: 14px; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 300px;
+  }
+  .q-big { background: #fff; border-radius: 12px; padding: 10px; }
+  .q-name { font-size: 1.7rem; font-weight: bold; color: #3e2723; background: #fff; border-radius: 12px; padding: 14px 30px; }
+  .q-name small { display: block; font-size: 0.85rem; color: #795548; font-weight: normal; text-align: center; }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 460px; }
+  .choice {
+    border: 2px solid #bcaaa4; background: #fff; border-radius: 12px;
+    padding: 10px 6px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation; display: flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 56px;
+  }
+  .choice:active { transform: translateY(1px); }
+  .choice.correct { background: #c8e6c9; border-color: #2e7d32; }
+  .choice.wrong { background: #ffcdd2; border-color: #c62828; }
+  .mark { font-size: 1.3rem; min-height: 1.7rem; font-weight: bold; }
+  .mark.ok { color: #2e7d32; }
+  .mark.ng { color: #c62828; }
+  .stage.miss-flash { animation: missShake 0.25s; }
+  @keyframes missShake { 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+  .word-count { font-size: 0.85rem; color: #888; }
+
+  .overlay {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.96); border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    text-align: center; z-index: 5; cursor: pointer; padding: 12px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay .big { font-size: 1.7rem; font-weight: bold; color: #3e2723; }
+  .overlay .stars { font-size: 2.2rem; letter-spacing: 6px; }
+  .overlay .detail { font-size: 1rem; color: #444; line-height: 1.6; }
+  .overlay .review {
+    font-size: 0.9rem; color: #b71c1c; line-height: 1.8; max-height: 130px; overflow-y: auto;
+    background: #ffebee; border-radius: 10px; padding: 6px 14px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .overlay .review .rv-row { display: flex; align-items: center; gap: 6px; justify-content: center; }
+  .overlay .go { font-size: 1rem; color: #5d4037; font-weight: bold; margin-top: 4px; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #3e2723; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>🗺️ 地図記号クイズ</h1>
+<p class="subtitle">地図記号をおぼえて、地図はかせになろう!(国土地理院の地図記号)</p>
+
+<div class="panel">
+
+  <div class="mode-row">
+    <button class="mode-btn active" data-mode="zukan">📖 ずかん</button>
+    <button class="mode-btn" data-mode="quiz">❓ クイズ</button>
+  </div>
+
+  <div id="content"></div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>ずかん</b>:記号をタップすると、名前と<b>記号の由来(なりたち)</b>がわかるよ。由来をおぼえると忘れないよ!</li>
+      <li><b>クイズ</b>:「記号 → 名前」「名前 → 記号」の2方向で10問チャレンジ!</li>
+      <li>にている記号(交番と警察署、田と畑、市役所と町・村役場…)がわざと出てくるよ。ひっかからないでね!</li>
+      <li>3回まちがえると答えが出て次へ。さいごにふりかえりで復習しよう。</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const ROUND = 10;
+
+  // ===== 地図記号のSVG(64×64) =====
+  const ST = 'stroke="#212121" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+  const SYM = {
+    school: `<text x="32" y="44" text-anchor="middle" font-size="36" font-weight="bold" fill="#212121">文</text>`,
+    highschool: `<circle cx="32" cy="32" r="26" ${ST} stroke-width="3"/><text x="32" y="42" text-anchor="middle" font-size="28" font-weight="bold" fill="#212121">文</text>`,
+    city: `<circle cx="32" cy="32" r="24" ${ST} stroke-width="3.5"/><circle cx="32" cy="32" r="13" ${ST} stroke-width="3.5"/>`,
+    town: `<circle cx="32" cy="32" r="15" ${ST} stroke-width="4"/>`,
+    post: `<circle cx="32" cy="32" r="26" ${ST} stroke-width="3"/><text x="32" y="43" text-anchor="middle" font-size="30" font-weight="bold" fill="#212121">〒</text>`,
+    koban: `<line x1="18" y1="16" x2="46" y2="48" ${ST} stroke-width="5"/><line x1="46" y1="16" x2="18" y2="48" ${ST} stroke-width="5"/>`,
+    police: `<circle cx="32" cy="32" r="26" ${ST} stroke-width="3"/><line x1="22" y1="22" x2="42" y2="42" ${ST} stroke-width="4.5"/><line x1="42" y1="22" x2="22" y2="42" ${ST} stroke-width="4.5"/>`,
+    fire: `<line x1="32" y1="56" x2="32" y2="32" ${ST} stroke-width="4.5"/><path d="M32,32 C32,24 20,26 15,12" ${ST} stroke-width="4.5"/><path d="M32,32 C32,24 44,26 49,12" ${ST} stroke-width="4.5"/>`,
+    hospital: `<path d="M32,8 L53,17 V33 Q53,50 32,57 Q11,50 11,33 V17 Z" ${ST} stroke-width="3"/><line x1="32" y1="20" x2="32" y2="45" ${ST} stroke-width="5.5"/><line x1="20" y1="32.5" x2="44" y2="32.5" ${ST} stroke-width="5.5"/>`,
+    shrine: `<path d="M8,17 Q32,10 56,17" ${ST} stroke-width="4.5"/><line x1="13" y1="27" x2="51" y2="27" ${ST} stroke-width="3.5"/><line x1="19" y1="21" x2="19" y2="54" ${ST} stroke-width="4"/><line x1="45" y1="21" x2="45" y2="54" ${ST} stroke-width="4"/>`,
+    temple: `<text x="32" y="46" text-anchor="middle" font-size="42" font-weight="bold" fill="#212121">卍</text>`,
+    library: `<path d="M32,18 C25,11 13,12 9,14 V47 C13,45 25,45 32,51 C39,45 51,45 55,47 V14 C51,12 39,11 32,18 Z" ${ST} stroke-width="3"/><line x1="32" y1="18" x2="32" y2="51" ${ST} stroke-width="2.5"/>`,
+    museum: `<line x1="10" y1="18" x2="54" y2="18" ${ST} stroke-width="4.5"/><line x1="18" y1="22" x2="18" y2="44" ${ST} stroke-width="4"/><line x1="32" y1="22" x2="32" y2="44" ${ST} stroke-width="4"/><line x1="46" y1="22" x2="46" y2="44" ${ST} stroke-width="4"/><line x1="10" y1="48" x2="54" y2="48" ${ST} stroke-width="4.5"/>`,
+    rice: `<line x1="24" y1="17" x2="24" y2="47" ${ST} stroke-width="4.5"/><line x1="40" y1="17" x2="40" y2="47" ${ST} stroke-width="4.5"/>`,
+    field: `<line x1="20" y1="15" x2="32" y2="47" ${ST} stroke-width="4.5"/><line x1="44" y1="15" x2="32" y2="47" ${ST} stroke-width="4.5"/>`,
+    orchard: `<circle cx="32" cy="34" r="12" ${ST} stroke-width="4"/><line x1="32" y1="22" x2="32" y2="14" ${ST} stroke-width="3.5"/>`,
+    conifer: `<line x1="32" y1="12" x2="32" y2="52" ${ST} stroke-width="4"/><line x1="32" y1="14" x2="17" y2="40" ${ST} stroke-width="4"/><line x1="32" y1="14" x2="47" y2="40" ${ST} stroke-width="4"/>`,
+    broadleaf: `<circle cx="32" cy="25" r="14" ${ST} stroke-width="4"/><line x1="32" y1="39" x2="32" y2="54" ${ST} stroke-width="4"/>`,
+    onsen: `<path d="M13,32 A19 19 0 0 0 51,32 Z" ${ST} stroke-width="3.5"/><path d="M22,26 C20,21 24,17 22,11" ${ST} stroke-width="3"/><path d="M32,26 C30,21 34,17 32,11" ${ST} stroke-width="3"/><path d="M42,26 C40,21 44,17 42,11" ${ST} stroke-width="3"/>`,
+    lighthouse: `<circle cx="32" cy="42" r="5" fill="#212121"/><line x1="32" y1="34" x2="32" y2="12" ${ST} stroke-width="3.5"/><line x1="25" y1="37" x2="12" y2="19" ${ST} stroke-width="3.5"/><line x1="39" y1="37" x2="52" y2="19" ${ST} stroke-width="3.5"/><line x1="23" y1="43" x2="8" y2="38" ${ST} stroke-width="3.5"/><line x1="41" y1="43" x2="56" y2="38" ${ST} stroke-width="3.5"/>`,
+    factory: `<circle cx="32" cy="32" r="14" ${ST} stroke-width="4"/>` +
+      [0,45,90,135,180,225,270,315].map(a => {
+        const r = a * Math.PI / 180;
+        return `<line x1="${(32 + 14 * Math.cos(r)).toFixed(1)}" y1="${(32 + 14 * Math.sin(r)).toFixed(1)}" x2="${(32 + 21 * Math.cos(r)).toFixed(1)}" y2="${(32 + 21 * Math.sin(r)).toFixed(1)}" ${ST} stroke-width="4"/>`;
+      }).join(''),
+    elderly: `<path d="M9,30 L32,11 L55,30 V54 H9 Z" ${ST} stroke-width="3"/><path d="M28,28 A6 6 0 0 1 40,28" ${ST} stroke-width="3.5"/><line x1="40" y1="28" x2="40" y2="48" ${ST} stroke-width="3.5"/>`
+  };
+
+  // ===== 記号データ =====
+  const DATA = [
+    ['school', '小・中学校', 'しょう・ちゅうがっこう', '漢字の「文」の形。勉強するところだから', 'highschool'],
+    ['highschool', '高等学校', 'こうとうがっこう', '「文」を○でかこんだ形。小・中学校とのちがいに注意!', 'school'],
+    ['city', '市役所', 'しやくしょ', '二重の丸。町・村役場より丸が1つ多いよ', 'town'],
+    ['town', '町・村役場', 'まち・むらやくば', '丸1つ。市役所(二重丸)とのちがいに注意!', 'city'],
+    ['post', '郵便局', 'ゆうびんきょく', 'カタカナの「テ」(むかしの逓信省の頭文字)を丸でかこんだ形', null],
+    ['koban', '交番', 'こうばん', 'けいぼう(警棒)を2本交差させた形', 'police'],
+    ['police', '警察署', 'けいさつしょ', '交番の記号を○でかこんだ形', 'koban'],
+    ['fire', '消防署', 'しょうぼうしょ', 'むかしの火消しの道具「さすまた」の形', null],
+    ['hospital', '病院', 'びょういん', 'むかしの軍隊の衛生隊のマークから', null],
+    ['shrine', '神社', 'じんじゃ', '神社の入口にある鳥居(とりい)の形', 'temple'],
+    ['temple', '寺', 'てら', '「卍(まんじ)」という、仏教に関係のある印', 'shrine'],
+    ['library', '図書館', 'としょかん', '開いた本の形', null],
+    ['museum', '博物館・美術館', 'はくぶつかん・びじゅつかん', '博物館のたてもの(柱のある建物)の形', null],
+    ['rice', '田', 'た', 'いねをかりとったあとの切りかぶの形', 'field'],
+    ['field', '畑', 'はたけ', '芽が出たばかりのふたばの形', 'rice'],
+    ['orchard', '果樹園', 'かじゅえん', 'りんごなどのくだものの実の形', null],
+    ['conifer', '針葉樹林', 'しんようじゅりん', 'マツやスギ(とがった葉の木)を横から見た形', 'broadleaf'],
+    ['broadleaf', '広葉樹林', 'こうようじゅりん', '丸い葉の木を横から見た形', 'conifer'],
+    ['onsen', '温泉', 'おんせん', '湯つぼから湯気が3本のぼっている形', null],
+    ['lighthouse', '灯台', 'とうだい', '上から見て、光が四方八方に出ている形', null],
+    ['factory', '工場', 'こうじょう', '機械の歯車の形(今の地図では使われなくなった記号だよ)', null],
+    ['elderly', '老人ホーム', 'ろうじんホーム', 'たてものの中に「つえ」がある形。2006年に小学生のアイデアで生まれた記号!', null]
+  ].map(([key, name, kana, origin, sib]) => ({ key, name, kana, origin, sib }));
+  const byKey = {};
+  DATA.forEach(d => byKey[d.key] = d);
+
+  const symSVG = (key, size) =>
+    `<svg viewBox="0 0 64 64" width="${size}" height="${size}">${SYM[key]}</svg>`;
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    const chk = $('chkSound');
+    if (chk && !chk.checked) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type, vol] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      gn.gain.setValueAtTime(vol || 0.15, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  // ===== 状態 =====
+  const st = {
+    mode: 'zukan', sel: 'school',
+    qmode: 'sym2name',   // sym2name | name2sym | mix
+    qs: [], qi: 0, tries: 0, miss: 0, wrong: [], playing: false, lock: false,
+    startT: 0, timerId: null
+  };
+
+  // ===== ずかん =====
+  function renderZukan() {
+    const d = byKey[st.sel];
+    $('content').innerHTML = `
+      <div class="card">
+        <div class="zukan-grid">
+          ${DATA.map(x => `
+            <div class="z-card ${x.key === st.sel ? 'sel' : ''}" data-key="${x.key}">
+              ${symSVG(x.key, 52)}
+              <div class="z-name">${x.name}</div>
+            </div>`).join('')}
+        </div>
+        <div class="z-detail">
+          <div class="big">${symSVG(d.key, 92)}</div>
+          <div>
+            <div class="z-title">${d.name}</div>
+            <div class="z-kana">${d.kana}</div>
+            <div class="z-origin">💡 ${d.origin}</div>
+          </div>
+        </div>
+      </div>`;
+    document.querySelectorAll('.z-card').forEach(c => c.addEventListener('click', () => {
+      st.sel = c.dataset.key;
+      renderZukan();
+    }));
+  }
+
+  // ===== クイズ =====
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  function renderQuizShell() {
+    $('content').innerHTML = `
+      <div class="card">
+        <div class="chip-row">
+          <button class="chip ${st.qmode === 'sym2name' ? 'active' : ''}" data-qm="sym2name">記号 → 名前</button>
+          <button class="chip ${st.qmode === 'name2sym' ? 'active' : ''}" data-qm="name2sym">名前 → 記号</button>
+          <button class="chip ${st.qmode === 'mix' ? 'active' : ''}" data-qm="mix">ミックス</button>
+        </div>
+        <div class="hud">
+          <span>もんだい <span class="val" id="hudWord">-</span></span>
+          <span>ミス <span class="val" id="hudMiss">0</span></span>
+          <span>タイム <span class="val" id="hudTime">0:00</span></span>
+          <label><input type="checkbox" id="chkSound" checked> 音</label>
+        </div>
+        <div class="stage" id="stage">
+          <div class="word-count" id="wordCount"></div>
+          <div id="qArea"></div>
+          <div class="choices" id="choices"></div>
+          <div class="mark" id="mark"></div>
+          <div class="overlay" id="overlay">
+            <div class="big" id="ovTitle">地図記号クイズ</div>
+            <div class="stars" id="ovStars"></div>
+            <div class="detail" id="ovDetail">10問チャレンジ!</div>
+            <div class="review" id="ovReview" style="display:none"></div>
+            <div class="go">タップ(スペースキー)でスタート!</div>
+          </div>
+        </div>
+      </div>`;
+    document.querySelectorAll('[data-qm]').forEach(b => b.addEventListener('click', () => {
+      st.qmode = b.dataset.qm;
+      stopQuiz();
+      renderQuizShell();
+    }));
+    $('overlay').addEventListener('pointerdown', () => { if (!st.playing) newRound(); });
+  }
+  function stopQuiz() {
+    st.playing = false;
+    clearInterval(st.timerId);
+  }
+  function newRound() {
+    st.qs = shuffle([...DATA]).slice(0, ROUND).map(d => ({
+      d, dir: st.qmode === 'mix' ? (Math.random() < 0.5 ? 'sym2name' : 'name2sym') : st.qmode
+    }));
+    st.qi = 0; st.miss = 0; st.wrong = []; st.playing = true; st.lock = false;
+    st.startT = Date.now();
+    clearInterval(st.timerId);
+    st.timerId = setInterval(() => {
+      const s = Math.floor((Date.now() - st.startT) / 1000);
+      $('hudTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }, 500);
+    $('hudTime').textContent = '0:00';
+    $('hudMiss').textContent = '0';
+    $('overlay').classList.add('hidden');
+    loadQ();
+  }
+  function choicesFor(d) {
+    const others = DATA.filter(x => x.key !== d.key && x.key !== d.sib);
+    const picks = shuffle([...others]).slice(0, d.sib ? 2 : 3).map(x => x.key);
+    if (d.sib) picks.push(d.sib);
+    picks.push(d.key);
+    return shuffle(picks);
+  }
+  function loadQ() {
+    st.tries = 0; st.lock = false;
+    const q = st.qs[st.qi];
+    $('wordCount').textContent = `もんだい ${st.qi + 1} / ${ROUND}`;
+    $('hudWord').textContent = `${st.qi + 1}/${ROUND}`;
+    $('mark').textContent = ''; $('mark').className = 'mark';
+    const keys = choicesFor(q.d);
+    if (q.dir === 'sym2name') {
+      $('qArea').innerHTML = `<div class="q-big">${symSVG(q.d.key, 110)}</div>
+        <div style="text-align:center;font-size:0.9rem;color:#795548;margin-top:4px">この記号はなに?</div>`;
+      $('choices').innerHTML = keys.map(k =>
+        `<button class="choice" data-key="${k}" ${k === q.d.key ? 'data-ok="1"' : ''}>${byKey[k].name}</button>`).join('');
+    } else {
+      $('qArea').innerHTML = `<div class="q-name">${q.d.name}<small>${q.d.kana}</small></div>
+        <div style="text-align:center;font-size:0.9rem;color:#795548;margin-top:4px">記号はどれ?</div>`;
+      $('choices').innerHTML = keys.map(k =>
+        `<button class="choice" data-key="${k}" ${k === q.d.key ? 'data-ok="1"' : ''}>${symSVG(k, 56)}</button>`).join('');
+    }
+    document.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => answer(b)));
+  }
+  function answer(btn) {
+    if (!st.playing || st.lock) return;
+    const q = st.qs[st.qi];
+    if (btn.dataset.ok) {
+      sndOK();
+      btn.classList.add('correct');
+      $('mark').textContent = '⭕ せいかい!';
+      $('mark').className = 'mark ok';
+      st.lock = true;
+      setTimeout(() => { st.qi++; st.qi >= ROUND ? finish() : loadQ(); }, 600);
+    } else {
+      sndNG();
+      st.miss++; st.tries++;
+      $('hudMiss').textContent = st.miss;
+      btn.classList.add('wrong');
+      setTimeout(() => btn.classList.remove('wrong'), 700);
+      const stage = $('stage');
+      stage.classList.remove('miss-flash'); void stage.offsetWidth;
+      stage.classList.add('miss-flash');
+      if (!st.wrong.some(w => w.key === q.d.key)) st.wrong.push(q.d);
+      if (st.tries >= 3) {
+        document.querySelector('.choice[data-ok]').classList.add('correct');
+        $('mark').textContent = `❌ せいかいは「${q.d.name}」`;
+        $('mark').className = 'mark ng';
+        st.lock = true;
+        setTimeout(() => { st.qi++; st.qi >= ROUND ? finish() : loadQ(); }, 1800);
+      } else {
+        $('mark').textContent = '❌ もういちど!';
+        $('mark').className = 'mark ng';
+      }
+    }
+  }
+  function finish() {
+    st.playing = false;
+    clearInterval(st.timerId);
+    const sec = Math.floor((Date.now() - st.startT) / 1000);
+    const acc = Math.round(ROUND / (ROUND + st.miss) * 100);
+    const stars = st.miss === 0 ? 3 : acc >= 80 ? 2 : 1;
+    $('ovTitle').textContent = ['', 'クリア!', 'すごい!🎉', 'かんぺき!👑'][stars];
+    $('ovStars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+    $('ovDetail').innerHTML = `タイム ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} / ミス ${st.miss}回 / せいかくりつ ${acc}%`;
+    const rv = $('ovReview');
+    if (st.wrong.length) {
+      rv.style.display = '';
+      rv.innerHTML = '<b>ふりかえり</b>' + st.wrong.map(d =>
+        `<span class="rv-row">${symSVG(d.key, 30)} ${d.name}(${d.kana})</span>`).join('');
+    } else {
+      rv.style.display = 'none';
+    }
+    $('overlay').classList.remove('hidden');
+    sndDone();
+  }
+  window.addEventListener('keydown', (ev) => {
+    if (st.mode === 'quiz' && ev.key === ' ') {
+      ev.preventDefault();
+      if (!st.playing) newRound();
+    }
+  });
+
+  // ===== モード切りかえ =====
+  function renderAll() {
+    stopQuiz();
+    if (st.mode === 'zukan') renderZukan();
+    else renderQuizShell();
+  }
+  document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+    st.mode = b.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.toggle('active', x === b));
+    renderAll();
+  }));
+
+  renderAll();
+})();
+</script>
+
+</body>
+</html>
