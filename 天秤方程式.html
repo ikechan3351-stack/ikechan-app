@@ -96,6 +96,23 @@
 
   <div class="chip-row" id="probRow"></div>
 
+  <div class="card" id="customCard" style="display:none">
+    <div style="text-align:center; font-weight:bold; color:#37474f; margin-bottom:8px">✏️ じぶんで問題をつくろう(数字は −9〜9)</div>
+    <div style="display:flex; gap:6px; justify-content:center; align-items:center; font-size:1.3rem; font-weight:bold; font-family:'Times New Roman',serif; flex-wrap:wrap">
+      <input type="number" id="cA" value="2" min="-9" max="9" style="width:64px; font-size:1.2rem; padding:6px; border-radius:8px; border:2px solid #90a4ae; text-align:center">
+      <span><i>x</i> +</span>
+      <input type="number" id="cB" value="3" min="-9" max="9" style="width:64px; font-size:1.2rem; padding:6px; border-radius:8px; border:2px solid #90a4ae; text-align:center">
+      <span>=</span>
+      <input type="number" id="cC" value="1" min="-9" max="9" style="width:64px; font-size:1.2rem; padding:6px; border-radius:8px; border:2px solid #90a4ae; text-align:center">
+      <span><i>x</i> +</span>
+      <input type="number" id="cD" value="5" min="-9" max="9" style="width:64px; font-size:1.2rem; padding:6px; border-radius:8px; border:2px solid #90a4ae; text-align:center">
+    </div>
+    <div style="display:flex; justify-content:center; margin-top:10px">
+      <button class="op-btn action" id="btnMake">⚖️ この問題であそぶ!</button>
+    </div>
+    <div id="customMsg" style="text-align:center; color:#c62828; font-size:0.88rem; font-weight:bold; min-height:1.3rem; margin-top:4px"></div>
+  </div>
+
   <div class="card">
     <div class="eq-line" id="eqOrig"></div>
     <div class="eq-now" id="eqNow"></div>
@@ -116,8 +133,9 @@
     <ul>
       <li><b>箱</b>は重り(+)、<b>風船</b>は浮かせる(−)。<b>x の箱</b>の重さはひみつの数だよ。</li>
       <li><b>①ならべる</b>:式のとおりに、左右の皿にパーツをおこう(タップでおく、皿の上のパーツをタップするともどせる)。まちがえると天秤がかたむくよ!</li>
-      <li><b>②とく</b>:つかえるのは3つだけ——<b>両辺に同じものをたす</b>/<b>+と−の0ペアをけす</b>/<b>両辺を同じ数でわる</b>。正しい操作なら天秤は<b>ぜったいかたむかない</b>!</li>
+      <li><b>②とく</b>:<b>🗑ゴミばこ</b>に「両辺から同じものを1こずつ」すてられるよ(皿のパーツをタップでもOK)。式に<b>マイナスがあるとき</b>は🎈風船も登場!正しい操作なら天秤は<b>ぜったいかたむかない</b>!</li>
       <li>「x の箱1こ = 数字」の形になったらクリア!🎉</li>
+      <li><b>✏️つくる</b>で、じぶんだけの問題も作れるよ(答えが整数になる式かチェックしてくれる)。</li>
     </ul>
   </div>
 
@@ -277,18 +295,46 @@
         <rect x="562" y="${SVG.py-68}" width="186" height="18" rx="8" fill="#d7a86e" stroke="#8d6e63" stroke-width="2.5"/>
         <g id="itemsL"></g>
         <g id="itemsR"></g>
+      </g>
+      <g id="trash" style="display:none; transform-origin:740px 390px">
+        <rect x="714" y="366" width="52" height="50" rx="6" fill="#78909c" stroke="#455a64" stroke-width="2.5"/>
+        <line x1="728" y1="376" x2="728" y2="406" stroke="#546e7a" stroke-width="3"/>
+        <line x1="740" y1="376" x2="740" y2="406" stroke="#546e7a" stroke-width="3"/>
+        <line x1="752" y1="376" x2="752" y2="406" stroke="#546e7a" stroke-width="3"/>
+        <rect x="708" y="357" width="64" height="10" rx="4" fill="#90a4ae" stroke="#455a64" stroke-width="2"/>
+        <text x="740" y="428" text-anchor="middle" font-size="12" font-weight="bold" fill="#455a64">ゴミばこ</text>
       </g>`;
-    // 皿の上のパーツをタップ(ならべる中だけ、もどせる)
+    // 皿の上のパーツをタップ:ならべる中=もどす/とく中=両辺からゴミばこへ
     $('scale').addEventListener('pointerdown', (ev) => {
       const g = ev.target.closest('.pitem');
-      if (!g || st.phase !== 'build') return;
+      if (!g) return;
       const side = g.dataset.side, type = g.dataset.type;
-      if (st[side][type] > 0) {
-        st[side][type]--;
-        sndPop();
-        renderScale(); renderEq();
+      if (st.phase === 'build') {
+        if (st[side][type] > 0) {
+          st[side][type]--;
+          sndPop();
+          renderScale(); renderEq();
+        }
+      } else if (st.phase === 'solve') {
+        discardBoth(type);
       }
     });
+  }
+  // 両辺から同じものを1こずつゴミばこへ(等式の性質:両辺から同じ数をひく)
+  function discardBoth(type) {
+    if (st.L[type] > 0 && st.R[type] > 0) {
+      st.L[type]--; st.R[type]--;
+      st.ops++;
+      sndPop();
+      const t = $('trash');
+      t.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(-9deg)' },
+        { transform: 'rotate(7deg)' }, { transform: 'rotate(0deg)' }], { duration: 320 });
+      log(`両辺から ${labelOf(type)} を1こずつゴミばこにすてた(同じだけへらせばつり合ったまま!)`);
+      renderScale(); renderEq(); updateOpBtns(); checkWin();
+    } else {
+      sndNG();
+      log('すてられるのは、りょうほうの皿にあるものだけ!(かた方だけすてるとかたむいちゃう)');
+    }
   }
   function renderScale() {
     $('itemsL').innerHTML = panItemsSVG(st.L, 'L');
@@ -311,10 +357,12 @@
     const L = st.L, R = st.R;
     const hasPair = (p) => (p.x > 0 && p.negx > 0) || (p.one > 0 && p.negone > 0);
     if (hasPair(L) || hasPair(R)) return '(0のペアがけせるよ!)';
-    if (netX(L) > 0 && netX(R) > 0) return '(🎈−x で x をかた方だけに)';
+    if (L.x > 0 && R.x > 0) return '(🗑 x を両辺からすてよう)';
+    if (L.one > 0 && R.one > 0 && !(netX(L) === 0 || netX(R) === 0) ) return '(🗑 1 を両辺からすてよう)';
+    if (L.one > 0 && R.one > 0) return '(🗑 1 を両辺からすてよう)';
     if (netX(L) < 0 || netX(R) < 0) return '(📦x をたしてみよう)';
     const xSide = netX(L) !== 0 ? L : R;
-    if (netC(xSide) > 0) return '(🎈−1 で数字をうかせよう)';
+    if (netC(xSide) > 0) return needFull() ? '(🎈−1 で数字をうかせよう)' : '(🗑 1 を両辺からすてよう)';
     if (netC(xSide) < 0) return '(📦1 をたして数字を消そう)';
     const n = Math.abs(netX(L)) || Math.abs(netX(R));
     if (n > 1) return `(両辺を ${n} でわろう)`;
@@ -362,28 +410,40 @@
         setTimeout(checkBuild, 300);
       });
     } else {
+      // 式にマイナスがある(または答えがマイナス)ときだけ、風船と0ペアが登場
+      const full = needFull();
       $('opsCard').innerHTML = `
-        <div class="op-group"><span class="op-label">両辺に同じものをたす(等式の性質①)</span>
+        <div class="op-group"><span class="op-label">🗑 両辺から同じものをすてる(等式の性質:両辺から同じ数をひく)</span>
+          <button class="op-btn" id="btnTrashX">🗑 x を1こずつすてる</button>
+          <button class="op-btn" id="btnTrash1">🗑 1 を1こずつすてる</button>
+        </div>
+        ${full ? `
+        <div class="op-group"><span class="op-label">両辺に同じものをたす(等式の性質:両辺に同じ数をたす)</span>
           <button class="op-btn blockish" data-add="x">📦 x をたす</button>
           <button class="op-btn blockish" data-add="one">📦 1 をたす</button>
           <button class="op-btn balloonish" data-add="negx">🎈 −x をたす</button>
           <button class="op-btn balloonish" data-add="negone">🎈 −1 をたす</button>
         </div>
-        <div class="op-group"><span class="op-label">まとめる・わる</span>
+        <div class="op-group">
           <button class="op-btn action" id="btnCancel">💨 0のペアをけす(+と−)</button>
+        </div>` : ''}
+        <div class="op-group"><span class="op-label">わる・やりなおす</span>
           <button class="op-btn action" id="btnDiv2">➗ 両辺を2でわる</button>
           <button class="op-btn action" id="btnDiv3">➗ 両辺を3でわる</button>
           <button class="op-btn warn" id="btnRestart">↺ はじめから</button>
         </div>`;
+      $('btnTrashX').addEventListener('click', () => discardBoth('x'));
+      $('btnTrash1').addEventListener('click', () => discardBoth('one'));
       document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => {
         const t = b.dataset.add;
         st.L[t]++; st.R[t]++;
         st.ops++;
         sndPut();
         log(`両辺に ${labelOf(t)} を1こずつたした`);
-        renderScale(); renderEq(); updateDivBtns(); checkWin();
+        renderScale(); renderEq(); updateOpBtns(); checkWin();
       }));
-      $('btnCancel').addEventListener('click', () => {
+      const bc = $('btnCancel');
+      if (bc) bc.addEventListener('click', () => {
         let n = 0;
         for (const p of [st.L, st.R]) {
           const px = Math.min(p.x, p.negx); p.x -= px; p.negx -= px;
@@ -394,7 +454,7 @@
         st.ops++;
         sndPop();
         log(`+と−の0のペアを ${n}組 けした(たして0!)`);
-        renderScale(); renderEq(); updateDivBtns(); checkWin();
+        renderScale(); renderEq(); updateOpBtns(); checkWin();
       });
       const divide = (k) => {
         const ok = ['x','negx','one','negone'].every(t => st.L[t] % k === 0 && st.R[t] % k === 0);
@@ -403,23 +463,30 @@
         for (const p of [st.L, st.R]) for (const t of ['x','negx','one','negone']) p[t] /= k;
         st.ops++;
         sndOK();
-        log(`両辺を ${k} でわった(等式の性質②)`);
-        renderScale(); renderEq(); updateDivBtns(); checkWin();
+        log(`両辺を ${k} でわった(等式の性質:両辺を同じ数でわる)`);
+        renderScale(); renderEq(); updateOpBtns(); checkWin();
       };
       $('btnDiv2').addEventListener('click', () => divide(2));
       $('btnDiv3').addEventListener('click', () => divide(3));
       $('btnRestart').addEventListener('click', () => loadProb(st.probIdx));
-      updateDivBtns();
+      updateOpBtns();
     }
   }
+  function needFull() {
+    const e = st.eq;
+    return e.a < 0 || e.b < 0 || e.c < 0 || e.d < 0 || st.xstar < 0;
+  }
   function labelOf(t) { return { x: '📦x', one: '📦1', negx: '🎈−x', negone: '🎈−1' }[t]; }
-  function updateDivBtns() {
+  function updateOpBtns() {
     for (const k of [2, 3]) {
       const ok = ['x','negx','one','negone'].every(t => st.L[t] % k === 0 && st.R[t] % k === 0)
         && ['x','negx','one','negone'].some(t => st.L[t] > 0 || st.R[t] > 0);
       const btn = $('btnDiv' + k);
       if (btn) btn.disabled = !ok;
     }
+    const tx = $('btnTrashX'), t1 = $('btnTrash1');
+    if (tx) tx.disabled = !(st.L.x > 0 && st.R.x > 0);
+    if (t1) t1.disabled = !(st.L.one > 0 && st.R.one > 0);
   }
   function log(msg) { $('logLine').textContent = '📝 ' + msg; }
 
@@ -430,6 +497,7 @@
     if (okL && okR) {
       sndOK();
       st.phase = 'solve';
+      $('trash').style.display = '';
       log('式のとおりにならべられた!天秤はつり合っている!');
       renderOps(); renderEq();
     } else {
@@ -460,7 +528,9 @@
   }
   $('overlay').addEventListener('pointerdown', () => {
     $('overlay').classList.add('hidden');
-    const next = st.probIdx === 'rand' ? 'rand' : Math.min(PROBS.length - 1, st.probIdx + 1);
+    const next = (st.probIdx === 'rand' || st.probIdx === 'custom')
+      ? st.probIdx
+      : Math.min(PROBS.length - 1, st.probIdx + 1);
     loadProb(next);
     document.querySelectorAll('[data-prob]').forEach(x =>
       x.classList.toggle('active', x.dataset.prob === String(next)));
@@ -469,12 +539,13 @@
   // ===== 問題ロード =====
   function loadProb(idx) {
     st.probIdx = idx;
-    st.eq = idx === 'rand' ? randomProb() : PROBS[idx];
+    st.eq = idx === 'rand' ? randomProb() : idx === 'custom' ? st.customEq : PROBS[idx];
     st.xstar = solve(st.eq);
     st.phase = 'build';
     st.L = emptyPan(); st.R = emptyPan();
     st.ops = 0;
     $('overlay').classList.add('hidden');
+    $('trash').style.display = 'none';
     log('ここに操作のきろくが出るよ');
     renderScale(); renderEq(); renderOps();
   }
@@ -498,9 +569,38 @@
   rb.textContent = '🎲 ランダム';
   rb.addEventListener('click', () => {
     document.querySelectorAll('[data-prob]').forEach(x => x.classList.toggle('active', x === rb));
+    $('customCard').style.display = 'none';
     loadProb('rand');
   });
   probRow.appendChild(rb);
+
+  // ✏️ じぶんで問題をつくる
+  const mb = document.createElement('button');
+  mb.className = 'chip';
+  mb.dataset.prob = 'custom';
+  mb.textContent = '✏️ つくる';
+  mb.addEventListener('click', () => {
+    document.querySelectorAll('[data-prob]').forEach(x => x.classList.toggle('active', x === mb));
+    const c = $('customCard');
+    c.style.display = c.style.display === 'none' ? '' : 'none';
+  });
+  probRow.appendChild(mb);
+  $('btnMake').addEventListener('click', () => {
+    const val = (id) => Math.max(-9, Math.min(9, parseInt($(id).value, 10) || 0));
+    const a = val('cA'), b = val('cB'), c = val('cC'), d = val('cD');
+    const msg = $('customMsg');
+    if (a === c) { msg.textContent = '左と右の x の数が同じだと、x が消えてとけないよ!'; sndNG(); return; }
+    const sol = (d - b) / (a - c);
+    if (!Number.isInteger(sol)) {
+      msg.textContent = `その式だと答えが整数にならないよ(x = ${d - b}/${a - c})。数を変えてみよう!`;
+      sndNG(); return;
+    }
+    if (Math.abs(sol) > 9) { msg.textContent = `答えが大きすぎるよ(x = ${sol})。−9〜9 になるようにしよう!`; sndNG(); return; }
+    msg.textContent = '';
+    st.customEq = { a, b, c, d };
+    sndOK();
+    loadProb('custom');
+  });
 
   buildScaffold();
   loadProb(0);
