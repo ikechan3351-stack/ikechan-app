@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>天秤で方程式</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 780px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .chip {
+    border: 2px solid #90a4ae; background: #fff; border-radius: 999px;
+    padding: 6px 13px; font-size: 0.88rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: #37474f; border-color: #37474f; color: #fff; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 12px 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+  .eq-line { text-align: center; font-size: 1.7rem; font-weight: bold; color: #263238; font-family: "Times New Roman", serif; }
+  .eq-now { text-align: center; font-size: 1.15rem; font-weight: bold; color: #1565c0; min-height: 1.6rem; }
+  .phase-note { text-align: center; font-size: 0.92rem; font-weight: bold; color: #e65100; min-height: 1.4rem; margin-top: 2px; }
+
+  svg#scale { width: 100%; height: auto; display: block; }
+  .pitem { cursor: pointer; }
+  .balloon-bob { animation: bob 2.2s ease-in-out infinite; }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+  .ops { display: flex; flex-direction: column; gap: 8px; }
+  .op-group { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .op-label { font-size: 0.85rem; font-weight: bold; color: #37474f; width: 100%; text-align: center; }
+  .op-btn {
+    border: 2px solid #90a4ae; background: #fff; border-radius: 12px;
+    padding: 8px 12px; font-size: 0.95rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.blockish { background: #d1c4e9; border-color: #7e57c2; }
+  .op-btn.balloonish { background: #ffcdd2; border-color: #e57373; }
+  .op-btn.action { background: #37474f; border-color: #37474f; color: #fff; }
+  .op-btn.warn { background: #fff3e0; border-color: #ffb74d; }
+
+  .build-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .build-col { border: 2px dashed #b0bec5; border-radius: 12px; padding: 8px; }
+  .build-col h4 { margin: 0 0 6px; text-align: center; font-size: 0.9rem; color: #37474f; }
+  .build-col .op-group { justify-content: center; }
+
+  .log {
+    font-size: 0.8rem; color: #546e7a; line-height: 1.6; min-height: 1.2rem;
+    text-align: center;
+  }
+
+  .overlay-card { position: relative; }
+  .overlay {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.96); border-radius: 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    text-align: center; z-index: 10; cursor: pointer; padding: 14px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay .big { font-size: 1.9rem; font-weight: bold; color: #1b5e20; }
+  .overlay .detail2 { font-size: 1rem; color: #444; line-height: 1.7; }
+  .overlay .go { font-size: 0.98rem; color: #37474f; font-weight: bold; margin-top: 4px; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>⚖️ 天秤で方程式</h1>
+<p class="subtitle">箱(おもり)と風船(うかせる)で、等式の性質を体で感じよう!</p>
+
+<div class="panel">
+
+  <div class="chip-row" id="probRow"></div>
+
+  <div class="card">
+    <div class="eq-line" id="eqOrig"></div>
+    <div class="eq-now" id="eqNow"></div>
+    <div class="phase-note" id="phaseNote"></div>
+  </div>
+
+  <div class="card overlay-card">
+    <svg id="scale" viewBox="0 0 800 430" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="overlay hidden" id="overlay"></div>
+  </div>
+
+  <div class="card ops" id="opsCard"></div>
+
+  <div class="card log" id="logLine">ここに操作のきろくが出るよ</div>
+
+  <div class="help">
+    <h2>つかい方(等式の性質)</h2>
+    <ul>
+      <li><b>箱</b>は重り(+)、<b>風船</b>は浮かせる(−)。<b>x の箱</b>の重さはひみつの数だよ。</li>
+      <li><b>①ならべる</b>:式のとおりに、左右の皿にパーツをおこう(タップでおく、皿の上のパーツをタップするともどせる)。まちがえると天秤がかたむくよ!</li>
+      <li><b>②とく</b>:つかえるのは3つだけ——<b>両辺に同じものをたす</b>/<b>+と−の0ペアをけす</b>/<b>両辺を同じ数でわる</b>。正しい操作なら天秤は<b>ぜったいかたむかない</b>!</li>
+      <li>「x の箱1こ = 数字」の形になったらクリア!🎉</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type, vol] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  }
+  const sndPut  = () => beep([[500, 0, 0.07, 'triangle']]);
+  const sndPop  = () => beep([[900, 0, 0.05, 'square', 0.1], [600, 0.05, 0.08, 'square', 0.08]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  // ===== 問題(ax + b = cx + d) =====
+  const PROBS = [
+    { a: 1, b: 2, c: 0, d: 5 },
+    { a: 2, b: 0, c: 0, d: 6 },
+    { a: 2, b: 1, c: 0, d: 7 },
+    { a: 3, b: 0, c: 1, d: 4 },
+    { a: 2, b: 3, c: 1, d: 5 },
+    { a: 3, b: -3, c: 1, d: 5 },   // 図の問題!
+    { a: 4, b: -2, c: 2, d: 6 },
+    { a: 1, b: 6, c: 3, d: 0 }
+  ];
+  const rnd = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+  function randomProb() {
+    for (let i = 0; i < 50; i++) {
+      const xs = rnd(1, 5), a = rnd(1, 4), c = rnd(0, a - 1);
+      const b = rnd(-5, 6);
+      const d = (a - c) * xs + b;
+      if (a === c || (b === 0 && d === 0) || Math.abs(d) > 8) continue;
+      return { a, b, c, d };
+    }
+    return PROBS[0];
+  }
+
+  // ===== 状態 =====
+  const emptyPan = () => ({ x: 0, negx: 0, one: 0, negone: 0 });
+  const st = {
+    probIdx: 0, eq: null, xstar: 0,
+    phase: 'build',                     // build | solve | won
+    L: emptyPan(), R: emptyPan(),
+    ops: 0
+  };
+  const solve = (eq) => (eq.d - eq.b) / (eq.a - eq.c);
+  function targetPan(coef, cons) {
+    const p = emptyPan();
+    if (coef > 0) p.x = coef; else p.negx = -coef;
+    if (cons > 0) p.one = cons; else p.negone = -cons;
+    return p;
+  }
+  const samePan = (p, q) => ['x','negx','one','negone'].every(k => p[k] === q[k]);
+
+  // ===== 式の表示 =====
+  function fmtSide(coef, cons) {
+    let s = '';
+    if (coef !== 0) s = coef === 1 ? 'x' : coef === -1 ? '−x' : `${coef}x`.replace('-', '−');
+    if (cons !== 0) {
+      if (s === '') s = String(cons).replace('-', '−');
+      else s += cons > 0 ? ` + ${cons}` : ` − ${-cons}`;
+    }
+    return s === '' ? '0' : s;
+  }
+  const fmtEq = (eq) => `${fmtSide(eq.a, eq.b)} = ${fmtSide(eq.c, eq.d)}`;
+  const netX = (p) => p.x - p.negx;
+  const netC = (p) => p.one - p.negone;
+  const fmtPans = () => `${fmtSide(netX(st.L), netC(st.L))} = ${fmtSide(netX(st.R), netC(st.R))}`;
+
+  // ===== 天秤の描画 =====
+  const SVG = { W: 800, H: 430, px: 400, py: 330 };
+  function itemBlockX(cx, by) {
+    // xの箱(横長・むらさき)
+    return `<g>
+      <polygon points="${cx-27},${by} ${cx-19},${by-9} ${cx+35},${by-9} ${cx+27},${by}" fill="#b39ddb"/>
+      <polygon points="${cx+27},${by} ${cx+35},${by-9} ${cx+35},${by+15} ${cx+27},${by+24}" fill="#7e57c2"/>
+      <rect x="${cx-27}" y="${by}" width="54" height="24" fill="#9575cd" stroke="#4527a0" stroke-width="1.2"/>
+      <text x="${cx}" y="${by+18}" text-anchor="middle" font-size="17" font-weight="bold" font-style="italic" fill="#fff">x</text></g>`;
+  }
+  function itemBlock1(cx, by) {
+    return `<g>
+      <polygon points="${cx-14},${by} ${cx-7},${by-8} ${cx+21},${by-8} ${cx+14},${by}" fill="#b39ddb"/>
+      <polygon points="${cx+14},${by} ${cx+21},${by-8} ${cx+21},${by+14} ${cx+14},${by+22}" fill="#7e57c2"/>
+      <rect x="${cx-14}" y="${by}" width="28" height="22" fill="#9575cd" stroke="#4527a0" stroke-width="1.2"/>
+      <text x="${cx}" y="${by+16.5}" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">1</text></g>`;
+  }
+  function itemBalloon(cx, panY, h, label) {
+    const by = panY - h;
+    return `<g>
+      <line x1="${cx}" y1="${panY}" x2="${cx}" y2="${by+16}" stroke="#b71c1c" stroke-width="1.3"/>
+      <g class="balloon-bob">
+        <ellipse cx="${cx}" cy="${by}" rx="17" ry="19" fill="#ef5350" stroke="#b71c1c" stroke-width="1.5"/>
+        <polygon points="${cx-4},${by+18} ${cx+4},${by+18} ${cx},${by+24}" fill="#b71c1c"/>
+        <text x="${cx}" y="${by+5}" text-anchor="middle" font-size="13" font-weight="bold" fill="#fff">${label}</text>
+      </g></g>`;
+  }
+  function panItemsSVG(p, side) {
+    // 台の中心 x(かたむき前のローカル座標)
+    const cx0 = side === 'L' ? 145 : 655;
+    const panY = 258;   // 台の上面
+    let out = '';
+    // 箱:xの箱→1の箱のじゅんで、ぎっしりならべる
+    const blocks = [];
+    for (let i = 0; i < p.x; i++) blocks.push('x');
+    for (let i = 0; i < p.one; i++) blocks.push('1');
+    let bx = cx0 - 82, byRow = panY - 24, rowH = 0;
+    blocks.forEach((t, i) => {
+      const w = t === 'x' ? 60 : 34;
+      if (bx + w > cx0 + 86) { bx = cx0 - 82; byRow -= 30; }
+      const cx = bx + w / 2;
+      out += `<g class="pitem" data-side="${side}" data-type="${t === 'x' ? 'x' : 'one'}">` +
+        (t === 'x' ? itemBlockX(cx, byRow) : itemBlock1(cx, byRow)) + '</g>';
+      bx += w + 4;
+    });
+    // 風船:台から糸でうかぶ
+    const bl = [];
+    for (let i = 0; i < p.negx; i++) bl.push('−x');
+    for (let i = 0; i < p.negone; i++) bl.push('−1');
+    bl.forEach((label, i) => {
+      const col = i % 5, row = Math.floor(i / 5);
+      const cx = cx0 - 76 + col * 38;
+      const h = 66 + row * 44 + (col % 2) * 10;
+      out += `<g class="pitem" data-side="${side}" data-type="${label === '−x' ? 'negx' : 'negone'}">` +
+        itemBalloon(cx, panY, h, label) + '</g>';
+    });
+    return out;
+  }
+  function tiltDeg() {
+    const w = (p) => netX(p) * st.xstar + netC(p);
+    const diff = w(st.L) - w(st.R);
+    return Math.max(-10, Math.min(10, diff * 2.5));
+  }
+  function buildScaffold() {
+    $('scale').innerHTML = `
+      <polygon points="355,${SVG.py+2} 445,${SVG.py+2} 470,405 330,405" fill="#a1887f" stroke="#6d4c41" stroke-width="3"/>
+      ${[0,1,2,3].map(i => `<circle cx="${372+i*19}" cy="${SVG.py+40}" r="2.5" fill="#6d4c41"/>`).join('')}
+      <g id="beam" style="transform-origin:${SVG.px}px ${SVG.py}px; transition: transform 0.7s cubic-bezier(.34,1.3,.64,1)">
+        <rect x="48" y="${SVG.py-24}" width="704" height="24" rx="12" fill="#d7a86e" stroke="#8d6e63" stroke-width="2.5"/>
+        <rect x="138" y="${SVG.py-40}" width="16" height="18" fill="#c69257" stroke="#8d6e63" stroke-width="2"/>
+        <rect x="648" y="${SVG.py-40}" width="16" height="18" fill="#c69257" stroke="#8d6e63" stroke-width="2"/>
+        <rect x="52" y="${SVG.py-68}" width="186" height="18" rx="8" fill="#d7a86e" stroke="#8d6e63" stroke-width="2.5"/>
+        <rect x="562" y="${SVG.py-68}" width="186" height="18" rx="8" fill="#d7a86e" stroke="#8d6e63" stroke-width="2.5"/>
+        <g id="itemsL"></g>
+        <g id="itemsR"></g>
+      </g>`;
+    // 皿の上のパーツをタップ(ならべる中だけ、もどせる)
+    $('scale').addEventListener('pointerdown', (ev) => {
+      const g = ev.target.closest('.pitem');
+      if (!g || st.phase !== 'build') return;
+      const side = g.dataset.side, type = g.dataset.type;
+      if (st[side][type] > 0) {
+        st[side][type]--;
+        sndPop();
+        renderScale(); renderEq();
+      }
+    });
+  }
+  function renderScale() {
+    $('itemsL').innerHTML = panItemsSVG(st.L, 'L');
+    $('itemsR').innerHTML = panItemsSVG(st.R, 'R');
+    $('beam').style.transform = `rotate(${tiltDeg()}deg)`;
+  }
+
+  // ===== 式・フェーズ表示 =====
+  function renderEq() {
+    $('eqOrig').textContent = fmtEq(st.eq);
+    if (st.phase === 'build') {
+      $('eqNow').textContent = `いまの皿: ${fmtPans()}`;
+      $('phaseNote').textContent = '①式のとおりに、パーツを皿にならべよう';
+    } else if (st.phase === 'solve') {
+      $('eqNow').textContent = `いまの式: ${fmtPans()}`;
+      $('phaseNote').textContent = '②x の箱1こだけにしよう!' + hintText();
+    }
+  }
+  function hintText() {
+    const L = st.L, R = st.R;
+    const hasPair = (p) => (p.x > 0 && p.negx > 0) || (p.one > 0 && p.negone > 0);
+    if (hasPair(L) || hasPair(R)) return '(0のペアがけせるよ!)';
+    if (netX(L) > 0 && netX(R) > 0) return '(🎈−x で x をかた方だけに)';
+    if (netX(L) < 0 || netX(R) < 0) return '(📦x をたしてみよう)';
+    const xSide = netX(L) !== 0 ? L : R;
+    if (netC(xSide) > 0) return '(🎈−1 で数字をうかせよう)';
+    if (netC(xSide) < 0) return '(📦1 をたして数字を消そう)';
+    const n = Math.abs(netX(L)) || Math.abs(netX(R));
+    if (n > 1) return `(両辺を ${n} でわろう)`;
+    return '';
+  }
+
+  // ===== そうさパネル =====
+  function renderOps() {
+    if (st.phase === 'build') {
+      $('opsCard').innerHTML = `
+        <div class="build-grid">
+          <div class="build-col"><h4>◀ 左の皿におく</h4>
+            <div class="op-group">
+              <button class="op-btn blockish" data-put="L,x">📦 x</button>
+              <button class="op-btn blockish" data-put="L,one">📦 1</button>
+              <button class="op-btn balloonish" data-put="L,negx">🎈 −x</button>
+              <button class="op-btn balloonish" data-put="L,negone">🎈 −1</button>
+            </div>
+          </div>
+          <div class="build-col"><h4>右の皿におく ▶</h4>
+            <div class="op-group">
+              <button class="op-btn blockish" data-put="R,x">📦 x</button>
+              <button class="op-btn blockish" data-put="R,one">📦 1</button>
+              <button class="op-btn balloonish" data-put="R,negx">🎈 −x</button>
+              <button class="op-btn balloonish" data-put="R,negone">🎈 −1</button>
+            </div>
+          </div>
+        </div>
+        <div class="op-group">
+          <button class="op-btn action" id="btnCheck">✔ ならべおわった!</button>
+          <button class="op-btn warn" id="btnAuto">🪄 自動でならべる</button>
+        </div>`;
+      document.querySelectorAll('[data-put]').forEach(b => b.addEventListener('click', () => {
+        const [side, type] = b.dataset.put.split(',');
+        if (st[side][type] >= 9) return;
+        st[side][type]++;
+        sndPut();
+        renderScale(); renderEq();
+      }));
+      $('btnCheck').addEventListener('click', checkBuild);
+      $('btnAuto').addEventListener('click', () => {
+        st.L = targetPan(st.eq.a, st.eq.b);
+        st.R = targetPan(st.eq.c, st.eq.d);
+        renderScale(); renderEq();
+        setTimeout(checkBuild, 300);
+      });
+    } else {
+      $('opsCard').innerHTML = `
+        <div class="op-group"><span class="op-label">両辺に同じものをたす(等式の性質①)</span>
+          <button class="op-btn blockish" data-add="x">📦 x をたす</button>
+          <button class="op-btn blockish" data-add="one">📦 1 をたす</button>
+          <button class="op-btn balloonish" data-add="negx">🎈 −x をたす</button>
+          <button class="op-btn balloonish" data-add="negone">🎈 −1 をたす</button>
+        </div>
+        <div class="op-group"><span class="op-label">まとめる・わる</span>
+          <button class="op-btn action" id="btnCancel">💨 0のペアをけす(+と−)</button>
+          <button class="op-btn action" id="btnDiv2">➗ 両辺を2でわる</button>
+          <button class="op-btn action" id="btnDiv3">➗ 両辺を3でわる</button>
+          <button class="op-btn warn" id="btnRestart">↺ はじめから</button>
+        </div>`;
+      document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => {
+        const t = b.dataset.add;
+        st.L[t]++; st.R[t]++;
+        st.ops++;
+        sndPut();
+        log(`両辺に ${labelOf(t)} を1こずつたした`);
+        renderScale(); renderEq(); updateDivBtns(); checkWin();
+      }));
+      $('btnCancel').addEventListener('click', () => {
+        let n = 0;
+        for (const p of [st.L, st.R]) {
+          const px = Math.min(p.x, p.negx); p.x -= px; p.negx -= px;
+          const po = Math.min(p.one, p.negone); p.one -= po; p.negone -= po;
+          n += px + po;
+        }
+        if (n === 0) { sndNG(); log('けせる0のペアがないよ'); return; }
+        st.ops++;
+        sndPop();
+        log(`+と−の0のペアを ${n}組 けした(たして0!)`);
+        renderScale(); renderEq(); updateDivBtns(); checkWin();
+      });
+      const divide = (k) => {
+        const ok = ['x','negx','one','negone'].every(t => st.L[t] % k === 0 && st.R[t] % k === 0);
+        const total = ['x','negx','one','negone'].reduce((s, t) => s + st.L[t] + st.R[t], 0);
+        if (!ok || total === 0) { sndNG(); return; }
+        for (const p of [st.L, st.R]) for (const t of ['x','negx','one','negone']) p[t] /= k;
+        st.ops++;
+        sndOK();
+        log(`両辺を ${k} でわった(等式の性質②)`);
+        renderScale(); renderEq(); updateDivBtns(); checkWin();
+      };
+      $('btnDiv2').addEventListener('click', () => divide(2));
+      $('btnDiv3').addEventListener('click', () => divide(3));
+      $('btnRestart').addEventListener('click', () => loadProb(st.probIdx));
+      updateDivBtns();
+    }
+  }
+  function labelOf(t) { return { x: '📦x', one: '📦1', negx: '🎈−x', negone: '🎈−1' }[t]; }
+  function updateDivBtns() {
+    for (const k of [2, 3]) {
+      const ok = ['x','negx','one','negone'].every(t => st.L[t] % k === 0 && st.R[t] % k === 0)
+        && ['x','negx','one','negone'].some(t => st.L[t] > 0 || st.R[t] > 0);
+      const btn = $('btnDiv' + k);
+      if (btn) btn.disabled = !ok;
+    }
+  }
+  function log(msg) { $('logLine').textContent = '📝 ' + msg; }
+
+  // ===== ならべるチェック =====
+  function checkBuild() {
+    const okL = samePan(st.L, targetPan(st.eq.a, st.eq.b));
+    const okR = samePan(st.R, targetPan(st.eq.c, st.eq.d));
+    if (okL && okR) {
+      sndOK();
+      st.phase = 'solve';
+      log('式のとおりにならべられた!天秤はつり合っている!');
+      renderOps(); renderEq();
+    } else {
+      sndNG();
+      const side = !okL ? '左' : '右';
+      $('phaseNote').textContent = `うーん、${side}の皿が式と合っていないみたい。見なおしてみよう!`;
+    }
+  }
+
+  // ===== クリア判定 =====
+  function checkWin() {
+    const isXOnly = (p) => p.x === 1 && p.negx === 0 && p.one === 0 && p.negone === 0;
+    const isConst = (p) => p.x === 0 && p.negx === 0 && (p.one === 0 || p.negone === 0);
+    let ans = null;
+    if (isXOnly(st.L) && isConst(st.R)) ans = netC(st.R);
+    else if (isXOnly(st.R) && isConst(st.L)) ans = netC(st.L);
+    if (ans === null) return;
+    st.phase = 'won';
+    sndDone();
+    const e = st.eq;
+    const lv = e.a * ans + e.b, rv = e.c * ans + e.d;
+    $('overlay').innerHTML = `
+      <div class="big">x = ${String(ans).replace('-', '−')} !🎉</div>
+      <div class="detail2">たしかめ:x = ${ans} を「${fmtEq(e)}」に入れると…<br>
+        左辺 = ${lv}、右辺 = ${rv}。同じ重さでつり合った!⚖️<br>そうさ回数:${st.ops}回</div>
+      <div class="go">タップでつぎの問題へ!</div>`;
+    $('overlay').classList.remove('hidden');
+  }
+  $('overlay').addEventListener('pointerdown', () => {
+    $('overlay').classList.add('hidden');
+    const next = st.probIdx === 'rand' ? 'rand' : Math.min(PROBS.length - 1, st.probIdx + 1);
+    loadProb(next);
+    document.querySelectorAll('[data-prob]').forEach(x =>
+      x.classList.toggle('active', x.dataset.prob === String(next)));
+  });
+
+  // ===== 問題ロード =====
+  function loadProb(idx) {
+    st.probIdx = idx;
+    st.eq = idx === 'rand' ? randomProb() : PROBS[idx];
+    st.xstar = solve(st.eq);
+    st.phase = 'build';
+    st.L = emptyPan(); st.R = emptyPan();
+    st.ops = 0;
+    $('overlay').classList.add('hidden');
+    log('ここに操作のきろくが出るよ');
+    renderScale(); renderEq(); renderOps();
+  }
+
+  // ===== 問題えらび =====
+  const probRow = $('probRow');
+  PROBS.forEach((p, i) => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (i === 0 ? ' active' : '');
+    b.dataset.prob = String(i);
+    b.textContent = '問' + (i + 1);
+    b.addEventListener('click', () => {
+      document.querySelectorAll('[data-prob]').forEach(x => x.classList.toggle('active', x === b));
+      loadProb(i);
+    });
+    probRow.appendChild(b);
+  });
+  const rb = document.createElement('button');
+  rb.className = 'chip';
+  rb.dataset.prob = 'rand';
+  rb.textContent = '🎲 ランダム';
+  rb.addEventListener('click', () => {
+    document.querySelectorAll('[data-prob]').forEach(x => x.classList.toggle('active', x === rb));
+    loadProb('rand');
+  });
+  probRow.appendChild(rb);
+
+  buildScaffold();
+  loadProb(0);
+})();
+</script>
+
+</body>
+</html>
