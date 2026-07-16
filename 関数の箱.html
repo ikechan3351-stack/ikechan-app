@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>関数の箱(ファンクションマシン)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e8eaf6 0%, #c5cae9 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #3949ab; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #1a237e; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #3949ab; text-align: center; }
+  .panel { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 10px; }
+
+  .mode-row, .chip-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn, .chip {
+    border: 2px solid #9fa8da; background: #fff; border-radius: 12px;
+    padding: 8px 14px; font-size: 0.95rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .chip { border-radius: 999px; padding: 6px 13px; font-size: 0.88rem; }
+  .mode-btn.active, .chip.active { background: #3949ab; border-color: #3949ab; color: #fff; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+
+  /* ===== きかい ===== */
+  .machine-area { position: relative; height: 270px; margin: 6px 0 2px; }
+  .mbody {
+    position: absolute; left: 50%; transform: translateX(-50%); top: 52px;
+    width: 320px; height: 172px;
+    background: linear-gradient(180deg, #ffca28, #ffa000);
+    border: 4px solid #795548; border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mbody.working { animation: mshake 0.14s infinite; }
+  @keyframes mshake {
+    0%,100% { transform: translateX(-50%) rotate(0deg); }
+    25% { transform: translateX(-51%) rotate(-0.8deg); }
+    75% { transform: translateX(-49%) rotate(0.8deg); }
+  }
+  .screen {
+    background: #263238; color: #b2ff59; border-radius: 12px;
+    min-width: 200px; max-width: 250px; min-height: 84px; padding: 10px 14px;
+    text-align: center; display: flex; flex-direction: column; justify-content: center; gap: 4px;
+    border: 3px solid #4e342e;
+  }
+  .screen .formula { font-size: 1.5rem; font-weight: bold; letter-spacing: 1px; }
+  .screen .words { font-size: 0.75rem; color: #aed581; }
+  .screen .face { font-size: 2.6rem; line-height: 1.1; }
+  .gear {
+    position: absolute; font-size: 1.9rem; user-select: none;
+  }
+  .g1 { left: 12px; top: 10px; } .g2 { left: 10px; bottom: 8px; } .g3 { right: 12px; top: 10px; }
+  .working .gear { animation: spin 0.5s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .funnel {
+    position: absolute; left: 50%; transform: translateX(-160px); top: 14px;
+    width: 110px; height: 44px; background: #90a4ae; border: 3px solid #546e7a;
+    clip-path: polygon(0 0, 100% 0, 72% 100%, 28% 100%);
+  }
+  .funnel-label { position: absolute; left: 50%; transform: translateX(-190px); top: -8px; font-size: 0.75rem; font-weight: bold; color: #3949ab; }
+  .chute {
+    position: absolute; left: 50%; transform: translateX(58px); top: 218px;
+    width: 96px; height: 20px; background: #8d6e63; border-radius: 0 0 10px 10px; border: 3px solid #5d4037; border-top: none;
+  }
+  .chute-label { position: absolute; left: 50%; transform: translateX(160px); top: 222px; font-size: 0.75rem; font-weight: bold; color: #3949ab; }
+  .io-card {
+    position: absolute; z-index: 3;
+    min-width: 62px; padding: 8px 10px; border-radius: 10px;
+    background: #fff; border: 3px solid #5c6bc0; color: #1a237e;
+    font-size: 1.15rem; font-weight: bold; text-align: center;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+    display: none;
+  }
+  #flyCard { left: 50%; transform: translateX(-150px); top: -34px; }
+  #outCard { left: 50%; transform: translateX(52px); top: 234px; border-color: #ef6c00; color: #bf360c; }
+
+  /* ===== 下のそうさエリア ===== */
+  .stage-note { text-align: center; font-size: 0.95rem; font-weight: bold; color: #3949ab; min-height: 1.5rem; }
+  .input-cards { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+  .in-card {
+    border: 3px solid #5c6bc0; background: #fff; border-radius: 10px;
+    padding: 8px 12px; font-size: 1.1rem; font-weight: bold; color: #1a237e;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+  }
+  .in-card:active { transform: translateY(2px); box-shadow: none; }
+  .in-card:disabled { opacity: 0.35; cursor: default; }
+  .in-card small { display: block; font-size: 0.68rem; font-weight: normal; color: #666; }
+
+  .hud {
+    display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap;
+    font-size: 0.92rem; font-weight: bold; color: #333; margin-top: 6px;
+  }
+  .hud .val { color: #3949ab; }
+  .hud label { font-weight: normal; font-size: 0.83rem; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+
+  /* キーパッド */
+  .keypad { display: flex; flex-direction: column; gap: 6px; align-items: center; margin-top: 8px; }
+  .kp-row { display: flex; gap: 6px; }
+  .kp {
+    width: 62px; height: 48px; border-radius: 10px; border: none;
+    font-size: 1.3rem; font-weight: bold; color: #333; background: #e8eaf6;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+  }
+  .kp:active { transform: translateY(2px); box-shadow: none; }
+  .kp.ok { background: #3949ab; color: #fff; }
+  .ans-line { text-align: center; font-size: 1.5rem; font-weight: bold; color: #1a237e; margin-top: 8px; }
+  .ans-line .abox {
+    display: inline-block; min-width: 80px; border-bottom: 4px solid #3949ab; padding: 0 8px; min-height: 2.2rem; vertical-align: bottom;
+  }
+  .mark { font-size: 1.3rem; min-height: 1.7rem; font-weight: bold; text-align: center; }
+  .mark.ok { color: #2e7d32; }
+  .mark.ng { color: #c62828; }
+
+  /* (x,y)の表 */
+  table.xy { border-collapse: collapse; margin: 10px auto 0; }
+  table.xy th, table.xy td {
+    border: 2px solid #9fa8da; padding: 5px 14px; text-align: center;
+    font-weight: bold; font-size: 1rem; min-width: 46px;
+  }
+  table.xy th { background: #e8eaf6; color: #1a237e; }
+  table.xy td.yv { color: #bf360c; }
+
+  .guess-btn {
+    display: block; margin: 12px auto 0; border: none; background: #ef6c00; color: #fff;
+    border-radius: 12px; padding: 10px 26px; font-size: 1.05rem; font-weight: bold;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .choice {
+    border: 2px solid #9fa8da; background: #fff; border-radius: 12px;
+    padding: 12px 8px; font-size: 1.15rem; font-weight: bold; color: #1a237e;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .choice.correct { background: #c8e6c9; border-color: #2e7d32; }
+  .choice.wrong { background: #ffcdd2; border-color: #c62828; }
+
+  .overlay-card { position: relative; }
+  .overlay {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.96); border-radius: 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    text-align: center; z-index: 10; cursor: pointer; padding: 14px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay .big { font-size: 1.6rem; font-weight: bold; color: #1a237e; }
+  .overlay .stars { font-size: 2.1rem; letter-spacing: 6px; }
+  .overlay .detail2 { font-size: 1rem; color: #444; line-height: 1.6; }
+  .overlay .go { font-size: 0.98rem; color: #3949ab; font-weight: bold; margin-top: 4px; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #1a237e; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>📦 関数の箱(ファンクションマシン)</h1>
+<p class="subtitle">カードを入れると、きまったものが出てくるふしぎな機械!</p>
+
+<div class="panel">
+
+  <div class="mode-row">
+    <button class="mode-btn active" data-mode="joke">🎪 ふしぎなきかい</button>
+    <button class="mode-btn" data-mode="predict">🔢 出力をあてる</button>
+    <button class="mode-btn" data-mode="guess">🕵️ ルールをあてる</button>
+  </div>
+
+  <div class="card overlay-card">
+    <div id="topControls"></div>
+    <div class="machine-area">
+      <span class="funnel-label">入力(x)▼</span>
+      <div class="funnel"></div>
+      <div class="mbody" id="mbody">
+        <span class="gear g1">⚙️</span><span class="gear g2">⚙️</span><span class="gear g3">⚙️</span>
+        <div class="screen" id="screen"></div>
+      </div>
+      <div class="chute"></div>
+      <span class="chute-label">◀ 出力(y)</span>
+      <div class="io-card" id="flyCard"></div>
+      <div class="io-card" id="outCard"></div>
+    </div>
+    <div class="stage-note" id="stageNote"></div>
+    <div id="bottomControls"></div>
+    <div class="overlay hidden" id="overlay"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>🎪 ふしぎなきかい</b>:カードを入れてみよう。人間マシンは…何を入れても出てくるものが同じ!?「入れるものがきまると、出てくるものがきまる」——これが<b>関数</b>のはじまりだよ。</li>
+      <li><b>🔢 出力をあてる</b>:機械の<b>式(ルール)</b>を見て、カードが入るまえに出てくる数を予想!</li>
+      <li><b>🕵️ ルールをあてる</b>:ルールはひみつ。すきな数カードを入れて、出てきた数の表から<b>かくれた式</b>を見やぶろう!</li>
+      <li>x は「入れる数(入力)」、y は「出てくる数(出力)」のことだよ。</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    const chk = $('chkSound');
+    if (chk && !chk.checked) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type, vol, slideTo] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t0 + start);
+      if (slideTo) o.frequency.linearRampToValueAtTime(slideTo, t0 + start + len);
+      gn.gain.setValueAtTime(vol || 0.13, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  }
+  const sndIn   = () => beep([[600, 0, 0.12, 'triangle', 0.12, 300]]);
+  const sndWork = () => beep([[90, 0, 0.7, 'sawtooth', 0.05], [120, 0.1, 0.5, 'square', 0.03]]);
+  const sndOut  = () => beep([[700, 0, 0.08, 'triangle'], [1050, 0.08, 0.15, 'triangle']]);
+  const sndPoo  = () => beep([[300, 0, 0.35, 'sawtooth', 0.1, 90]]);
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  // ===== きかいアニメーション =====
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  let animBusy = false;
+  async function runMachine(inLabel, outLabel, opts = {}) {
+    animBusy = true;
+    const fly = $('flyCard'), out = $('outCard'), body = $('mbody');
+    out.style.display = 'none';
+    fly.textContent = inLabel;
+    fly.style.display = 'block';
+    sndIn();
+    // 入力カードがじょうごに落ちる
+    await fly.animate([
+      { transform: 'translateX(-150px) translateY(0) scale(1)', opacity: 1 },
+      { transform: 'translateX(-125px) translateY(58px) scale(0.4)', opacity: 0.2 }
+    ], { duration: 550, easing: 'ease-in' }).finished;
+    fly.style.display = 'none';
+    // ガタガタ
+    body.classList.add('working');
+    sndWork();
+    await sleep(opts.workMs || 850);
+    body.classList.remove('working');
+    // 出力カードがポン!
+    out.textContent = outLabel;
+    out.style.display = 'block';
+    if (opts.poo) sndPoo(); else sndOut();
+    await out.animate([
+      { transform: 'translateX(52px) translateY(-26px) scale(0.3)', opacity: 0 },
+      { transform: 'translateX(52px) translateY(6px) scale(1.15)', opacity: 1, offset: 0.7 },
+      { transform: 'translateX(52px) translateY(0) scale(1)', opacity: 1 }
+    ], { duration: 480, easing: 'ease-out' }).finished;
+    animBusy = false;
+  }
+  function setScreen(html) { $('screen').innerHTML = html; }
+  function clearIO() { $('flyCard').style.display = 'none'; $('outCard').style.display = 'none'; }
+
+  // ===== ルール(式) =====
+  const rnd = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+  const pick = (arr) => arr[rnd(0, arr.length - 1)];
+  function applyRule(r, x) {
+    if (r.type === 'sq') return x * x;
+    return r.a * x + r.b;
+  }
+  function ruleFormula(r) {
+    if (r.type === 'sq') return 'y = x × x';
+    const { a, b } = r;
+    let s = 'y = ';
+    if (a === 1) s += 'x';
+    else s += `${a} × x`;
+    if (b > 0) s += ` + ${b}`;
+    else if (b < 0) s += ` − ${-b}`;
+    return s;
+  }
+  function ruleWords(r) {
+    if (r.type === 'sq') return '入れた数どうしをかける';
+    const { a, b } = r;
+    if (a === 1) return b >= 0 ? `入れた数に ${b} をたす` : `入れた数から ${-b} をひく`;
+    if (b === 0) return `入れた数を ${a} 倍する`;
+    return `${a}倍して ${b > 0 ? b + ' をたす' : (-b) + ' をひく'}`;
+  }
+  function sameRule(r1, r2) {
+    return ruleFormula(r1) === ruleFormula(r2);
+  }
+  function makeRule(diff) {
+    if (diff === 1) {
+      return Math.random() < 0.5
+        ? { type: 'lin', a: 1, b: rnd(1, 9) * (Math.random() < 0.3 ? -1 : 1) }
+        : { type: 'lin', a: rnd(2, 9), b: 0 };
+    }
+    if (diff === 2) return { type: 'lin', a: rnd(2, 5), b: rnd(1, 9) };
+    // むずかしい
+    const k = Math.random();
+    if (k < 0.25) return { type: 'sq' };
+    return { type: 'lin', a: rnd(2, 6), b: rnd(1, 9) * (Math.random() < 0.5 ? -1 : 1) };
+  }
+
+  // ===== 状態 =====
+  const st = {
+    mode: 'joke', diff: 1,
+    // joke
+    jm: 'human', jokeCount: 0,
+    // predict
+    rule: null, qx: 0, input: '', qi: 0, miss: 0, tries: 0, playing: false, lock: false,
+    // guess
+    pairs: [], guessRound: 0, guessMiss: 0, choosing: false
+  };
+
+  // ===== 🎪 ふしぎなきかい =====
+  const JOKES = {
+    human: {
+      name: '人間マシン', face: '🧑', note: '人間マシンに食べ物を入れると…?',
+      inputs: [['🍛', 'カレー'], ['🍙', 'おにぎり'], ['🍜', 'ラーメン'], ['🍰', 'ケーキ']],
+      out: () => ['💩', 'うんこ'], poo: true,
+      lesson: 'なにを入れても出てくるものが同じ!「入れたものがきまると、出てくるものがきまる」…これも関数だよ💩'
+    },
+    juicer: {
+      name: 'ジューサー', face: '🥤', note: 'ジューサーにくだものを入れると…?',
+      inputs: [['🍎', 'りんご'], ['🍊', 'みかん'], ['🍇', 'ぶどう'], ['🍌', 'バナナ']],
+      out: (label) => ['🧃', label + 'ジュース'],
+      lesson: '入れたくだものによって、出てくるジュースがきまるね!「入力がきまれば出力がきまる」= 関数!'
+    },
+    laundry: {
+      name: 'せんたくき', face: '🌀', note: 'せんたくきに、よごれた服を入れると…?',
+      inputs: [['👕', 'どろんこシャツ'], ['🧦', 'くさいくつ下'], ['👖', 'よごれたズボン'], ['🧢', 'すなまみれぼうし']],
+      out: (label) => ['✨', 'ピカピカの' + label.replace(/どろんこ|くさい|よごれた|すなまみれ/, '')],
+      lesson: 'よごれたものが、きれいになって出てくる!これも「きまりのある変身」= 関数だね'
+    }
+  };
+  function renderJoke() {
+    const m = JOKES[st.jm];
+    setScreen(`<div class="face">${m.face}</div><div class="words">${m.name}</div>`);
+    $('topControls').innerHTML = `
+      <div class="chip-row">
+        ${Object.entries(JOKES).map(([k, v]) =>
+          `<button class="chip ${st.jm === k ? 'active' : ''}" data-jm="${k}">${v.face} ${v.name}</button>`).join('')}
+        <label style="font-size:0.83rem;display:flex;align-items:center;gap:3px"><input type="checkbox" id="chkSound" checked> 音</label>
+      </div>`;
+    $('stageNote').textContent = m.note;
+    $('bottomControls').innerHTML = `
+      <div class="input-cards">
+        ${m.inputs.map(([e, label], i) =>
+          `<button class="in-card" data-i="${i}">${e}<small>${label}</small></button>`).join('')}
+      </div>
+      <div class="mark" id="lessonLine" style="margin-top:10px;color:#3949ab;font-size:0.95rem"></div>`;
+    document.querySelectorAll('[data-jm]').forEach(b => b.addEventListener('click', () => {
+      st.jm = b.dataset.jm; st.jokeCount = 0; clearIO(); renderJoke();
+    }));
+    document.querySelectorAll('.in-card').forEach(b => b.addEventListener('click', async () => {
+      if (animBusy) return;
+      const [e, label] = m.inputs[+b.dataset.i];
+      const [oe, olabel] = m.out(label);
+      $('stageNote').textContent = `${label} を入れた!なにが出てくるかな…`;
+      await runMachine(`${e}`, `${oe}`, { poo: m.poo });
+      $('stageNote').textContent = `${label} → ${oe} ${olabel} が出てきた!`;
+      st.jokeCount++;
+      if (st.jokeCount >= 3) $('lessonLine').textContent = '💡 ' + m.lesson;
+    }));
+  }
+
+  // ===== 🔢 出力をあてる =====
+  const PREDICT_N = 8;
+  function renderPredict() {
+    $('topControls').innerHTML = `
+      <div class="chip-row">
+        <button class="chip ${st.diff === 1 ? 'active' : ''}" data-diff="1">やさしい</button>
+        <button class="chip ${st.diff === 2 ? 'active' : ''}" data-diff="2">ふつう</button>
+        <button class="chip ${st.diff === 3 ? 'active' : ''}" data-diff="3">むずかしい</button>
+      </div>
+      <div class="hud">
+        <span>もんだい <span class="val" id="hudQ">-</span></span>
+        <span>ミス <span class="val" id="hudMiss">0</span></span>
+        <label><input type="checkbox" id="chkSound" checked> 音</label>
+      </div>`;
+    document.querySelectorAll('[data-diff]').forEach(b => b.addEventListener('click', () => {
+      st.diff = +b.dataset.diff; renderPredict();
+    }));
+    setScreen(`<div class="formula">?</div>`);
+    $('stageNote').textContent = '';
+    $('bottomControls').innerHTML = `
+      <div class="ans-line">y = <span class="abox" id="ansBox"></span></div>
+      <div class="keypad" id="keypad"></div>
+      <div class="mark" id="mark"></div>`;
+    buildKeypad();
+    showOverlay(`<div class="big">出力をあてる</div>
+      <div class="detail2">機械の式を見て、出てくる数(y)を予想しよう!<br>ぜんぶで${PREDICT_N}問</div>
+      <div class="go">タップでスタート!</div>`, () => startPredict());
+  }
+  function startPredict() {
+    st.qi = 0; st.miss = 0; st.playing = true;
+    $('hudMiss').textContent = '0';
+    nextPredictQ();
+  }
+  function nextPredictQ() {
+    st.rule = makeRule(st.diff);
+    st.qx = rnd(0, 9);
+    st.input = ''; st.tries = 0; st.lock = false;
+    clearIO();
+    setScreen(`<div class="formula">${ruleFormula(st.rule)}</div><div class="words">${ruleWords(st.rule)}</div>`);
+    $('hudQ').textContent = `${st.qi + 1}/${PREDICT_N}`;
+    $('stageNote').innerHTML = `<b style="font-size:1.2rem">x = ${st.qx}</b> のカードを入れるよ。y はいくつになる?`;
+    $('ansBox').textContent = '';
+    $('mark').textContent = ''; $('mark').className = 'mark';
+    // 入力カードをじょうご上にスタンバイ表示
+    const fly = $('flyCard');
+    fly.textContent = 'x=' + st.qx;
+    fly.style.display = 'block';
+    fly.style.transform = 'translateX(-150px)';
+  }
+  function buildKeypad() {
+    const rows = [['7','8','9'], ['4','5','6'], ['1','2','3'], ['±','0','del','ok']];
+    const kp = $('keypad');
+    kp.innerHTML = '';
+    for (const row of rows) {
+      const div = document.createElement('div');
+      div.className = 'kp-row';
+      for (const k of row) {
+        const b = document.createElement('button');
+        b.className = 'kp' + (k === 'ok' ? ' ok' : '');
+        b.textContent = k === 'del' ? '⌫' : k === 'ok' ? 'OK' : k;
+        b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); pressKey(k); });
+        div.appendChild(b);
+      }
+      kp.appendChild(div);
+    }
+  }
+  function pressKey(k) {
+    if (!st.playing || st.lock || st.mode !== 'predict') return;
+    if (k === 'ok') { checkPredict(); return; }
+    if (k === 'del') { st.input = st.input.slice(0, -1); }
+    else if (k === '±') { st.input = st.input.startsWith('-') ? st.input.slice(1) : '-' + st.input; }
+    else if (st.input.replace('-', '').length < 4) { st.input += k; }
+    $('ansBox').textContent = st.input;
+  }
+  async function checkPredict() {
+    if (st.input === '' || st.input === '-') return;
+    const ans = applyRule(st.rule, st.qx);
+    const q = st.qx;
+    if (parseInt(st.input, 10) === ans) {
+      st.lock = true;
+      sndOK();
+      $('mark').textContent = '⭕ 予想せいかい!きかいでたしかめよう!';
+      $('mark').className = 'mark ok';
+      await runMachine('x=' + q, 'y=' + ans);
+      $('stageNote').innerHTML = `x = ${q} → <b style="color:#bf360c">y = ${ans}</b> !予想ぴったり!`;
+      await sleep(900);
+      st.qi++;
+      if (st.qi >= PREDICT_N) finishPredict();
+      else nextPredictQ();
+    } else {
+      sndNG();
+      st.miss++; st.tries++;
+      $('hudMiss').textContent = st.miss;
+      if (st.tries >= 3) {
+        st.lock = true;
+        $('mark').textContent = '❌ きかいに聞いてみよう…';
+        $('mark').className = 'mark ng';
+        await runMachine('x=' + q, 'y=' + ans);
+        $('mark').textContent = `こたえは y = ${ans} だったよ`;
+        await sleep(1400);
+        st.qi++;
+        if (st.qi >= PREDICT_N) finishPredict();
+        else nextPredictQ();
+      } else {
+        $('mark').textContent = '❌ もういちど!';
+        $('mark').className = 'mark ng';
+        st.input = '';
+        $('ansBox').textContent = '';
+      }
+    }
+  }
+  function finishPredict() {
+    st.playing = false;
+    const stars = st.miss === 0 ? 3 : st.miss <= 3 ? 2 : 1;
+    sndDone();
+    showOverlay(`<div class="big">${['', 'クリア!', 'すごい!🎉', 'かんぺき!👑'][stars]}</div>
+      <div class="stars">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
+      <div class="detail2">ミス ${st.miss}回</div>
+      <div class="go">タップでもう一回!</div>`, () => startPredict());
+  }
+
+  // ===== 🕵️ ルールをあてる =====
+  const GUESS_ROUNDS = 4;
+  function renderGuess() {
+    $('topControls').innerHTML = `
+      <div class="chip-row">
+        <button class="chip ${st.diff === 1 ? 'active' : ''}" data-diff="1">やさしい</button>
+        <button class="chip ${st.diff === 2 ? 'active' : ''}" data-diff="2">ふつう</button>
+        <button class="chip ${st.diff === 3 ? 'active' : ''}" data-diff="3">むずかしい</button>
+      </div>
+      <div class="hud">
+        <span>ラウンド <span class="val" id="hudR">-</span></span>
+        <span>ミス <span class="val" id="hudMiss">0</span></span>
+        <label><input type="checkbox" id="chkSound" checked> 音</label>
+      </div>`;
+    document.querySelectorAll('[data-diff]').forEach(b => b.addEventListener('click', () => {
+      st.diff = +b.dataset.diff; renderGuess();
+    }));
+    setScreen(`<div class="formula">? ? ?</div>`);
+    $('stageNote').textContent = '';
+    $('bottomControls').innerHTML = '';
+    showOverlay(`<div class="big">ルールをあてる</div>
+      <div class="detail2">数カードを入れて、出てくる数から<br>かくれた式を見やぶろう!(全${GUESS_ROUNDS}ラウンド)</div>
+      <div class="go">タップでスタート!</div>`, () => startGuess());
+  }
+  function startGuess() {
+    st.guessRound = 0; st.guessMiss = 0;
+    $('hudMiss').textContent = '0';
+    nextGuessRound();
+  }
+  function nextGuessRound() {
+    st.rule = makeRule(st.diff);
+    st.pairs = []; st.choosing = false;
+    clearIO();
+    setScreen(`<div class="formula">? ? ?</div><div class="words">ルールはひみつ…</div>`);
+    $('hudR').textContent = `${st.guessRound + 1}/${GUESS_ROUNDS}`;
+    $('stageNote').textContent = 'すきな数カードを入れてしらべよう!';
+    $('bottomControls').innerHTML = `
+      <div class="input-cards" id="numCards">
+        ${[1,2,3,4,5,6,7,8,9,10].map(n => `<button class="in-card" data-n="${n}">${n}</button>`).join('')}
+      </div>
+      <table class="xy" id="xyTable">
+        <tr id="rowX"><th>入力 x</th></tr>
+        <tr id="rowY"><th>出力 y</th></tr>
+      </table>
+      <button class="guess-btn" id="btnGuess" style="display:none">💡 ルールがわかった!</button>
+      <div id="choiceArea"></div>
+      <div class="mark" id="mark"></div>`;
+    document.querySelectorAll('#numCards .in-card').forEach(b => b.addEventListener('click', async () => {
+      if (animBusy || st.choosing) return;
+      const x = +b.dataset.n;
+      b.disabled = true;
+      const y = applyRule(st.rule, x);
+      await runMachine('x=' + x, 'y=' + y);
+      st.pairs.push([x, y]);
+      $('rowX').insertAdjacentHTML('beforeend', `<td>${x}</td>`);
+      $('rowY').insertAdjacentHTML('beforeend', `<td class="yv">${y}</td>`);
+      $('btnGuess').style.display = '';
+      if (st.pairs.length >= 2) $('stageNote').textContent = 'ひらめいたら「ルールがわかった!」をおそう';
+    }));
+    $('btnGuess').addEventListener('click', showChoices);
+  }
+  function makeDistractors(r) {
+    const cands = [];
+    if (r.type === 'sq') {
+      cands.push({ type: 'lin', a: 2, b: 0 }, { type: 'lin', a: 3, b: 0 }, { type: 'lin', a: 2, b: 1 });
+    } else {
+      cands.push({ type: 'lin', a: r.a, b: r.b + pick([1, 2, -1, -2]) });
+      cands.push({ type: 'lin', a: Math.max(1, r.a + pick([1, -1])), b: r.b });
+      cands.push(r.b !== 0
+        ? { type: 'lin', a: r.a, b: -r.b }
+        : { type: 'lin', a: r.a + 2, b: 0 });
+      if (st.diff === 3) cands.push({ type: 'sq' });
+    }
+    // 正解とかぶらない・たがいにかぶらない3つ
+    const out = [];
+    for (const c of cands) {
+      if (!sameRule(c, r) && !out.some(o => sameRule(o, c))) out.push(c);
+      if (out.length === 3) break;
+    }
+    while (out.length < 3) {
+      const c = { type: 'lin', a: rnd(2, 6), b: rnd(-9, 9) };
+      if (!sameRule(c, r) && !out.some(o => sameRule(o, c))) out.push(c);
+    }
+    return out;
+  }
+  function showChoices() {
+    st.choosing = true;
+    $('stageNote').textContent = 'かくれたルールはどれ?';
+    const rules = [st.rule, ...makeDistractors(st.rule)];
+    for (let i = rules.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rules[i], rules[j]] = [rules[j], rules[i]];
+    }
+    $('choiceArea').innerHTML = `<div class="choices">${rules.map(r =>
+      `<button class="choice" ${sameRule(r, st.rule) ? 'data-ok="1"' : ''}>${ruleFormula(r)}</button>`).join('')}</div>`;
+    document.querySelectorAll('.choice').forEach(b => b.addEventListener('click', async () => {
+      if (!st.choosing) return;
+      if (b.dataset.ok) {
+        st.choosing = false;
+        sndOK();
+        b.classList.add('correct');
+        setScreen(`<div class="formula">${ruleFormula(st.rule)}</div><div class="words">${ruleWords(st.rule)}</div>`);
+        $('mark').textContent = '⭕ 見やぶった!';
+        $('mark').className = 'mark ok';
+        await sleep(1400);
+        st.guessRound++;
+        if (st.guessRound >= GUESS_ROUNDS) finishGuess();
+        else nextGuessRound();
+      } else {
+        sndNG();
+        st.guessMiss++;
+        $('hudMiss').textContent = st.guessMiss;
+        b.classList.add('wrong');
+        setTimeout(() => b.classList.remove('wrong'), 700);
+        $('mark').textContent = '❌ ちがうみたい…もっとカードを入れてしらべてもOK!';
+        $('mark').className = 'mark ng';
+        st.choosing = false;
+        $('choiceArea').innerHTML = '';
+      }
+    }));
+  }
+  function finishGuess() {
+    const stars = st.guessMiss === 0 ? 3 : st.guessMiss <= 2 ? 2 : 1;
+    sndDone();
+    showOverlay(`<div class="big">${['', 'クリア!', 'すごい!🎉', 'めいたんてい!👑'][stars]}</div>
+      <div class="stars">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
+      <div class="detail2">ミス ${st.guessMiss}回</div>
+      <div class="go">タップでもう一回!</div>`, () => startGuess());
+  }
+
+  // ===== オーバーレイ =====
+  let overlayHandler = null;
+  function showOverlay(html, onTap) {
+    const ov = $('overlay');
+    ov.innerHTML = html;
+    ov.classList.remove('hidden');
+    overlayHandler = onTap;
+  }
+  $('overlay').addEventListener('pointerdown', () => {
+    $('overlay').classList.add('hidden');
+    if (overlayHandler) { const h = overlayHandler; overlayHandler = null; h(); }
+  });
+
+  // ===== モード切りかえ =====
+  function renderAll() {
+    clearIO();
+    $('overlay').classList.add('hidden');
+    st.playing = false;
+    if (st.mode === 'joke') renderJoke();
+    else if (st.mode === 'predict') renderPredict();
+    else renderGuess();
+  }
+  document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+    st.mode = b.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.toggle('active', x === b));
+    renderAll();
+  }));
+
+  renderAll();
+})();
+</script>
+
+</body>
+</html>
