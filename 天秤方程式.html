@@ -97,7 +97,7 @@
   <div class="chip-row" id="probRow"></div>
 
   <div class="card" id="customCard" style="display:none">
-    <div style="text-align:center; font-weight:bold; color:#37474f; margin-bottom:8px">✏️ じぶんで問題をつくろう(数字は −9〜9)</div>
+    <div style="text-align:center; font-weight:bold; color:#37474f; margin-bottom:8px">✏️ じぶんで問題をつくろう(数字は −9〜9)<br><span style="font-weight:normal; font-size:0.82rem; color:#546e7a">答えが分数になる問題もOK!</span></div>
     <div style="display:flex; gap:6px; justify-content:center; align-items:center; font-size:1.3rem; font-weight:bold; font-family:'Times New Roman',serif; flex-wrap:wrap">
       <input type="number" id="cA" value="2" min="-9" max="9" style="width:64px; font-size:1.2rem; padding:6px; border-radius:8px; border:2px solid #90a4ae; text-align:center">
       <span><i>x</i> +</span>
@@ -135,7 +135,7 @@
       <li><b>①ならべる</b>:式のとおりに、左右の皿にパーツをおこう(タップでおく、皿の上のパーツをタップするともどせる)。まちがえると天秤がかたむくよ!</li>
       <li><b>②とく</b>:<b>🗑ゴミばこ</b>に「両辺から同じものを1こずつ」すてられるよ(皿のパーツをタップでもOK)。式に<b>マイナスがあるとき</b>は🎈風船も登場!正しい操作なら天秤は<b>ぜったいかたむかない</b>!</li>
       <li>「x の箱1こ = 数字」の形になったらクリア!🎉</li>
-      <li><b>✏️つくる</b>で、じぶんだけの問題も作れるよ(答えが整数になる式かチェックしてくれる)。</li>
+      <li><b>✏️つくる</b>で、じぶんだけの問題も作れるよ。<b>答えが分数になる問題もOK</b>——「2x = 5」みたいにもうわれなくなったら、<b>x = 5/2</b> と分数で答えが出るよ!</li>
     </ul>
   </div>
 
@@ -507,22 +507,43 @@
     }
   }
 
-  // ===== クリア判定 =====
+  // ===== 分数の表示 =====
+  const gcd2 = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) { [a, b] = [b, a % b]; } return a || 1; };
+  function fmtFrac(num, den) {
+    // num/den を約分してきれいに(整数なら整数、分数なら「5/2」)
+    if (den < 0) { num = -num; den = -den; }
+    const g = gcd2(num, den);
+    num /= g; den /= g;
+    if (den === 1) return { text: String(num).replace('-', '−'), isInt: true, num, den };
+    return { text: `${String(num).replace('-', '−')}/${den}`, isInt: false, num, den };
+  }
+  const fracYomi = (num, den) => `${den}ぶんの${Math.abs(num)}${num < 0 ? '(マイナス)' : ''}`;
+
+  // ===== クリア判定(わり切れないときは分数で決着) =====
   function checkWin() {
-    const isXOnly = (p) => p.x === 1 && p.negx === 0 && p.one === 0 && p.negone === 0;
+    const pureX = (p) => p.x >= 1 && p.negx === 0 && p.one === 0 && p.negone === 0;
     const isConst = (p) => p.x === 0 && p.negx === 0 && (p.one === 0 || p.negone === 0);
-    let ans = null;
-    if (isXOnly(st.L) && isConst(st.R)) ans = netC(st.R);
-    else if (isXOnly(st.R) && isConst(st.L)) ans = netC(st.L);
-    if (ans === null) return;
+    let k = 0, m = null;
+    if (pureX(st.L) && isConst(st.R)) { k = st.L.x; m = netC(st.R); }
+    else if (pureX(st.R) && isConst(st.L)) { k = st.R.x; m = netC(st.L); }
+    if (m === null) return;
+    if (k > 1) {
+      // まだ両辺をわって小さくできるなら、クリアにしない(わってもらう)
+      for (const d of [2, 3]) if (k % d === 0 && m % d === 0) return;
+    }
     st.phase = 'won';
     sndDone();
     const e = st.eq;
-    const lv = e.a * ans + e.b, rv = e.c * ans + e.d;
+    const ans = fmtFrac(m, k);
+    // 検算も分数で正確に:左辺 = (a·m + b·k)/k
+    const lv = fmtFrac(e.a * m + e.b * k, k), rv = fmtFrac(e.c * m + e.d * k, k);
+    const fracNote = ans.isInt ? '' :
+      `<br>📦xの箱 ${k}こ で ${String(m).replace('-', '−')} を分けるから、1こ分は <b>${ans.text}</b>(${fracYomi(ans.num, ans.den)})だね!`;
     $('overlay').innerHTML = `
-      <div class="big">x = ${String(ans).replace('-', '−')} !🎉</div>
-      <div class="detail2">たしかめ:x = ${ans} を「${fmtEq(e)}」に入れると…<br>
-        左辺 = ${lv}、右辺 = ${rv}。同じ重さでつり合った!⚖️<br>そうさ回数:${st.ops}回</div>
+      <div class="big">x = ${ans.text} !🎉</div>
+      <div class="detail2">${ans.isInt ? '' : `さいごは「${k}x = ${String(m).replace('-', '−')}」。もうこれ以上われない…`}${fracNote}
+        たしかめ:x = ${ans.text} を「${fmtEq(e)}」に入れると…<br>
+        左辺 = ${lv.text}、右辺 = ${rv.text}。同じ重さでつり合った!⚖️<br>そうさ回数:${st.ops}回</div>
       <div class="go">タップでつぎの問題へ!</div>`;
     $('overlay').classList.remove('hidden');
   }
@@ -546,6 +567,7 @@
     st.ops = 0;
     $('overlay').classList.add('hidden');
     $('trash').style.display = 'none';
+    if (idx !== 'custom') $('customCard').style.display = 'none';
     log('ここに操作のきろくが出るよ');
     renderScale(); renderEq(); renderOps();
   }
@@ -590,12 +612,6 @@
     const a = val('cA'), b = val('cB'), c = val('cC'), d = val('cD');
     const msg = $('customMsg');
     if (a === c) { msg.textContent = '左と右の x の数が同じだと、x が消えてとけないよ!'; sndNG(); return; }
-    const sol = (d - b) / (a - c);
-    if (!Number.isInteger(sol)) {
-      msg.textContent = `その式だと答えが整数にならないよ(x = ${d - b}/${a - c})。数を変えてみよう!`;
-      sndNG(); return;
-    }
-    if (Math.abs(sol) > 9) { msg.textContent = `答えが大きすぎるよ(x = ${sol})。−9〜9 になるようにしよう!`; sndNG(); return; }
     msg.textContent = '';
     st.customEq = { a, b, c, d };
     sndOK();
