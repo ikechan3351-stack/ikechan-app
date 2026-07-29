@@ -113,7 +113,7 @@
 
 <a class="back-link" href="index.html">← アプリ一覧にもどる</a>
 <h1>🎴 計算フラッシュカード</h1>
-<p class="subtitle">さくらんぼや式のカードで、計算名人になろう!(合成・分解・足し算・引き算)</p>
+<p class="subtitle">さくらんぼや式のカードで、計算名人になろう!(合成・分解・足し算・引き算・九九)</p>
 
 <div class="panel">
 
@@ -123,7 +123,7 @@
       <button class="chip small active" data-type="compose">🍒 数の合成</button>
       <button class="chip small" data-type="add">➕ 足し算</button>
       <button class="chip small" data-type="sub">➖ ひき算</button>
-      <button class="chip small" data-type="mul" disabled>✖️ 九九</button>
+      <button class="chip small" data-type="mul">✖️ 九九</button>
       <button class="chip small" data-type="shape" disabled>⬜ 図形</button>
     </div>
     <div class="mode-row">
@@ -158,8 +158,9 @@
     <ul>
       <li>カードの「?」に入る数を考えよう。<b>数の合成</b>はさくらんぼ、<b>足し算</b>は式で出るよ。</li>
       <li><b>📖 めくり</b>:自分で答えを考えてから「こたえ」をタップ(カードをタップしてもOK)。「✋手動」は自分のペース、「▶自動フラッシュ」はパッパッと自動で進むよ(先生が見せる用)。</li>
-      <li><b>❓ クイズ</b>:下の数字ボタンで答えを入れると、○×を判定。10問チャレンジで星をねらおう!</li>
-      <li>上の「しゅるい」で <b>数の合成 / 足し算 / 引き算</b> をえらべるよ(九九・図形はこれから追加)。</li>
+      <li><b>❓ クイズ</b>:下の数字ボタンで答えを入れると、○×を判定。10問チャレンジで星をねらおう!(九九は数字を打って「OK」だよ)</li>
+      <li><b>✖️ 九九</b>は「段」をえらべて、<b>こたえ(3×5=?)</b>のほかに<b>穴あき(□×5=25)</b>もできるよ。</li>
+      <li>上の「しゅるい」で <b>数の合成 / 足し算 / 引き算 / 九九</b> をえらべるよ(図形はこれから追加)。</li>
     </ul>
   </div>
 
@@ -215,13 +216,25 @@
       cell(rC, c.right, c.blank === 'right', '#e53935');
   }
 
-  // ===== しき図(足し算・引き算 共用。2桁でも中央にきれいに収まる) =====
-  function drawEquation(c, reveal) {
-    const ansTxt = reveal ? c.result : '?';
-    const ansCol = reveal ? '#e65100' : '#c62828';
-    $('face').setAttribute('viewBox', '0 0 440 180');
-    $('face').innerHTML = `
-      <text x="220" y="118" text-anchor="middle" font-size="60" font-weight="bold" fill="#333">${c.a} ${c.op} ${c.b} = <tspan fill="${ansCol}" font-size="66">${ansTxt}</tspan></text>`;
+  // ===== しき図(足し算・引き算・九九 共用。どの位置でも空欄にでき、2桁も中央に収まる) =====
+  function drawEquation(c, reveal, typed) {
+    const slot = (val, isBlank) => {
+      if (!isBlank) return { t: String(val), c: '#333' };
+      if (reveal) return { t: String(val), c: '#e65100' };
+      if (typed) return { t: typed, c: '#1565c0' };
+      return { t: '?', c: '#c62828' };
+    };
+    const A = slot(c.a, c.blank === 'a');
+    const B = slot(c.b, c.blank === 'b');
+    const R = slot(c.result, c.blank === 'result');
+    $('face').setAttribute('viewBox', '0 0 460 180');
+    $('face').innerHTML =
+      `<text x="230" y="118" text-anchor="middle" font-size="58" font-weight="bold">` +
+      `<tspan fill="${A.c}">${A.t}</tspan>` +
+      `<tspan fill="#333"> ${c.op} </tspan>` +
+      `<tspan fill="${B.c}">${B.t}</tspan>` +
+      `<tspan fill="#333"> = </tspan>` +
+      `<tspan fill="${R.c}">${R.t}</tspan></text>`;
   }
 
   // ===== 種類ごとの定義(ここに足すだけで新しいカードが増える) =====
@@ -261,7 +274,7 @@
         let a, b;
         if (mode === 'carry') { a = rnd(2, 9); b = rnd(Math.max(2, 11 - a), 9); }
         else { a = rnd(1, 9); b = rnd(1, Math.min(9, 10 - a)); }
-        return { kind: 'add', op: '+', a, b, result: a + b, carry: a + b >= 11 };
+        return { kind: 'add', op: '+', a, b, result: a + b, blank: 'result', carry: a + b >= 11 };
       },
       draw: drawEquation,
       answer: (c) => c.result,
@@ -291,7 +304,7 @@
           // くり下がりなし:a(1〜10)から、それ以下をひく。答え 0〜9
           a = rnd(1, 10); b = rnd(0, a);
         }
-        return { kind: 'sub', op: '−', a, b, result: a - b, borrow: a >= 11 };
+        return { kind: 'sub', op: '−', a, b, result: a - b, blank: 'result', borrow: a >= 11 };
       },
       draw: drawEquation,
       answer: (c) => c.result,
@@ -300,13 +313,48 @@
       tag: (c) => c.borrow ? '〈くり下がり〉' : '',
       quizTitle: 'クイズ:引き算',
       quizSub: '式の答えを、下の数字ボタンで入れてね!'
+    },
+    mul: {
+      settingLabel: '出し方',
+      settings: [
+        { key: 'product', label: 'こたえ(3×5=?)', default: true },
+        { key: 'missing', label: '穴あき(□×5=25)' },
+        { key: 'mix', label: 'ミックス' }
+      ],
+      extra: {
+        label: '段',
+        options: [{ key: 'all', label: 'ぜんぶ', default: true }].concat(
+          [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => ({ key: String(n), label: n + 'の段' })))
+      },
+      inputMode: 'entry',   // 答えが最大81(2けた)なので数字を打ちこむ方式
+      make(setting, extra) {
+        const dan = (!extra || extra === 'all') ? rnd(1, 9) : +extra;
+        const other = rnd(1, 9);
+        const danLeft = Math.random() < 0.5;
+        const a = danLeft ? dan : other;
+        const b = danLeft ? other : dan;
+        const result = a * b;
+        const form = setting === 'mix' ? (Math.random() < 0.5 ? 'product' : 'missing') : setting;
+        let blank;
+        if (form === 'product') blank = 'result';
+        else if (!extra || extra === 'all') blank = Math.random() < 0.5 ? 'a' : 'b';
+        else blank = danLeft ? 'b' : 'a';   // 段(かけられる数)は見せて、もう一方をかくす
+        return { kind: 'mul', op: '×', a, b, result, blank };
+      },
+      draw: drawEquation,
+      answer: (c) => c.blank === 'a' ? c.a : c.blank === 'b' ? c.b : c.result,
+      text: (c) => `${c.a} × ${c.b} = ${c.result}`,
+      wordCount: (c) => `${c.blank === 'a' ? '?' : c.a} × ${c.blank === 'b' ? '?' : c.b} = ${c.blank === 'result' ? '?' : c.result}`,
+      tag: (c) => c.blank === 'result' ? '' : '〈穴あき〉',
+      quizTitle: 'クイズ:九九',
+      quizSub: '九九の答えや、□に入る数を打ちこんでね!'
     }
   };
 
   // ===== 状態 =====
   const st = {
-    type: 'compose', mode: 'flip', setting: 'mix', tempo: 'manual', speed: 'normal',
-    card: null, revealed: false, lastKey: '',
+    type: 'compose', mode: 'flip', setting: 'mix', extra: null, tempo: 'manual', speed: 'normal',
+    card: null, revealed: false, lastKey: '', input: '',
     autoTimer: null, autoRunning: false,
     qi: 0, miss: 0, tries: 0, wrong: [], playing: false, lock: false, startT: 0, timerId: null
   };
@@ -314,12 +362,12 @@
 
   function newCard() {
     let c, guard = 0;
-    do { c = T().make(st.setting); } while (JSON.stringify(c) === st.lastKey && ++guard < 10);
+    do { c = T().make(st.setting, st.extra); } while (JSON.stringify(c) === st.lastKey && ++guard < 10);
     st.lastKey = JSON.stringify(c);
     st.card = c;
     return c;
   }
-  const drawCard = (reveal) => T().draw(st.card, reveal);
+  const drawCard = (reveal, typed) => T().draw(st.card, reveal, typed);
 
   // ===== めくりモード =====
   function renderFlip() {
@@ -418,7 +466,7 @@
     loadQuizQ();
   }
   function loadQuizQ() {
-    st.tries = 0; st.lock = false;
+    st.tries = 0; st.lock = false; st.input = '';
     newCard();
     drawCard(false);
     $('mark').textContent = ''; $('mark').className = 'mark';
@@ -433,16 +481,38 @@
       <label><input type="checkbox" id="chkSound" checked> 音</label>`;
   }
   function buildKeypad() {
+    let rows;
+    if (T().inputMode === 'entry') rows = [['7', '8', '9'], ['4', '5', '6'], ['1', '2', '3'], ['0', 'del', 'ok']];
+    else rows = T().keypad;
     let out = '<div class="keypad">';
-    for (const row of T().keypad) {
-      out += '<div class="kp-row">' + row.map(k => `<button class="kp" data-k="${k}">${k}</button>`).join('') + '</div>';
+    for (const row of rows) {
+      out += '<div class="kp-row">' + row.map(k => {
+        const label = k === 'del' ? '⌫' : k === 'ok' ? 'OK' : k;
+        return `<button class="kp${k === 'ok' ? ' ok' : ''}" data-k="${k}">${label}</button>`;
+      }).join('') + '</div>';
     }
     return out + '</div>';
   }
   function bindKeypad() {
-    document.querySelectorAll('.kp').forEach(b => b.addEventListener('click', () => answerQuiz(+b.dataset.k)));
+    if (T().inputMode === 'entry') {
+      document.querySelectorAll('.kp').forEach(b => b.addEventListener('click', () => {
+        if (!st.playing || st.lock) return;
+        const k = b.dataset.k;
+        if (k === 'ok') {
+          if (st.input === '') return;
+          judgeQuiz(+st.input);
+          if (!st.lock) { st.input = ''; drawCard(false); }   // まちがい(あと1〜2回)なら入力クリア
+        } else if (k === 'del') {
+          st.input = st.input.slice(0, -1); drawCard(false, st.input);
+        } else if (st.input.length < 2) {
+          st.input += k; drawCard(false, st.input);
+        }
+      }));
+    } else {
+      document.querySelectorAll('.kp').forEach(b => b.addEventListener('click', () => judgeQuiz(+b.dataset.k)));
+    }
   }
-  function answerQuiz(val) {
+  function judgeQuiz(val) {
     if (!st.playing || st.lock) return;
     const c = st.card, ans = T().answer(c);
     if (val === ans) {
@@ -506,15 +576,28 @@
     }
   });
 
-  // ===== 設定行(むき/レベル)を種類ごとに作る =====
+  // ===== 設定行(むき/レベル/出し方 + 九九の段)を種類ごとに作る =====
+  function reRenderCurrent() {
+    if (st.mode === 'flip') renderFlip(); else if (!st.playing) renderQuizStart();
+  }
   function renderSettingRow() {
     const t = T();
-    $('settingRow').innerHTML = `<span class="set-label">${t.settingLabel}:</span>` +
+    let html = `<span class="set-label">${t.settingLabel}:</span>` +
       t.settings.map(s => `<button class="chip small ${s.key === st.setting ? 'active' : ''}" data-set="${s.key}">${s.label}</button>`).join('');
+    if (t.extra) {
+      html += `<span class="set-label" style="margin-left:12px">${t.extra.label}:</span>` +
+        t.extra.options.map(o => `<button class="chip small ${o.key === st.extra ? 'active' : ''}" data-extra="${o.key}">${o.label}</button>`).join('');
+    }
+    $('settingRow').innerHTML = html;
     document.querySelectorAll('[data-set]').forEach(b => b.addEventListener('click', () => {
       st.setting = b.dataset.set;
       document.querySelectorAll('[data-set]').forEach(x => x.classList.toggle('active', x === b));
-      if (st.mode === 'flip') renderFlip(); else if (!st.playing) renderQuizStart();
+      reRenderCurrent();
+    }));
+    document.querySelectorAll('[data-extra]').forEach(b => b.addEventListener('click', () => {
+      st.extra = b.dataset.extra;
+      document.querySelectorAll('[data-extra]').forEach(x => x.classList.toggle('active', x === b));
+      reRenderCurrent();
     }));
   }
 
@@ -537,6 +620,7 @@
     document.querySelectorAll('[data-type]').forEach(x => x.classList.toggle('active', x.dataset.type === type));
     const t = T();
     st.setting = (t.settings.find(s => s.default) || t.settings[0]).key;
+    st.extra = t.extra ? (t.extra.options.find(o => o.default) || t.extra.options[0]).key : null;
     st.playing = false;
     renderSettingRow();
     applyMode();
