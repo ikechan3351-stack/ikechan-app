@@ -113,7 +113,7 @@
 
 <a class="back-link" href="index.html">← アプリ一覧にもどる</a>
 <h1>🎴 計算フラッシュカード</h1>
-<p class="subtitle">さくらんぼや式のカードで、計算名人になろう!(合成・分解・足し算)</p>
+<p class="subtitle">さくらんぼや式のカードで、計算名人になろう!(合成・分解・足し算・引き算)</p>
 
 <div class="panel">
 
@@ -122,7 +122,7 @@
       <span class="set-label">しゅるい:</span>
       <button class="chip small active" data-type="compose">🍒 数の合成</button>
       <button class="chip small" data-type="add">➕ 足し算</button>
-      <button class="chip small" data-type="sub" disabled>➖ ひき算</button>
+      <button class="chip small" data-type="sub">➖ ひき算</button>
       <button class="chip small" data-type="mul" disabled>✖️ 九九</button>
       <button class="chip small" data-type="shape" disabled>⬜ 図形</button>
     </div>
@@ -159,7 +159,7 @@
       <li>カードの「?」に入る数を考えよう。<b>数の合成</b>はさくらんぼ、<b>足し算</b>は式で出るよ。</li>
       <li><b>📖 めくり</b>:自分で答えを考えてから「こたえ」をタップ(カードをタップしてもOK)。「✋手動」は自分のペース、「▶自動フラッシュ」はパッパッと自動で進むよ(先生が見せる用)。</li>
       <li><b>❓ クイズ</b>:下の数字ボタンで答えを入れると、○×を判定。10問チャレンジで星をねらおう!</li>
-      <li>上の「しゅるい」で <b>数の合成 / 足し算</b> をえらべるよ(ひき算・九九・図形はこれから追加)。</li>
+      <li>上の「しゅるい」で <b>数の合成 / 足し算 / 引き算</b> をえらべるよ(九九・図形はこれから追加)。</li>
     </ul>
   </div>
 
@@ -215,16 +215,13 @@
       cell(rC, c.right, c.blank === 'right', '#e53935');
   }
 
-  // ===== しき図(足し算用) =====
+  // ===== しき図(足し算・引き算 共用。2桁でも中央にきれいに収まる) =====
   function drawEquation(c, reveal) {
-    const ansTxt = reveal ? c.sum : '?';
-    const ansFill = reveal ? '#fff3e0' : '#eceff1';
-    const ansCol = reveal ? '#e65100' : '#90a4ae';
-    $('face').setAttribute('viewBox', '0 0 400 190');
+    const ansTxt = reveal ? c.result : '?';
+    const ansCol = reveal ? '#e65100' : '#c62828';
+    $('face').setAttribute('viewBox', '0 0 440 180');
     $('face').innerHTML = `
-      <text x="256" y="120" text-anchor="end" font-size="62" font-weight="bold" fill="#333">${c.a} + ${c.b} =</text>
-      <rect x="282" y="58" width="94" height="94" rx="16" fill="${ansFill}" stroke="#ffb74d" stroke-width="3"/>
-      <text x="329" y="126" text-anchor="middle" font-size="54" font-weight="bold" fill="${ansCol}">${ansTxt}</text>`;
+      <text x="220" y="118" text-anchor="middle" font-size="60" font-weight="bold" fill="#333">${c.a} ${c.op} ${c.b} = <tspan fill="${ansCol}" font-size="66">${ansTxt}</tspan></text>`;
   }
 
   // ===== 種類ごとの定義(ここに足すだけで新しいカードが増える) =====
@@ -264,14 +261,44 @@
         let a, b;
         if (mode === 'carry') { a = rnd(2, 9); b = rnd(Math.max(2, 11 - a), 9); }
         else { a = rnd(1, 9); b = rnd(1, Math.min(9, 10 - a)); }
-        return { kind: 'add', a, b, sum: a + b, carry: a + b >= 11 };
+        return { kind: 'add', op: '+', a, b, result: a + b, carry: a + b >= 11 };
       },
       draw: drawEquation,
-      answer: (c) => c.sum,
-      text: (c) => `${c.a} + ${c.b} = ${c.sum}`,
+      answer: (c) => c.result,
+      text: (c) => `${c.a} + ${c.b} = ${c.result}`,
       wordCount: (c) => `${c.a} + ${c.b} = ?`,
       tag: (c) => c.carry ? '〈くり上がり〉' : '',
       quizTitle: 'クイズ:足し算',
+      quizSub: '式の答えを、下の数字ボタンで入れてね!'
+    },
+    sub: {
+      settingLabel: 'レベル',
+      settings: [
+        { key: 'noBorrow', label: 'くり下がりなし', default: true },
+        { key: 'borrow', label: 'くり下がり(十何-)' },
+        { key: 'mix', label: 'ミックス' }
+      ],
+      keypad: [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9]],
+      make(setting) {
+        const mode = setting === 'mix' ? (Math.random() < 0.5 ? 'noBorrow' : 'borrow') : setting;
+        let a, b;
+        if (mode === 'borrow') {
+          // 十何 − 1けた で、一の位より大きい数をひく(くり下がり)。答えは1〜9
+          a = rnd(11, 18);
+          const ones = a - 10;
+          b = rnd(ones + 1, 9);
+        } else {
+          // くり下がりなし:a(1〜10)から、それ以下をひく。答え 0〜9
+          a = rnd(1, 10); b = rnd(0, a);
+        }
+        return { kind: 'sub', op: '−', a, b, result: a - b, borrow: a >= 11 };
+      },
+      draw: drawEquation,
+      answer: (c) => c.result,
+      text: (c) => `${c.a} − ${c.b} = ${c.result}`,
+      wordCount: (c) => `${c.a} − ${c.b} = ?`,
+      tag: (c) => c.borrow ? '〈くり下がり〉' : '',
+      quizTitle: 'クイズ:引き算',
       quizSub: '式の答えを、下の数字ボタンで入れてね!'
     }
   };
