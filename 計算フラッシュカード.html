@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>計算フラッシュカード</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #fff3e0 0%, #ffe0b2 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #ef6c00; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #e65100; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #ef6c00; text-align: center; }
+  .panel { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .chip {
+    border: 2px solid #ffb74d; background: #fff; border-radius: 999px;
+    padding: 6px 14px; font-size: 0.9rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.08); touch-action: manipulation;
+  }
+  .chip.active { background: #ef6c00; border-color: #ef6c00; color: #fff; }
+  .chip:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+  .chip.small { font-size: 0.82rem; padding: 5px 11px; }
+
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    border: 2px solid #ffb74d; background: #fff; border-radius: 12px;
+    padding: 8px 18px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: #e65100; border-color: #e65100; color: #fff; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+  .settings { display: flex; flex-direction: column; gap: 8px; }
+  .set-line { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .set-label { font-size: 0.82rem; font-weight: bold; color: #6d4c41; }
+
+  .hud {
+    display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap;
+    font-size: 0.92rem; font-weight: bold; color: #333;
+  }
+  .hud .val { color: #e65100; }
+  .hud label { font-weight: normal; font-size: 0.82rem; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+
+  .stage {
+    position: relative;
+    background: #fffdf7; border-radius: 16px; padding: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  svg#cherry { width: 100%; max-width: 420px; height: auto; display: block; cursor: pointer; }
+  .cnum { font-size: 3rem; font-weight: bold; }
+  .mark { font-size: 1.4rem; min-height: 1.8rem; font-weight: bold; text-align: center; }
+  .mark.ok { color: #2e7d32; }
+  .mark.ng { color: #c62828; }
+  .word-count { font-size: 0.85rem; color: #999; }
+  .stage.miss-flash { animation: missShake 0.25s; }
+  @keyframes missShake { 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+
+  .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .act-btn {
+    border: none; background: #ef6c00; color: #fff; border-radius: 12px;
+    padding: 11px 26px; font-size: 1.05rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn.sub { background: #fff; color: #ef6c00; border: 2px solid #ffb74d; box-shadow: none; }
+
+  .keypad { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .kp-row { display: flex; gap: 6px; }
+  .kp {
+    width: 58px; height: 50px; border-radius: 10px; border: none;
+    font-size: 1.3rem; font-weight: bold; color: #333; background: #fff3e0;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+  }
+  .kp:active { transform: translateY(2px); box-shadow: none; }
+  .kp.ten { width: 100px; }
+
+  .overlay {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.96); border-radius: 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    text-align: center; z-index: 5; cursor: pointer; padding: 14px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay .big { font-size: 1.7rem; font-weight: bold; color: #e65100; }
+  .overlay .stars { font-size: 2.2rem; letter-spacing: 6px; }
+  .overlay .detail { font-size: 1rem; color: #444; line-height: 1.6; }
+  .overlay .review {
+    font-size: 0.9rem; color: #b71c1c; line-height: 1.6; max-height: 120px; overflow-y: auto;
+    background: #ffebee; border-radius: 10px; padding: 6px 14px;
+  }
+  .overlay .go { font-size: 1rem; color: #ef6c00; font-weight: bold; margin-top: 4px; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #e65100; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>🎴 計算フラッシュカード</h1>
+<p class="subtitle">さくらんぼで「いくつといくつ」!10 の合成・分解をマスターしよう</p>
+
+<div class="panel">
+
+  <div class="card settings">
+    <div class="set-line" id="typeRow">
+      <span class="set-label">しゅるい:</span>
+      <button class="chip small active" data-type="compose">🍒 数の合成</button>
+      <button class="chip small" data-type="add" disabled>➕ 足し算</button>
+      <button class="chip small" data-type="sub" disabled>➖ ひき算</button>
+      <button class="chip small" data-type="mul" disabled>✖️ 九九</button>
+      <button class="chip small" data-type="shape" disabled>⬜ 図形</button>
+    </div>
+    <div class="mode-row">
+      <button class="mode-btn active" data-mode="flip">📖 めくり</button>
+      <button class="mode-btn" data-mode="quiz">❓ クイズ</button>
+    </div>
+    <div class="set-line" id="dirRow">
+      <span class="set-label">むき:</span>
+      <button class="chip small" data-dir="compose">合成(?で いくつ)</button>
+      <button class="chip small" data-dir="decompose">分解(10は ?と)</button>
+      <button class="chip small active" data-dir="mix">ミックス</button>
+    </div>
+    <div class="set-line" id="tempoRow">
+      <span class="set-label">テンポ:</span>
+      <button class="chip small active" data-tempo="manual">✋ 手動</button>
+      <button class="chip small" data-tempo="auto">▶ 自動フラッシュ</button>
+      <span id="speedWrap" style="display:none">
+        <button class="chip small" data-speed="slow">ゆっくり</button>
+        <button class="chip small active" data-speed="normal">ふつう</button>
+        <button class="chip small" data-speed="fast">はやい</button>
+      </span>
+    </div>
+    <div class="hud" id="hud"></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="word-count" id="wordCount"></div>
+    <svg id="cherry" viewBox="0 0 300 280" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="mark" id="mark"></div>
+    <div class="overlay hidden" id="overlay"></div>
+  </div>
+
+  <div class="card" id="controlCard"></div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>さくらんぼ</b>の「?」に入る数を考えよう。<b>合成</b>は下の2つで上の数、<b>分解</b>は上の10を下の2つに分けるよ。</li>
+      <li><b>📖 めくり</b>:自分で答えを考えてから「こたえ」をタップ(カードをタップしてもOK)。「✋手動」は自分のペース、「▶自動フラッシュ」はパッパッと自動で進むよ(先生が見せる用)。</li>
+      <li><b>❓ クイズ</b>:下の数字ボタンで答えを入れると、○×を判定。10問チャレンジで星をねらおう!</li>
+      <li>「むき」で合成だけ・分解だけ・ミックスをえらべるよ。まずは10の合成・分解から!</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const TARGET = 10;          // 合成・分解の対象数(将来 5 なども追加可能)
+  const ROUND = 10;           // クイズ1セットの問題数
+  const SPEEDS = { slow: 2200, normal: 1400, fast: 800 };
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    if (!$('chkSound') || !$('chkSound').checked) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type, vol] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      gn.gain.setValueAtTime(vol || 0.14, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  }
+  const sndPop  = () => beep([[720, 0, 0.06, 'triangle'], [1080, 0.06, 0.12, 'triangle']]);
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  // ===== カード生成 =====
+  const rnd = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+  // dir: 'compose'(上が?) | 'decompose'(下の片方が?)
+  function makeCard(dir) {
+    const left = rnd(0, TARGET);
+    const right = TARGET - left;
+    let blank;
+    if (dir === 'compose') blank = 'top';
+    else blank = Math.random() < 0.5 ? 'left' : 'right';
+    return { top: TARGET, left, right, blank };
+  }
+  function answerOf(c) { return c.blank === 'top' ? c.top : c.blank === 'left' ? c.left : c.right; }
+
+  // ===== さくらんぼ図(SVG) =====
+  function drawCherry(c, reveal) {
+    // reveal: true なら「?」も数字で表示
+    const topC = { x: 150, y: 62, r: 46 };
+    const lC = { x: 92, y: 205, r: 40 };
+    const rC = { x: 208, y: 205, r: 40 };
+    const cell = (cir, val, isBlank, color) => {
+      const show = (!isBlank || reveal);
+      const txt = show ? val : '?';
+      const fill = isBlank ? (reveal ? '#fff3e0' : '#eceff1') : color;
+      const tcol = isBlank ? (reveal ? '#e65100' : '#90a4ae') : '#fff';
+      return `<circle cx="${cir.x}" cy="${cir.y}" r="${cir.r}" fill="${fill}" stroke="#c62828" stroke-width="3"/>
+        <text x="${cir.x}" y="${cir.y + cir.r * 0.34}" text-anchor="middle" font-size="${cir.r * 1.05}" font-weight="bold" fill="${tcol}">${txt}</text>`;
+    };
+    // ステム(枝):上の丸から左右の丸へ
+    const stem = `
+      <path d="M150,108 Q120,150 ${lC.x},${lC.y - lC.r}" fill="none" stroke="#8d6e63" stroke-width="6" stroke-linecap="round"/>
+      <path d="M150,108 Q180,150 ${rC.x},${rC.y - rC.r}" fill="none" stroke="#8d6e63" stroke-width="6" stroke-linecap="round"/>
+      <path d="M150,108 l-6,-20 q6,-6 12,0 l-6,20 Z" fill="#66bb6a"/>`;
+    $('cherry').innerHTML = stem +
+      cell(topC, c.top, c.blank === 'top', '#ef5350') +
+      cell(lC, c.left, c.blank === 'left', '#e53935') +
+      cell(rC, c.right, c.blank === 'right', '#e53935');
+  }
+
+  // ===== 状態 =====
+  const st = {
+    mode: 'flip', dir: 'mix', tempo: 'manual', speed: 'normal',
+    card: null, revealed: false, lastKey: '',
+    // 自動フラッシュ
+    autoTimer: null, autoRunning: false,
+    // クイズ
+    qi: 0, miss: 0, tries: 0, input: '', wrong: [], playing: false, lock: false,
+    startT: 0, timerId: null
+  };
+  function pickDir() {
+    if (st.dir === 'mix') return Math.random() < 0.5 ? 'compose' : 'decompose';
+    return st.dir;
+  }
+  function newCard() {
+    let c, guard = 0;
+    const key = () => `${c.left}-${c.right}-${c.blank}`;
+    do { c = makeCard(pickDir()); } while (key() === st.lastKey && ++guard < 10);
+    st.lastKey = key();
+    st.card = c;
+    return c;
+  }
+
+  // ===== めくりモード =====
+  function renderFlip() {
+    stopAuto();
+    st.revealed = false;
+    newCard();
+    drawCherry(st.card, false);
+    $('mark').textContent = '';
+    $('wordCount').textContent = st.card.blank === 'top' ? '合成:下の2つで いくつ?' : '分解:10は ?と いくつ?';
+    $('overlay').classList.add('hidden');
+    if (st.tempo === 'manual') {
+      $('controlCard').innerHTML = `
+        <div class="actions">
+          <button class="act-btn" id="btnReveal">こたえを見る 👀</button>
+          <button class="act-btn sub" id="btnNext">つぎ ▶</button>
+        </div>`;
+      $('btnReveal').addEventListener('click', revealFlip);
+      $('btnNext').addEventListener('click', renderFlip);
+    } else {
+      $('controlCard').innerHTML = `
+        <div class="actions">
+          <button class="act-btn" id="btnAuto">${st.autoRunning ? '⏸ とめる' : '▶ スタート'}</button>
+          <button class="act-btn sub" id="btnNext">つぎ ▶</button>
+        </div>`;
+      $('btnAuto').addEventListener('click', toggleAuto);
+      $('btnNext').addEventListener('click', () => { stopAuto(); renderFlip(); });
+    }
+  }
+  function revealFlip() {
+    if (st.revealed) return;
+    st.revealed = true;
+    sndPop();
+    drawCherry(st.card, true);
+    $('mark').textContent = `こたえ:${answerOf(st.card)}`;
+    $('mark').className = 'mark ok';
+  }
+  // カードタップでも答え表示(手動めくり時)
+  $('cherry').addEventListener('click', () => {
+    if (st.mode !== 'flip' || st.tempo !== 'manual') return;
+    if (!st.revealed) revealFlip(); else renderFlip();
+  });
+
+  // 自動フラッシュ
+  function toggleAuto() {
+    if (st.autoRunning) { stopAuto(); $('btnAuto').textContent = '▶ スタート'; }
+    else { startAuto(); $('btnAuto').textContent = '⏸ とめる'; }
+  }
+  function startAuto() {
+    st.autoRunning = true;
+    const step = () => {
+      if (!st.autoRunning) return;
+      const dur = SPEEDS[st.speed];
+      // 問題を見せる
+      st.revealed = false;
+      newCard();
+      drawCherry(st.card, false);
+      $('mark').textContent = '';
+      $('wordCount').textContent = st.card.blank === 'top' ? '合成:下の2つで いくつ?' : '分解:10は ?と いくつ?';
+      st.autoTimer = setTimeout(() => {
+        if (!st.autoRunning) return;
+        // 答えを見せる
+        sndPop();
+        drawCherry(st.card, true);
+        $('mark').textContent = `こたえ:${answerOf(st.card)}`;
+        $('mark').className = 'mark ok';
+        st.autoTimer = setTimeout(step, dur * 0.7);
+      }, dur);
+    };
+    step();
+  }
+  function stopAuto() {
+    st.autoRunning = false;
+    clearTimeout(st.autoTimer);
+    const b = $('btnAuto');
+    if (b) b.textContent = '▶ スタート';
+  }
+
+  // ===== クイズモード =====
+  function renderQuizStart() {
+    stopAuto();
+    $('controlCard').innerHTML = buildKeypad();
+    bindKeypad();
+    drawCherry(makeCard('compose'), false);
+    $('mark').textContent = '';
+    $('wordCount').textContent = '';
+    showOverlay(`<div class="big">クイズ:10 の合成・分解</div>
+      <div class="detail">さくらんぼの「?」に入る数を、下のボタンで入れてね!<br>ぜんぶで${ROUND}問</div>
+      <div class="go">タップ(スペースキー)でスタート!</div>`, startQuiz);
+  }
+  function startQuiz() {
+    st.qi = 0; st.miss = 0; st.wrong = []; st.playing = true; st.lock = false;
+    st.startT = Date.now();
+    clearInterval(st.timerId);
+    st.timerId = setInterval(() => {
+      const s = Math.floor((Date.now() - st.startT) / 1000);
+      $('hudTime') && ($('hudTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'));
+    }, 500);
+    updateHud();
+    loadQuizQ();
+  }
+  function loadQuizQ() {
+    st.input = ''; st.tries = 0; st.lock = false;
+    newCard();
+    drawCherry(st.card, false);
+    $('mark').textContent = ''; $('mark').className = 'mark';
+    $('wordCount').textContent = `もんだい ${st.qi + 1} / ${ROUND}` +
+      (st.card.blank === 'top' ? ' 〈合成〉' : ' 〈分解〉');
+    updateHud();
+  }
+  function updateHud() {
+    $('hud').innerHTML = `
+      <span>もんだい <span class="val">${Math.min(st.qi + 1, ROUND)}/${ROUND}</span></span>
+      <span>ミス <span class="val">${st.miss}</span></span>
+      <span>タイム <span class="val" id="hudTime">0:00</span></span>
+      <label><input type="checkbox" id="chkSound" checked> 音</label>`;
+  }
+  function buildKeypad() {
+    const rows = [['1','2','3','4'], ['5','6','7','8'], ['9','0','10']];
+    let out = '<div class="keypad">';
+    for (const row of rows) {
+      out += '<div class="kp-row">' + row.map(k =>
+        `<button class="kp ${k === '10' ? 'ten' : ''}" data-k="${k}">${k}</button>`).join('') + '</div>';
+    }
+    return out + '</div>';
+  }
+  function bindKeypad() {
+    document.querySelectorAll('.kp').forEach(b => b.addEventListener('click', () => answerQuiz(+b.dataset.k)));
+  }
+  function answerQuiz(val) {
+    if (!st.playing || st.lock) return;
+    const c = st.card, ans = answerOf(c);
+    if (val === ans) {
+      sndOK();
+      drawCherry(c, true);
+      $('mark').textContent = '⭕ せいかい!';
+      $('mark').className = 'mark ok';
+      st.lock = true;
+      setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 700);
+    } else {
+      sndNG();
+      st.miss++; st.tries++;
+      const stage = $('stage');
+      stage.classList.remove('miss-flash'); void stage.offsetWidth; stage.classList.add('miss-flash');
+      if (!st.wrong.some(w => w.key === st.lastKey)) {
+        st.wrong.push({ key: st.lastKey, text: cardText(c), ans });
+      }
+      if (st.tries >= 3) {
+        st.lock = true;
+        drawCherry(c, true);
+        $('mark').textContent = `❌ こたえは ${ans}`;
+        $('mark').className = 'mark ng';
+        setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1500);
+      } else {
+        $('mark').textContent = '❌ もういちど!';
+        $('mark').className = 'mark ng';
+      }
+      updateHud();
+    }
+  }
+  function cardText(c) {
+    if (c.blank === 'top') return `${c.left} と ${c.right} で ${c.top}`;
+    if (c.blank === 'left') return `${c.top} は ${c.left} と ${c.right}`;
+    return `${c.top} は ${c.left} と ${c.right}`;
+  }
+  function finishQuiz() {
+    st.playing = false;
+    clearInterval(st.timerId);
+    const sec = Math.floor((Date.now() - st.startT) / 1000);
+    const acc = Math.round(ROUND / (ROUND + st.miss) * 100);
+    const stars = st.miss === 0 ? 3 : acc >= 80 ? 2 : 1;
+    sndDone();
+    const rv = st.wrong.length
+      ? `<div class="review"><b>ふりかえり</b><br>${st.wrong.map(w => w.text).join('<br>')}</div>` : '';
+    showOverlay(`<div class="big">${['', 'クリア!', 'すごい!🎉', 'かんぺき!👑'][stars]}</div>
+      <div class="stars">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
+      <div class="detail">タイム ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} / ミス ${st.miss}回 / せいかくりつ ${acc}%</div>
+      ${rv}
+      <div class="go">タップ(スペースキー)でもう一回!</div>`, startQuiz);
+    updateHud();
+  }
+
+  // ===== オーバーレイ =====
+  let overlayHandler = null;
+  function showOverlay(html, onTap) {
+    $('overlay').innerHTML = html;
+    $('overlay').classList.remove('hidden');
+    overlayHandler = onTap;
+  }
+  $('overlay').addEventListener('pointerdown', () => {
+    $('overlay').classList.add('hidden');
+    if (overlayHandler) { const h = overlayHandler; overlayHandler = null; h(); }
+  });
+  window.addEventListener('keydown', (ev) => {
+    if (st.mode === 'quiz' && ev.key === ' ' && !st.playing) {
+      ev.preventDefault();
+      if (!$('overlay').classList.contains('hidden')) {
+        $('overlay').classList.add('hidden');
+        if (overlayHandler) { const h = overlayHandler; overlayHandler = null; h(); }
+      }
+    }
+  });
+
+  // ===== UI 切りかえ =====
+  function applyMode() {
+    const isFlip = st.mode === 'flip';
+    $('tempoRow').style.display = isFlip ? '' : 'none';
+    if (isFlip) { $('hud').innerHTML = `<label><input type="checkbox" id="chkSound" checked> 音</label>`; renderFlip(); }
+    else renderQuizStart();
+  }
+  document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+    st.mode = b.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.toggle('active', x === b));
+    applyMode();
+  }));
+  $('dirRow').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-dir]');
+    if (!b) return;
+    st.dir = b.dataset.dir;
+    document.querySelectorAll('[data-dir]').forEach(x => x.classList.toggle('active', x === b));
+    if (st.mode === 'flip') renderFlip(); else if (!st.playing) renderQuizStart();
+  });
+  $('tempoRow').addEventListener('click', (ev) => {
+    const tb = ev.target.closest('[data-tempo]');
+    if (tb) {
+      st.tempo = tb.dataset.tempo;
+      document.querySelectorAll('[data-tempo]').forEach(x => x.classList.toggle('active', x === tb));
+      $('speedWrap').style.display = st.tempo === 'auto' ? '' : 'none';
+      renderFlip();
+    }
+    const sb = ev.target.closest('[data-speed]');
+    if (sb) {
+      st.speed = sb.dataset.speed;
+      document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('active', x === sb));
+    }
+  });
+  // しゅるいメニュー(数の合成のみ実装、他はじゅんびちゅう)
+  $('typeRow').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-type]');
+    if (!b || b.disabled) return;
+    // compose のみ。将来ここで種類を切りかえ。
+  });
+
+  applyMode();
+})();
+</script>
+
+</body>
+</html>
