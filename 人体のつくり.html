@@ -147,6 +147,33 @@
     other:   { name: 'その他', color: '#7cb342' }
   };
 
+  // ===== 色を明るく/暗くする(グラデーションで立体感を出すため) =====
+  function mixColor(hex, target, amt) {
+    const n = parseInt(hex.slice(1), 16), t = parseInt(target.slice(1), 16);
+    const mixCh = (c, tc) => Math.round(c + (tc - c) * amt);
+    const r = mixCh((n >> 16) & 255, (t >> 16) & 255);
+    const g = mixCh((n >> 8) & 255, (t >> 8) & 255);
+    const b = mixCh(n & 255, t & 255);
+    return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+  const lighten = (hex, amt) => mixColor(hex, '#ffffff', amt);
+  const darken  = (hex, amt) => mixColor(hex, '#000000', amt);
+  // 臓器の系統ごとの色 + 肌色を、光が当たったような立体グラデーションに
+  const GRAD_DEFS = Object.entries(SYS).map(([key, s]) => `
+    <radialGradient id="g-${key}" cx="34%" cy="26%" r="80%">
+      <stop offset="0%" stop-color="${lighten(s.color, 0.55)}"/>
+      <stop offset="55%" stop-color="${s.color}"/>
+      <stop offset="100%" stop-color="${darken(s.color, 0.32)}"/>
+    </radialGradient>`).join('') + `
+    <radialGradient id="g-skin" cx="32%" cy="20%" r="90%">
+      <stop offset="0%" stop-color="#fff6f3"/>
+      <stop offset="55%" stop-color="#ffe0e6"/>
+      <stop offset="100%" stop-color="#f0a0b4"/>
+    </radialGradient>
+    <filter id="f-organ" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0.6" dy="1.4" stdDeviation="1.1" flood-color="#000" flood-opacity="0.28"/>
+    </filter>`;
+
   // ===== 臓器データ =====
   // pos: 名前ラベルとタップ判定の中心(0-100の相対)、shape: SVGパス(viewBox 0 0 300 560)
   const ORGANS = [
@@ -187,23 +214,67 @@
   const byKey = {}; ORGANS.forEach(o => byKey[o.key] = o);
 
   // ===== 臓器の形(SVG) =====
+  // base: 色をぬるほんたいの形 / detail: 上にかさねる しわ・すじ・かげ などの本物っぽいもよう
   const SHAPES = {
-    brain: `<ellipse cx="150" cy="50" rx="27" ry="24" fill="COL"/>
-      <path d="M126,44 q8,-7 13,0 q8,-7 13,0 q8,-7 13,0" stroke="#fff" stroke-width="2.2" fill="none" opacity="0.75"/>
-      <path d="M127,55 q12,-5 24,0 q12,-5 22,-1" stroke="#fff" stroke-width="2.2" fill="none" opacity="0.75"/>`,
-    trachea: `<rect x="143" y="96" width="14" height="54" rx="6" fill="COL"/>
-      ${[104,112,120,128,136,144].map(y => `<line x1="143" y1="${y}" x2="157" y2="${y}" stroke="#fff" stroke-width="1.8" opacity="0.75"/>`).join('')}`,
-    esophagus: `<path d="M162,100 Q174,152 170,244" stroke="COL" stroke-width="10" fill="none" stroke-linecap="round"/>`,
-    lung: `<path d="M140,152 Q128,140 112,148 Q96,160 96,198 Q96,228 110,236 Q132,240 138,222 Q142,186 140,152 Z" fill="COL"/>
-      <path d="M160,152 Q172,140 188,148 Q204,160 204,198 Q204,228 190,236 Q168,240 162,222 Q158,186 160,152 Z" fill="COL"/>`,
-    heart: `<path d="M155,176 Q143,162 133,175 Q125,187 139,202 L155,219 L171,202 Q185,187 177,175 Q167,162 155,176 Z" fill="COL"/>`,
-    liver: `<path d="M96,252 Q130,242 162,251 Q167,272 154,286 Q120,296 100,286 Q89,269 96,252 Z" fill="COL"/>`,
-    stomach: `<path d="M166,248 Q193,243 197,269 Q200,292 179,301 Q160,305 156,288 Q154,276 165,270 Q156,257 166,248 Z" fill="COL"/>`,
-    kidney: `<path d="M112,288 Q102,292 102,304 Q102,318 112,320 Q121,317 121,304 Q123,290 112,288 Z" fill="COL"/>
-      <path d="M188,288 Q198,292 198,304 Q198,318 188,320 Q179,317 179,304 Q177,290 188,288 Z" fill="COL"/>`,
-    small: `<path d="M130,336 C152,327 174,337 171,348 C168,359 132,352 130,362 C128,372 156,374 172,367" stroke="COL" stroke-width="11" fill="none" stroke-linecap="round"/>`,
-    large: `<path d="M114,380 L114,338 Q114,318 136,318 L164,318 Q186,318 186,338 L186,380 Q186,391 171,391 L152,391" stroke="COL" stroke-width="13" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
-    bladder: `<ellipse cx="150" cy="402" rx="19" ry="17" fill="COL"/>`
+    brain: {
+      base: `<path d="M150,24 C133,22 121,32 120,46 C119,56 124,64 133,68 C138,72 146,74 150,74 C154,74 162,72 167,68 C176,64 181,56 180,46 C179,32 167,22 150,24 Z" fill="COL"/>`,
+      detail: `<path d="M150,27 L150,71" stroke="rgba(255,255,255,0.55)" stroke-width="1.6" fill="none"/>
+        <path d="M128,38 q6,-7 11,-1 q6,-7 11,-1 q6,-7 10,0" stroke="rgba(255,255,255,0.7)" stroke-width="2" fill="none"/>
+        <path d="M129,49 q6,-6 12,0 q6,-6 12,0 q6,-6 11,0" stroke="rgba(255,255,255,0.7)" stroke-width="2" fill="none"/>
+        <path d="M131,60 q6,-5 12,0 q6,-5 12,0" stroke="rgba(255,255,255,0.6)" stroke-width="1.8" fill="none"/>`
+    },
+    trachea: {
+      base: `<rect x="143" y="96" width="14" height="54" rx="6" fill="COL"/>`,
+      detail: `${[104,112,120,128,136,144].map(y => `<line x1="144" y1="${y}" x2="156" y2="${y}" stroke="rgba(255,255,255,0.65)" stroke-width="1.8"/>`).join('')}`
+    },
+    esophagus: {
+      base: `<path d="M162,100 Q174,152 170,244" stroke="COL" stroke-width="10" fill="none" stroke-linecap="round"/>`,
+      detail: `<path d="M164,102 Q175,152 172,242" stroke="rgba(0,0,0,0.12)" stroke-width="2.5" fill="none" stroke-linecap="round"/>`
+    },
+    lung: {
+      base: `<path d="M140,152 Q128,140 112,148 Q96,160 96,198 Q96,228 110,236 Q132,240 138,222 Q142,186 140,152 Z" fill="COL"/>
+        <path d="M160,152 Q172,140 188,148 Q204,160 204,198 Q204,228 190,236 Q168,240 162,222 Q158,186 160,152 Z" fill="COL"/>`,
+      detail: `<path d="M114,178 Q126,182 136,196" stroke="rgba(0,0,0,0.16)" stroke-width="1.6" fill="none"/>
+        <path d="M186,178 Q174,182 164,196" stroke="rgba(0,0,0,0.16)" stroke-width="1.6" fill="none"/>
+        <path d="M116,204 Q128,206 136,214" stroke="rgba(0,0,0,0.12)" stroke-width="1.4" fill="none"/>
+        <path d="M184,204 Q172,206 164,214" stroke="rgba(0,0,0,0.12)" stroke-width="1.4" fill="none"/>`
+    },
+    heart: {
+      base: `<path d="M155,176 Q143,162 133,175 Q125,187 139,202 L155,219 L171,202 Q185,187 177,175 Q167,162 155,176 Z" fill="COL"/>
+        <rect x="147" y="158" width="7" height="14" rx="3" fill="COL"/>
+        <rect x="159" y="156" width="8" height="16" rx="3" fill="COL"/>`,
+      detail: `<path d="M155,178 L146,205" stroke="rgba(0,0,0,0.18)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+        <path d="M137,182 Q141,176 148,178" stroke="rgba(255,255,255,0.45)" stroke-width="2" fill="none"/>`
+    },
+    liver: {
+      base: `<path d="M94,250 Q130,238 165,249 Q172,258 170,272 Q168,286 152,292 Q118,300 98,288 Q86,270 94,250 Z" fill="COL"/>`,
+      detail: `<path d="M118,248 Q126,262 120,282" stroke="rgba(0,0,0,0.15)" stroke-width="1.8" fill="none"/>
+        <path d="M100,256 Q115,250 132,252" stroke="rgba(255,255,255,0.35)" stroke-width="2" fill="none"/>`
+    },
+    stomach: {
+      base: `<path d="M168,246 Q192,238 200,258 Q206,278 196,294 Q186,308 168,304 Q154,300 154,286 Q154,276 164,272 Q152,266 156,254 Q160,248 168,246 Z" fill="COL"/>`,
+      detail: `<path d="M170,256 Q180,262 178,272" stroke="rgba(0,0,0,0.15)" stroke-width="1.6" fill="none"/>
+        <path d="M166,280 Q176,284 172,294" stroke="rgba(0,0,0,0.13)" stroke-width="1.5" fill="none"/>
+        <path d="M172,252 Q186,250 194,262" stroke="rgba(255,255,255,0.4)" stroke-width="2" fill="none"/>`
+    },
+    kidney: {
+      base: `<path d="M112,288 Q102,292 102,304 Q102,318 112,320 Q121,317 121,304 Q123,290 112,288 Z" fill="COL"/>
+        <path d="M188,288 Q198,292 198,304 Q198,318 188,320 Q179,317 179,304 Q177,290 188,288 Z" fill="COL"/>`,
+      detail: `<path d="M114,302 Q119,304 114,308" stroke="rgba(0,0,0,0.22)" stroke-width="1.6" fill="none"/>
+        <path d="M186,302 Q181,304 186,308" stroke="rgba(0,0,0,0.22)" stroke-width="1.6" fill="none"/>`
+    },
+    small: {
+      base: `<path d="M130,336 C152,327 174,337 171,348 C168,359 132,352 130,362 C128,372 156,374 172,367" stroke="COL" stroke-width="11" fill="none" stroke-linecap="round"/>`,
+      detail: `<path d="M130,336 C152,327 174,337 171,348 C168,359 132,352 130,362 C128,372 156,374 172,367" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-dasharray="1 8" stroke-linecap="round"/>`
+    },
+    large: {
+      base: `<path d="M114,380 L114,338 Q114,318 136,318 L164,318 Q186,318 186,338 L186,380 Q186,391 171,391 L152,391" stroke="COL" stroke-width="13" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+      detail: `<path d="M114,380 L114,338 Q114,318 136,318 L164,318 Q186,318 186,338 L186,380 Q186,391 171,391 L152,391" stroke="rgba(0,0,0,0.18)" stroke-width="13" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 7"/>`
+    },
+    bladder: {
+      base: `<ellipse cx="150" cy="402" rx="19" ry="17" fill="COL"/>`,
+      detail: `<ellipse cx="144" cy="396" rx="6" ry="4" fill="rgba(255,255,255,0.4)"/>`
+    }
   };
 
   // ===== 状態 =====
@@ -238,16 +309,23 @@
   // ===== 人体図SVG =====
   function bodySVG(opts = {}) {
     const { highlight = [], dim = [], showLabels = false, clickable = false, pulse = null } = opts;
-    let out = `<svg id="body" viewBox="0 0 300 560" xmlns="http://www.w3.org/2000/svg">`;
+    let out = `<svg id="body" viewBox="0 0 300 560" xmlns="http://www.w3.org/2000/svg"><defs>${GRAD_DEFS}</defs>`;
     // 体のシルエット(頭・首・うで・あし・どう体)
-    const SKIN = 'fill="#ffe0e6" stroke="#f4a6b8" stroke-width="2"';
+    const SKIN = 'fill="url(#g-skin)" stroke="#e3849c" stroke-width="2"';
     out += `<ellipse cx="150" cy="54" rx="34" ry="40" ${SKIN}/>
       <rect x="137" y="86" width="26" height="28" ${SKIN}/>
       <path d="M94,126 Q71,136 67,196 L61,296 Q59,322 70,322 Q81,322 82,296 L90,214 Z" ${SKIN}/>
       <path d="M206,126 Q229,136 233,196 L239,296 Q241,322 230,322 Q219,322 218,296 L210,214 Z" ${SKIN}/>
       <path d="M104,410 L108,520 Q109,542 122,542 Q135,542 136,520 L144,418 Z" ${SKIN}/>
       <path d="M196,410 L192,520 Q191,542 178,542 Q165,542 164,520 L156,418 Z" ${SKIN}/>
-      <path d="M112,110 Q150,100 188,110 L206,126 Q216,170 212,230 Q208,290 202,330 L200,412 Q150,424 100,412 L98,330 Q92,290 88,230 Q84,170 94,126 Z" ${SKIN}/>`;
+      <path d="M112,110 Q150,100 188,110 L206,126 Q216,170 212,230 Q208,290 202,330 L200,412 Q150,424 100,412 L98,330 Q92,290 88,230 Q84,170 94,126 Z" ${SKIN}/>
+      <path d="M120,116 Q150,122 180,116" stroke="rgba(0,0,0,0.07)" stroke-width="2" fill="none"/>
+      <path d="M96,300 Q150,310 204,300" stroke="rgba(0,0,0,0.05)" stroke-width="3" fill="none"/>
+      <path d="M136,46 q6,-5 12,0" stroke="#c76a83" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M152,46 q6,-5 12,0" stroke="#c76a83" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="127" cy="58" r="5" fill="rgba(244,150,170,0.35)"/>
+      <circle cx="173" cy="58" r="5" fill="rgba(244,150,170,0.35)"/>
+      <path d="M144,64 q6,5 12,0" stroke="#c76a83" stroke-width="2" fill="none" stroke-linecap="round"/>`;
     // 臓器(消化管の順に奥から)
     // 奥にあるものから手前へ(じん臓は胃のあとに描いて、かくれないようにする)
     const drawOrder = ['large', 'lung', 'liver', 'stomach', 'kidney', 'small', 'trachea', 'esophagus', 'heart', 'bladder', 'brain'];
@@ -255,17 +333,18 @@
       const o = byKey[key];
       const isDim = dim.length && !dim.includes(key);
       const isHi = highlight.includes(key);
-      const col = isDim ? '#d7ccc8' : SYS[o.sys].color;
+      const col = isDim ? '#d7ccc8' : `url(#g-${o.sys})`;
       const op = isDim ? 0.35 : 1;
-      const shape = SHAPES[key].replace(/COL/g, col);
+      const shape = SHAPES[key].base.replace(/COL/g, col);
       // 臓器どうしの境目が見えるよう、白いふちどりを下にしく
       const outline = shape
         .replace(/fill="[^"]*"/g, 'fill="#fff"')
         .replace(/stroke="[^"]*"/g, 'stroke="#fff"')
         .replace(/stroke-width="([\d.]+)"/g, (m, w) => `stroke-width="${+w + 5}"`);
+      const detail = isDim ? '' : (SHAPES[key].detail || '');
       out += `<g class="organ ${clickable ? 'clk' : ''}" data-key="${key}" opacity="${op}"
-        style="${isHi ? 'filter:drop-shadow(0 0 6px #fff);' : ''}">
-        <g stroke="#fff" stroke-width="5" opacity="0.95">${outline}</g>${shape}`;
+        style="filter:url(#f-organ)${isHi ? ' drop-shadow(0 0 7px #fff) drop-shadow(0 0 7px #fff)' : ''};">
+        <g stroke="#fff" stroke-width="5" opacity="0.95">${outline}</g>${shape}${detail}`;
       if (isHi) {
         const [hx, hy] = o.hit.map((v, i) => i === 0 ? v : v);
         out += `<circle cx="${o.hit[0]}" cy="${o.hit[1]}" r="30" fill="none" stroke="#fff59d" stroke-width="3" opacity="0.9"/>`;
