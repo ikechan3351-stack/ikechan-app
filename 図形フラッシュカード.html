@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>図形フラッシュカード</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #fff3e0 0%, #ffe0b2 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #ef6c00; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #e65100; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #ef6c00; text-align: center; }
+  .panel { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .chip {
+    border: 2px solid #ffb74d; background: #fff; border-radius: 999px;
+    padding: 6px 14px; font-size: 0.9rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.08); touch-action: manipulation;
+  }
+  .chip.active { background: #ef6c00; border-color: #ef6c00; color: #fff; }
+  .chip:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+  .chip.small { font-size: 0.82rem; padding: 5px 11px; }
+
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    border: 2px solid #ffb74d; background: #fff; border-radius: 12px;
+    padding: 8px 18px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: #e65100; border-color: #e65100; color: #fff; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+  .settings { display: flex; flex-direction: column; gap: 8px; }
+  .set-line { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .set-label { font-size: 0.82rem; font-weight: bold; color: #6d4c41; }
+
+  .hud {
+    display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap;
+    font-size: 0.92rem; font-weight: bold; color: #333;
+  }
+  .hud .val { color: #e65100; }
+  .hud label { font-weight: normal; font-size: 0.82rem; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+
+  .stage {
+    position: relative;
+    background: #fffdf7; border-radius: 16px; padding: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  svg#face { width: 100%; max-width: 420px; height: auto; display: block; cursor: pointer; }
+  .mark { font-size: 1.4rem; min-height: 1.8rem; font-weight: bold; text-align: center; }
+  .mark.ok { color: #2e7d32; }
+  .mark.ng { color: #c62828; }
+  .word-count { font-size: 0.85rem; color: #999; }
+  .stage.miss-flash { animation: missShake 0.25s; }
+  @keyframes missShake { 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+
+  .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .act-btn {
+    border: none; background: #ef6c00; color: #fff; border-radius: 12px;
+    padding: 11px 26px; font-size: 1.05rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn.sub { background: #fff; color: #ef6c00; border: 2px solid #ffb74d; box-shadow: none; }
+
+  .keypad { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .kp-row { display: flex; gap: 6px; }
+  .kp {
+    width: 58px; height: 50px; border-radius: 10px; border: none;
+    font-size: 1.25rem; font-weight: bold; color: #333; background: #fff3e0;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+  }
+  .kp:active { transform: translateY(2px); box-shadow: none; }
+  .kp.ok { background: #ef6c00; color: #fff; }
+
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .choice {
+    border: 2px solid #ffb74d; background: #fff; border-radius: 12px;
+    min-width: 96px; min-height: 60px; padding: 8px 14px;
+    font-size: 1.1rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12);
+  }
+  .choice:active { transform: translateY(2px); box-shadow: none; }
+  .choice.correct { background: #c8e6c9; border-color: #2e7d32; }
+  .choice.wrong { background: #ffcdd2; border-color: #c62828; }
+
+  .overlay {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.96); border-radius: 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    text-align: center; z-index: 5; cursor: pointer; padding: 14px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay .big { font-size: 1.7rem; font-weight: bold; color: #e65100; }
+  .overlay .stars { font-size: 2.2rem; letter-spacing: 6px; }
+  .overlay .detail { font-size: 1rem; color: #444; line-height: 1.6; }
+  .overlay .review {
+    font-size: 0.9rem; color: #b71c1c; line-height: 1.6; max-height: 120px; overflow-y: auto;
+    background: #ffebee; border-radius: 10px; padding: 6px 14px;
+  }
+  .overlay .go { font-size: 1rem; color: #ef6c00; font-weight: bold; margin-top: 4px; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #e65100; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>⬜ 図形フラッシュカード</h1>
+<p class="subtitle">平面図形の名前をおぼえよう!(まる・さんかく・しかく〜多角形)</p>
+
+<div class="panel">
+
+  <div class="card settings">
+    <div class="mode-row">
+      <button class="mode-btn active" data-mode="flip">📖 めくり</button>
+      <button class="mode-btn" data-mode="quiz">❓ クイズ</button>
+    </div>
+    <div class="set-line" id="settingRow"></div>
+    <div class="set-line" id="tempoRow">
+      <span class="set-label">テンポ:</span>
+      <button class="chip small active" data-tempo="manual">✋ 手動</button>
+      <button class="chip small" data-tempo="auto">▶ 自動フラッシュ</button>
+      <span id="speedWrap" style="display:none">
+        <button class="chip small" data-speed="slow">ゆっくり</button>
+        <button class="chip small active" data-speed="normal">ふつう</button>
+        <button class="chip small" data-speed="fast">はやい</button>
+      </span>
+    </div>
+    <div class="hud" id="hud"></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="word-count" id="wordCount"></div>
+    <svg id="face" viewBox="0 0 300 280" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="mark" id="mark"></div>
+    <div class="overlay hidden" id="overlay"></div>
+  </div>
+
+  <div class="card" id="controlCard"></div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>かたち→なまえ</b>(形を見て名前)/<b>なまえ→かたち</b>(名前を見て形)を4たくでこたえるよ。</li>
+      <li><b>📖 めくり</b>:自分で答えを考えてから「こたえ」をタップ(カードをタップしてもOK)。「✋手動」は自分のペース、「▶自動フラッシュ」はパッパッと自動で進むよ(先生が見せる用)。</li>
+      <li><b>❓ クイズ</b>:4つの中から正しいものをえらぶよ。10問チャレンジで星をねらおう!</li>
+      <li>「なかま」で <b>きほん(まる・さんかく・しかく)</b> と <b>くわしく(正方形・長方形・三角形のなかま・多角形)</b> がえらべるよ。</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const ROUND = 10;
+  const SPEEDS = { slow: 2200, normal: 1400, fast: 800 };
+  const rnd = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    if (!$('chkSound') || !$('chkSound').checked) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type, vol] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      gn.gain.setValueAtTime(vol || 0.14, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  }
+  const sndPop  = () => beep([[720, 0, 0.06, 'triangle'], [1080, 0.06, 0.12, 'triangle']]);
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  // ===== さくらんぼ図(数の合成用) =====
+  function drawCherry(c, reveal) {
+    const topC = { x: 150, y: 62, r: 46 };
+    const lC = { x: 92, y: 205, r: 40 };
+    const rC = { x: 208, y: 205, r: 40 };
+    const cell = (cir, val, isBlank, color) => {
+      const txt = (!isBlank || reveal) ? val : '?';
+      const fill = isBlank ? (reveal ? '#fff3e0' : '#eceff1') : color;
+      const tcol = isBlank ? (reveal ? '#e65100' : '#90a4ae') : '#fff';
+      return `<circle cx="${cir.x}" cy="${cir.y}" r="${cir.r}" fill="${fill}" stroke="#c62828" stroke-width="3"/>
+        <text x="${cir.x}" y="${cir.y + cir.r * 0.34}" text-anchor="middle" font-size="${cir.r * 1.05}" font-weight="bold" fill="${tcol}">${txt}</text>`;
+    };
+    const stem = `
+      <path d="M150,108 Q120,150 ${lC.x},${lC.y - lC.r}" fill="none" stroke="#8d6e63" stroke-width="6" stroke-linecap="round"/>
+      <path d="M150,108 Q180,150 ${rC.x},${rC.y - rC.r}" fill="none" stroke="#8d6e63" stroke-width="6" stroke-linecap="round"/>
+      <path d="M150,108 l-6,-20 q6,-6 12,0 l-6,20 Z" fill="#66bb6a"/>`;
+    $('face').setAttribute('viewBox', '0 0 300 280');
+    $('face').innerHTML = stem +
+      cell(topC, c.top, c.blank === 'top', '#ef5350') +
+      cell(lC, c.left, c.blank === 'left', '#e53935') +
+      cell(rC, c.right, c.blank === 'right', '#e53935');
+  }
+
+  // ===== しき図(足し算・引き算・九九 共用。どの位置でも空欄にでき、2桁も中央に収まる) =====
+  function drawEquation(c, reveal, typed) {
+    const slot = (val, isBlank) => {
+      if (!isBlank) return { t: String(val), c: '#333' };
+      if (reveal) return { t: String(val), c: '#e65100' };
+      if (typed) return { t: typed, c: '#1565c0' };
+      return { t: '?', c: '#c62828' };
+    };
+    const A = slot(c.a, c.blank === 'a');
+    const B = slot(c.b, c.blank === 'b');
+    const R = slot(c.result, c.blank === 'result');
+    $('face').setAttribute('viewBox', '0 0 460 180');
+    $('face').innerHTML =
+      `<text x="230" y="118" text-anchor="middle" font-size="58" font-weight="bold">` +
+      `<tspan fill="${A.c}">${A.t}</tspan>` +
+      `<tspan fill="#333"> ${c.op} </tspan>` +
+      `<tspan fill="${B.c}">${B.t}</tspan>` +
+      `<tspan fill="#333"> = </tspan>` +
+      `<tspan fill="${R.c}">${R.t}</tspan></text>`;
+  }
+
+  // ===== 平面図形(SVG) =====
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  function regPoly(cx, cy, r, n, rotDeg) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = (rotDeg + i * 360 / n) * Math.PI / 180;
+      pts.push(`${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`);
+    }
+    return pts.join(' ');
+  }
+  const SF = '#4fc3f7', SS = '#0277bd';
+  const poly = (pts) => `<polygon points="${pts}" fill="${SF}" stroke="${SS}" stroke-width="4" stroke-linejoin="round"/>`;
+  const circ = `<circle cx="100" cy="100" r="64" fill="${SF}" stroke="${SS}" stroke-width="4"/>`;
+  const sq = `<rect x="38" y="38" width="124" height="124" rx="4" fill="${SF}" stroke="${SS}" stroke-width="4"/>`;
+  const rectSVG = `<rect x="18" y="58" width="164" height="84" rx="4" fill="${SF}" stroke="${SS}" stroke-width="4"/>`;
+  const eqTri = poly('100,30 168,164 32,164');
+  const SHAPES = {
+    maru:            { name: 'まる', svg: circ },
+    sankaku:         { name: 'さんかく', svg: eqTri },
+    shikaku:         { name: 'しかく', svg: sq },
+    en:              { name: 'えん', svg: circ },
+    seihoukei:       { name: 'せいほうけい', svg: sq },
+    chouhoukei:      { name: 'ちょうほうけい', svg: rectSVG },
+    seisankaku:      { name: 'せいさんかくけい', svg: eqTri },
+    chokkakusankaku: { name: 'ちょっかくさんかくけい', svg: poly('42,44 42,164 170,164') },
+    hishigata:       { name: 'ひしがた', svg: poly('100,26 172,100 100,174 28,100') },
+    heikoushihenkei: { name: 'へいこうしへんけい', svg: poly('60,56 180,56 140,150 20,150') },
+    daikei:          { name: 'だいけい', svg: poly('64,56 136,56 174,150 26,150') },
+    gokakukei:       { name: 'ごかくけい', svg: poly(regPoly(100, 106, 64, 5, -90)) },
+    rokkakukei:      { name: 'ろっかくけい', svg: poly(regPoly(100, 102, 64, 6, -90)) }
+  };
+  const SHAPE_GROUPS = {
+    basic: ['maru', 'sankaku', 'shikaku'],
+    detail: ['en', 'seihoukei', 'chouhoukei', 'seisankaku', 'chokkakusankaku', 'hishigata', 'heikoushihenkei', 'daikei', 'gokakukei', 'rokkakukei']
+  };
+  function drawShapeFace(c, reveal) {
+    const sh = SHAPES[c.target], face = $('face');
+    if (c.dir === 'name2shape' && !reveal) {
+      const w = Math.max(230, sh.name.length * 34);
+      face.setAttribute('viewBox', `0 0 ${w} 200`);
+      face.innerHTML =
+        `<text x="${w / 2}" y="102" text-anchor="middle" font-size="34" font-weight="bold" fill="#333">${sh.name}</text>` +
+        `<text x="${w / 2}" y="152" text-anchor="middle" font-size="22" font-weight="bold" fill="#c62828">どんな かたち?</text>`;
+    } else {
+      face.setAttribute('viewBox', '0 0 200 200');
+      face.innerHTML = sh.svg;
+    }
+  }
+
+  // ===== とけい(アナログ時計 SVG) =====
+  const clockTimeText = (h, m) => m === 0 ? `${h}じ` : `${h}じ${m}ふん`;
+  function clockSVG(h, m) {
+    const cx = 100, cy = 100, R = 88;
+    let out = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="#fff" stroke="#37474f" stroke-width="5"/>`;
+    for (let i = 0; i < 60; i++) {
+      const a = i / 60 * 2 * Math.PI;
+      const big = i % 5 === 0;
+      const r1 = big ? R - 12 : R - 6;
+      const x1 = cx + r1 * Math.sin(a), y1 = cy - r1 * Math.cos(a);
+      const x2 = cx + R * Math.sin(a), y2 = cy - R * Math.cos(a);
+      out += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#90a4ae" stroke-width="${big ? 2.5 : 1}"/>`;
+    }
+    for (let i = 1; i <= 12; i++) {
+      const a = i / 12 * 2 * Math.PI;
+      const nx = cx + (R - 22) * Math.sin(a), ny = cy - (R - 22) * Math.cos(a);
+      out += `<text x="${nx.toFixed(1)}" y="${(ny + 7).toFixed(1)}" text-anchor="middle" font-size="19" font-weight="bold" fill="#37474f">${i}</text>`;
+    }
+    const hf = ((h % 12) + m / 60) / 12 * 2 * Math.PI;
+    const mf = m / 60 * 2 * Math.PI;
+    const hx = cx + 44 * Math.sin(hf), hy = cy - 44 * Math.cos(hf);
+    const mx = cx + 68 * Math.sin(mf), my = cy - 68 * Math.cos(mf);
+    out += `<line x1="${cx}" y1="${cy}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}" stroke="#e53935" stroke-width="7" stroke-linecap="round"/>`;
+    out += `<line x1="${cx}" y1="${cy}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}" stroke="#1565c0" stroke-width="5" stroke-linecap="round"/>`;
+    out += `<circle cx="${cx}" cy="${cy}" r="6" fill="#37474f"/>`;
+    return out;
+  }
+  function drawClockFace(c, reveal) {
+    const face = $('face');
+    if (c.dir === 'time2clock' && !reveal) {
+      const t = clockTimeText(c.h, c.m);
+      const w = Math.max(230, t.length * 36);
+      face.setAttribute('viewBox', `0 0 ${w} 200`);
+      face.innerHTML =
+        `<text x="${w / 2}" y="102" text-anchor="middle" font-size="42" font-weight="bold" fill="#333">${t}</text>` +
+        `<text x="${w / 2}" y="152" text-anchor="middle" font-size="22" font-weight="bold" fill="#c62828">どの とけい?</text>`;
+    } else {
+      face.setAttribute('viewBox', '0 0 200 200');
+      face.innerHTML = clockSVG(c.h, c.m);
+    }
+  }
+
+  // ===== 種類ごとの定義(ここに足すだけで新しいカードが増える) =====
+  const TYPES = {
+    compose: {
+      settingLabel: 'むき',
+      settings: [
+        { key: 'compose', label: '合成(?で いくつ)' },
+        { key: 'decompose', label: '分解(10は ?と)' },
+        { key: 'mix', label: 'ミックス', default: true }
+      ],
+      keypad: [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 0]],
+      make(setting) {
+        const left = rnd(0, 10), right = 10 - left;
+        const dir = setting === 'mix' ? (Math.random() < 0.5 ? 'compose' : 'decompose') : setting;
+        const blank = dir === 'compose' ? 'top' : (Math.random() < 0.5 ? 'left' : 'right');
+        return { kind: 'compose', top: 10, left, right, blank };
+      },
+      draw: drawCherry,
+      answer: (c) => c.blank === 'top' ? c.top : c.blank === 'left' ? c.left : c.right,
+      text: (c) => c.blank === 'top' ? `${c.left} と ${c.right} で ${c.top}` : `${c.top} は ${c.left} と ${c.right}`,
+      wordCount: (c) => c.blank === 'top' ? '合成:下の2つで いくつ?' : '分解:10は ?と いくつ?',
+      tag: (c) => c.blank === 'top' ? '〈合成〉' : '〈分解〉',
+      quizTitle: 'クイズ:10 の合成・分解',
+      quizSub: 'さくらんぼの「?」に入る数を、下のボタンで入れてね!'
+    },
+    add: {
+      settingLabel: 'レベル',
+      settings: [
+        { key: 'noCarry', label: '10まで(くり上がりなし)', default: true },
+        { key: 'carry', label: 'くり上がり(11〜18)' },
+        { key: 'mix', label: 'ミックス' }
+      ],
+      keypad: [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14], [15, 16, 17, 18]],
+      make(setting) {
+        const mode = setting === 'mix' ? (Math.random() < 0.5 ? 'noCarry' : 'carry') : setting;
+        let a, b;
+        if (mode === 'carry') { a = rnd(2, 9); b = rnd(Math.max(2, 11 - a), 9); }
+        else { a = rnd(1, 9); b = rnd(1, Math.min(9, 10 - a)); }
+        return { kind: 'add', op: '+', a, b, result: a + b, blank: 'result', carry: a + b >= 11 };
+      },
+      draw: drawEquation,
+      answer: (c) => c.result,
+      text: (c) => `${c.a} + ${c.b} = ${c.result}`,
+      wordCount: (c) => `${c.a} + ${c.b} = ?`,
+      tag: (c) => c.carry ? '〈くり上がり〉' : '',
+      quizTitle: 'クイズ:足し算',
+      quizSub: '式の答えを、下の数字ボタンで入れてね!'
+    },
+    sub: {
+      settingLabel: 'レベル',
+      settings: [
+        { key: 'noBorrow', label: 'くり下がりなし', default: true },
+        { key: 'borrow', label: 'くり下がり(十何-)' },
+        { key: 'mix', label: 'ミックス' }
+      ],
+      keypad: [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9]],
+      make(setting) {
+        const mode = setting === 'mix' ? (Math.random() < 0.5 ? 'noBorrow' : 'borrow') : setting;
+        let a, b;
+        if (mode === 'borrow') {
+          // 十何 − 1けた で、一の位より大きい数をひく(くり下がり)。答えは1〜9
+          a = rnd(11, 18);
+          const ones = a - 10;
+          b = rnd(ones + 1, 9);
+        } else {
+          // くり下がりなし:a(1〜10)から、それ以下をひく。答え 0〜9
+          a = rnd(1, 10); b = rnd(0, a);
+        }
+        return { kind: 'sub', op: '−', a, b, result: a - b, blank: 'result', borrow: a >= 11 };
+      },
+      draw: drawEquation,
+      answer: (c) => c.result,
+      text: (c) => `${c.a} − ${c.b} = ${c.result}`,
+      wordCount: (c) => `${c.a} − ${c.b} = ?`,
+      tag: (c) => c.borrow ? '〈くり下がり〉' : '',
+      quizTitle: 'クイズ:引き算',
+      quizSub: '式の答えを、下の数字ボタンで入れてね!'
+    },
+    mul: {
+      settingLabel: '出し方',
+      settings: [
+        { key: 'product', label: 'こたえ(3×5=?)', default: true },
+        { key: 'missing', label: '穴あき(□×5=25)' },
+        { key: 'mix', label: 'ミックス' }
+      ],
+      extra: {
+        label: '段',
+        options: [{ key: 'all', label: 'ぜんぶ', default: true }].concat(
+          [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => ({ key: String(n), label: n + 'の段' })))
+      },
+      inputMode: 'entry',   // 答えが最大81(2けた)なので数字を打ちこむ方式
+      make(setting, extra) {
+        const dan = (!extra || extra === 'all') ? rnd(1, 9) : +extra;
+        const other = rnd(1, 9);
+        const danLeft = Math.random() < 0.5;
+        const a = danLeft ? dan : other;
+        const b = danLeft ? other : dan;
+        const result = a * b;
+        const form = setting === 'mix' ? (Math.random() < 0.5 ? 'product' : 'missing') : setting;
+        let blank;
+        if (form === 'product') blank = 'result';
+        else if (!extra || extra === 'all') blank = Math.random() < 0.5 ? 'a' : 'b';
+        else blank = danLeft ? 'b' : 'a';   // 段(かけられる数)は見せて、もう一方をかくす
+        return { kind: 'mul', op: '×', a, b, result, blank };
+      },
+      draw: drawEquation,
+      answer: (c) => c.blank === 'a' ? c.a : c.blank === 'b' ? c.b : c.result,
+      text: (c) => `${c.a} × ${c.b} = ${c.result}`,
+      wordCount: (c) => `${c.blank === 'a' ? '?' : c.a} × ${c.blank === 'b' ? '?' : c.b} = ${c.blank === 'result' ? '?' : c.result}`,
+      tag: (c) => c.blank === 'result' ? '' : '〈穴あき〉',
+      quizTitle: 'クイズ:九九',
+      quizSub: '九九の答えや、□に入る数を打ちこんでね!'
+    },
+    shape: {
+      settingLabel: 'むき',
+      settings: [
+        { key: 'shape2name', label: 'かたち→なまえ', default: true },
+        { key: 'name2shape', label: 'なまえ→かたち' },
+        { key: 'mix', label: 'ミックス' }
+      ],
+      extra: {
+        label: 'なかま',
+        options: [
+          { key: 'basic', label: 'きほん(まる・さんかく・しかく)', default: true },
+          { key: 'detail', label: 'くわしく' }
+        ]
+      },
+      inputMode: 'choice',
+      make(setting, extra) {
+        const pool = SHAPE_GROUPS[extra || 'basic'];
+        const target = pool[rnd(0, pool.length - 1)];
+        const dir = setting === 'mix' ? (Math.random() < 0.5 ? 'shape2name' : 'name2shape') : setting;
+        const others = shuffle(pool.filter(k => k !== target)).slice(0, Math.min(3, pool.length - 1));
+        const choices = shuffle([target, ...others]);
+        return { kind: 'shape', target, dir, choices };
+      },
+      draw: drawShapeFace,
+      answer: (c) => SHAPES[c.target].name,
+      text: (c) => SHAPES[c.target].name,
+      choiceButton: (c, key) => c.dir === 'shape2name'
+        ? SHAPES[key].name
+        : `<svg viewBox="0 0 200 200" width="64" height="64">${SHAPES[key].svg}</svg>`,
+      wordCount: (c) => c.dir === 'shape2name' ? 'この形のなまえは?' : 'この名前の形はどれ?',
+      tag: () => '',
+      quizTitle: 'クイズ:図形',
+      quizSub: 'かたちとなまえを、正しくえらんでね!'
+    },
+    clock: {
+      settingLabel: 'むき',
+      settings: [
+        { key: 'clock2time', label: 'とけい→じかん', default: true },
+        { key: 'time2clock', label: 'じかん→とけい' },
+        { key: 'mix', label: 'ミックス' }
+      ],
+      extra: {
+        label: 'レベル',
+        options: [
+          { key: 'oclock', label: 'ちょうど(◯じ)', default: true },
+          { key: 'half', label: '30ぷん' },
+          { key: 'five', label: '5ふんごと' },
+          { key: 'any', label: '1ぷんごと' }
+        ]
+      },
+      inputMode: 'choice',
+      make(setting, extra) {
+        const lv = extra || 'oclock';
+        const pick = (arr) => arr[rnd(0, arr.length - 1)];
+        const minOf = () => lv === 'oclock' ? 0 : lv === 'half' ? pick([0, 30]) : lv === 'five' ? rnd(0, 11) * 5 : rnd(0, 59);
+        const h = rnd(1, 12), m = minOf();
+        const dir = setting === 'mix' ? pick(['clock2time', 'time2clock']) : setting;
+        const set = new Set([`${h}:${m}`]);
+        let guard = 0;
+        while (set.size < 4 && guard++ < 300) set.add(`${rnd(1, 12)}:${minOf()}`);
+        return { kind: 'clock', h, m, target: `${h}:${m}`, dir, choices: shuffle([...set]) };
+      },
+      draw: drawClockFace,
+      answer: (c) => clockTimeText(c.h, c.m),
+      text: (c) => clockTimeText(c.h, c.m),
+      choiceButton: (c, key) => {
+        const [h, m] = key.split(':').map(Number);
+        return c.dir === 'clock2time' ? clockTimeText(h, m)
+          : `<svg viewBox="0 0 200 200" width="76" height="76">${clockSVG(h, m)}</svg>`;
+      },
+      wordCount: (c) => c.dir === 'clock2time' ? 'なんじ なんぷん?' : 'この時こくの とけいは どれ?',
+      tag: () => '',
+      quizTitle: 'クイズ:とけい',
+      quizSub: 'とけいと じかんを、正しくえらんでね!'
+    }
+  };
+
+  // ===== 状態 =====
+  const st = {
+    type: 'compose', mode: 'flip', setting: 'mix', extra: null, tempo: 'manual', speed: 'normal',
+    card: null, revealed: false, lastKey: '', input: '',
+    autoTimer: null, autoRunning: false,
+    qi: 0, miss: 0, tries: 0, wrong: [], playing: false, lock: false, startT: 0, timerId: null
+  };
+  const T = () => TYPES[st.type];
+
+  function newCard() {
+    let c, guard = 0;
+    do { c = T().make(st.setting, st.extra); } while (JSON.stringify(c) === st.lastKey && ++guard < 10);
+    st.lastKey = JSON.stringify(c);
+    st.card = c;
+    return c;
+  }
+  const drawCard = (reveal, typed) => T().draw(st.card, reveal, typed);
+
+  // ===== めくりモード =====
+  function renderFlip() {
+    stopAuto();
+    st.revealed = false;
+    newCard();
+    drawCard(false);
+    $('mark').textContent = '';
+    $('wordCount').textContent = T().wordCount(st.card);
+    $('overlay').classList.add('hidden');
+    if (st.tempo === 'manual') {
+      $('controlCard').innerHTML = `
+        <div class="actions">
+          <button class="act-btn" id="btnReveal">こたえを見る 👀</button>
+          <button class="act-btn sub" id="btnNext">つぎ ▶</button>
+        </div>`;
+      $('btnReveal').addEventListener('click', revealFlip);
+      $('btnNext').addEventListener('click', renderFlip);
+    } else {
+      $('controlCard').innerHTML = `
+        <div class="actions">
+          <button class="act-btn" id="btnAuto">${st.autoRunning ? '⏸ とめる' : '▶ スタート'}</button>
+          <button class="act-btn sub" id="btnNext">つぎ ▶</button>
+        </div>`;
+      $('btnAuto').addEventListener('click', toggleAuto);
+      $('btnNext').addEventListener('click', () => { stopAuto(); renderFlip(); });
+    }
+  }
+  function revealFlip() {
+    if (st.revealed) return;
+    st.revealed = true;
+    sndPop();
+    drawCard(true);
+    $('mark').textContent = `こたえ:${T().answer(st.card)}`;
+    $('mark').className = 'mark ok';
+  }
+  $('face').addEventListener('click', () => {
+    if (st.mode !== 'flip' || st.tempo !== 'manual') return;
+    if (!st.revealed) revealFlip(); else renderFlip();
+  });
+
+  // 自動フラッシュ
+  function toggleAuto() {
+    if (st.autoRunning) { stopAuto(); $('btnAuto').textContent = '▶ スタート'; }
+    else { startAuto(); $('btnAuto').textContent = '⏸ とめる'; }
+  }
+  function startAuto() {
+    st.autoRunning = true;
+    const step = () => {
+      if (!st.autoRunning) return;
+      const dur = SPEEDS[st.speed];
+      st.revealed = false;
+      newCard();
+      drawCard(false);
+      $('mark').textContent = '';
+      $('wordCount').textContent = T().wordCount(st.card);
+      st.autoTimer = setTimeout(() => {
+        if (!st.autoRunning) return;
+        sndPop();
+        drawCard(true);
+        $('mark').textContent = `こたえ:${T().answer(st.card)}`;
+        $('mark').className = 'mark ok';
+        st.autoTimer = setTimeout(step, dur * 0.7);
+      }, dur);
+    };
+    step();
+  }
+  function stopAuto() {
+    st.autoRunning = false;
+    clearTimeout(st.autoTimer);
+    const b = $('btnAuto');
+    if (b) b.textContent = '▶ スタート';
+  }
+
+  // ===== クイズモード =====
+  function renderQuizStart() {
+    stopAuto();
+    if (T().inputMode === 'choice') { $('controlCard').innerHTML = ''; }
+    else { $('controlCard').innerHTML = buildKeypad(); bindKeypad(); }
+    newCard(); drawCard(false);
+    $('mark').textContent = '';
+    $('wordCount').textContent = '';
+    showOverlay(`<div class="big">${T().quizTitle}</div>
+      <div class="detail">${T().quizSub}<br>ぜんぶで${ROUND}問</div>
+      <div class="go">タップ(スペースキー)でスタート!</div>`, startQuiz);
+  }
+  function startQuiz() {
+    st.qi = 0; st.miss = 0; st.wrong = []; st.playing = true; st.lock = false;
+    st.startT = Date.now();
+    clearInterval(st.timerId);
+    st.timerId = setInterval(() => {
+      const s = Math.floor((Date.now() - st.startT) / 1000);
+      if ($('hudTime')) $('hudTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }, 500);
+    updateHud();
+    loadQuizQ();
+  }
+  function loadQuizQ() {
+    st.tries = 0; st.lock = false; st.input = '';
+    newCard();
+    drawCard(false);
+    if (T().inputMode === 'choice') renderChoices();
+    $('mark').textContent = ''; $('mark').className = 'mark';
+    $('wordCount').textContent = `もんだい ${st.qi + 1} / ${ROUND} ${T().tag(st.card)}`;
+    updateHud();
+  }
+  function renderChoices() {
+    const c = st.card;
+    const html = c.choices.map(k =>
+      `<button class="choice" data-k="${k}">${T().choiceButton(c, k)}</button>`).join('');
+    $('controlCard').innerHTML = `<div class="choices">${html}</div>`;
+    document.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => judgeChoice(b)));
+  }
+  function judgeChoice(btn) {
+    if (!st.playing || st.lock) return;
+    const c = st.card;
+    if (btn.dataset.k === c.target) {
+      sndOK();
+      btn.classList.add('correct');
+      drawCard(true);
+      $('mark').textContent = '⭕ せいかい!';
+      $('mark').className = 'mark ok';
+      st.lock = true;
+      setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 800);
+    } else {
+      sndNG();
+      st.miss++; st.tries++;
+      btn.classList.add('wrong');
+      setTimeout(() => btn.classList.remove('wrong'), 600);
+      const stage = $('stage');
+      stage.classList.remove('miss-flash'); void stage.offsetWidth; stage.classList.add('miss-flash');
+      if (!st.wrong.some(w => w.key === st.lastKey)) st.wrong.push({ key: st.lastKey, text: T().text(c) });
+      if (st.tries >= 3) {
+        st.lock = true;
+        const okBtn = document.querySelector(`.choice[data-k="${c.target}"]`);
+        if (okBtn) okBtn.classList.add('correct');
+        drawCard(true);
+        $('mark').textContent = `❌ こたえは「${T().answer(c)}」`;
+        $('mark').className = 'mark ng';
+        setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1600);
+      } else {
+        $('mark').textContent = '❌ もういちど!';
+        $('mark').className = 'mark ng';
+      }
+      updateHud();
+    }
+  }
+  function updateHud() {
+    $('hud').innerHTML = `
+      <span>もんだい <span class="val">${Math.min(st.qi + 1, ROUND)}/${ROUND}</span></span>
+      <span>ミス <span class="val">${st.miss}</span></span>
+      <span>タイム <span class="val" id="hudTime">0:00</span></span>
+      <label><input type="checkbox" id="chkSound" checked> 音</label>`;
+  }
+  function buildKeypad() {
+    let rows;
+    if (T().inputMode === 'entry') rows = [['7', '8', '9'], ['4', '5', '6'], ['1', '2', '3'], ['0', 'del', 'ok']];
+    else rows = T().keypad;
+    let out = '<div class="keypad">';
+    for (const row of rows) {
+      out += '<div class="kp-row">' + row.map(k => {
+        const label = k === 'del' ? '⌫' : k === 'ok' ? 'OK' : k;
+        return `<button class="kp${k === 'ok' ? ' ok' : ''}" data-k="${k}">${label}</button>`;
+      }).join('') + '</div>';
+    }
+    return out + '</div>';
+  }
+  function bindKeypad() {
+    if (T().inputMode === 'entry') {
+      document.querySelectorAll('.kp').forEach(b => b.addEventListener('click', () => {
+        if (!st.playing || st.lock) return;
+        const k = b.dataset.k;
+        if (k === 'ok') {
+          if (st.input === '') return;
+          judgeQuiz(+st.input);
+          if (!st.lock) { st.input = ''; drawCard(false); }   // まちがい(あと1〜2回)なら入力クリア
+        } else if (k === 'del') {
+          st.input = st.input.slice(0, -1); drawCard(false, st.input);
+        } else if (st.input.length < 2) {
+          st.input += k; drawCard(false, st.input);
+        }
+      }));
+    } else {
+      document.querySelectorAll('.kp').forEach(b => b.addEventListener('click', () => judgeQuiz(+b.dataset.k)));
+    }
+  }
+  function judgeQuiz(val) {
+    if (!st.playing || st.lock) return;
+    const c = st.card, ans = T().answer(c);
+    if (val === ans) {
+      sndOK();
+      drawCard(true);
+      $('mark').textContent = '⭕ せいかい!';
+      $('mark').className = 'mark ok';
+      st.lock = true;
+      setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 700);
+    } else {
+      sndNG();
+      st.miss++; st.tries++;
+      const stage = $('stage');
+      stage.classList.remove('miss-flash'); void stage.offsetWidth; stage.classList.add('miss-flash');
+      if (!st.wrong.some(w => w.key === st.lastKey)) st.wrong.push({ key: st.lastKey, text: T().text(c) });
+      if (st.tries >= 3) {
+        st.lock = true;
+        drawCard(true);
+        $('mark').textContent = `❌ こたえは ${ans}`;
+        $('mark').className = 'mark ng';
+        setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1500);
+      } else {
+        $('mark').textContent = '❌ もういちど!';
+        $('mark').className = 'mark ng';
+      }
+      updateHud();
+    }
+  }
+  function finishQuiz() {
+    st.playing = false;
+    clearInterval(st.timerId);
+    const sec = Math.floor((Date.now() - st.startT) / 1000);
+    const acc = Math.round(ROUND / (ROUND + st.miss) * 100);
+    const stars = st.miss === 0 ? 3 : acc >= 80 ? 2 : 1;
+    sndDone();
+    const rv = st.wrong.length
+      ? `<div class="review"><b>ふりかえり</b><br>${st.wrong.map(w => w.text).join('<br>')}</div>` : '';
+    showOverlay(`<div class="big">${['', 'クリア!', 'すごい!🎉', 'かんぺき!👑'][stars]}</div>
+      <div class="stars">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
+      <div class="detail">タイム ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} / ミス ${st.miss}回 / せいかくりつ ${acc}%</div>
+      ${rv}
+      <div class="go">タップ(スペースキー)でもう一回!</div>`, startQuiz);
+    updateHud();
+  }
+
+  // ===== オーバーレイ =====
+  let overlayHandler = null;
+  function showOverlay(html, onTap) {
+    $('overlay').innerHTML = html;
+    $('overlay').classList.remove('hidden');
+    overlayHandler = onTap;
+  }
+  function fireOverlay() {
+    $('overlay').classList.add('hidden');
+    if (overlayHandler) { const h = overlayHandler; overlayHandler = null; h(); }
+  }
+  $('overlay').addEventListener('pointerdown', fireOverlay);
+  window.addEventListener('keydown', (ev) => {
+    if (st.mode === 'quiz' && ev.key === ' ' && !st.playing && !$('overlay').classList.contains('hidden')) {
+      ev.preventDefault(); fireOverlay();
+    }
+  });
+
+  // ===== 設定行(むき/レベル/出し方 + 九九の段)を種類ごとに作る =====
+  function reRenderCurrent() {
+    if (st.mode === 'flip') renderFlip(); else if (!st.playing) renderQuizStart();
+  }
+  function renderSettingRow() {
+    const t = T();
+    let html = `<span class="set-label">${t.settingLabel}:</span>` +
+      t.settings.map(s => `<button class="chip small ${s.key === st.setting ? 'active' : ''}" data-set="${s.key}">${s.label}</button>`).join('');
+    if (t.extra) {
+      html += `<span class="set-label" style="margin-left:12px">${t.extra.label}:</span>` +
+        t.extra.options.map(o => `<button class="chip small ${o.key === st.extra ? 'active' : ''}" data-extra="${o.key}">${o.label}</button>`).join('');
+    }
+    $('settingRow').innerHTML = html;
+    document.querySelectorAll('[data-set]').forEach(b => b.addEventListener('click', () => {
+      st.setting = b.dataset.set;
+      document.querySelectorAll('[data-set]').forEach(x => x.classList.toggle('active', x === b));
+      reRenderCurrent();
+    }));
+    document.querySelectorAll('[data-extra]').forEach(b => b.addEventListener('click', () => {
+      st.extra = b.dataset.extra;
+      document.querySelectorAll('[data-extra]').forEach(x => x.classList.toggle('active', x === b));
+      reRenderCurrent();
+    }));
+  }
+
+  // ===== モード切りかえ =====
+  function applyMode() {
+    const isFlip = st.mode === 'flip';
+    $('tempoRow').style.display = isFlip ? '' : 'none';
+    if (isFlip) { $('hud').innerHTML = `<label><input type="checkbox" id="chkSound" checked> 音</label>`; renderFlip(); }
+    else renderQuizStart();
+  }
+  document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+    st.mode = b.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.toggle('active', x === b));
+    applyMode();
+  }));
+
+  // 種類切りかえ
+  function switchType(type) {
+    st.type = type;
+    document.querySelectorAll('[data-type]').forEach(x => x.classList.toggle('active', x.dataset.type === type));
+    const t = T();
+    st.setting = (t.settings.find(s => s.default) || t.settings[0]).key;
+    st.extra = t.extra ? (t.extra.options.find(o => o.default) || t.extra.options[0]).key : null;
+    st.playing = false;
+    renderSettingRow();
+    applyMode();
+  }
+  $('tempoRow').addEventListener('click', (ev) => {
+    const tb = ev.target.closest('[data-tempo]');
+    if (tb) {
+      st.tempo = tb.dataset.tempo;
+      document.querySelectorAll('[data-tempo]').forEach(x => x.classList.toggle('active', x === tb));
+      $('speedWrap').style.display = st.tempo === 'auto' ? '' : 'none';
+      renderFlip();
+    }
+    const sb = ev.target.closest('[data-speed]');
+    if (sb) {
+      st.speed = sb.dataset.speed;
+      document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('active', x === sb));
+    }
+  });
+
+  // ===== 起動 =====
+  switchType('shape');
+})();
+</script>
+
+</body>
+</html>
