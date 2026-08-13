@@ -313,18 +313,23 @@
       if (!force && w === lastW && h === lastH) return true;
       lastW = w; lastH = h;
       canvas.width = w; canvas.height = h;        // ← ここで中身は消える
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);     // 以後はCSSピクセルで描ける
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       return true;
     }
     if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(wrap);
+
+    // 座標は「その場で実測した比率」で変換する。
+    // canvas の中身の大きさ(canvas.width)と、画面に出ている大きさ(rect.width)の比を
+    // 毎回はかるので、拡大表示・画面サイズ設定・dprが半端な値でも、ぜったいにずれない。
     const pt = (ev) => {
       const r = canvas.getBoundingClientRect();
-      return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+      const sx = r.width ? canvas.width / r.width : 1;
+      const sy = r.height ? canvas.height / r.height : 1;
+      return { x: (ev.clientX - r.left) * sx, y: (ev.clientY - r.top) * sy, s: sx };
     };
-    function stroke(from, to) {
-      if (mode === 'eraser') { ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = 26; }
-      else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = '#d84315'; ctx.lineWidth = 3.5; }
+    function stroke(from, to, s) {
+      if (mode === 'eraser') { ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = 26 * s; }
+      else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = '#d84315'; ctx.lineWidth = 3.5 * s; }
       ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
     }
     let last = null;
@@ -332,12 +337,12 @@
       ev.preventDefault();
       try { canvas.setPointerCapture(ev.pointerId); } catch (_) {}
       drawing = true; last = pt(ev);
-      stroke(last, { x: last.x + 0.01, y: last.y });   // 点も残るように
+      stroke(last, { x: last.x + 0.01, y: last.y }, last.s);   // 点も残るように
     });
     canvas.addEventListener('pointermove', (ev) => {
       if (!drawing) return;
       ev.preventDefault();
-      const p = pt(ev); stroke(last, p); last = p;
+      const p = pt(ev); stroke(last, p, p.s); last = p;
     });
     const end = () => { drawing = false; last = null; };
     canvas.addEventListener('pointerup', end);
@@ -346,7 +351,7 @@
 
     return {
       resize,
-      clear: () => { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.restore(); },
+      clear: () => ctx.clearRect(0, 0, canvas.width, canvas.height),
       setMode: (m) => {
         mode = m;
         canvas.classList.toggle('on', m !== 'num');
