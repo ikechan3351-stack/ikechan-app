@@ -299,16 +299,25 @@
   function setupInk(canvas, wrap) {
     const ctx = canvas.getContext('2d');
     let drawing = false, mode = 'pen';
+    let lastW = 0, lastH = 0;
 
-    function resize() {
+    // 盤面と canvas の大きさを合わせる。
+    // ※ タブが非表示のあいだは大きさが 0 になる。そのまま初期サイズ(300×150)で
+    //    引きのばされると、書いた線の位置が大きくずれるので、
+    //    ResizeObserver で「見えるようになった瞬間」にも測りなおす。
+    function resize(force) {
       const r = wrap.getBoundingClientRect();
-      if (!r.width) return;
+      if (!r.width || !r.height) return false;
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(r.width * dpr);
-      canvas.height = Math.round(r.height * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // 以後はCSSピクセルで描ける
+      const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+      if (!force && w === lastW && h === lastH) return true;
+      lastW = w; lastH = h;
+      canvas.width = w; canvas.height = h;        // ← ここで中身は消える
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);     // 以後はCSSピクセルで描ける
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      return true;
     }
+    if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(wrap);
     const pt = (ev) => {
       const r = canvas.getBoundingClientRect();
       return { x: ev.clientX - r.left, y: ev.clientY - r.top };
@@ -421,7 +430,7 @@
       });
       // ②は一のくらい（右はし）から
       setActive(mode === 'place' ? 0 : S.cells.length - 1);
-      requestAnimationFrame(() => { ink.resize(); ink.clear(); });
+      requestAnimationFrame(() => { ink.resize(true); ink.clear(); });
     }
 
     function setActive(i) {
