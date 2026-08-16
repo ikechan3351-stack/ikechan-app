@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ハノイの塔</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e1f5fe 0%, #b3e5fc 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #0277bd; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #01579b; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #0277bd; text-align: center; }
+  .panel { width: 100%; max-width: 1000px; display: flex; flex-direction: column; gap: 10px; }
+
+  .main { display: flex; gap: 12px; align-items: stretch; }
+  @media (max-width: 720px) { .main { flex-direction: column; } }
+  .board-wrap { flex: 1; display: flex; justify-content: center; align-items: flex-start; }
+
+  /* 木の台 */
+  .board {
+    position: relative; width: 100%; max-width: 640px; aspect-ratio: 1.7 / 1;
+    touch-action: manipulation; user-select: none;
+  }
+  .base {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 12%;
+    background: linear-gradient(180deg, #f0dfc0 0%, #dcc39a 40%, #c2a578 100%);
+    border-radius: 999px;
+    box-shadow: 0 5px 12px rgba(0,0,0,0.28), inset 0 2px 3px rgba(255,255,255,0.7);
+  }
+  .peg {
+    position: absolute; bottom: 12%; width: 2.6%;
+    background: linear-gradient(90deg, #9c7b4d 0%, #e6cfa4 35%, #cbaa76 70%, #8d6a3f 100%);
+    border-radius: 999px; transform: translateX(-50%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+  }
+  .col {
+    position: absolute; top: 0; bottom: 0; width: 33.33%;
+    background: transparent; border: none; padding: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .col::after {
+    content: ''; position: absolute; left: 6%; right: 6%; top: 4%; bottom: 13%;
+    border-radius: 16px; border: 3px dashed transparent; transition: border-color .15s, background .15s;
+  }
+  .col.can::after { border-color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.18); }
+  .col.hintTo::after { border-color: #ffeb3b; background: rgba(255,235,59,0.25); }
+
+  .disk {
+    position: absolute; transform: translateX(-50%);
+    border-radius: 999px; display: flex; align-items: center; justify-content: center;
+    font-weight: bold; color: rgba(0,0,0,0.5); pointer-events: none;
+    box-shadow: inset 0 3px 0 rgba(255,255,255,0.5), inset 0 -4px 0 rgba(0,0,0,0.2), 0 3px 5px rgba(0,0,0,0.3);
+    transition: left .18s ease-out, bottom .18s ease-out, box-shadow .15s;
+  }
+  .disk.held { box-shadow: inset 0 3px 0 rgba(255,255,255,0.5), inset 0 -4px 0 rgba(0,0,0,0.2), 0 10px 14px rgba(0,0,0,0.4); }
+  .disk.hint { animation: blink .7s ease-in-out infinite; }
+  @keyframes blink { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
+  .disk.ng { animation: shake .4s; }
+  @keyframes shake {
+    0%,100% { transform: translateX(-50%); }
+    25% { transform: translateX(calc(-50% - 8px)); }
+    75% { transform: translateX(calc(-50% + 8px)); }
+  }
+  .goal {
+    position: absolute; bottom: 1%; text-align: center; transform: translateX(-50%);
+    font-size: 0.8rem; font-weight: bold; color: #6d4c41; white-space: nowrap;
+  }
+
+  .side {
+    width: 232px; flex-shrink: 0; background: #fff; border-radius: 14px; padding: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12); display: flex; flex-direction: column; gap: 10px;
+  }
+  @media (max-width: 720px) { .side { width: 100%; max-width: 640px; margin: 0 auto; } }
+  .side .label { font-size: 0.85rem; font-weight: bold; color: #0277bd; }
+  .side select {
+    font-family: inherit; font-size: 1rem; padding: 8px; border-radius: 10px;
+    border: 2px solid #b3e5fc; background: #fff; color: #37474f; width: 100%;
+  }
+  .stats { display: flex; gap: 8px; }
+  .stat { flex: 1; background: #e1f5fe; border-radius: 10px; padding: 8px 4px; text-align: center; }
+  .stat .k { display: block; font-size: 0.75rem; color: #0277bd; }
+  .stat .v { display: block; font-size: 1.3rem; font-weight: bold; color: #01579b; }
+  .btn {
+    border: none; border-radius: 12px; padding: 11px 14px; font-size: 0.95rem; font-weight: bold;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.18);
+    display: flex; align-items: center; gap: 8px; justify-content: center; width: 100%;
+  }
+  .btn:active { transform: translateY(2px); box-shadow: none; }
+  .btn.reset { background: #ff9800; color: #fff; }
+  .btn.hint { background: #43a047; color: #fff; }
+  .btn.auto { background: #0277bd; color: #fff; }
+  .btn.auto.on { background: #e91e63; }
+  .btn:disabled { background: #eceff1; color: #b0bec5; box-shadow: none; cursor: default; transform: none; }
+
+  .readout {
+    background: #fff; border-radius: 14px; padding: 12px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    text-align: center;
+  }
+  .readout .msg { font-size: 1.25rem; font-weight: bold; color: #01579b; }
+  .readout .msg.clear { color: #e91e63; }
+  .readout .msg.ng { color: #e53935; }
+  .readout .sub { font-size: 0.85rem; color: #607d8b; margin-top: 4px; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #01579b; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .help table { border-collapse: collapse; margin: 6px 0 0; font-size: 0.84rem; }
+  .help th, .help td { border: 1px solid #cfd8dc; padding: 2px 10px; text-align: center; }
+  .help th { background: #e1f5fe; color: #01579b; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>🗼 ハノイの塔</h1>
+<p class="subtitle">えんばんを ぜんぶ 右のぼうへ! 大きいえんばんは 小さいえんばんの上に おけないよ</p>
+
+<div class="panel">
+
+  <div class="main">
+    <div class="board-wrap">
+      <div class="board" id="board"></div>
+    </div>
+
+    <div class="side">
+      <span class="label">だんすう</span>
+      <select id="levels">
+        <option value="3">3だん（さいたん 7手）</option>
+        <option value="4">4だん（さいたん 15手）</option>
+        <option value="5" selected>5だん（さいたん 31手）</option>
+        <option value="6">6だん（さいたん 63手）</option>
+        <option value="7">7だん（さいたん 127手）</option>
+        <option value="8">8だん（さいたん 255手）</option>
+      </select>
+      <div class="stats">
+        <div class="stat"><span class="k">てすう</span><span class="v" id="moves">0</span></div>
+        <div class="stat"><span class="k">さいたん</span><span class="v" id="best">31</span></div>
+      </div>
+      <button class="btn reset" id="btnReset">🔄 はじめから</button>
+      <button class="btn hint" id="btnHint">💡 つぎの1手 ヒント</button>
+      <button class="btn auto" id="btnAuto">▶ じどうで とく</button>
+    </div>
+  </div>
+
+  <div class="readout">
+    <div class="msg" id="msg">いちばん上の えんばんを えらぼう!</div>
+    <div class="sub" id="sub">ぼうをタップ → うつす先の ぼうをタップ</div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方・あそび方</h2>
+    <ul>
+      <li><b>ぼう（またはえんばん）をタップ</b>すると、いちばん上のえんばんを もちあげるよ。つぎに <b>うつしたい ぼうをタップ</b>すると すべっていく。もう一度おなじぼうをおすと やめられるよ。</li>
+      <li>ルールは2つだけ。<b>①1回に うごかせるのは 1まいだけ ②大きいえんばんを 小さいえんばんの上に おけない</b>。</li>
+      <li>ぜんぶを <b>いちばん右のぼう</b>にうつせたら クリア!</li>
+      <li>まよったら <b>つぎの1手 ヒント</b>。さいごまで見たいときは <b>じどうで とく</b>をおしてね。</li>
+      <li>じつは さいたん手数は <b>2をだんすうのぶんだけ かけて 1をひいた数</b>になるよ。だんすうが1ふえると、手数は<b>ほぼ2ばい</b>!</li>
+    </ul>
+    <table>
+      <tr><th>だん</th><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td></tr>
+      <tr><th>さいたん手数</th><td>7</td><td>15</td><td>31</td><td>63</td><td>127</td><td>255</td></tr>
+    </table>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const board = $('board');
+
+  // 写真の教具のように、大きい方を こい色に
+  const COLORS = ['#fafafa', '#fdd835', '#ef6c00', '#d32f2f', '#66bb6a', '#2e7d32', '#1565c0', '#1a237e'];
+
+  const PEG_X = [16.67, 50, 83.33];   // ぼうの中心(%)
+  const BASE_H = 12;                  // 台の上面(%)
+  const DISK_H = 8;                   // えんばん1まいの高さ(%)
+  const pegHeight = (n) => n * DISK_H + 9;          // ぼうの高さ(%)。だんすうに合わせる
+  const holdY = (n) => BASE_H + n * DISK_H + 2;     // もちあげたときの高さ(%)
+
+  const state = {
+    n: 5,
+    pegs: [[], [], []],   // 各ぼう。先頭が下、うしろが上
+    els: [],              // えんばん番号(1..n) -> 要素
+    held: null,           // もちあげ中のえんばん番号
+    heldFrom: -1,
+    moves: 0,
+    auto: null,
+    cleared: false
+  };
+
+  // ---- 盤をつくる --------------------------------------------------------
+  function build(n) {
+    stopAuto();
+    state.n = n;
+    state.pegs = [[], [], []];
+    state.els = [];
+    state.cols = [];
+    state.held = null; state.heldFrom = -1;
+    state.moves = 0;
+    state.cleared = false;
+    board.innerHTML = '';
+
+    const base = document.createElement('div');
+    base.className = 'base';
+    board.appendChild(base);
+
+    PEG_X.forEach((x, i) => {
+      const p = document.createElement('div');
+      p.className = 'peg';
+      p.style.left = x + '%';
+      p.style.height = pegHeight(n) + '%';
+      board.appendChild(p);
+      if (i === 2) {
+        const g = document.createElement('div');
+        g.className = 'goal';
+        g.style.left = x + '%';
+        g.textContent = '⬆ ゴール';
+        board.appendChild(g);
+      }
+    });
+
+    // 大きい方から下に積む
+    for (let d = n; d >= 1; d--) {
+      state.pegs[0].push(d);
+      const el = document.createElement('div');
+      el.className = 'disk';
+      el.textContent = d;
+      el.style.background = COLORS[d - 1];
+      el.style.height = DISK_H + '%';
+      el.style.width = diskWidth(d) + '%';
+      el.style.borderRadius = '999px';
+      board.appendChild(el);
+      state.els[d] = el;
+    }
+
+    PEG_X.forEach((x, i) => {
+      const c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'col';
+      c.style.left = (i * 33.33) + '%';
+      c.addEventListener('click', () => onColClick(i));
+      board.appendChild(c);
+      state.cols[i] = c;
+    });
+
+    layout();
+    updateStats();
+    $('best').textContent = Math.pow(2, n) - 1;
+    setMsg('いちばん上の えんばんを えらぼう!', 'ぼうをタップ → うつす先の ぼうをタップ');
+  }
+
+  // えんばんの はば(%)。1が いちばん小さい
+  function diskWidth(d) {
+    const maxW = 29, minW = 11;
+    if (state.n === 1) return maxW;
+    return minW + (maxW - minW) * (d - 1) / (state.n - 1);
+  }
+
+  function layout() {
+    const fs = Math.max(11, (board.clientWidth || 600) * 0.022);
+    state.pegs.forEach((stack, pi) => {
+      stack.forEach((d, idx) => {
+        const el = state.els[d];
+        el.style.left = PEG_X[pi] + '%';
+        el.style.bottom = (BASE_H + idx * DISK_H) + '%';
+        el.style.fontSize = fs + 'px';
+        el.classList.remove('held');
+      });
+    });
+    if (state.held !== null) {
+      const el = state.els[state.held];
+      el.style.left = PEG_X[state.heldFrom] + '%';
+      el.style.bottom = holdY(state.n) + '%';
+      el.classList.add('held');
+    }
+    // うつせる先を光らせる
+    state.cols.forEach((c, i) => {
+      c.classList.toggle('can', state.held !== null && canPut(state.held, i));
+    });
+  }
+
+  const topOf = (pi) => state.pegs[pi].length ? state.pegs[pi][state.pegs[pi].length - 1] : Infinity;
+  const canPut = (d, pi) => d < topOf(pi);
+
+  // ---- そうさ ------------------------------------------------------------
+  function onColClick(pi) {
+    if (state.auto) return;
+    clearHint();
+    if (state.held === null) {
+      if (!state.pegs[pi].length) { setMsg('そこには えんばんが ないよ', 'えんばんの ある ぼうを えらんでね', 'ng'); return; }
+      state.held = topOf(pi);
+      state.heldFrom = pi;
+      layout();
+      setMsg(`${state.held}ばんを もちあげたよ`, 'つぎに うつす先の ぼうを タップ');
+      return;
+    }
+    if (pi === state.heldFrom) {          // 同じぼう → やめる
+      state.held = null; state.heldFrom = -1;
+      layout();
+      setMsg('もどしたよ', 'ぼうをタップ → うつす先の ぼうをタップ');
+      return;
+    }
+    if (!canPut(state.held, pi)) {
+      const el = state.els[state.held];
+      el.classList.remove('ng'); void el.offsetWidth; el.classList.add('ng');
+      setMsg('そこには おけないよ!', '大きいえんばんは 小さいえんばんの上に おけません', 'ng');
+      return;
+    }
+    doMove(state.heldFrom, pi);
+    state.held = null; state.heldFrom = -1;
+    layout();
+    if (!checkClear()) setMsg('いいね! つぎの えんばんは?', `てすう ${state.moves}`);
+  }
+
+  function doMove(from, to) {
+    const d = state.pegs[from].pop();
+    state.pegs[to].push(d);
+    state.moves++;
+    updateStats();
+  }
+
+  function checkClear() {
+    if (state.pegs[2].length !== state.n) { state.cleared = false; return false; }
+    state.cleared = true;
+    stopAuto();
+    const best = Math.pow(2, state.n) - 1;
+    $('msg').textContent = '🎉 クリア! おめでとう!';
+    $('msg').className = 'msg clear';
+    $('sub').textContent = state.moves === best
+      ? `${state.moves}てすう ― さいたん手数で クリア! かんぺき!`
+      : `${state.moves}てすう（さいたんは ${best}手）`;
+    return true;
+  }
+
+  // ---- ヒント・じどう ----------------------------------------------------
+  // いまのならびから、いちばん早く そろえる「つぎの1手」を計算する
+  function nextMove() {
+    const pos = [];
+    state.pegs.forEach((stack, pi) => stack.forEach(d => pos[d] = pi));
+    const search = (k, target) => {
+      if (k === 0) return null;
+      if (pos[k] === target) return search(k - 1, target);
+      const other = 3 - pos[k] - target;
+      return search(k - 1, other) || { disk: k, from: pos[k], to: target };
+    };
+    return search(state.n, 2);
+  }
+
+  let hintTimer = null;
+  function clearHint() {
+    clearTimeout(hintTimer);
+    state.els.forEach(el => el && el.classList.remove('hint'));
+    state.cols.forEach(c => c.classList.remove('hintTo'));
+  }
+
+  $('btnHint').addEventListener('click', () => {
+    if (state.auto || state.cleared) return;
+    const m = nextMove();
+    if (!m) return;
+    clearHint();
+    state.els[m.disk].classList.add('hint');
+    state.cols[m.to].classList.add('hintTo');
+    setMsg(`${m.disk}ばんを ${['左', 'まん中', '右'][m.to]}のぼうへ`, 'ひかっている えんばんを うごかしてみよう');
+    hintTimer = setTimeout(clearHint, 3000);
+  });
+
+  $('btnAuto').addEventListener('click', () => {
+    if (state.auto) { stopAuto(); return; }
+    if (state.cleared) return;
+    clearHint();
+    state.held = null; state.heldFrom = -1;
+    layout();
+    $('btnAuto').classList.add('on');
+    $('btnAuto').textContent = '⏸ とめる';
+    setMsg('じどうで といているよ…', 'いちばん早い うごかし方を 見てみよう');
+    state.auto = setInterval(() => {
+      const m = nextMove();
+      if (!m) { stopAuto(); checkClear(); return; }
+      doMove(m.from, m.to);
+      layout();
+    }, 320);
+  });
+
+  function stopAuto() {
+    if (state.auto) { clearInterval(state.auto); state.auto = null; }
+    const b = $('btnAuto');
+    if (b) { b.classList.remove('on'); b.textContent = '▶ じどうで とく'; }
+  }
+
+  // ---- ひょうじ ----------------------------------------------------------
+  function setMsg(main, sub, cls) {
+    $('msg').textContent = main;
+    $('msg').className = 'msg' + (cls ? ' ' + cls : '');
+    $('sub').textContent = sub || '';
+  }
+  function updateStats() { $('moves').textContent = state.moves; }
+
+  $('btnReset').addEventListener('click', () => build(state.n));
+  $('levels').addEventListener('change', () => build(+$('levels').value));
+
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(layout, 120);
+  });
+
+  build(5);
+})();
+</script>
+
+</body>
+</html>
