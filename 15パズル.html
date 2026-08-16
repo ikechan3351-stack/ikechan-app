@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>15パズル（スライドパズル）</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e1f5fe 0%, #b3e5fc 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #0277bd; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #01579b; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #0277bd; text-align: center; }
+  .panel { width: 100%; max-width: 1000px; display: flex; flex-direction: column; gap: 10px; }
+
+  .main { display: flex; gap: 12px; align-items: stretch; }
+  @media (max-width: 720px) { .main { flex-direction: column; } }
+
+  .board-wrap {
+    flex: 1; display: flex; justify-content: center; align-items: flex-start;
+  }
+  /* 木のわく */
+  .frame {
+    width: 100%; max-width: 520px; aspect-ratio: 1 / 1; padding: 3.4%;
+    background: linear-gradient(160deg, #a1887f 0%, #795548 45%, #5d4037 100%);
+    border-radius: 22px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.28), inset 0 2px 4px rgba(255,255,255,0.35);
+  }
+  .board {
+    position: relative; width: 100%; height: 100%;
+    background: #4e342e; border-radius: 12px;
+    box-shadow: inset 0 3px 8px rgba(0,0,0,0.5);
+    overflow: hidden; touch-action: manipulation;
+  }
+
+  .tile {
+    position: absolute; display: flex; align-items: center; justify-content: center;
+    border: none; padding: 0; margin: 0; cursor: pointer;
+    font-family: inherit; font-weight: bold; color: #1c2833;
+    border-radius: 12%; background: var(--c);
+    box-shadow: inset 0 3px 0 rgba(255,255,255,0.45), inset 0 -4px 0 rgba(0,0,0,0.18), 0 2px 4px rgba(0,0,0,0.35);
+    transition: left .13s ease-out, top .13s ease-out, transform .1s;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+  }
+  .tile:active { transform: scale(0.96); }
+  .tile.done { color: #102027; }
+  .board.clear .tile { animation: pop .5s ease-out; }
+  @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+  .board.peek .tile { opacity: .35; }
+
+  .side {
+    width: 232px; flex-shrink: 0; background: #fff; border-radius: 14px; padding: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12); display: flex; flex-direction: column; gap: 10px;
+  }
+  @media (max-width: 720px) { .side { width: 100%; max-width: 520px; margin: 0 auto; } }
+  .side .label { font-size: 0.85rem; font-weight: bold; color: #0277bd; }
+  .side select {
+    font-family: inherit; font-size: 1rem; padding: 8px; border-radius: 10px;
+    border: 2px solid #b3e5fc; background: #fff; color: #37474f; width: 100%;
+  }
+  .stats { display: flex; gap: 8px; }
+  .stat {
+    flex: 1; background: #e1f5fe; border-radius: 10px; padding: 8px 4px; text-align: center;
+  }
+  .stat .k { display: block; font-size: 0.75rem; color: #0277bd; }
+  .stat .v { display: block; font-size: 1.3rem; font-weight: bold; color: #01579b; }
+  .btn {
+    border: none; border-radius: 12px; padding: 11px 14px; font-size: 0.95rem; font-weight: bold;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.18);
+    display: flex; align-items: center; gap: 8px; justify-content: center; width: 100%;
+  }
+  .btn:active { transform: translateY(2px); box-shadow: none; }
+  .btn.shuffle { background: #0277bd; color: #fff; }
+  .btn.undo { background: #eceff1; color: #37474f; }
+  .btn.peek { background: #43a047; color: #fff; }
+  .btn:disabled { background: #eceff1; color: #b0bec5; box-shadow: none; cursor: default; transform: none; }
+
+  .readout {
+    background: #fff; border-radius: 14px; padding: 12px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    text-align: center;
+  }
+  .readout .msg { font-size: 1.25rem; font-weight: bold; color: #01579b; }
+  .readout .msg.clear { color: #e91e63; }
+  .readout .sub { font-size: 0.85rem; color: #607d8b; margin-top: 4px; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #01579b; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>🔢 15パズル（スライドパズル）</h1>
+<p class="subtitle">タイルをすべらせて、1から じゅんばんに ならべよう!</p>
+
+<div class="panel">
+
+  <div class="main">
+    <div class="board-wrap">
+      <div class="frame">
+        <div class="board" id="board"></div>
+      </div>
+    </div>
+
+    <div class="side">
+      <span class="label">おおきさ</span>
+      <select id="size">
+        <option value="3">3 × 3（8パズル・やさしい）</option>
+        <option value="4" selected>4 × 4（15パズル）</option>
+        <option value="5">5 × 5（24パズル・むずかしい）</option>
+      </select>
+      <div class="stats">
+        <div class="stat"><span class="k">てすう</span><span class="v" id="moves">0</span></div>
+        <div class="stat"><span class="k">じかん</span><span class="v" id="time">0:00</span></div>
+      </div>
+      <button class="btn shuffle" id="btnShuffle">🔀 シャッフル</button>
+      <button class="btn undo" id="btnUndo">↩ 1手 もどす</button>
+      <button class="btn peek" id="btnPeek">👀 かんせい図を見る</button>
+    </div>
+  </div>
+
+  <div class="readout">
+    <div class="msg" id="msg">タイルをおして うごかそう!</div>
+    <div class="sub" id="sub">あいているところの となりのタイルが うごかせるよ</div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方・あそび方</h2>
+    <ul>
+      <li><b>あいているマスのとなり</b>のタイルをおすと、そこへ すべっていくよ。<b>ならびを 1・2・3…のじゅんに</b>そろえたら クリア!</li>
+      <li>あいているマスと <b>たて・よこ が そろっている</b>タイルなら、はなれていても おせるよ。あいだのタイルも <b>いっしょに すべる</b>んだ。</li>
+      <li><b>キーボードの やじるしキー</b>でも うごかせるよ。</li>
+      <li>コツ:<b>上の段から じゅんに そろえる</b>のがおすすめ。1 と 2 をそろえたら、つぎは 3・4 …と、そろえた段はさわらないようにしよう。</li>
+      <li>むずかしいときは <b>3×3</b> から ちょうせん! <b>かんせい図を見る</b>で ゴールのならびを たしかめられるよ。</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const board = $('board');
+
+  // 写真の教具のような、あかるい24色
+  const COLORS = [
+    '#e53935', '#fb8c00', '#43a047', '#7e57c2',
+    '#ef6c00', '#66bb6a', '#26c6da', '#ab47bc',
+    '#9ccc65', '#4dd0e1', '#5c6bc0', '#4fc3f7',
+    '#d32f2f', '#ec407a', '#1565c0', '#ffa726',
+    '#26a69a', '#8d6e63', '#f06292', '#9575cd',
+    '#00acc1', '#7cb342', '#ff7043', '#5e35b1'
+  ];
+
+  const state = {
+    n: 4,
+    tiles: [],      // 位置 index -> タイル番号（0 は あき）
+    els: [],        // タイル番号 -> ボタン要素
+    moves: 0,
+    history: [],
+    startAt: null,
+    timer: null,
+    playing: false
+  };
+
+  const goalOf = (n) => Array.from({ length: n * n }, (_, i) => (i + 1) % (n * n));
+
+  // ---- 盤をつくる --------------------------------------------------------
+  function build(n) {
+    state.n = n;
+    state.tiles = goalOf(n);
+    state.els = [];
+    board.innerHTML = '';
+    board.classList.remove('clear', 'peek');
+
+    for (let v = 1; v < n * n; v++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tile';
+      b.textContent = v;
+      b.style.setProperty('--c', COLORS[(v - 1) % COLORS.length]);
+      b.addEventListener('click', () => onTileClick(v));
+      board.appendChild(b);
+      state.els[v] = b;
+    }
+    layout();
+    stopTimer();
+    state.moves = 0; state.history = []; state.playing = false;
+    updateStats();
+    $('msg').textContent = 'シャッフルボタンで はじめよう!';
+    $('msg').className = 'msg';
+    $('sub').textContent = 'あいているところの となりのタイルが うごかせるよ';
+  }
+
+  // タイルの大きさ・位置を、いまの並びに合わせる
+  function layout() {
+    const n = state.n;
+    const gapPct = 1.6;                       // タイルどうしのすきま(%)
+    const cell = 100 / n;
+    const size = cell - gapPct;
+    const fs = Math.max(16, (board.clientWidth || 400) * (0.5 / n));
+    state.tiles.forEach((v, idx) => {
+      if (v === 0) return;
+      const el = state.els[v];
+      const r = Math.floor(idx / n), c = idx % n;
+      el.style.width = size + '%';
+      el.style.height = size + '%';
+      el.style.left = (c * cell + gapPct / 2) + '%';
+      el.style.top = (r * cell + gapPct / 2) + '%';
+      el.style.fontSize = fs + 'px';
+    });
+  }
+
+  // ---- うごかす ----------------------------------------------------------
+  const blankIndex = () => state.tiles.indexOf(0);
+
+  // クリックしたタイルから あきマスまで、同じ行/列なら まとめてスライド
+  function indicesToSlide(from) {
+    const n = state.n, blank = blankIndex();
+    const fr = Math.floor(from / n), fc = from % n;
+    const br = Math.floor(blank / n), bc = blank % n;
+    if (from === blank) return null;
+    if (fr !== br && fc !== bc) return null;
+    const list = [];
+    if (fr === br) {
+      const step = fc < bc ? 1 : -1;
+      for (let c = bc - step; ; c -= step) { list.push(fr * n + c); if (c === fc) break; }
+    } else {
+      const step = fr < br ? 1 : -1;
+      for (let r = br - step; ; r -= step) { list.push(r * n + fc); if (r === fr) break; }
+    }
+    return list;   // あきマスに近い順
+  }
+
+  function slide(from, record = true) {
+    const list = indicesToSlide(from);
+    if (!list || list.length === 0) return false;
+    const blankBefore = blankIndex();
+    let blank = blankBefore;
+    list.forEach(idx => {                      // あきマスに近い方から順ぐりに動かす
+      state.tiles[blank] = state.tiles[idx];
+      state.tiles[idx] = 0;
+      blank = idx;
+    });
+    if (record) {
+      state.history.push(blankBefore);         // もどすときは もとのあきマスへ スライドし直す
+      state.moves++;
+      if (!state.playing) startPlay();
+      updateStats();
+    }
+    layout();
+    return true;
+  }
+
+  function onTileClick(v) {
+    if (board.classList.contains('peek')) return;
+    const idx = state.tiles.indexOf(v);
+    if (!slide(idx)) return;
+    checkClear();
+  }
+
+  function undo() {
+    if (!state.history.length) return;
+    // 直前に動かした列を、逆方向にスライドし直す
+    slide(state.history.pop(), false);
+    state.moves = Math.max(0, state.moves - 1);
+    updateStats();
+    board.classList.remove('clear');
+    if ($('msg').classList.contains('clear')) {
+      $('msg').textContent = 'もういちど ならべよう!';
+      $('msg').className = 'msg';
+    }
+  }
+
+  // ---- シャッフル（かならず とける並びになる） ---------------------------
+  function shuffle() {
+    const n = state.n;
+    state.tiles = goalOf(n);
+    let prev = -1;
+    const times = n * n * 20;
+    for (let t = 0; t < times; t++) {
+      const blank = blankIndex();
+      const r = Math.floor(blank / n), c = blank % n;
+      const cand = [];
+      if (r > 0) cand.push(blank - n);
+      if (r < n - 1) cand.push(blank + n);
+      if (c > 0) cand.push(blank - 1);
+      if (c < n - 1) cand.push(blank + 1);
+      const pick = cand.filter(x => x !== prev);
+      const from = (pick.length ? pick : cand)[Math.floor(Math.random() * (pick.length ? pick.length : cand.length))];
+      prev = blank;
+      state.tiles[blank] = state.tiles[from];
+      state.tiles[from] = 0;
+    }
+    if (isClear()) shuffle();                  // まぐれで そろっていたら やり直し
+    layout();
+    board.classList.remove('clear');
+    state.moves = 0; state.history = [];
+    stopTimer(); state.startAt = null; state.playing = false;
+    updateStats();
+    $('msg').textContent = 'タイルをおして うごかそう!';
+    $('msg').className = 'msg';
+    $('sub').textContent = '1手めを うごかすと じかんが スタートするよ';
+  }
+
+  const isClear = () => state.tiles.every((v, i) => v === (i + 1) % (state.n * state.n));
+
+  function checkClear() {
+    if (!isClear()) return;
+    stopTimer();
+    state.playing = false;
+    board.classList.add('clear');
+    $('msg').textContent = '🎉 かんせい! おめでとう!';
+    $('msg').className = 'msg clear';
+    $('sub').textContent = `${state.moves}てすう / ${fmt(elapsed())} でクリア!`;
+  }
+
+  // ---- じかん・ひょうじ --------------------------------------------------
+  const elapsed = () => state.startAt ? Math.floor((Date.now() - state.startAt) / 1000) : 0;
+  const fmt = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+
+  function startPlay() {
+    state.playing = true;
+    state.startAt = Date.now();
+    stopTimer();
+    state.timer = setInterval(() => { $('time').textContent = fmt(elapsed()); }, 500);
+  }
+  function stopTimer() { if (state.timer) { clearInterval(state.timer); state.timer = null; } }
+  function updateStats() {
+    $('moves').textContent = state.moves;
+    $('time').textContent = fmt(elapsed());
+  }
+
+  // ---- ボタン・キーボード ------------------------------------------------
+  $('btnShuffle').addEventListener('click', shuffle);
+  $('btnUndo').addEventListener('click', undo);
+  $('size').addEventListener('change', () => { build(+$('size').value); shuffle(); });
+
+  const peekBtn = $('btnPeek');
+  let peekTimer = null;
+  peekBtn.addEventListener('click', () => {
+    if (board.classList.contains('peek')) return;
+    const keep = state.tiles.slice();
+    state.tiles = goalOf(state.n);
+    layout();
+    board.classList.add('peek');
+    clearTimeout(peekTimer);
+    peekTimer = setTimeout(() => {
+      state.tiles = keep;
+      layout();
+      board.classList.remove('peek');
+    }, 1600);
+  });
+
+  window.addEventListener('keydown', (e) => {
+    const n = state.n, blank = blankIndex();
+    const r = Math.floor(blank / n), c = blank % n;
+    let from = -1;
+    if (e.key === 'ArrowLeft'  && c < n - 1) from = blank + 1;   // 右のタイルが左へ
+    if (e.key === 'ArrowRight' && c > 0)     from = blank - 1;
+    if (e.key === 'ArrowUp'    && r < n - 1) from = blank + n;
+    if (e.key === 'ArrowDown'  && r > 0)     from = blank - n;
+    if (from < 0) return;
+    e.preventDefault();
+    if (slide(from)) checkClear();
+  });
+
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(layout, 120);
+  });
+
+  build(4);
+  shuffle();
+})();
+</script>
+
+</body>
+</html>
