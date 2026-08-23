@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>歴史年表スクロール</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e8f0e8 0%, #c8d8d0 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #2e5d50; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #1b4332; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #2e5d50; text-align: center; }
+  .panel { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 10px; }
+
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    border: 2px solid #a5c4b5; background: #fff; border-radius: 12px;
+    padding: 8px 16px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: #2e5d50; border-color: #2e5d50; color: #fff; }
+
+  .card { background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+
+  .chip-row { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; }
+  .chip {
+    border: 2px solid #a5c4b5; background: #fff; border-radius: 999px;
+    padding: 5px 11px; font-size: 0.85rem; font-weight: bold; color: #333; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: #2e5d50; border-color: #2e5d50; color: #fff; }
+  .chip.era { border-width: 2px; }
+  .chip.era.active { color: #fff; }
+
+  /* ===== 年表 ===== */
+  .tl-bar { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .tl-bar .lbl { font-size: 0.82rem; font-weight: bold; color: #2e5d50; }
+  .zoom-btn {
+    border: 2px solid #a5c4b5; background: #fff; border-radius: 10px;
+    width: 40px; height: 34px; font-size: 1.1rem; font-weight: bold; color: #2e5d50;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .zoom-btn:disabled { opacity: 0.4; cursor: default; }
+
+  .tl-wrap {
+    overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+    background: #eef5f0; border-radius: 12px; padding: 8px 0 4px;
+    border: 1px solid #d7e2da;
+  }
+  .tl-inner { position: relative; }
+  .tl-era {
+    position: absolute; top: 0; height: 30px; border-radius: 5px;
+    display: flex; align-items: center; overflow: hidden;
+    color: #fff; font-size: 0.76rem; font-weight: bold; cursor: pointer; white-space: nowrap;
+  }
+  .tl-era .nm { position: sticky; left: 8px; padding: 0 6px; }
+  .tl-era.dim { opacity: 0.45; }
+  .tl-tick { position: absolute; top: 32px; width: 1px; height: 7px; background: #9bb3a7; }
+  .tl-tick.major { height: 12px; background: #6d8f80; }
+  .tl-year { position: absolute; top: 44px; font-size: 0.62rem; color: #6d8f80; transform: translateX(-50%); white-space: nowrap; }
+  .tl-axis { position: absolute; height: 3px; background: #6d8f80; border-radius: 2px; left: 0; }
+  .tl-dot {
+    position: absolute; width: 13px; height: 13px; border-radius: 50%;
+    border: 2px solid #fff; cursor: pointer; transform: translate(-50%, -50%);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3); touch-action: manipulation; z-index: 3;
+  }
+  .tl-dot.sel { width: 19px; height: 19px; border-width: 3px; z-index: 4; }
+  .tl-lead { position: absolute; width: 1px; background: #b9cdc3; z-index: 1; }
+  .tl-lab {
+    position: absolute; font-size: 0.63rem; line-height: 1.25; color: #234; cursor: pointer;
+    background: #fff; border: 1px solid #cfe0d6; border-radius: 6px; padding: 2px 4px;
+    touch-action: manipulation; z-index: 2;
+  }
+  .tl-lab .ly { font-weight: bold; color: #2e5d50; display: block; font-size: 0.6rem; }
+  .tl-lab.sel { border-color: #ef6c00; background: #fff3e0; font-weight: bold; z-index: 5; }
+  .tl-hint { font-size: 0.78rem; color: #6d8f80; text-align: center; margin-top: 6px; }
+
+  .ev-detail {
+    margin-top: 10px; background: #eef5f0; border-radius: 12px; padding: 12px; min-height: 96px;
+  }
+  .ev-detail .e-badge { font-size: 0.78rem; color: #fff; border-radius: 999px; padding: 2px 10px; display: inline-block; font-weight: bold; }
+  .ev-detail .e-year { font-size: 1.05rem; font-weight: bold; color: #2e5d50; margin-left: 8px; }
+  .ev-detail .e-title { font-size: 1.2rem; font-weight: bold; color: #1b4332; margin-top: 6px; line-height: 1.35; }
+  .ev-detail .e-desc { font-size: 0.95rem; color: #333; line-height: 1.65; margin-top: 5px; }
+  .ev-nav { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 10px; }
+  .lg { font-size: 0.7rem; color: #fff; border-radius: 999px; padding: 2px 9px; font-weight: bold; }
+
+  /* ===== クイズ ===== */
+  .hud {
+    display: flex; gap: 16px; justify-content: center; align-items: center; flex-wrap: wrap;
+    font-size: 0.95rem; font-weight: bold; color: #333; margin-top: 8px;
+  }
+  .hud .val { color: #2e5d50; }
+  .hud label { font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+
+  .stage {
+    position: relative; margin-top: 8px;
+    background: #eef5f0; border-radius: 14px; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 330px;
+  }
+  .q-ev { font-size: 1.2rem; font-weight: bold; color: #1b4332; background: #fff; border-radius: 12px; padding: 14px 18px; text-align: center; line-height: 1.45; max-width: 480px; }
+  .q-ask { text-align: center; font-size: 0.9rem; color: #4b7d6b; }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 520px; }
+  .choices.one { grid-template-columns: 1fr; }
+  .choice {
+    border: 2px solid #a5c4b5; background: #fff; border-radius: 12px;
+    padding: 10px 8px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation; display: flex; align-items: center; justify-content: center;
+    min-height: 56px; text-align: center; line-height: 1.4;
+  }
+  .choice.long { font-size: 0.9rem; text-align: left; justify-content: flex-start; }
+  .choice:active { transform: translateY(1px); }
+  .choice.correct { background: #c8e6c9; border-color: #2e7d32; }
+  .choice.wrong { background: #ffcdd2; border-color: #c62828; }
+  .mark { font-size: 1.25rem; min-height: 1.7rem; font-weight: bold; text-align: center; line-height: 1.4; }
+  .mark.ok { color: #2e7d32; }
+  .mark.ng { color: #c62828; }
+  .stage.miss-flash { animation: missShake 0.25s; }
+  @keyframes missShake { 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+  .word-count { font-size: 0.85rem; color: #888; }
+
+  /* ===== ならべかえ ===== */
+  .sort-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 10px; }
+  .sort-axis { display: flex; justify-content: space-between; width: 100%; font-size: 0.85rem; font-weight: bold; color: #2e5d50; }
+  .sort-row { display: flex; gap: 6px; justify-content: center; flex-wrap: nowrap; width: 100%; }
+  .s-card {
+    flex: 1 1 0; min-width: 0; max-width: 150px;
+    border: 2px solid #d7e2da; border-radius: 12px; background: #fff;
+    padding: 6px 4px; text-align: center; cursor: grab; touch-action: none; user-select: none;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .s-card .s-band { width: 100%; height: 6px; border-radius: 3px; background: #ccc; }
+  .s-card .s-name { font-size: 0.72rem; font-weight: bold; color: #1b4332; line-height: 1.3; }
+  .s-card .s-year { font-size: 0.68rem; color: #fff; border-radius: 999px; padding: 1px 6px; font-weight: bold; }
+  .s-card .s-year.hide { visibility: hidden; }
+  .s-card.picked { border-color: #ef6c00; background: #fff3e0; }
+  .s-card.dragging { opacity: 0.5; }
+  .s-card.ok { border-color: #2e7d32; background: #c8e6c9; }
+  .s-card.ng { border-color: #c62828; background: #ffcdd2; }
+  .sort-msg { font-size: 1rem; font-weight: bold; min-height: 1.6rem; text-align: center; line-height: 1.6; }
+  .sort-msg.ok { color: #2e7d32; }
+  .sort-msg.ng { color: #c62828; }
+
+  .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .act-btn {
+    border: none; background: #2e5d50; color: #fff; border-radius: 12px;
+    padding: 11px 24px; font-size: 1.02rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn.sub { background: #fff; color: #2e5d50; border: 2px solid #a5c4b5; box-shadow: none; }
+
+  .overlay {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.96); border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    text-align: center; z-index: 5; cursor: pointer; padding: 12px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay .big { font-size: 1.7rem; font-weight: bold; color: #1b4332; }
+  .overlay .stars { font-size: 2.2rem; letter-spacing: 6px; }
+  .overlay .detail { font-size: 1rem; color: #444; line-height: 1.6; }
+  .overlay .review {
+    font-size: 0.88rem; color: #b71c1c; line-height: 1.7; max-height: 140px; overflow-y: auto;
+    background: #ffebee; border-radius: 10px; padding: 6px 14px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .overlay .go { font-size: 1rem; color: #2e5d50; font-weight: bold; margin-top: 4px; }
+
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #1b4332; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .help .note { margin-top: 8px; font-size: 0.8rem; color: #777; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>📜 歴史年表スクロール</h1>
+<p class="subtitle">縄文から令和まで、横にスクロールして歴史の流れをつかもう!</p>
+
+<div class="panel">
+
+  <div class="mode-row">
+    <button class="mode-btn active" data-mode="tl">📜 年表</button>
+    <button class="mode-btn" data-mode="quiz">❓ クイズ</button>
+    <button class="mode-btn" data-mode="sort">🔀 ならべかえ</button>
+  </div>
+
+  <div id="content"></div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>年表</b>:年表は<b>横にスクロール</b>できます。長さは実際の年数どおりなので、<b>時代の長さのちがい</b>がひと目でわかります(江戸265年に対して安土桃山は30年!)。</li>
+      <li>丸やふきだしをタップすると、そのできごとのくわしい説明が下に出ます。</li>
+      <li>上の時代ボタンをおすと、その時代へジャンプします。＋−で大きさを変えられます。</li>
+      <li><b>クイズ</b>:「できごと → 時代」「時代 → できごと」「できごと → 年(むずかしい)」の3方向で10問チャレンジ!</li>
+      <li><b>ならべかえ</b>:5つのできごとを<b>古い順(左が古い)</b>にならべかえよう。ドラッグでも、2まいタップの入れかえでも動かせます。</li>
+    </ul>
+    <p class="note">※ 縄文時代は約1万年つづくため、年表では左はしを省略して表示しています。年代は教科書でよく使われるものにそろえています(1192年など、別の考え方がある年は説明にそえました)。</p>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const ROUND = 10;
+  const SORT_N = 5;
+
+  // ===== 時代 [key, 名前, 始まり, 終わり, 色] =====
+  const ERAS = [
+    ['jomon',     '縄文',     -1000, -300, '#8d6e63'],
+    ['yayoi',     '弥生',      -300,  250, '#a1887f'],
+    ['kofun',     '古墳',       250,  592, '#9575cd'],
+    ['asuka',     '飛鳥',       592,  710, '#7e57c2'],
+    ['nara',      '奈良',       710,  794, '#26a69a'],
+    ['heian',     '平安',       794, 1185, '#ec407a'],
+    ['kamakura',  '鎌倉',      1185, 1333, '#5c6bc0'],
+    ['muromachi', '室町',      1333, 1573, '#66bb6a'],
+    ['azuchi',    '安土桃山',  1573, 1603, '#ef5350'],
+    ['edo',       '江戸',      1603, 1868, '#5d4037'],
+    ['meiji',     '明治',      1868, 1912, '#f57c00'],
+    ['taisho',    '大正',      1912, 1926, '#c0a000'],
+    ['showa',     '昭和',      1926, 1989, '#0288d1'],
+    ['heisei',    '平成',      1989, 2019, '#00897b'],
+    ['reiwa',     '令和',      2019, 2026, '#7cb342']
+  ].map(([key, name, from, to, color], i) => ({ key, name, from, to, color, order: i }));
+  const eraOf = Object.fromEntries(ERAS.map(e => [e.key, e]));
+  const Y_MIN = -1000, Y_MAX = 2026;
+
+  // ===== できごと [年, 名前, 時代, 説明] =====
+  const RAW = [
+    [-1000, '縄文のむらでのくらし', 'jomon', '土器を使い、狩りや漁、木の実の採集でくらした。青森県の三内丸山遺跡など大きなむらのあとが見つかっている。縄文時代は約1万年つづいた。'],
+    [-300, '米づくりが広まる', 'yayoi', '大陸から稲作が伝わった。米をたくわえるようになり、むらとむらの争いから「くに」ができていった。静岡県の登呂遺跡など。'],
+    [57, '奴国の王が漢に使いを送る', 'yayoi', '中国(漢)の皇帝から「漢委奴国王」ときざまれた金印をもらった。江戸時代に福岡県の志賀島で見つかった。'],
+    [239, '卑弥呼が魏に使いを送る', 'yayoi', '邪馬台国の女王・卑弥呼が中国(魏)に使いを送り、王の称号と金印、銅鏡をもらった。'],
+    [350, '大和政権が国土を統一していく', 'kofun', '大王を中心とする大和政権が力をのばした。各地に前方後円墳などの大きな古墳がつくられた。'],
+    [538, '仏教が伝わる', 'kofun', '朝鮮半島の百済から仏教が伝えられた(552年という説もある)。'],
+    [593, '聖徳太子が政治を行う', 'asuka', '推古天皇の摂政となり、天皇中心の国づくりをめざした。'],
+    [603, '冠位十二階を定める', 'asuka', '家がらではなく能力で位を決めるしくみ。聖徳太子が定めた。'],
+    [604, '十七条の憲法を定める', 'asuka', '役人の心がまえを示した。「和をもって貴しとなす」で始まる。'],
+    [607, '遣隋使を送る・法隆寺を建てる', 'asuka', '小野妹子を隋へ送り、対等な立場でつきあおうとした。法隆寺は現存する世界最古の木造建築。'],
+    [645, '大化の改新が始まる', 'asuka', '中大兄皇子と中臣鎌足が蘇我氏をたおし、天皇中心の国づくりをすすめた。'],
+    [701, '大宝律令ができる', 'asuka', '中国にならった法律。全国を治めるしくみが整い、税(租・調・庸)が定められた。'],
+    [710, '都を平城京にうつす', 'nara', '奈良に、中国の長安をまねた都がつくられた。ここから奈良時代。'],
+    [743, '大仏をつくる命令が出される', 'nara', '聖武天皇が「大仏をつくる詔」を出した。行基が多くの人々を集めて協力した。'],
+    [752, '東大寺の大仏が完成する', 'nara', '大仏開眼の式が行われた。高さ約15メートル。'],
+    [754, '鑑真が来日する', 'nara', '何度も失敗し目が見えなくなりながら来日し、正しい仏教のきまりを伝えた。のちに唐招提寺を開いた。'],
+    [770, '万葉集がまとめられる', 'nara', '天皇から農民まで、いろいろな人の歌 約4500首を集めた歌集。'],
+    [794, '都を平安京にうつす', 'heian', '桓武天皇が京都に都をうつした。ここから約400年の平安時代。'],
+    [894, '遣唐使をやめる', 'heian', '菅原道真の意見でとりやめになった。これ以降、日本風の文化(国風文化)が育った。'],
+    [1000, '『源氏物語』『枕草子』が書かれる', 'heian', 'かな文字を使って、紫式部が『源氏物語』を、清少納言が『枕草子』を書いた。'],
+    [1016, '藤原道長が摂政になる', 'heian', 'むすめを天皇のきさきにして、藤原氏の力が最も強くなった。'],
+    [1167, '平清盛が太政大臣になる', 'heian', '武士として初めて太政大臣に。中国(宋)との貿易で栄えた。'],
+    [1185, '壇ノ浦の戦いで平氏がほろびる', 'heian', '源義経らが平氏をやぶった。同じ年、源頼朝は守護・地頭を置いた。'],
+    [1192, '源頼朝が征夷大将軍になる', 'kamakura', '鎌倉に幕府を開き、武士の政治が始まった。(1185年に幕府が成立したという考え方もある)'],
+    [1274, '元が攻めてくる(文永の役)', 'kamakura', '執権・北条時宗のとき、元(モンゴル)の大軍がせめてきた。'],
+    [1281, '元が再び攻めてくる(弘安の役)', 'kamakura', '御家人の戦いと暴風雨で元軍を退けた。2度をまとめて元寇という。'],
+    [1338, '足利尊氏が室町幕府を開く', 'muromachi', '京都に幕府が開かれた。ここから室町時代。'],
+    [1397, '足利義満が金閣を建てる', 'muromachi', '京都の北山に建てた。明との貿易も始め、幕府の力が最も強かったころ。'],
+    [1467, '応仁の乱が起こる', 'muromachi', '11年間つづいて京都が焼け、幕府の力がおとろえた。ここから戦国の世に。'],
+    [1489, '足利義政が銀閣を建てる', 'muromachi', '京都の東山に建てた。書院造は今の和室のもとになった。'],
+    [1543, '鉄砲が伝わる', 'muromachi', '種子島に流れ着いたポルトガル人が鉄砲を伝えた。戦い方が大きく変わった。'],
+    [1549, 'キリスト教が伝わる', 'muromachi', 'フランシスコ・ザビエルが鹿児島に来て、キリスト教を初めて伝えた。'],
+    [1573, '室町幕府がほろびる', 'azuchi', '織田信長が将軍・足利義昭を京都から追放した。'],
+    [1575, '長篠の戦い', 'azuchi', '織田信長・徳川家康の連合軍が鉄砲を大量に使い、武田軍をやぶった。'],
+    [1582, '本能寺の変', 'azuchi', '織田信長が家臣の明智光秀にせめられ、天下統一のとちゅうでたおれた。'],
+    [1590, '豊臣秀吉が全国を統一する', 'azuchi', '検地と刀狩をおこない、武士と百姓の身分を分けた。'],
+    [1600, '関ヶ原の戦い', 'edo', '徳川家康が勝ち、全国を治める力をにぎった。'],
+    [1603, '江戸幕府が開かれる', 'edo', '徳川家康が征夷大将軍になった。約260年つづく江戸時代の始まり。'],
+    [1635, '参勤交代の制度ができる', 'edo', '徳川家光が定めた。大名は1年おきに江戸と領地を行き来し、費用がかさんだ。'],
+    [1639, '鎖国が完成する', 'edo', 'ポルトガル船の来航を禁止。長崎の出島でオランダ・中国とだけ貿易した。'],
+    [1774, '『解体新書』が出される', 'edo', '杉田玄白らがオランダ語の人体の本を訳した。ここから蘭学が広まった。'],
+    [1821, '正確な日本地図が完成する', 'edo', '伊能忠敬が全国を歩いて測量した地図。忠敬の死後に弟子たちが完成させた。'],
+    [1853, 'ペリーが来航する', 'edo', 'アメリカの黒船4せきが浦賀に来て、開国をせまった。'],
+    [1854, '日米和親条約を結ぶ', 'edo', '下田と函館を開き、約200年つづいた鎖国が終わった。'],
+    [1858, '日米修好通商条約を結ぶ', 'edo', '関税自主権がなく、領事裁判権を認める不平等な条約だった。'],
+    [1867, '大政奉還', 'edo', '15代将軍・徳川慶喜が政権を朝廷に返した。江戸幕府が終わった。'],
+    [1868, '明治維新が始まる', 'meiji', '五箇条の御誓文が出され、新しい国づくりが始まった。'],
+    [1871, '廃藩置県', 'meiji', '藩をやめて県を置き、政府が全国を直接治めるようにした。'],
+    [1872, '学制・鉄道の開通', 'meiji', '6才以上の子は学校へ通うことに。新橋〜横浜に鉄道が開通した。'],
+    [1877, '西南戦争', 'meiji', '西郷隆盛を中心とする士族の反乱。政府軍がしずめた。'],
+    [1889, '大日本帝国憲法ができる', 'meiji', '伊藤博文が中心となってつくった。翌年、第1回帝国議会が開かれた。'],
+    [1894, '日清戦争が起こる', 'meiji', '同じ年、陸奥宗光が領事裁判権(治外法権)をなくすことに成功した。'],
+    [1904, '日露戦争が起こる', 'meiji', '東郷平八郎が日本海海戦で勝利。翌年、小村寿太郎がポーツマス条約を結んだ。'],
+    [1911, '関税自主権を回復する', 'meiji', '小村寿太郎が実現し、不平等条約の改正が完成した。'],
+    [1914, '第一次世界大戦が始まる', 'taisho', '日本も参加した。大戦景気で工業が発展した。'],
+    [1923, '関東大震災', 'taisho', '東京・横浜が大きな被害を受けた。'],
+    [1925, '男子の普通選挙が実現する', 'taisho', '25才以上のすべての男子に選挙権があたえられた。'],
+    [1931, '満州事変が起こる', 'showa', '日本の軍が中国東北部で戦いを始めた。'],
+    [1937, '日中戦争が始まる', 'showa', '中国との戦争が全面的に広がった。'],
+    [1941, '太平洋戦争が始まる', 'showa', 'アメリカ・イギリスなどとの戦争が始まった。'],
+    [1945, '広島・長崎に原子爆弾・戦争が終わる', 'showa', '8月6日に広島、9日に長崎へ原子爆弾が落とされ、8月15日に戦争が終わった。'],
+    [1946, '日本国憲法が公布される', 'showa', '国民主権・基本的人権の尊重・平和主義の3つが原則。翌1947年5月3日から施行された。'],
+    [1951, 'サンフランシスコ平和条約', 'showa', '48か国と結び、翌年、日本は独立を回復した。'],
+    [1956, '国際連合に加盟する', 'showa', '国際社会に復帰した。'],
+    [1964, '東京オリンピックが開かれる', 'showa', '東海道新幹線も開通。高度経済成長のまっただ中だった。'],
+    [1972, '沖縄が日本に復帰する', 'showa', '27年ぶりにアメリカから返された。'],
+    [1995, '阪神・淡路大震災', 'heisei', '兵庫県を中心に大きな被害が出た。ボランティア活動が広がった。'],
+    [2011, '東日本大震災', 'heisei', '地震と津波で東北地方を中心に大きな被害が出た。'],
+    [2021, '東京オリンピック・パラリンピック', 'reiwa', '感染症の広がりで1年延期して開かれた。']
+  ];
+  const EV = RAW.map(([year, name, era, desc], i) => ({ id: i, year, name, era, desc }))
+                .sort((a, b) => a.year - b.year);
+
+  const fmtYear = (y) => y < 0 ? `紀元前${-y}年` : `${y}年`;
+  const fmtYearShort = (y) => y < 0 ? `前${-y}` : `${y}`;
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  // ===== 音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    const chk = $('chkSound');
+    if (chk && !chk.checked) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type, vol] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      gn.gain.setValueAtTime(vol || 0.15, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // ===== 状態 =====
+  const st = {
+    mode: 'tl',
+    zoom: 1, sel: EV.findIndex(e => e.year === 1603),
+    qmode: 'ev2era',
+    qs: [], qi: 0, tries: 0, miss: 0, wrong: [], playing: false, lock: false,
+    startT: 0, timerId: null,
+    sortList: [], sortPick: -1, sortDone: false, sortScore: 0, sortTotal: 0
+  };
+  const ZOOMS = [1.1, 2.2, 4.4];
+
+  // ===== 年表 =====
+  const LABW = 108;
+  function renderTL() {
+    $('content').innerHTML = `
+      <div class="card">
+        <div class="tl-bar">
+          <span class="lbl">大きさ</span>
+          <button class="zoom-btn" id="zOut">−</button>
+          <button class="zoom-btn" id="zIn">＋</button>
+          <span class="lbl">時代へジャンプ</span>
+        </div>
+        <div class="chip-row" id="eraChips">
+          ${ERAS.map(e => `<button class="chip era" data-jump="${e.key}" style="border-color:${e.color}">${e.name}</button>`).join('')}
+        </div>
+        <div class="tl-wrap" id="tlWrap"><div class="tl-inner" id="tlInner"></div></div>
+        <p class="tl-hint" id="tlHint"></p>
+        <div class="ev-detail" id="evDetail"></div>
+        <div class="ev-nav">
+          <button class="act-btn sub" id="evPrev">◀ 前のできごと</button>
+          <button class="act-btn sub" id="evNext">次のできごと ▶</button>
+        </div>
+        <div class="legend">
+          ${ERAS.map(e => `<span class="lg" style="background:${e.color}">${e.name} ${fmtYearShort(e.from)}〜</span>`).join('')}
+        </div>
+      </div>`;
+    drawTL();
+    document.querySelectorAll('[data-jump]').forEach(b => b.addEventListener('click', () => jumpTo(b.dataset.jump)));
+    $('zIn').addEventListener('click', () => { st.zoom = Math.min(2, st.zoom + 1); drawTL(); centerSel(); });
+    $('zOut').addEventListener('click', () => { st.zoom = Math.max(0, st.zoom - 1); drawTL(); centerSel(); });
+    $('evPrev').addEventListener('click', () => { st.sel = (st.sel - 1 + EV.length) % EV.length; drawTL(); centerSel(); });
+    $('evNext').addEventListener('click', () => { st.sel = (st.sel + 1) % EV.length; drawTL(); centerSel(); });
+    centerSel();
+  }
+  function drawTL() {
+    const sc = ZOOMS[st.zoom];
+    const W = (Y_MAX - Y_MIN) * sc;
+    const X = (y) => (y - Y_MIN) * sc;
+
+    // いちばん小さいズームは「ぜんたい見わたし」。ふきだしは出さず、丸だけ表示する
+    const showLabels = st.zoom > 0;
+    const labX = (y) => Math.max(0, Math.min(W - LABW, X(y) - 6));
+
+    // ふきだしの段(レーン)を決める
+    const laneEnd = [];
+    const lanes = EV.map(e => {
+      const left = labX(e.year);
+      let i = 0;
+      while (laneEnd[i] !== undefined && laneEnd[i] > left) i++;
+      laneEnd[i] = left + LABW + 5;
+      return i;
+    });
+    const nLane = laneEnd.length;
+    const TOP = 64, LANE_H = 40;
+    const H = showLabels ? TOP + nLane * LANE_H + 8 : TOP + 26;
+
+    const inner = $('tlInner');
+    inner.style.width = W + 'px';
+    inner.style.height = H + 'px';
+
+    let html = '';
+    for (const e of ERAS) {
+      const l = X(e.from), w = Math.max(3, X(e.to) - X(e.from));
+      const label = w > 26 ? `<span class="nm">${e.name}</span>` : '';
+      html += `<div class="tl-era" data-era="${e.key}" style="left:${l}px;width:${w}px;background:${e.color}" title="${e.name}">${label}</div>`;
+    }
+    const step = sc >= 4 ? 50 : sc >= 2 ? 100 : 200;
+    for (let y = -1000; y <= 2000; y += step) {
+      const major = y % (step * 2) === 0;
+      html += `<div class="tl-tick ${major ? 'major' : ''}" style="left:${X(y)}px"></div>`;
+      if (major) {
+        const px = X(y);
+        const edge = px < 24 ? 'left:2px;transform:none' : `left:${px}px`;
+        html += `<div class="tl-year" style="${edge}">${fmtYearShort(y)}</div>`;
+      }
+    }
+    html += `<div class="tl-axis" style="top:60px;width:${W}px"></div>`;
+    EV.forEach((e, i) => {
+      const x = X(e.year), c = eraOf[e.era].color, sel = i === st.sel;
+      if (showLabels) {
+        const lx = labX(e.year), ly = TOP + lanes[i] * LANE_H + 6;
+        html += `<div class="tl-lead" style="left:${x}px;top:60px;height:${ly - 60}px"></div>`;
+        html += `<div class="tl-lab ${sel ? 'sel' : ''}" data-ev="${i}" style="left:${lx}px;top:${ly}px;width:${LABW}px">
+          <span class="ly">${fmtYear(e.year)}</span>${esc(e.name)}</div>`;
+      }
+      html += `<div class="tl-dot ${sel ? 'sel' : ''}" data-ev="${i}" style="left:${x}px;top:60px;background:${c}"></div>`;
+    });
+    inner.innerHTML = html;
+
+    inner.querySelectorAll('[data-ev]').forEach(el => el.addEventListener('click', () => {
+      st.sel = +el.dataset.ev;
+      drawTL();
+    }));
+    inner.querySelectorAll('[data-era]').forEach(el => el.addEventListener('click', () => {
+      const first = EV.findIndex(e => e.era === el.dataset.era);
+      if (first >= 0) { st.sel = first; drawTL(); centerSel(); }
+    }));
+    $('zIn') && ($('zIn').disabled = st.zoom >= 2);
+    $('zOut') && ($('zOut').disabled = st.zoom <= 0);
+    if ($('tlHint')) $('tlHint').textContent = showLabels
+      ? '← 横にスクロールできます。丸やふきだしをタップしてみよう →'
+      : '「ぜんたい見わたし」中。− のとなりの ＋ をおすと、できごとの名前が出ます';
+    drawDetail();
+  }
+  function drawDetail() {
+    const e = EV[st.sel], er = eraOf[e.era];
+    $('evDetail').innerHTML = `
+      <span class="e-badge" style="background:${er.color}">${er.name}時代</span>
+      <span class="e-year">${fmtYear(e.year)}</span>
+      <div class="e-title">${esc(e.name)}</div>
+      <div class="e-desc">${esc(e.desc)}</div>`;
+  }
+  function centerSel() {
+    const wrap = $('tlWrap');
+    if (!wrap) return;
+    const x = (EV[st.sel].year - Y_MIN) * ZOOMS[st.zoom];
+    wrap.scrollLeft = Math.max(0, x - wrap.clientWidth / 2);
+  }
+  function jumpTo(eraKey) {
+    const i = EV.findIndex(e => e.era === eraKey);
+    if (i >= 0) { st.sel = i; drawTL(); centerSel(); }
+  }
+
+  // ===== クイズ =====
+  function renderQuizShell() {
+    $('content').innerHTML = `
+      <div class="card">
+        <div class="chip-row">
+          <button class="chip ${st.qmode === 'ev2era' ? 'active' : ''}" data-qm="ev2era">できごと → 時代</button>
+          <button class="chip ${st.qmode === 'era2ev' ? 'active' : ''}" data-qm="era2ev">時代 → できごと</button>
+          <button class="chip ${st.qmode === 'ev2year' ? 'active' : ''}" data-qm="ev2year">できごと → 年(むずかしい)</button>
+          <button class="chip ${st.qmode === 'mix' ? 'active' : ''}" data-qm="mix">ミックス</button>
+        </div>
+        <div class="hud">
+          <span>もんだい <span class="val" id="hudWord">-</span></span>
+          <span>ミス <span class="val" id="hudMiss">0</span></span>
+          <span>タイム <span class="val" id="hudTime">0:00</span></span>
+          <label><input type="checkbox" id="chkSound" checked> 音</label>
+        </div>
+        <div class="stage" id="stage">
+          <div class="word-count" id="wordCount"></div>
+          <div id="qArea"></div>
+          <div class="choices" id="choices"></div>
+          <div class="mark" id="mark"></div>
+          <div class="overlay" id="overlay">
+            <div class="big" id="ovTitle">歴史年表クイズ</div>
+            <div class="stars" id="ovStars"></div>
+            <div class="detail" id="ovDetail">10問チャレンジ!</div>
+            <div class="review" id="ovReview" style="display:none"></div>
+            <div class="go">タップ(スペースキー)でスタート!</div>
+          </div>
+        </div>
+      </div>`;
+    document.querySelectorAll('[data-qm]').forEach(b => b.addEventListener('click', () => {
+      st.qmode = b.dataset.qm;
+      stopQuiz();
+      renderQuizShell();
+    }));
+    $('overlay').addEventListener('pointerdown', () => { if (!st.playing) newRound(); });
+  }
+  function stopQuiz() { st.playing = false; clearInterval(st.timerId); }
+  function newRound() {
+    const dirs = ['ev2era', 'era2ev', 'ev2year'];
+    st.qs = shuffle([...EV]).slice(0, ROUND).map(e => ({
+      e, dir: st.qmode === 'mix' ? dirs[Math.floor(Math.random() * 3)] : st.qmode
+    }));
+    st.qi = 0; st.miss = 0; st.wrong = []; st.playing = true; st.lock = false;
+    st.startT = Date.now();
+    clearInterval(st.timerId);
+    st.timerId = setInterval(() => {
+      const s = Math.floor((Date.now() - st.startT) / 1000);
+      $('hudTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }, 500);
+    $('hudTime').textContent = '0:00';
+    $('hudMiss').textContent = '0';
+    $('overlay').classList.add('hidden');
+    loadQ();
+  }
+  function eraChoices(e) {
+    const picks = [e.era];
+    const near = ERAS.filter(x => x.key !== e.era)
+      .sort((a, b) => Math.abs(a.order - eraOf[e.era].order) - Math.abs(b.order - eraOf[e.era].order))
+      .slice(0, 4);
+    shuffle(near);
+    while (picks.length < 4 && near.length) picks.push(near.pop().key);
+    return shuffle(picks);
+  }
+  function evChoices(e) {
+    const picks = [e];
+    const other = shuffle(EV.filter(x => x.era !== e.era));
+    while (picks.length < 4 && other.length) {
+      const c = other.pop();
+      if (!picks.some(p => p.era === c.era)) picks.push(c);
+    }
+    return shuffle(picks);
+  }
+  function yearChoices(e) {
+    const set = new Set([e.year]);
+    const near = shuffle(EV.filter(x => x.id !== e.id && Math.abs(x.year - e.year) <= 200));
+    while (set.size < 4 && near.length) set.add(near.pop().year);
+    const offs = [-100, -50, -30, 30, 50, 100, 200, -200];
+    while (set.size < 4) set.add(e.year + offs[Math.floor(Math.random() * offs.length)]);
+    return shuffle([...set]);
+  }
+  function loadQ() {
+    st.tries = 0; st.lock = false;
+    const q = st.qs[st.qi], e = q.e;
+    $('wordCount').textContent = `もんだい ${st.qi + 1} / ${ROUND}`;
+    $('hudWord').textContent = `${st.qi + 1}/${ROUND}`;
+    $('mark').textContent = ''; $('mark').className = 'mark';
+    const box = $('choices');
+    if (q.dir === 'ev2era') {
+      $('qArea').innerHTML = `<div class="q-ev">${esc(e.name)}</div><div class="q-ask">これはいつの時代のできごと?</div>`;
+      box.className = 'choices';
+      box.innerHTML = eraChoices(e).map(k =>
+        `<button class="choice" data-v="${k}" ${k === e.era ? 'data-ok="1"' : ''}
+          style="border-color:${eraOf[k].color}">${eraOf[k].name}時代</button>`).join('');
+    } else if (q.dir === 'era2ev') {
+      const er = eraOf[e.era];
+      $('qArea').innerHTML = `<div class="q-ev" style="color:${er.color}">${er.name}時代</div><div class="q-ask">この時代に起きたできごとはどれ?</div>`;
+      box.className = 'choices one';
+      box.innerHTML = evChoices(e).map(x =>
+        `<button class="choice long" data-v="${x.id}" ${x.id === e.id ? 'data-ok="1"' : ''}>${esc(x.name)}</button>`).join('');
+    } else {
+      $('qArea').innerHTML = `<div class="q-ev">${esc(e.name)}</div><div class="q-ask">これは何年のできごと?</div>`;
+      box.className = 'choices';
+      box.innerHTML = yearChoices(e).map(y =>
+        `<button class="choice" data-v="${y}" ${y === e.year ? 'data-ok="1"' : ''}>${fmtYear(y)}</button>`).join('');
+    }
+    document.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => answer(b)));
+  }
+  function rightAnswerText(q) {
+    if (q.dir === 'ev2era') return eraOf[q.e.era].name + '時代';
+    if (q.dir === 'era2ev') return q.e.name;
+    return fmtYear(q.e.year);
+  }
+  function answer(btn) {
+    if (!st.playing || st.lock) return;
+    const q = st.qs[st.qi];
+    if (btn.dataset.ok) {
+      sndOK();
+      btn.classList.add('correct');
+      $('mark').innerHTML = `⭕ せいかい! <span style="font-size:0.9rem;font-weight:normal">${fmtYear(q.e.year)}・${eraOf[q.e.era].name}時代</span>`;
+      $('mark').className = 'mark ok';
+      st.lock = true;
+      setTimeout(() => { st.qi++; st.qi >= ROUND ? finish() : loadQ(); }, 900);
+    } else {
+      sndNG();
+      st.miss++; st.tries++;
+      $('hudMiss').textContent = st.miss;
+      btn.classList.add('wrong');
+      setTimeout(() => btn.classList.remove('wrong'), 700);
+      const stage = $('stage');
+      stage.classList.remove('miss-flash'); void stage.offsetWidth;
+      stage.classList.add('miss-flash');
+      if (!st.wrong.some(w => w.id === q.e.id)) st.wrong.push(q.e);
+      if (st.tries >= 3) {
+        document.querySelector('.choice[data-ok]').classList.add('correct');
+        $('mark').textContent = `❌ せいかいは「${rightAnswerText(q)}」`;
+        $('mark').className = 'mark ng';
+        st.lock = true;
+        setTimeout(() => { st.qi++; st.qi >= ROUND ? finish() : loadQ(); }, 2200);
+      } else {
+        $('mark').textContent = '❌ もういちど!';
+        $('mark').className = 'mark ng';
+      }
+    }
+  }
+  function finish() {
+    st.playing = false;
+    clearInterval(st.timerId);
+    const sec = Math.floor((Date.now() - st.startT) / 1000);
+    const acc = Math.round(ROUND / (ROUND + st.miss) * 100);
+    const stars = st.miss === 0 ? 3 : acc >= 80 ? 2 : 1;
+    $('ovTitle').textContent = ['', 'クリア!', 'すごい!🎉', 'かんぺき!👑'][stars];
+    $('ovStars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+    $('ovDetail').innerHTML = `タイム ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} / ミス ${st.miss}回 / せいかくりつ ${acc}%`;
+    const rv = $('ovReview');
+    if (st.wrong.length) {
+      rv.style.display = '';
+      rv.innerHTML = '<b>ふりかえり</b>' + st.wrong.map(e =>
+        `<span>${fmtYear(e.year)}(${eraOf[e.era].name}) ${esc(e.name)}</span>`).join('');
+    } else rv.style.display = 'none';
+    $('overlay').classList.remove('hidden');
+    sndDone();
+  }
+
+  // ===== ならべかえ =====
+  function renderSortShell() {
+    $('content').innerHTML = `
+      <div class="card">
+        <div class="hud">
+          <span>せいかい <span class="val" id="sHudOk">0</span> / <span class="val" id="sHudAll">0</span></span>
+          <label><input type="checkbox" id="chkSound" checked> 音</label>
+        </div>
+        <div class="sort-wrap">
+          <div class="sort-axis"><span>⬅ むかし</span><span>いま ➡</span></div>
+          <div class="sort-row" id="sortRow"></div>
+          <div class="sort-msg" id="sortMsg"></div>
+          <div class="actions">
+            <button class="act-btn" id="btnCheck">こたえあわせ</button>
+            <button class="act-btn sub" id="btnNext">つぎの5もん</button>
+          </div>
+        </div>
+      </div>`;
+    $('btnCheck').addEventListener('click', checkSort);
+    $('btnNext').addEventListener('click', newSort);
+    newSort();
+  }
+  function newSort() {
+    // 時代がばらけるように、ちがう時代から5つえらぶ
+    const pool = shuffle([...EV]);
+    const picked = [], usedEra = new Set();
+    for (const e of pool) {
+      if (picked.length >= SORT_N) break;
+      if (usedEra.has(e.era)) continue;
+      usedEra.add(e.era); picked.push(e);
+    }
+    st.sortList = shuffle(picked);
+    st.sortPick = -1; st.sortDone = false;
+    $('sortMsg').textContent = ''; $('sortMsg').className = 'sort-msg';
+    drawSort();
+  }
+  function drawSort() {
+    $('sortRow').innerHTML = st.sortList.map((e, i) => `
+      <div class="s-card ${i === st.sortPick ? 'picked' : ''}" data-i="${i}">
+        <div class="s-band" style="background:${eraOf[e.era].color}"></div>
+        <div class="s-name">${esc(e.name)}</div>
+        <span class="s-year ${st.sortDone ? '' : 'hide'}" style="background:${eraOf[e.era].color}">${fmtYear(e.year)}</span>
+      </div>`).join('');
+    $('sHudOk').textContent = st.sortScore;
+    $('sHudAll').textContent = st.sortTotal;
+    if (!st.sortDone) document.querySelectorAll('.s-card').forEach(el => el.addEventListener('pointerdown', onSortDown));
+  }
+  let drag = null;
+  function onSortDown(ev) {
+    if (st.sortDone) return;
+    const el = ev.currentTarget;
+    drag = { from: +el.dataset.i, moved: false, el };
+    el.setPointerCapture(ev.pointerId);
+    el.classList.add('dragging');
+    el.addEventListener('pointermove', onSortMove);
+    el.addEventListener('pointerup', onSortUp);
+    el.addEventListener('pointercancel', onSortUp);
+  }
+  function onSortMove(ev) {
+    if (!drag) return;
+    const over = document.elementFromPoint(ev.clientX, ev.clientY);
+    const card = over && over.closest('.s-card');
+    if (!card) return;
+    const to = +card.dataset.i;
+    if (to === drag.from) return;
+    drag.moved = true;
+    const arr = st.sortList;
+    [arr[drag.from], arr[to]] = [arr[to], arr[drag.from]];
+    drag.from = to;
+    const keep = drag;
+    drawSort();
+    drag = keep;
+    const newEl = document.querySelector(`.s-card[data-i="${to}"]`);
+    if (newEl) { newEl.classList.add('dragging'); drag.el = newEl; }
+  }
+  function onSortUp() {
+    if (!drag) return;
+    const wasMoved = drag.moved, from = drag.from;
+    if (drag.el) drag.el.classList.remove('dragging');
+    drag = null;
+    if (wasMoved) { st.sortPick = -1; drawSort(); return; }
+    if (st.sortPick === -1) st.sortPick = from;
+    else if (st.sortPick === from) st.sortPick = -1;
+    else {
+      const arr = st.sortList;
+      [arr[st.sortPick], arr[from]] = [arr[from], arr[st.sortPick]];
+      st.sortPick = -1;
+    }
+    drawSort();
+  }
+  function checkSort() {
+    if (st.sortDone) return;
+    st.sortDone = true; st.sortPick = -1; st.sortTotal++;
+    const years = st.sortList.map(e => e.year);
+    const sorted = [...years].sort((a, b) => a - b);
+    const allOk = years.every((v, i) => v === sorted[i]);
+    drawSort();
+    document.querySelectorAll('.s-card').forEach((el, i) => {
+      el.classList.add(years[i] === sorted[i] ? 'ok' : 'ng');
+    });
+    const msg = $('sortMsg');
+    if (allOk) {
+      st.sortScore++;
+      $('sHudOk').textContent = st.sortScore;
+      msg.textContent = '⭕ 大せいかい! 古い順にならんでいます';
+      msg.className = 'sort-msg ok';
+      sndDone();
+    } else {
+      msg.innerHTML = '❌ おしい! 正しい順は<br>' +
+        [...st.sortList].sort((a, b) => a.year - b.year)
+          .map(e => `${esc(e.name)}(${fmtYear(e.year)})`).join(' → ');
+      msg.className = 'sort-msg ng';
+      sndNG();
+    }
+  }
+
+  window.addEventListener('keydown', (ev) => {
+    if (st.mode === 'quiz' && ev.key === ' ') {
+      ev.preventDefault();
+      if (!st.playing) newRound();
+    }
+  });
+
+  // ===== モード切りかえ =====
+  function renderAll() {
+    stopQuiz();
+    if (st.mode === 'tl') renderTL();
+    else if (st.mode === 'quiz') renderQuizShell();
+    else renderSortShell();
+  }
+  document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+    st.mode = b.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.toggle('active', x === b));
+    renderAll();
+  }));
+
+  renderAll();
+})();
+</script>
+
+</body>
+</html>
