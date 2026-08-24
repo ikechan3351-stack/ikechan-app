@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>画面提示ヘルパー</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: #10151b; color: #e8eef4;
+    margin: 0; display: flex; flex-direction: column; overflow: hidden;
+    touch-action: manipulation;
+  }
+
+  /* ===== 道具バー ===== */
+  #bar {
+    flex: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 7px 10px; background: #1a222c; border-bottom: 1px solid #2a3644;
+  }
+  #bar .home { color: #8fb4d4; text-decoration: none; font-size: 0.85rem; margin-right: 4px; }
+  .sep { width: 1px; height: 26px; background: #2f3d4d; margin: 0 4px; flex: none; }
+
+  .tool {
+    border: 1px solid #33455a; background: #212c38; color: #cfdbe6;
+    border-radius: 9px; padding: 8px 13px; font-size: 0.9rem; font-family: inherit;
+    cursor: pointer; white-space: nowrap; touch-action: manipulation;
+  }
+  .tool:hover { background: #2a3846; color: #fff; }
+  .tool.on { background: #3d7fb8; border-color: #3d7fb8; color: #fff; font-weight: bold; }
+  .tool.ghost { background: transparent; border-color: #2f3d4d; color: #9fb0c1; font-size: 0.82rem; padding: 7px 11px; }
+  .tool.ghost:hover { color: #fff; border-color: #4a5d72; }
+  .tool small { display: block; font-size: 0.66rem; opacity: 0.75; font-weight: normal; }
+
+  .opt { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #9fb0c1; }
+  .opt input[type=range] { width: 88px; accent-color: #5aa0d8; }
+  .opt select {
+    background: #212c38; color: #cfdbe6; border: 1px solid #33455a; border-radius: 7px;
+    padding: 5px 7px; font-family: inherit; font-size: 0.82rem;
+  }
+  #optArea { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #optArea:empty { display: none; }
+
+  /* ===== 舞台 ===== */
+  #stage { flex: 1; position: relative; overflow: hidden; background: #0b0f14; }
+  #media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; }
+  #media.on { display: block; }
+
+  #drop {
+    position: absolute; inset: 22px; border: 3px dashed #2f4054; border-radius: 20px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; text-align: center; padding: 20px; color: #7f93a8;
+  }
+  #drop.hide { display: none; }
+  #drop.over { border-color: #5aa0d8; background: rgba(90,160,216,0.08); }
+  #drop h2 { margin: 0; font-size: clamp(1.1rem, 3vw, 1.7rem); color: #cfdbe6; }
+  #drop p { margin: 0; font-size: 0.92rem; line-height: 1.8; }
+  #drop kbd {
+    background: #212c38; border: 1px solid #3b4d63; border-radius: 5px;
+    padding: 1px 6px; font-family: inherit; font-size: 0.85em; color: #cfdbe6;
+  }
+  #drop .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #drop .big {
+    border: none; background: #3d7fb8; color: #fff; border-radius: 11px;
+    padding: 12px 22px; font-size: 1rem; font-family: inherit; font-weight: bold; cursor: pointer;
+  }
+  #drop .big:hover { background: #4c92cd; }
+
+  /* かぶせる層 */
+  #dark { position: absolute; inset: 0; pointer-events: none; display: none; }
+  #dark.on { display: block; }
+  #lens {
+    position: absolute; border: 3px solid #f2f6fa; border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.5), 0 8px 26px rgba(0,0,0,0.6);
+    pointer-events: none; display: none; background: #0b0f14;
+  }
+  #lens.on { display: block; }
+  #lens.sq { border-radius: 10px; }
+
+  .hidebox {
+    position: absolute; background: #24313f; border: 1px solid #3a4b5e; border-radius: 4px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    color: #64788c; font-size: 0.8rem;
+  }
+  .hidebox:hover { background: #2d3d4d; color: #9fb0c1; }
+  .hidebox.dragging { opacity: 0.6; }
+
+  #shade { position: absolute; background: #171f28; display: none; }
+  #shade.on { display: block; }
+  #shade .handle {
+    position: absolute; background: #3d7fb8; display: flex; align-items: center;
+    justify-content: center; color: #fff; font-size: 0.8rem; cursor: grab; touch-action: none;
+  }
+  #shade.h .handle { left: 0; right: 0; height: 26px; }
+  #shade.v .handle { top: 0; bottom: 0; width: 26px; writing-mode: vertical-rl; }
+  #shade.d-top .handle { bottom: -26px; }
+  #shade.d-bottom .handle { top: -26px; }
+  #shade.d-left .handle { right: -26px; }
+  #shade.d-right .handle { left: -26px; }
+
+  #hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    background: rgba(15,21,28,0.9); border: 1px solid #33455a; border-radius: 999px;
+    padding: 7px 16px; font-size: 0.85rem; color: #b9c8d6; pointer-events: none;
+    max-width: 92%; text-align: center;
+    opacity: 1; transition: opacity 0.5s;
+  }
+  #hint.fade { opacity: 0; }
+  @media (prefers-reduced-motion: reduce) { #hint { transition: none; } }
+  #hint:empty { display: none; }
+
+  /* ===== タイマー ===== */
+  #timer {
+    position: absolute; right: 16px; bottom: 16px; display: none;
+    background: rgba(16,21,27,0.93); border: 1px solid #33455a; border-radius: 14px;
+    padding: 10px 14px; text-align: center; cursor: grab; touch-action: none;
+    box-shadow: 0 8px 26px rgba(0,0,0,0.5);
+  }
+  #timer.on { display: block; }
+  #tDisp {
+    font-size: clamp(2rem, 5vw, 3.4rem); font-weight: bold; line-height: 1;
+    font-variant-numeric: tabular-nums; color: #f2f6fa;
+  }
+  #tDisp.warn { color: #ffd166; }
+  #tDisp.last { color: #ff8a6b; }
+  #timer .btns { display: flex; gap: 5px; justify-content: center; margin-top: 8px; }
+  #timer .btns button {
+    border: 1px solid #33455a; background: #212c38; color: #cfdbe6; border-radius: 7px;
+    padding: 5px 10px; font-size: 0.78rem; font-family: inherit; cursor: pointer;
+  }
+  #timer .btns button:hover { background: #2a3846; color: #fff; }
+  #timer .presets { display: flex; gap: 4px; justify-content: center; margin-top: 5px; }
+  #timer .presets button {
+    border: 1px solid #2f3d4d; background: transparent; color: #8fa2b4; border-radius: 6px;
+    padding: 3px 8px; font-size: 0.72rem; font-family: inherit; cursor: pointer;
+  }
+  #timer .presets button:hover { color: #fff; border-color: #4a5d72; }
+
+  @media (max-width: 720px) {
+    .tool { padding: 7px 10px; font-size: 0.84rem; }
+    .tool small { display: none; }
+    #bar {
+      gap: 5px; padding: 6px 7px;
+      flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    #bar > *, #optArea > * { flex: none; }
+    #optArea { flex-wrap: nowrap; }
+  }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <a class="home" href="index.html">←</a>
+
+  <button class="tool" data-t="none" id="tNone">そのまま<small>ツールなし</small></button>
+  <button class="tool" data-t="spot">スポットライト<small>まわりを暗く</small></button>
+  <button class="tool" data-t="hide">かくす<small>ドラッグで目隠し</small></button>
+  <button class="tool" data-t="shade">シェード<small>板でおおう</small></button>
+  <button class="tool" data-t="zoom">拡大鏡<small>その場で大きく</small></button>
+
+  <div class="sep"></div>
+  <button class="tool ghost" id="bTimer">タイマー</button>
+  <button class="tool ghost" id="bFull">全画面</button>
+  <button class="tool ghost" id="bOpen">画像を開く</button>
+  <button class="tool ghost" id="bCap">画面を取り込む</button>
+  <button class="tool ghost" id="bClear">ぜんぶ消す</button>
+  <input type="file" id="file" accept="image/*" hidden>
+
+  <div class="sep"></div>
+  <div id="optArea"></div>
+</div>
+
+<div id="stage">
+  <img id="media" alt="提示中の画像">
+  <video id="video" style="display:none" playsinline muted></video>
+
+  <div id="drop">
+    <h2>教科書やノートの画像を、ここに置いてください</h2>
+    <p>
+      画像をドラッグ＆ドロップ　／　<kbd>Ctrl</kbd>＋<kbd>V</kbd> で貼り付け<br>
+      スクリーンショットを撮って貼り付けるのがいちばん速いです
+    </p>
+    <div class="row">
+      <button class="big" id="bOpen2">画像を選ぶ</button>
+      <button class="big" id="bCap2" style="background:#4a5d72">画面を取り込む</button>
+    </div>
+  </div>
+
+  <canvas id="dark"></canvas>
+  <canvas id="lens"></canvas>
+  <div id="shade"><div class="handle">▲▼ ドラッグ</div></div>
+  <div id="hint"></div>
+
+  <div id="timer">
+    <div id="tDisp">05:00</div>
+    <div class="btns">
+      <button id="tStart">開始</button>
+      <button id="tReset">戻す</button>
+      <button id="tMode">ストップウォッチ</button>
+      <button id="tClose">×</button>
+    </div>
+    <div class="presets" id="tPresets"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ========== 設定の保存 ========== */
+var KEY = "gamenHelper_v1";
+var cfg = { spotSize: 180, spotShape: "circle", spotDark: 0.82, zoom: 3, lensSize: 260, shadeDir: "top", timerMin: 5 };
+try {
+  var raw = localStorage.getItem(KEY);
+  if (raw) { var d = JSON.parse(raw); for (var k in cfg) if (d && d[k] !== undefined) cfg[k] = d[k]; }
+} catch (e) { /* 壊れていたら初期値 */ }
+function saveCfg() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) { /* 無視 */ } }
+
+/* ========== 要素 ========== */
+var stage = document.getElementById("stage");
+var media = document.getElementById("media");
+var video = document.getElementById("video");
+var drop = document.getElementById("drop");
+var dark = document.getElementById("dark");
+var lens = document.getElementById("lens");
+var shade = document.getElementById("shade");
+var hint = document.getElementById("hint");
+var optArea = document.getElementById("optArea");
+
+var srcEl = null;      // 表示中の元（img か video）
+var tool = "none";
+var pointer = { x: -9999, y: -9999, inside: false };
+var boxes = [];        // 目隠し（画像に対する 0〜1 の割合で持つ）
+var stream = null;
+
+/* ========== 元画像の表示位置を計算 ========== */
+function natural() {
+  if (!srcEl) return null;
+  var w = srcEl.tagName === "VIDEO" ? srcEl.videoWidth : srcEl.naturalWidth;
+  var h = srcEl.tagName === "VIDEO" ? srcEl.videoHeight : srcEl.naturalHeight;
+  return (w && h) ? { w: w, h: h } : null;
+}
+// object-fit: contain で実際に絵が出ている長方形
+function fitRect() {
+  var n = natural();
+  var sw = stage.clientWidth, sh = stage.clientHeight;
+  if (!n) return { x: 0, y: 0, w: sw, h: sh };
+  var s = Math.min(sw / n.w, sh / n.h);
+  var w = n.w * s, h = n.h * s;
+  return { x: (sw - w) / 2, y: (sh - h) / 2, w: w, h: h };
+}
+
+/* ========== 読み込み ========== */
+function showImage(url) {
+  stopCapture();
+  media.onload = function () {
+    srcEl = media;
+    media.classList.add("on");
+    video.style.display = "none";
+    drop.classList.add("hide");
+    boxes = [];
+    render();
+  };
+  media.src = url;
+}
+function fileToStage(f) {
+  if (!f || !/^image\//.test(f.type)) return;
+  var r = new FileReader();
+  r.onload = function () { showImage(String(r.result)); };
+  r.readAsDataURL(f);
+}
+document.getElementById("file").addEventListener("change", function (e) {
+  fileToStage(e.target.files && e.target.files[0]); e.target.value = "";
+});
+function pickFile() { document.getElementById("file").click(); }
+document.getElementById("bOpen").addEventListener("click", pickFile);
+document.getElementById("bOpen2").addEventListener("click", pickFile);
+
+stage.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("over"); });
+stage.addEventListener("dragleave", function () { drop.classList.remove("over"); });
+stage.addEventListener("drop", function (e) {
+  e.preventDefault(); drop.classList.remove("over");
+  var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  fileToStage(f);
+});
+document.addEventListener("paste", function (e) {
+  var items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf("image") === 0) { fileToStage(items[i].getAsFile()); break; }
+  }
+});
+
+/* ========== 画面の取り込み ========== */
+function stopCapture() {
+  if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+  video.style.display = "none";
+}
+async function startCapture() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    alert("このブラウザは画面の取り込みに対応していません。\n画像を貼り付けて使ってください。");
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    video.srcObject = stream;
+    await video.play();
+    srcEl = video;
+    media.classList.remove("on");
+    video.style.display = "block";
+    video.style.position = "absolute";
+    video.style.inset = "0";
+    video.style.width = "100%";
+    video.style.height = "100%";
+    video.style.objectFit = "contain";
+    drop.classList.add("hide");
+    boxes = [];
+    stream.getVideoTracks()[0].addEventListener("ended", function () {
+      stopCapture(); srcEl = null; drop.classList.remove("hide"); render();
+    });
+    setTimeout(render, 200);
+  } catch (e) {
+    // 取り消しただけの場合もここに来るので、何も言わない
+  }
+}
+document.getElementById("bCap").addEventListener("click", startCapture);
+document.getElementById("bCap2").addEventListener("click", startCapture);
+
+/* ========== 道具の切り替え ========== */
+var hintTimer = null;
+var HINTS = {
+  none: "",
+  spot: "動かすと、その場所だけが明るくなります。ホイールで大きさを変えられます",
+  hide: "かくしたいところをドラッグで囲みます。板をクリックするとめくれます",
+  shade: "青いバーをドラッグして、板を動かします",
+  zoom: "見たいところに合わせると、そこが大きく映ります"
+};
+function setTool(t) {
+  tool = t;
+  Array.prototype.forEach.call(document.querySelectorAll("#bar .tool[data-t]"), function (b) {
+    b.classList.toggle("on", b.getAttribute("data-t") === t);
+  });
+  dark.classList.toggle("on", t === "spot");
+  lens.classList.toggle("on", t === "zoom");
+  shade.classList.toggle("on", t === "shade");
+  hint.textContent = HINTS[t] || "";
+  hint.classList.remove("fade");
+  if (hintTimer) clearTimeout(hintTimer);
+  if (hint.textContent) hintTimer = setTimeout(function () { hint.classList.add("fade"); }, 6000);
+  stage.style.cursor = (t === "spot" || t === "zoom") ? "none" : (t === "hide" ? "crosshair" : "default");
+  buildOpts();
+  render();
+}
+Array.prototype.forEach.call(document.querySelectorAll("#bar .tool[data-t]"), function (b) {
+  b.addEventListener("click", function () { setTool(b.getAttribute("data-t")); });
+});
+
+/* ========== 道具ごとの調整つまみ ========== */
+function mkRange(label, min, max, step, val, on) {
+  var w = document.createElement("label"); w.className = "opt";
+  w.appendChild(document.createTextNode(label));
+  var r = document.createElement("input");
+  r.type = "range"; r.min = min; r.max = max; r.step = step; r.value = val;
+  r.addEventListener("input", function () { on(parseFloat(r.value)); });
+  w.appendChild(r);
+  return w;
+}
+function mkSelect(label, opts, val, on) {
+  var w = document.createElement("label"); w.className = "opt";
+  w.appendChild(document.createTextNode(label));
+  var s = document.createElement("select");
+  opts.forEach(function (o) {
+    var op = document.createElement("option");
+    op.value = o[0]; op.textContent = o[1];
+    if (o[0] === val) op.selected = true;
+    s.appendChild(op);
+  });
+  s.addEventListener("change", function () { on(s.value); });
+  w.appendChild(s);
+  return w;
+}
+function mkBtn(label, on) {
+  var b = document.createElement("button");
+  b.className = "tool ghost"; b.textContent = label;
+  b.addEventListener("click", on);
+  return b;
+}
+function buildOpts() {
+  optArea.innerHTML = "";
+  if (tool === "spot") {
+    optArea.appendChild(mkRange("大きさ", 60, 500, 10, cfg.spotSize, function (v) { cfg.spotSize = v; saveCfg(); render(); }));
+    optArea.appendChild(mkRange("暗さ", 0.3, 0.97, 0.01, cfg.spotDark, function (v) { cfg.spotDark = v; saveCfg(); render(); }));
+    optArea.appendChild(mkSelect("形", [["circle", "丸"], ["rect", "四角"]], cfg.spotShape, function (v) { cfg.spotShape = v; saveCfg(); render(); }));
+  } else if (tool === "zoom") {
+    optArea.appendChild(mkRange("倍率", 1.5, 6, 0.5, cfg.zoom, function (v) { cfg.zoom = v; saveCfg(); }));
+    optArea.appendChild(mkRange("窓の大きさ", 120, 520, 10, cfg.lensSize, function (v) { cfg.lensSize = v; saveCfg(); sizeLens(); }));
+    optArea.appendChild(mkSelect("形", [["circle", "丸"], ["rect", "四角"]], cfg.spotShape, function (v) {
+      cfg.spotShape = v; saveCfg(); lens.classList.toggle("sq", v === "rect");
+    }));
+  } else if (tool === "hide") {
+    optArea.appendChild(mkBtn("全部もどす", function () { boxes = []; render(); }));
+    optArea.appendChild(mkBtn("最後を取り消す", function () { boxes.pop(); render(); }));
+  } else if (tool === "shade") {
+    optArea.appendChild(mkSelect("向き", [["top", "上から"], ["bottom", "下から"], ["left", "左から"], ["right", "右から"]],
+      cfg.shadeDir, function (v) { cfg.shadeDir = v; shadePos = 0.45; saveCfg(); render(); }));
+  }
+}
+
+/* ========== 描画 ========== */
+function sizeCanvas(c) {
+  var dpr = window.devicePixelRatio || 1;
+  var w = stage.clientWidth, h = stage.clientHeight;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
+    c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+    c.style.width = w + "px"; c.style.height = h + "px";
+  }
+  var ctx = c.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+function drawSpot() {
+  var ctx = sizeCanvas(dark);
+  var w = stage.clientWidth, h = stage.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "rgba(6,9,13," + cfg.spotDark + ")";
+  ctx.fillRect(0, 0, w, h);
+  if (!pointer.inside) return;
+  ctx.globalCompositeOperation = "destination-out";
+  var r = cfg.spotSize;
+  if (cfg.spotShape === "circle") {
+    var g = ctx.createRadialGradient(pointer.x, pointer.y, r * 0.72, pointer.x, pointer.y, r);
+    g.addColorStop(0, "rgba(0,0,0,1)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(pointer.x, pointer.y, r, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = "rgba(0,0,0,1)";
+    ctx.fillRect(pointer.x - r, pointer.y - r * 0.62, r * 2, r * 1.24);
+  }
+  ctx.globalCompositeOperation = "source-over";
+}
+
+function sizeLens() {
+  var dpr = window.devicePixelRatio || 1;
+  var s = cfg.lensSize;
+  lens.style.width = s + "px"; lens.style.height = s + "px";
+  lens.width = Math.round(s * dpr); lens.height = Math.round(s * dpr);
+  lens.classList.toggle("sq", cfg.spotShape === "rect");
+}
+function drawLens() {
+  if (!srcEl || !pointer.inside) { lens.style.opacity = "0"; return; }
+  lens.style.opacity = "1";
+  var s = cfg.lensSize;
+  if (lens.style.width !== s + "px") sizeLens();
+  var dpr = window.devicePixelRatio || 1;
+  var ctx = lens.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, s, s);
+
+  var n = natural(); if (!n) return;
+  var r = fitRect();
+  var scale = r.w / n.w;                 // 画面上の1px ＝ 元画像の 1/scale px
+  var srcW = s / (cfg.zoom * scale);     // 元画像から切り出す幅
+  var sx = (pointer.x - r.x) / scale - srcW / 2;
+  var sy = (pointer.y - r.y) / scale - srcW / 2;
+  try { ctx.drawImage(srcEl, sx, sy, srcW, srcW, 0, 0, s, s); } catch (e) { /* 読み込み前は無視 */ }
+
+  // 中心の十字
+  ctx.strokeStyle = "rgba(255,80,80,0.75)"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(s / 2 - 9, s / 2); ctx.lineTo(s / 2 + 9, s / 2);
+  ctx.moveTo(s / 2, s / 2 - 9); ctx.lineTo(s / 2, s / 2 + 9);
+  ctx.stroke();
+
+  var half = s / 2;
+  lens.style.left = Math.round(pointer.x - half) + "px";
+  lens.style.top = Math.round(pointer.y - half) + "px";
+}
+
+function drawBoxes() {
+  Array.prototype.forEach.call(stage.querySelectorAll(".hidebox"), function (e) { e.remove(); });
+  var r = fitRect();
+  boxes.forEach(function (b, i) {
+    var d = document.createElement("div");
+    d.className = "hidebox";
+    d.style.left = (r.x + b.x * r.w) + "px";
+    d.style.top = (r.y + b.y * r.h) + "px";
+    d.style.width = (b.w * r.w) + "px";
+    d.style.height = (b.h * r.h) + "px";
+    if (b.w * r.w > 70 && b.h * r.h > 26) d.textContent = "クリックでめくる";
+    d.addEventListener("click", function (ev) { ev.stopPropagation(); boxes.splice(i, 1); render(); });
+    stage.appendChild(d);
+  });
+}
+
+var shadePos = 0.45;   // 板がおおう割合
+function drawShade() {
+  if (tool !== "shade") return;
+  var w = stage.clientWidth, h = stage.clientHeight;
+  var dir = cfg.shadeDir;
+  shade.className = "on " + (dir === "top" || dir === "bottom" ? "h" : "v") + " d-" + dir;
+  var css;
+  if (dir === "top") css = "left:0;right:0;top:0;bottom:auto;width:auto;height:" + (h * shadePos) + "px";
+  else if (dir === "bottom") css = "left:0;right:0;bottom:0;top:auto;width:auto;height:" + (h * shadePos) + "px";
+  else if (dir === "left") css = "top:0;bottom:0;left:0;right:auto;height:auto;width:" + (w * shadePos) + "px";
+  else css = "top:0;bottom:0;right:0;left:auto;height:auto;width:" + (w * shadePos) + "px";
+  shade.style.cssText = css;
+}
+
+var rafPending = false;
+function render() {
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(function () {
+    rafPending = false;
+    if (tool === "spot") drawSpot();
+    if (tool === "zoom") drawLens();
+    drawBoxes();
+    drawShade();
+  });
+}
+// 動画のときは動き続けるので回し続ける
+(function loop() {
+  if (srcEl === video && stream && (tool === "zoom")) drawLens();
+  requestAnimationFrame(loop);
+})();
+
+/* ========== ポインタ操作 ========== */
+function pt(e) {
+  var r = stage.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+stage.addEventListener("pointermove", function (e) {
+  var p = pt(e);
+  pointer.x = p.x; pointer.y = p.y; pointer.inside = true;
+  if (tool === "spot" || tool === "zoom") render();
+  if (dragBox) updateDragBox(p);
+});
+stage.addEventListener("pointerleave", function () { pointer.inside = false; render(); });
+stage.addEventListener("wheel", function (e) {
+  if (tool === "spot") { e.preventDefault(); cfg.spotSize = Math.max(60, Math.min(500, cfg.spotSize - e.deltaY * 0.35)); saveCfg(); buildOpts(); render(); }
+  else if (tool === "zoom") { e.preventDefault(); cfg.zoom = Math.max(1.5, Math.min(6, cfg.zoom - e.deltaY * 0.004)); saveCfg(); buildOpts(); render(); }
+}, { passive: false });
+
+/* --- 目隠しを描く --- */
+var dragBox = null, dragStart = null, ghost = null;
+stage.addEventListener("pointerdown", function (e) {
+  if (tool !== "hide") return;
+  if (e.target.classList.contains("hidebox")) return;
+  var p = pt(e);
+  dragStart = p; dragBox = true;
+  ghost = document.createElement("div");
+  ghost.className = "hidebox dragging";
+  stage.appendChild(ghost);
+  stage.setPointerCapture(e.pointerId);
+});
+function updateDragBox(p) {
+  if (!ghost) return;
+  var x = Math.min(p.x, dragStart.x), y = Math.min(p.y, dragStart.y);
+  ghost.style.left = x + "px"; ghost.style.top = y + "px";
+  ghost.style.width = Math.abs(p.x - dragStart.x) + "px";
+  ghost.style.height = Math.abs(p.y - dragStart.y) + "px";
+}
+stage.addEventListener("pointerup", function (e) {
+  if (!dragBox) return;
+  var p = pt(e);
+  var x = Math.min(p.x, dragStart.x), y = Math.min(p.y, dragStart.y);
+  var w = Math.abs(p.x - dragStart.x), h = Math.abs(p.y - dragStart.y);
+  if (ghost) { ghost.remove(); ghost = null; }
+  dragBox = null;
+  if (w > 12 && h > 12) {
+    var r = fitRect();
+    boxes.push({ x: (x - r.x) / r.w, y: (y - r.y) / r.h, w: w / r.w, h: h / r.h });
+  }
+  render();
+});
+
+/* --- シェードを動かす --- */
+(function () {
+  var handle = shade.querySelector(".handle");
+  var moving = false;
+  handle.addEventListener("pointerdown", function (e) {
+    moving = true; handle.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  handle.addEventListener("pointermove", function (e) {
+    if (!moving) return;
+    var p = pt(e);
+    var w = stage.clientWidth, h = stage.clientHeight;
+    var v;
+    if (cfg.shadeDir === "top") v = p.y / h;
+    else if (cfg.shadeDir === "bottom") v = 1 - p.y / h;
+    else if (cfg.shadeDir === "left") v = p.x / w;
+    else v = 1 - p.x / w;
+    shadePos = Math.max(0, Math.min(1, v));
+    drawShade();
+  });
+  handle.addEventListener("pointerup", function () { moving = false; });
+})();
+
+/* ========== タイマー ========== */
+var timer = document.getElementById("timer");
+var tDisp = document.getElementById("tDisp");
+var tMode = document.getElementById("tMode");
+var tStart = document.getElementById("tStart");
+var tState = { mode: "down", running: false, endAt: 0, leftMs: cfg.timerMin * 60000, upMs: 0, upFrom: 0 };
+var tTick = null, audioCtx = null;
+
+function beep(times) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    for (var i = 0; i < times; i++) {
+      var t0 = audioCtx.currentTime + i * 0.28;
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(i === times - 1 ? 1046 : 784, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.28, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.24);
+      o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 0.26);
+    }
+  } catch (e) { /* 無視 */ }
+}
+function fmt(ms, down) {
+  if (ms < 0) ms = 0;
+  // 数えるときは切り上げ（残り0.4秒でも「01」）、数え上げるときは切り捨て
+  var s = down ? Math.ceil(ms / 1000) : Math.floor(ms / 1000);
+  var m = Math.floor(s / 60);
+  s %= 60;
+  return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+}
+function tPaint() {
+  var ms = tState.mode === "down"
+    ? (tState.running ? tState.endAt - Date.now() : tState.leftMs)
+    : (tState.running ? tState.upMs + (Date.now() - tState.upFrom) : tState.upMs);
+  tDisp.textContent = fmt(ms, tState.mode === "down");
+  tDisp.className = tState.mode === "down"
+    ? (ms <= 10000 ? "last" : (ms <= 60000 ? "warn" : ""))
+    : "";
+  if (tState.mode === "down" && tState.running && ms <= 0) {
+    tState.running = false; tState.leftMs = 0; tStart.textContent = "開始";
+    beep(3);
+  }
+}
+function tLoop() { tPaint(); }
+document.getElementById("bTimer").addEventListener("click", function () {
+  timer.classList.toggle("on");
+  document.getElementById("bTimer").classList.toggle("on", timer.classList.contains("on"));
+  if (timer.classList.contains("on") && !tTick) { tTick = setInterval(tLoop, 200); tPaint(); }
+});
+document.getElementById("tClose").addEventListener("click", function () {
+  timer.classList.remove("on");
+  document.getElementById("bTimer").classList.remove("on");
+});
+tStart.addEventListener("click", function () {
+  if (tState.running) {
+    if (tState.mode === "down") tState.leftMs = tState.endAt - Date.now();
+    else tState.upMs += Date.now() - tState.upFrom;
+    tState.running = false; tStart.textContent = "開始";
+  } else {
+    if (tState.mode === "down") {
+      if (tState.leftMs <= 0) tState.leftMs = cfg.timerMin * 60000;
+      tState.endAt = Date.now() + tState.leftMs;
+    } else tState.upFrom = Date.now();
+    tState.running = true; tStart.textContent = "止める";
+    beep(1);
+  }
+  tPaint();
+});
+document.getElementById("tReset").addEventListener("click", function () {
+  tState.running = false; tStart.textContent = "開始";
+  tState.leftMs = cfg.timerMin * 60000; tState.upMs = 0;
+  tPaint();
+});
+tMode.addEventListener("click", function () {
+  tState.mode = tState.mode === "down" ? "up" : "down";
+  tState.running = false; tStart.textContent = "開始";
+  tState.leftMs = cfg.timerMin * 60000; tState.upMs = 0;
+  tMode.textContent = tState.mode === "down" ? "ストップウォッチ" : "カウントダウン";
+  document.getElementById("tPresets").style.display = tState.mode === "down" ? "flex" : "none";
+  tPaint();
+});
+(function () {
+  var wrap = document.getElementById("tPresets");
+  [1, 3, 5, 10].forEach(function (m) {
+    var b = document.createElement("button");
+    b.textContent = m + "分";
+    b.addEventListener("click", function () {
+      cfg.timerMin = m; saveCfg();
+      tState.running = false; tStart.textContent = "開始";
+      tState.leftMs = m * 60000; tPaint();
+    });
+    wrap.appendChild(b);
+  });
+})();
+// タイマーを好きな場所へ
+(function () {
+  var moving = false, off = null;
+  timer.addEventListener("pointerdown", function (e) {
+    if (e.target.tagName === "BUTTON") return;
+    moving = true;
+    var r = timer.getBoundingClientRect(), s = stage.getBoundingClientRect();
+    off = { x: e.clientX - r.left, y: e.clientY - r.top, sx: s.left, sy: s.top };
+    timer.setPointerCapture(e.pointerId);
+  });
+  timer.addEventListener("pointermove", function (e) {
+    if (!moving) return;
+    timer.style.left = (e.clientX - off.sx - off.x) + "px";
+    timer.style.top = (e.clientY - off.sy - off.y) + "px";
+    timer.style.right = "auto"; timer.style.bottom = "auto";
+  });
+  timer.addEventListener("pointerup", function () { moving = false; });
+})();
+
+/* ========== その他のボタン ========== */
+document.getElementById("bFull").addEventListener("click", function () {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  } catch (e) { /* 無視 */ }
+});
+document.getElementById("bClear").addEventListener("click", function () {
+  boxes = []; shadePos = 0.45; setTool("none");
+  stopCapture(); srcEl = null;
+  media.classList.remove("on"); media.removeAttribute("src");
+  drop.classList.remove("hide");
+  render();
+});
+
+document.addEventListener("keydown", function (e) {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  var map = { "1": "none", "2": "spot", "3": "hide", "4": "shade", "5": "zoom" };
+  if (map[e.key]) { setTool(map[e.key]); }
+  else if (e.key === "Escape") setTool("none");
+  else if (e.key === "f" || e.key === "F") document.getElementById("bFull").click();
+  else if (e.key === "t" || e.key === "T") document.getElementById("bTimer").click();
+  else if ((e.key === "r" || e.key === "R") && tool === "hide") { boxes = []; render(); }
+});
+
+window.addEventListener("resize", function () { sizeLens(); render(); });
+// 道具バーの高さが変わると舞台の大きさも変わるので、その都度置き直す
+if (window.ResizeObserver) new ResizeObserver(function () { render(); }).observe(stage);
+
+/* ========== 起動 ========== */
+sizeLens();
+setTool("none");
+document.getElementById("tPresets").style.display = "flex";
+tPaint();
+</script>
+</body>
+</html>
