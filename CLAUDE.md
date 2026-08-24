@@ -23,6 +23,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 作業ルール（教材HTMLの開発）
 
+- **作業を始める前に必ず `git pull --rebase` する**：このリポジトリは、べつのパソコンやべつの作業でも更新されることがある。先に取りこんでおかないと、push が拒否されて後から直すことになる。
+- **push が拒否されたら、絶対に強制 push（`--force`）しない**：リモートに知らない変更があるということ。`git fetch` してから `git log origin/main` で中身を確かめ、重なるファイルがなければ `git rebase origin/main` で自分のコミットを上に載せ直す。重なっていたら、どう直すかをユーザーに相談する。強制 push は相手の作業を消してしまう。
 - **公開の仕組み**：このフォルダは公開リポジトリ `ikechan-app` に直結している。`git push` すると `https://ikechan3351-stack.github.io/ikechan-app/` が自動更新され、世界中から見えるようになる。
 - **push する前に必ずブラウザで動作確認する**：内蔵ブラウザで実際にHTMLを開き、ボタン操作やエラーの有無を確認してから push すること。公開ページの不具合を防ぐため。
 - **新しい教材を作ったら `index.html`（トップページ）にもリンクを追加する**：教科・学年のセクション分けに合わせて配置する。
