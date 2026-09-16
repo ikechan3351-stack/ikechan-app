@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>因数チェック</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e3f2fd 0%, #bbdefb 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #1565c0; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #0d47a1; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.88rem; color: #1565c0; text-align: center; }
+  .panel { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 10px; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+
+  /* ===== せっていのチップ ===== */
+  .set-row { display: flex; gap: 6px; justify-content: center; align-items: center; flex-wrap: wrap; margin-bottom: 7px; }
+  .set-row .lbl { font-size: 0.82rem; color: #607d8b; font-weight: bold; }
+  .chip {
+    border: 2px solid #90caf9; background: #fff; border-radius: 999px;
+    padding: 6px 13px; font-size: 0.95rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: #1565c0; border-color: #1565c0; color: #fff; }
+  .set-row.hidden { display: none; }
+
+  .hud {
+    display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap;
+    font-size: 0.95rem; font-weight: bold; color: #333; margin-top: 8px;
+  }
+  .hud .val { color: #0d47a1; }
+  .hud label { font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+
+  /* ===== ステージ ===== */
+  .stage {
+    position: relative; margin-top: 8px;
+    background: #eaf4fe; border-radius: 14px; padding: 14px 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .stage.miss-flash { animation: missShake 0.25s; }
+  @keyframes missShake { 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+
+  /* ===== かけ算の表 ===== */
+  .board-wrap { display: flex; justify-content: center; flex: 0 0 auto; }
+  .side { width: 100%; text-align: center; }
+  @media (min-width: 700px) {
+    .stage { flex-direction: row; align-items: center; justify-content: center; gap: 16px; }
+    .side { width: auto; flex: 1 1 230px; max-width: 280px; }
+    .side .q-area { margin-top: 0; }
+    .side .q-line { font-size: 1.5rem; gap: 5px; }
+    .side .q-line .grp { gap: 5px; }
+    .side .q-line .qm { padding: 2px 12px; }
+    .side .q-line .tg { padding: 2px 12px; min-width: 64px; }
+  }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(var(--cols), var(--cw));
+    gap: 3px;
+    user-select: none; -webkit-user-select: none;
+  }
+  .cell {
+    width: var(--cw); height: var(--cw);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: bold; font-size: calc(var(--cw) * 0.48); line-height: 1;
+    color: #fff; background: #1e88e5; border-radius: 4px;
+    touch-action: manipulation;
+    transition: background 0.3s, transform 0.3s;
+  }
+  .cell.open { cursor: pointer; }
+  .cell.head { background: #e53935; }
+  .cell.corner { background: #c62828; }
+  .cell.done { background: #0d47a1; cursor: default; }
+  .cell.d3 { font-size: calc(var(--cw) * 0.36); }
+  .cell.hit { background: #fdd835; color: #bf360c; transform: scale(1.14); transition: none; }
+  .cell.hint { animation: hintBlink 0.4s infinite alternate; }
+  @keyframes hintBlink { from { background: #1e88e5; } to { background: #fdd835; } }
+
+  /* ===== もんだい ===== */
+  .q-area { margin-top: 12px; text-align: center; width: 100%; }
+  .q-line {
+    font-size: 1.9rem; font-weight: bold; color: #0d47a1;
+    display: flex; align-items: center; justify-content: center; gap: 7px; flex-wrap: wrap;
+  }
+  .q-line .qm {
+    background: #fff; color: #90a4ae; border-radius: 10px; padding: 2px 18px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.12);
+  }
+  .q-line .grp { display: inline-flex; align-items: center; gap: 7px; }
+  .q-line .op { color: #f9a825; }
+  .q-line .tg {
+    background: #fff; color: #0d47a1; border-radius: 10px; padding: 2px 18px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.12); min-width: 84px;
+  }
+  .q-sub { font-size: 1rem; color: #1565c0; font-weight: bold; margin-top: 6px; }
+  .found-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 6px; min-height: 28px; }
+  .fchip { background: #cfe3f7; color: #78909c; border-radius: 999px; padding: 3px 12px; font-size: 0.95rem; font-weight: bold; }
+  .fchip.ok { background: #1565c0; color: #fff; }
+  .mark { font-size: 1.15rem; min-height: 1.6rem; font-weight: bold; margin-top: 4px; }
+  .mark.ok { color: #2e7d32; }
+  .mark.ng { color: #c62828; }
+
+  /* ===== オーバーレイ ===== */
+  .overlay {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.96); border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    text-align: center; z-index: 5; cursor: pointer; padding: 10px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay .big { font-size: 1.5rem; font-weight: bold; color: #0d47a1; }
+  .overlay .stamp { font-size: 3rem; }
+  .overlay .detail { font-size: 1rem; color: #444; line-height: 1.7; }
+  .overlay .go { font-size: 0.95rem; color: #1565c0; font-weight: bold; }
+  .overlay .newbest {
+    font-size: 1.05rem; font-weight: bold; color: #e65100;
+    background: #fff8e1; border: 2px solid #ffb300; border-radius: 10px; padding: 4px 14px;
+  }
+
+  .btn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+  .act-btn {
+    border: none; background: #1565c0; color: #fff; border-radius: 12px;
+    padding: 10px 24px; font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn.sub { background: #fff; color: #1565c0; border: 2px solid #90caf9; box-shadow: none; }
+  .best-line { text-align: center; font-size: 0.88rem; color: #607d8b; font-weight: bold; margin-top: 8px; }
+
+  .help {
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #0d47a1; }
+  .help ul { margin: 0; padding-left: 20px; }
+
+  @media (max-width: 480px) {
+    .q-line { font-size: 1.7rem; }
+    .chip { padding: 5px 10px; font-size: 0.85rem; }
+    .set-row { gap: 5px; margin-bottom: 5px; }
+    .set-row .lbl { font-size: 0.75rem; }
+    .hud { gap: 10px; font-size: 0.88rem; }
+    h1 { font-size: 1.3rem; }
+    /* せまい画面では、チップをのこりの幅で分け合って1行におさめる */
+    #modeRow .chip, #timeRow .chip, #lvRow .chip { flex: 1 1 0; min-width: 0; white-space: nowrap; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>🔍 因数チェック</h1>
+<p class="subtitle">その数になる かけ算を、表から ぜんぶ 見つけよう!</p>
+
+<div class="panel">
+  <div class="card">
+
+    <div class="set-row" id="lvRow">
+      <span class="lbl">レベル</span>
+      <button class="chip" data-n="5">5×5</button>
+      <button class="chip active" data-n="9">9×9</button>
+      <button class="chip" data-n="12">12×12</button>
+    </div>
+
+    <div class="set-row" id="modeRow">
+      <span class="lbl">モード</span>
+      <button class="chip active" data-mode="time">⏱ じかんせいげん</button>
+      <button class="chip" data-mode="full">🏁 ぜんぶうめる</button>
+    </div>
+
+    <div class="set-row" id="timeRow">
+      <span class="lbl">じかん</span>
+      <button class="chip" data-limit="30">30びょう</button>
+      <button class="chip active" data-limit="60">60びょう</button>
+      <button class="chip" data-limit="90">90びょう</button>
+    </div>
+
+    <div class="hud">
+      <span>うめた <span class="val" id="hudScore">0</span></span>
+      <span>のこり <span class="val" id="hudLeft">0</span></span>
+      <span>タイム <span class="val" id="hudTime">0:00</span></span>
+      <span>ミス <span class="val" id="hudMiss">0</span></span>
+      <label><input type="checkbox" id="chkSound" checked> 音</label>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="board-wrap"><div class="board" id="board"></div></div>
+      <div class="side">
+      <div class="q-area">
+        <div class="q-line">
+          <span class="grp"><span class="qm">?</span><span class="op">×</span><span class="qm">?</span></span>
+          <span class="grp"><span class="op">=</span><span class="tg" id="qTarget">-</span></span>
+        </div>
+        <div class="q-sub">あと <span id="qLeft">-</span> マス</div>
+        <div class="found-row" id="foundRow"></div>
+      </div>
+      <div class="mark" id="mark"></div>
+      </div>
+
+      <div class="overlay" id="overlay">
+        <div class="big" id="ovTitle">はじめよう!</div>
+        <div class="stamp" id="ovStamp">🔍</div>
+        <div class="detail" id="ovDetail"></div>
+        <div class="newbest" id="ovBest" style="display:none"></div>
+        <div class="go">タップ(スペースキー)でスタート!</div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="act-btn sub" id="btnClear">🧽 ぜんぶ消す</button>
+    </div>
+    <div class="best-line" id="bestLine"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li>下に <b>? × ? = 35</b> のような もんだいが 出ます。かけ算の表から <b>35 になるマス</b>をさがしてタップしよう。</li>
+      <li>35 になるマスは <b>5×7</b> と <b>7×5</b> の2つ。<b>空いているマスを ぜんぶ 見つける</b>と1問クリアです。</li>
+      <li>もう うまっているマスは 数えません。だから <b>のこっているマスだけ</b>うめればOK。</li>
+      <li>もんだいは <b>まだ空いているマス</b>からしか出ません。うめるほど もんだいは 少なくなります。</li>
+      <li>まちがえると、そのマスが いくつなのかを おしえてくれます。3回まちがえると <b>正解のマスが光ってヒント</b>が出ます。</li>
+      <li><b>⏱ じかんせいげん</b>…きめた時間で 何マスうめられるか。<b>🏁 ぜんぶうめる</b>…表を全部うめるまでのタイムを計ります。</li>
+      <li><b>レベル</b>は 5×5(小2のはじめ)・9×9(九九ぜんぶ)・12×12(約数・因数のれんしゅう)から えらべます。</li>
+      <li>さいこう記録は この端末に とっておかれます。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const STORE_KEY = 'insu-check-best';
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    if (!$('chkSound') || !$('chkSound').checked) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type, vol] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      gn.gain.setValueAtTime(vol || 0.15, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  }
+  const sndOK    = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG    = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone  = () => beep([[784, 0, 0.12], [1047, 0.11, 0.22]]);
+  const sndClear = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.45]]);
+  const sndEnd   = () => beep([[660, 0, 0.18], [523, 0.17, 0.18], [392, 0.34, 0.32]]);
+
+  // ===== 記録 =====
+  function loadBest() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (_) { return {}; }
+  }
+  function bestKey() {
+    return st.n + '-' + (st.mode === 'time' ? 'time' + st.limit : 'full');
+  }
+  /** 記録をくらべて、よければ保存する。{ better, old } を返す */
+  function saveBest(val, higherIsBetter) {
+    const b = loadBest(), key = bestKey(), old = b[key];
+    const better = (old === undefined) || (higherIsBetter ? val > old : val < old);
+    if (better) {
+      b[key] = val;
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(b)); } catch (_) {}
+    }
+    return { better: better, old: old };
+  }
+
+  // ===== 状態 =====
+  const st = {
+    n: 9, mode: 'time', limit: 60,
+    filled: new Set(), cells: {},
+    target: 0, need: [], found: [], tries: 0, lastTarget: 0,
+    score: 0, miss: 0,
+    startT: 0, timerId: null, playing: false, lock: false
+  };
+
+  const fmt = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+
+  // ===== 表をつくる =====
+  function makeCell(cls, text) {
+    const d = document.createElement('div');
+    d.className = cls;
+    d.textContent = text;
+    return d;
+  }
+  function buildBoard() {
+    const b = $('board');
+    b.style.setProperty('--cols', st.n + 1);
+    b.innerHTML = '';
+    st.cells = {};
+    st.filled.clear();
+    b.appendChild(makeCell('cell head corner', '×'));
+    for (let c = 1; c <= st.n; c++) b.appendChild(makeCell('cell head', c));
+    for (let r = 1; r <= st.n; r++) {
+      b.appendChild(makeCell('cell head', r));
+      for (let c = 1; c <= st.n; c++) {
+        const el = makeCell('cell open', '');
+        el.dataset.r = r; el.dataset.c = c;
+        st.cells[r + ',' + c] = el;
+        b.appendChild(el);
+      }
+    }
+    fitBoard();
+  }
+  function fitBoard() {
+    const cols = st.n + 1, gap = 3;
+    const wide = window.innerWidth >= 700;          // 横並びレイアウトかどうか
+    const avail = Math.min(window.innerWidth - 56 - (wide ? 250 : 0), 620);
+    const cw = Math.max(20, Math.min(48, Math.floor((avail - gap * (cols - 1)) / cols)));
+    $('board').style.setProperty('--cw', cw + 'px');
+  }
+  window.addEventListener('resize', fitBoard);
+
+  // ===== 出題：空いているマスだけから作る =====
+  function pickQuestion() {
+    const byProduct = new Map();
+    for (let r = 1; r <= st.n; r++) {
+      for (let c = 1; c <= st.n; c++) {
+        if (st.filled.has(r + ',' + c)) continue;
+        const p = r * c;
+        if (!byProduct.has(p)) byProduct.set(p, []);
+        byProduct.get(p).push([r, c]);
+      }
+    }
+    if (byProduct.size === 0) return null;
+    let keys = Array.from(byProduct.keys());
+    if (keys.length > 1) keys = keys.filter((p) => p !== st.lastTarget);
+    const p = keys[Math.floor(Math.random() * keys.length)];
+    return { target: p, need: byProduct.get(p) };
+  }
+  function newQuestion() {
+    const q = pickQuestion();
+    if (!q) { finish('clear'); return; }
+    st.target = q.target; st.need = q.need;
+    st.found = []; st.tries = 0; st.lastTarget = q.target;
+    renderQ();
+  }
+  function renderQ() {
+    $('qTarget').textContent = st.target;
+    const left = st.need.length - st.found.length;
+    $('qLeft').textContent = left;
+    let html = st.found.map(([r, c]) => '<span class="fchip ok">' + r + ' × ' + c + '</span>').join('');
+    for (let i = 0; i < left; i++) html += '<span class="fchip">? × ?</span>';
+    $('foundRow').innerHTML = html;
+  }
+
+  // ===== HUD =====
+  function updateHud() {
+    $('hudScore').textContent = st.score;
+    $('hudLeft').textContent = st.n * st.n - st.filled.size;
+    $('hudMiss').textContent = st.miss;
+  }
+  function setMark(text, cls) {
+    const m = $('mark');
+    m.textContent = text;
+    m.className = 'mark' + (cls ? ' ' + cls : '');
+  }
+  function flashMiss() {
+    const s = $('stage');
+    s.classList.remove('miss-flash');
+    void s.offsetWidth;
+    s.classList.add('miss-flash');
+  }
+
+  // ===== マスをタップ =====
+  function fillCell(r, c) {
+    const k = r + ',' + c;
+    st.filled.add(k);
+    const el = st.cells[k];
+    const p = r * c;
+    el.textContent = p;
+    el.classList.remove('open', 'hint');
+    el.classList.add('done', 'hit');
+    if (p >= 100) el.classList.add('d3');
+    setTimeout(() => el.classList.remove('hit'), 400);
+  }
+  function showHint() {
+    const rest = st.need.filter(([r, c]) => !st.filled.has(r + ',' + c));
+    if (!rest.length) return;
+    const el = st.cells[rest[0][0] + ',' + rest[0][1]];
+    el.classList.add('hint');
+    setTimeout(() => el.classList.remove('hint'), 2200);
+  }
+  function onCell(r, c) {
+    if (!st.playing || st.lock) return;
+    if (st.filled.has(r + ',' + c)) { setMark('そこは もう うまってるよ', ''); return; }
+    if (r * c === st.target) {
+      fillCell(r, c);
+      st.found.push([r, c]);
+      st.score++;
+      updateHud(); renderQ();
+      if (st.found.length >= st.need.length) {
+        st.lock = true;
+        sndDone();
+        setMark('◯ ' + st.target + ' は ' + st.found.map(([a, b]) => a + '×' + b).join(' と ') + ' だけ!', 'ok');
+        setTimeout(() => {
+          st.lock = false;
+          setMark('', '');
+          if (!st.playing) return;
+          newQuestion();
+        }, 900);
+      } else {
+        sndOK();
+        setMark('◯ あたり!', 'ok');
+      }
+    } else {
+      st.miss++; st.tries++;
+      sndNG(); flashMiss();
+      setMark('✗ そこは ' + (r * c) + ' だよ', 'ng');
+      updateHud();
+      if (st.tries >= 3) { showHint(); st.tries = 0; }
+    }
+  }
+  $('board').addEventListener('pointerdown', (ev) => {
+    const el = ev.target.closest('.cell');
+    if (!el || !el.dataset.r) return;
+    ev.preventDefault();
+    onCell(+el.dataset.r, +el.dataset.c);
+  });
+
+  // ===== タイマー =====
+  function tick() {
+    const el = Math.floor((Date.now() - st.startT) / 1000);
+    if (st.mode === 'time') {
+      const left = Math.max(0, st.limit - el);
+      $('hudTime').textContent = fmt(left);
+      if (left <= 0) finish('timeup');
+    } else {
+      $('hudTime').textContent = fmt(el);
+    }
+  }
+
+  // ===== はじめる・おわる =====
+  function start() {
+    buildBoard();
+    st.score = 0; st.miss = 0; st.lastTarget = 0;
+    st.playing = true; st.lock = false;
+    st.startT = Date.now();
+    clearInterval(st.timerId);
+    st.timerId = setInterval(tick, 200);
+    tick();
+    updateHud();
+    setMark('', '');
+    $('overlay').classList.add('hidden');
+    newQuestion();
+  }
+  function finish(kind) {
+    if (!st.playing) return;
+    st.playing = false; st.lock = false;
+    clearInterval(st.timerId); st.timerId = null;
+    const sec = Math.max(0, Math.floor((Date.now() - st.startT) / 1000));
+    let res;
+    if (st.mode === 'time') {
+      $('hudTime').textContent = '0:00';
+      res = saveBest(st.score, true);
+      $('ovTitle').textContent = 'そこまで!';
+      $('ovStamp').textContent = st.score >= st.n * st.n ? '👑' : st.miss === 0 ? '💮' : '⏱';
+      $('ovDetail').innerHTML = st.limit + 'びょうで <b>' + st.score + 'マス</b> うめました<br>ミス ' + st.miss + ' かい';
+      sndEnd();
+    } else if (kind === 'clear') {
+      $('hudTime').textContent = fmt(sec);
+      res = saveBest(sec, false);
+      $('ovTitle').textContent = '表をぜんぶ うめた!';
+      $('ovStamp').textContent = st.miss === 0 ? '👑' : '🏁';
+      $('ovDetail').innerHTML = '<b>' + fmt(sec) + '</b> で ' + (st.n * st.n) + 'マス かんせい!<br>ミス ' + st.miss + ' かい';
+      sndClear();
+    } else {
+      res = { better: false };
+      $('ovTitle').textContent = 'おわり';
+      $('ovStamp').textContent = '🔍';
+      $('ovDetail').textContent = '';
+      sndEnd();
+    }
+    const nb = $('ovBest');
+    if (res.better && res.old !== undefined) {
+      nb.textContent = '🎉 さいこう記録こうしん!';
+      nb.style.display = '';
+    } else if (res.better) {
+      nb.textContent = '🎉 はじめての記録!';
+      nb.style.display = '';
+    } else {
+      nb.style.display = 'none';
+    }
+    $('overlay').classList.remove('hidden');
+    showBest();
+  }
+  function toReady() {
+    st.playing = false; st.lock = false;
+    clearInterval(st.timerId); st.timerId = null;
+    buildBoard();
+    st.score = 0; st.miss = 0; st.lastTarget = 0;
+    updateHud();
+    $('qTarget').textContent = '-';
+    $('qLeft').textContent = '-';
+    $('foundRow').innerHTML = '';
+    setMark('', '');
+    $('hudTime').textContent = st.mode === 'time' ? fmt(st.limit) : '0:00';
+    $('ovTitle').textContent = st.n + '×' + st.n + 'の表に チャレンジ!';
+    $('ovStamp').textContent = '🔍';
+    $('ovDetail').innerHTML = st.mode === 'time'
+      ? st.limit + 'びょうで 何マス うめられるかな?'
+      : '表をぜんぶ うめるまでの タイムを計るよ';
+    $('ovBest').style.display = 'none';
+    $('overlay').classList.remove('hidden');
+    showBest();
+  }
+  function showBest() {
+    const b = loadBest()[bestKey()];
+    if (b === undefined) { $('bestLine').textContent = 'さいこう記録: まだなし'; return; }
+    $('bestLine').textContent = st.mode === 'time'
+      ? 'さいこう記録(' + st.n + '×' + st.n + '・' + st.limit + 'びょう): ' + b + 'マス'
+      : 'さいこう記録(' + st.n + '×' + st.n + '・ぜんぶうめる): ' + fmt(b);
+  }
+
+  // ===== せってい =====
+  function setActive(rowId, el) {
+    $(rowId).querySelectorAll('.chip').forEach((c) => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+  $('lvRow').addEventListener('click', (ev) => {
+    const el = ev.target.closest('.chip'); if (!el) return;
+    setActive('lvRow', el); st.n = +el.dataset.n; toReady();
+  });
+  $('modeRow').addEventListener('click', (ev) => {
+    const el = ev.target.closest('.chip'); if (!el) return;
+    setActive('modeRow', el); st.mode = el.dataset.mode;
+    $('timeRow').classList.toggle('hidden', st.mode !== 'time');
+    toReady();
+  });
+  $('timeRow').addEventListener('click', (ev) => {
+    const el = ev.target.closest('.chip'); if (!el) return;
+    setActive('timeRow', el); st.limit = +el.dataset.limit; toReady();
+  });
+
+  $('overlay').addEventListener('click', start);
+  $('btnClear').addEventListener('click', () => {
+    if (st.filled.size > 0 && !confirm('表をぜんぶ消して さいしょから やりなおしますか?')) return;
+    toReady();
+  });
+  window.addEventListener('keydown', (ev) => {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (ev.key === ' ' || ev.key === 'Enter') {
+      if (!st.playing) { ev.preventDefault(); start(); }
+    }
+  });
+
+  toReady();
+})();
+</script>
+</body>
+</html>
