@@ -58,10 +58,33 @@ def build(index_html):
     return head + '\n' + '\n'.join(lines).rstrip() + '\n', total, warnings
 
 
+def note_candidates():
+    """脳メモ（Obsidian保管庫）の置き場所の候補。上から順に探す。"""
+    home = Path.home()
+    rel = Path('脳メモ') / '教材開発' / 'ikechan-app.md'
+    return [home / 'Documents' / rel, home / rel]
+
+
+def find_note():
+    for candidate in note_candidates():
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def main():
     repo = Path(__file__).resolve().parent.parent
     index_path = repo / 'index.html'
-    note_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / '脳メモ' / '教材開発' / 'ikechan-app.md'
+    if len(sys.argv) > 1:
+        note_path = Path(sys.argv[1])
+    else:
+        note_path = find_note()
+        if note_path is None:
+            sys.exit(
+                '脳メモのノートが見つかりません。探した場所:\n  '
+                + '\n  '.join(str(c) for c in note_candidates())
+                + '\nノートのパスを引数で渡してください。'
+            )
 
     for path in (index_path, note_path):
         if not path.exists():
