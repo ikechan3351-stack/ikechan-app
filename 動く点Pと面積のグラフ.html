@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>動く点Pと面積のグラフ</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e8eaf6 0%, #e0f2f1 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #3949ab; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #283593; text-align: center; }
+  .subtitle { margin: 0 0 12px; font-size: 0.9rem; color: #3949ab; text-align: center; line-height: 1.8; }
+
+  .main {
+    width: 100%; max-width: 1180px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start;
+  }
+  @media (max-width: 820px) { .main { grid-template-columns: 1fr; } }
+  .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 12px 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+  .card h2 { font-size: 1rem; margin: 0 0 6px; color: #283593; }
+  svg { width: 100%; height: auto; display: block; }
+
+  /* x と y の大きな表示 */
+  .readout { display: flex; gap: 10px; }
+  .readout .box {
+    flex: 1; border-radius: 14px; padding: 6px 10px; text-align: center; background: #f5f5f5;
+  }
+  .readout .lbl { font-size: 0.9rem; font-weight: bold; color: #555; }
+  .readout .num { font-size: 2.4rem; font-weight: bold; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .readout .unit { font-size: 1rem; font-weight: bold; margin-left: 2px; }
+  .box.xbox { background: #e8eaf6; color: #283593; }
+  .box.ybox { color: #fff; transition: background 0.2s; }
+
+  /* 操作 */
+  .controls { display: flex; flex-direction: column; gap: 10px; }
+  .slider-row { display: flex; align-items: center; gap: 8px; }
+  .slider-row .lbl { font-weight: bold; font-size: 0.95rem; white-space: nowrap; color: #283593; }
+  .slider-row input[type=range] { flex: 1; accent-color: #3949ab; height: 28px; touch-action: manipulation; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    border: none; border-radius: 12px; padding: 10px 18px; font-size: 1.05rem; font-weight: bold;
+    cursor: pointer; touch-action: manipulation; font-family: inherit;
+  }
+  .btn.play { background: #3949ab; color: #fff; min-width: 150px; }
+  .btn.reset { background: #e8eaf6; color: #283593; }
+  .btn.step { background: #e8eaf6; color: #283593; padding: 10px 12px; }
+  .speed { margin-left: auto; display: flex; gap: 4px; align-items: center; font-size: 0.85rem; color: #555; }
+  @media (max-width: 480px) {
+    .speed { margin-left: 0; width: 100%; }
+    .readout .num { font-size: 2rem; }
+  }
+  .speed button {
+    border: 1.5px solid #c5cae9; background: #fff; color: #3949ab; border-radius: 10px;
+    padding: 6px 10px; font-size: 0.85rem; font-weight: bold; cursor: pointer; touch-action: manipulation; font-family: inherit; white-space: nowrap;
+  }
+  .speed button.on { background: #3949ab; color: #fff; border-color: #3949ab; }
+
+  /* 解説 */
+  .steps { display: flex; flex-direction: column; gap: 6px; }
+  .step-item {
+    border-radius: 12px; padding: 8px 12px; border: 2px solid #eee; opacity: 0.45;
+    transition: opacity 0.2s, border-color 0.2s, background 0.2s;
+  }
+  .step-item.on { opacity: 1; }
+  .step-item .head { font-weight: bold; font-size: 0.98rem; }
+  .step-item .formula { font-weight: bold; font-size: 1.1rem; margin-left: 6px; }
+  .step-item .body { font-size: 0.88rem; line-height: 1.6; margin-top: 2px; }
+  .calc {
+    margin-top: 8px; border-radius: 12px; background: #fffde7; padding: 8px 12px;
+    font-size: 1.05rem; font-weight: bold; line-height: 1.7; font-variant-numeric: tabular-nums;
+  }
+
+  .help {
+    width: 100%; max-width: 1180px; margin-top: 12px;
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #283593; }
+  .help ul { margin: 0; padding-left: 20px; }
+
+  #graph { touch-action: none; cursor: pointer; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>🏃 動く点Pと面積のグラフ</h1>
+<p class="subtitle">
+  長方形ABCD（AB＝4cm、BC＝6cm）の辺の上を、点Pが A → B → C → D と毎秒1cmで動きます。<br>
+  x秒後の △APD の面積を y cm² として、<ruby>動点<rt>どうてん</rt></ruby>のようすとグラフを見くらべよう。
+</p>
+
+<div class="main">
+  <!-- ===== 左：操作と長方形 ===== -->
+  <div class="col">
+    <div class="card">
+      <div class="readout">
+        <div class="box xbox"><div class="lbl">x（時間）</div><div><span class="num" id="xNum">0.0</span><span class="unit">秒</span></div></div>
+        <div class="box ybox" id="yBox"><div class="lbl" style="color:#fff">y（△APDの面積）</div><div><span class="num" id="yNum">0.0</span><span class="unit">cm²</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <svg id="rect" viewBox="0 0 400 300" aria-label="長方形ABCDと点P">
+        <!-- 方眼 -->
+        <g id="rectGrid" stroke="#eceff1" stroke-width="1"></g>
+        <!-- 三角形APD -->
+        <polygon id="tri" points="" fill-opacity="0.35" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- 長方形 -->
+        <rect x="50" y="50" width="300" height="200" fill="none" stroke="#455a64" stroke-width="3"/>
+        <!-- 通ったあと -->
+        <polyline id="trail" points="" fill="none" stroke="#e53935" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+        <!-- 底辺AD -->
+        <line x1="50" y1="50" x2="350" y2="50" stroke="#1e88e5" stroke-width="6" stroke-linecap="round"/>
+        <text x="200" y="38" text-anchor="middle" font-size="15" font-weight="bold" fill="#1e88e5">底辺 AD ＝ 6cm</text>
+        <!-- 高さ -->
+        <line id="hLine" x1="0" y1="50" x2="0" y2="50" stroke="#fb8c00" stroke-width="4" stroke-dasharray="8 5"/>
+        <g id="hLabel">
+          <rect id="hLabelBg" x="0" y="0" width="0" height="24" rx="6" fill="#fff3e0" stroke="#fb8c00" stroke-width="1.5"/>
+          <text id="hText" x="0" y="0" font-size="15" font-weight="bold" fill="#e65100" text-anchor="middle" dominant-baseline="central"></text>
+        </g>
+        <!-- 頂点ラベル -->
+        <g font-size="22" font-weight="bold" fill="#263238">
+          <text x="30" y="44" text-anchor="middle">A</text>
+          <text x="30" y="272" text-anchor="middle">B</text>
+          <text x="370" y="272" text-anchor="middle">C</text>
+          <text x="370" y="44" text-anchor="middle">D</text>
+        </g>
+        <g font-size="13" fill="#78909c" font-weight="bold">
+          <text x="22" y="155" text-anchor="middle">4cm</text>
+          <text x="200" y="285" text-anchor="middle">6cm</text>
+          <text x="378" y="155" text-anchor="middle">4cm</text>
+        </g>
+        <!-- 点P -->
+        <circle id="pDot" cx="50" cy="50" r="10" fill="#e53935" stroke="#fff" stroke-width="3"/>
+        <text id="pText" x="0" y="0" font-size="20" font-weight="bold" fill="#e53935" text-anchor="middle" dominant-baseline="central">P</text>
+      </svg>
+    </div>
+
+    <div class="card controls">
+      <div class="slider-row">
+        <span class="lbl">時間を進める</span>
+        <input type="range" id="slider" min="0" max="14" step="0.1" value="0" aria-label="x（秒）">
+      </div>
+      <div class="btn-row">
+        <button class="btn play" id="playBtn">▶ スタート</button>
+        <button class="btn step" id="backBtn" title="0.5秒もどす">−0.5</button>
+        <button class="btn step" id="fwdBtn" title="0.5秒すすめる">＋0.5</button>
+        <button class="btn reset" id="resetBtn">↺ 最初から</button>
+        <div class="speed">速さ
+          <button data-speed="0.5">ゆっくり</button>
+          <button data-speed="1" class="on">ふつう</button>
+          <button data-speed="2">はやい</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 右：グラフと解説 ===== -->
+  <div class="col">
+    <div class="card">
+      <h2>📈 x と y のグラフ</h2>
+      <svg id="graph" viewBox="0 0 470 410" aria-label="xとyのグラフ">
+        <g id="gGrid"></g>
+        <g id="gAxis"></g>
+        <polyline id="gGhost" points="" fill="none" stroke="#b0bec5" stroke-width="3" stroke-dasharray="6 5" stroke-linejoin="round"/>
+        <g id="gTrail"></g>
+        <line id="gVx" stroke="#9e9e9e" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <line id="gHy" stroke="#9e9e9e" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <circle id="gDot" r="9" fill="#e53935" stroke="#fff" stroke-width="3"/>
+        <text id="gDotText" font-size="14" font-weight="bold" fill="#c62828" text-anchor="middle"></text>
+      </svg>
+    </div>
+
+    <div class="card">
+      <h2>💡 いま、どうなっている？</h2>
+      <div class="steps">
+        <div class="step-item" data-seg="0">
+          <div class="head">① 0〜4秒（辺AB上）<span class="formula">y ＝ 3x</span></div>
+          <div class="body">底辺はAD（6cm）で変わらない。高さ（AP）が毎秒1cmずつ<b>増える</b>ので、面積は x に<b>比例して増える</b>。</div>
+        </div>
+        <div class="step-item" data-seg="1">
+          <div class="head">② 4〜10秒（辺BC上）<span class="formula">y ＝ 12</span></div>
+          <div class="body">底辺はAD（6cm）、高さはAB（4cm）のまま<b>一定</b>。だから面積は<b>変わらない</b>（グラフは横にまっすぐ）。</div>
+        </div>
+        <div class="step-item" data-seg="2">
+          <div class="head">③ 10〜14秒（辺CD上）<span class="formula">y ＝ −3x ＋ 42</span></div>
+          <div class="body">底辺はAD（6cm）で変わらない。高さ（DP）が毎秒1cmずつ<b>減る</b>ので、面積は<b>減っていく</b>。DP ＝ 14 − x</div>
+        </div>
+      </div>
+      <div class="calc" id="calc"></div>
+    </div>
+  </div>
+</div>
+
+<div class="help">
+  <h2>📝 使いかた</h2>
+  <ul>
+    <li>「▶ スタート」で点Pが自動で動きます。スライダーや「−0.5 / ＋0.5」で好きな時間に止めて考えられます。</li>
+    <li>グラフの上をタップ・ドラッグしても x を動かせます。</li>
+    <li>うすい点線が全体のグラフ、太い線が「いままでに通ったところ」です。色は①②③の区間ごとに分かれています。</li>
+    <li>オレンジの点線が △APD の「高さ」、青い太線が「底辺」です。</li>
+  </ul>
+</div>
+
+<script>
+(() => {
+  const MAX = 14;
+  const SEG_COLORS = ['#ec407a', '#43a047', '#7e57c2'];
+  const SEG_BG = ['#fce4ec', '#e8f5e9', '#ede7f6'];
+  const NS = 'http://www.w3.org/2000/svg';
+  const $ = id => document.getElementById(id);
+
+  // ---- 計算 ----
+  const segOf = x => (x <= 4 ? 0 : x <= 10 ? 1 : 2);
+  const heightOf = x => (x <= 4 ? x : x <= 10 ? 4 : MAX - x);
+  const areaOf = x => 0.5 * 6 * heightOf(x);
+
+  // ---- 長方形の座標（1cm = 50px、A=(50,50)）----
+  const S = 50, AX = 50, AY = 50;
+  function pPos(x) {
+    if (x <= 4) return [AX, AY + S * x];
+    if (x <= 10) return [AX + S * (x - 4), AY + 4 * S];
+    return [AX + 6 * S, AY + 4 * S - S * (x - 10)];
+  }
+
+  // 長方形の方眼
+  (() => {
+    const g = $('rectGrid');
+    for (let i = 1; i < 6; i++) addLine(g, AX + S * i, AY, AX + S * i, AY + 4 * S);
+    for (let j = 1; j < 4; j++) addLine(g, AX, AY + S * j, AX + 6 * S, AY + S * j);
+  })();
+
+  function addLine(g, x1, y1, x2, y2, attrs = {}) {
+    const l = document.createElementNS(NS, 'line');
+    l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+    l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+    for (const k in attrs) l.setAttribute(k, attrs[k]);
+    g.appendChild(l);
+    return l;
+  }
+  function addText(g, x, y, str, attrs = {}) {
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    for (const k in attrs) t.setAttribute(k, attrs[k]);
+    t.textContent = str;
+    g.appendChild(t);
+    return t;
+  }
+
+  // ---- グラフの座標 ----
+  const GL = 50, GR = 445, GT = 25, GB = 365;
+  const gx = x => GL + (GR - GL) * x / MAX;
+  const gy = y => GB - (GB - GT) * y / 12;
+
+  (() => {
+    const grid = $('gGrid'), axis = $('gAxis');
+    for (let i = 0; i <= MAX; i++) {
+      addLine(grid, gx(i), GT, gx(i), GB, { stroke: (i === 4 || i === 10) ? '#cfd8dc' : '#eceff1', 'stroke-width': (i === 4 || i === 10) ? 2 : 1 });
+      addText(axis, gx(i), GB + 20, i, { 'font-size': 13, 'text-anchor': 'middle', fill: '#546e7a' });
+    }
+    for (let j = 0; j <= 12; j++) {
+      addLine(grid, GL, gy(j), GR, gy(j), { stroke: '#eceff1', 'stroke-width': 1 });
+      if (j > 0) addText(axis, GL - 8, gy(j), j, { 'font-size': 13, 'text-anchor': 'end', 'dominant-baseline': 'central', fill: '#546e7a' });
+    }
+    addText(axis, GL - 8, GB + 20, 'O', { 'font-size': 13, 'text-anchor': 'end', fill: '#546e7a', 'font-style': 'italic' });
+    addLine(axis, GL, GB, GR + 12, GB, { stroke: '#37474f', 'stroke-width': 2 });
+    addLine(axis, GL, GB, GL, GT - 12, { stroke: '#37474f', 'stroke-width': 2 });
+    addText(axis, GR + 16, GB + 5, 'x', { 'font-size': 18, 'font-weight': 'bold', 'font-style': 'italic', fill: '#37474f' });
+    addText(axis, GL - 2, GT - 14, 'y', { 'font-size': 18, 'font-weight': 'bold', 'font-style': 'italic', fill: '#37474f', 'text-anchor': 'end' });
+    addText(axis, GR + 16, GB + 22, '（秒）', { 'font-size': 11, 'text-anchor': 'middle', fill: '#78909c' });
+    addText(axis, GL + 6, GT - 10, '（cm²）', { 'font-size': 12, fill: '#78909c' });
+    // 区間の名前
+    const names = [['①AB上', 2], ['②BC上', 7], ['③CD上', 12]];
+    names.forEach(([n, c], i) => addText(axis, gx(c), GB + 40, n, { 'font-size': 13, 'font-weight': 'bold', 'text-anchor': 'middle', fill: SEG_COLORS[i], opacity: 0.8 }));
+    $('gGhost').setAttribute('points', [0, 4, 10, 14].map(x => `${gx(x)},${gy(areaOf(x))}`).join(' '));
+  })();
+
+  // 通ったあとの太線（区間ごとに1本）
+  const trailLines = SEG_COLORS.map(c => {
+    const pl = document.createElementNS(NS, 'polyline');
+    pl.setAttribute('fill', 'none');
+    pl.setAttribute('stroke', c);
+    pl.setAttribute('stroke-width', 6);
+    pl.setAttribute('stroke-linecap', 'round');
+    pl.setAttribute('stroke-linejoin', 'round');
+    $('gTrail').appendChild(pl);
+    return pl;
+  });
+  const SEG_RANGE = [[0, 4], [4, 10], [10, 14]];
+
+  // ---- 描画 ----
+  const els = {
+    tri: $('tri'), trail: $('trail'), hLine: $('hLine'), hText: $('hText'), hLabelBg: $('hLabelBg'),
+    pDot: $('pDot'), pText: $('pText'), xNum: $('xNum'), yNum: $('yNum'), yBox: $('yBox'),
+    slider: $('slider'), gDot: $('gDot'), gDotText: $('gDotText'), gVx: $('gVx'), gHy: $('gHy'), calc: $('calc'),
+    steps: document.querySelectorAll('.step-item'),
+  };
+  let x = 0, lastSeg = -1, lastCalcKey = '';
+
+  const fmt = v => {
+    const r = Math.round(v * 10) / 10;
+    return (Object.is(r, -0) ? 0 : r).toFixed(1);
+  };
+
+  function render() {
+    const seg = segOf(x);
+    const col = SEG_COLORS[seg];
+    const [px, py] = pPos(x);
+    const h = heightOf(x);
+    const y = areaOf(x);
+
+    // 三角形APD
+    els.tri.setAttribute('points', `${AX},${AY} ${px},${py} ${AX + 6 * S},${AY}`);
+    // 通ったあと
+    const pts = [[AX, AY]];
+    if (x > 4) pts.push([AX, AY + 4 * S]);
+    if (x > 10) pts.push([AX + 6 * S, AY + 4 * S]);
+    pts.push([px, py]);
+    els.trail.setAttribute('points', pts.map(p => p.join(',')).join(' '));
+    // 高さ（PからADへの垂線）
+    els.hLine.setAttribute('x1', px); els.hLine.setAttribute('x2', px);
+    els.hLine.setAttribute('y2', py);
+    const hStr = `高さ ${fmt(h)}cm`;
+    const lx = seg === 0 ? px + 58 : seg === 2 ? px - 58 : px;
+    const ly = seg === 1 ? AY + 2 * S : Math.max(AY + 16, (AY + py) / 2);
+    const showH = h > 0.05;
+    els.hLine.style.display = showH ? '' : 'none';
+    els.hText.parentNode.style.display = showH ? '' : 'none';
+    els.hText.textContent = hStr;
+    els.hText.setAttribute('x', lx); els.hText.setAttribute('y', ly);
+    els.hLabelBg.setAttribute('x', lx - 52); els.hLabelBg.setAttribute('y', ly - 12);
+    els.hLabelBg.setAttribute('width', 104);
+    // 点P
+    els.pDot.setAttribute('cx', px); els.pDot.setAttribute('cy', py);
+    const [tx, ty] = seg === 0 ? [px + 22, py] : seg === 1 ? [px, py + 24] : [px - 22, py];
+    els.pText.setAttribute('x', tx); els.pText.setAttribute('y', ty);
+
+    // 数値
+    els.xNum.textContent = fmt(x);
+    els.yNum.textContent = fmt(y);
+    els.slider.value = fmt(x);
+
+    // グラフ
+    const cx = gx(x), cy = gy(y);
+    els.gDot.setAttribute('cx', cx); els.gDot.setAttribute('cy', cy);
+    els.gVx.setAttribute('x1', cx); els.gVx.setAttribute('x2', cx);
+    els.gVx.setAttribute('y1', cy); els.gVx.setAttribute('y2', GB);
+    els.gHy.setAttribute('x1', GL); els.gHy.setAttribute('x2', cx);
+    els.gHy.setAttribute('y1', cy); els.gHy.setAttribute('y2', cy);
+    els.gDotText.textContent = `(${fmt(x)}, ${fmt(y)})`;
+    // 線とかさならない側にラベルを置く（①は左上、②は上、③は右上）
+    const [lbx, lby, anc] = seg === 0 ? [cx - 14, cy - 8, 'end'] : seg === 1 ? [cx, cy - 16, 'middle'] : [cx + 14, cy - 8, 'start'];
+    els.gDotText.setAttribute('text-anchor', anc);
+    els.gDotText.setAttribute('x', anc === 'start' ? Math.min(lbx, GR - 70) : anc === 'end' ? Math.max(lbx, GL + 70) : Math.min(Math.max(lbx, GL + 40), GR - 40));
+    els.gDotText.setAttribute('y', Math.max(lby, GT - 4));
+    SEG_RANGE.forEach(([a, b], i) => {
+      if (x <= a) { trailLines[i].setAttribute('points', ''); return; }
+      const e = Math.min(x, b);
+      trailLines[i].setAttribute('points', `${gx(a)},${gy(areaOf(a))} ${gx(e)},${gy(areaOf(e))}`);
+    });
+
+    // 色・解説（区間が変わったときだけ）
+    if (seg !== lastSeg) {
+      lastSeg = seg;
+      els.tri.setAttribute('fill', col);
+      els.tri.setAttribute('stroke', col);
+      els.yBox.style.background = col;
+      els.gDot.setAttribute('fill', col);
+      els.steps.forEach((s, i) => {
+        const on = i === seg;
+        s.classList.toggle('on', on);
+        s.style.borderColor = on ? SEG_COLORS[i] : '#eee';
+        s.style.background = on ? SEG_BG[i] : '#fff';
+        s.querySelector('.formula').style.color = SEG_COLORS[i];
+      });
+    }
+
+    // 計算の説明
+    const xs = fmt(x), hs = fmt(h), ys = fmt(y);
+    const key = xs;
+    if (key !== lastCalcKey) {
+      lastCalcKey = key;
+      let line1, line2;
+      if (seg === 0) {
+        line1 = `y ＝ 3x ＝ 3 × ${xs} ＝ ${ys}`;
+        line2 = `（底辺 × 高さ ÷ 2 ＝ 6 × ${hs} ÷ 2 ＝ ${ys}）`;
+      } else if (seg === 1) {
+        line1 = `y ＝ 12（x が ${xs} でも 変わらない）`;
+        line2 = `（底辺 × 高さ ÷ 2 ＝ 6 × 4 ÷ 2 ＝ 12）`;
+      } else {
+        line1 = `y ＝ −3x ＋ 42 ＝ −3 × ${xs} ＋ 42 ＝ ${ys}`;
+        line2 = `（高さ DP ＝ 14 − ${xs} ＝ ${hs}、6 × ${hs} ÷ 2 ＝ ${ys}）`;
+      }
+      els.calc.innerHTML = `<span style="color:${col}">x ＝ ${xs} のとき</span><br>${line1}<br><span style="font-size:0.88rem;color:#555">${line2}</span>`;
+    }
+  }
+
+  function setX(v) {
+    x = Math.min(MAX, Math.max(0, v));
+    render();
+  }
+
+  // ---- アニメーション ----
+  let playing = false, speed = 1, lastT = 0, rafId = 0;
+  const playBtn = $('playBtn');
+
+  function tick(t) {
+    if (!playing) return;
+    const dt = Math.min(0.1, (t - lastT) / 1000);
+    lastT = t;
+    setX(x + dt * speed);
+    if (x >= MAX) { stop(); return; }
+    rafId = requestAnimationFrame(tick);
+  }
+  function play() {
+    if (x >= MAX) setX(0);
+    playing = true;
+    playBtn.textContent = '⏸ 一時停止';
+    lastT = performance.now();
+    rafId = requestAnimationFrame(tick);
+  }
+  function stop() {
+    playing = false;
+    cancelAnimationFrame(rafId);
+    playBtn.textContent = x >= MAX ? '▶ もう一度' : '▶ スタート';
+  }
+
+  playBtn.addEventListener('click', () => (playing ? stop() : play()));
+  $('resetBtn').addEventListener('click', () => { stop(); setX(0); playBtn.textContent = '▶ スタート'; });
+  $('backBtn').addEventListener('click', () => { stop(); setX(Math.round((x - 0.5) * 10) / 10); });
+  $('fwdBtn').addEventListener('click', () => { stop(); setX(Math.round((x + 0.5) * 10) / 10); stop(); });
+  els.slider.addEventListener('input', () => { stop(); setX(parseFloat(els.slider.value)); stop(); });
+  document.querySelectorAll('.speed button').forEach(b => b.addEventListener('click', () => {
+    speed = parseFloat(b.dataset.speed);
+    document.querySelectorAll('.speed button').forEach(o => o.classList.toggle('on', o === b));
+  }));
+
+  // グラフの上をタップ・ドラッグ
+  const graph = $('graph');
+  let dragging = false;
+  function xFromEvent(e) {
+    const pt = graph.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(graph.getScreenCTM().inverse());
+    return Math.round(((p.x - GL) / (GR - GL) * MAX) * 10) / 10;
+  }
+  graph.addEventListener('pointerdown', e => {
+    dragging = true; stop();
+    graph.setPointerCapture(e.pointerId);
+    setX(xFromEvent(e)); stop();
+  });
+  graph.addEventListener('pointermove', e => { if (dragging) { setX(xFromEvent(e)); stop(); } });
+  graph.addEventListener('pointerup', () => { dragging = false; });
+  graph.addEventListener('pointercancel', () => { dragging = false; });
+
+  render();
+})();
+</script>
+</body>
+</html>
