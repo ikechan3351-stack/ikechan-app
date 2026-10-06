@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>箱ひげ図とヒストグラム</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --q1: #42a5f5; --q2: #66bb6a; --q3: #ffa726; --q4: #ec407a;
+    --mean: #8e24aa; --med: #263238;
+  }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e3f2fd 0%, #f1f8e9 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #1565c0; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #0d47a1; text-align: center; }
+  .subtitle { margin: 0 0 12px; font-size: 0.9rem; color: #1565c0; text-align: center; line-height: 1.8; }
+  .wrap { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: #fff; border-radius: 16px; padding: 12px 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+  .card h2 { font-size: 1rem; margin: 0 0 8px; color: #0d47a1; }
+
+  #chart { width: 100%; height: auto; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .dot { cursor: grab; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .btn {
+    border: none; border-radius: 12px; padding: 10px 16px; font-size: 1rem; font-weight: bold;
+    cursor: pointer; touch-action: manipulation; font-family: inherit; background: #e3f2fd; color: #0d47a1;
+  }
+  .btn.genius { background: #fff8e1; color: #e65100; border: 2px solid #ffb300; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 0.95rem; font-weight: bold; }
+  .checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .checks input { width: 20px; height: 20px; accent-color: #1565c0; }
+
+  .bottom { display: grid; grid-template-columns: 1.1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .bottom { grid-template-columns: 1fr; } }
+  table.st { width: 100%; border-collapse: collapse; font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+  table.st th, table.st td { padding: 6px 8px; border-bottom: 1px solid #eceff1; text-align: left; }
+  table.st td.v { text-align: right; font-weight: bold; font-size: 1.15rem; }
+  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cbox { border-radius: 14px; padding: 10px; text-align: center; }
+  .cbox .lbl { font-weight: bold; font-size: 0.95rem; }
+  .cbox .big { font-size: 2.2rem; font-weight: bold; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .cbox .sub { font-size: 0.85rem; color: #555; font-variant-numeric: tabular-nums; }
+  .cbox.med { background: #eceff1; color: var(--med); }
+  .cbox.mean { background: #f3e5f5; color: var(--mean); }
+  .msg { margin-top: 10px; font-weight: bold; line-height: 1.6; min-height: 1.6em; color: #e65100; }
+
+  .help {
+    width: 100%; max-width: 960px; margin-top: 12px;
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #0d47a1; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>📦 <ruby>箱<rt>はこ</rt></ruby>ひげ図とヒストグラム</h1>
+<p class="subtitle">下の●（20人の点数）を左右にドラッグしてみよう。上の2つのグラフがいっしょに動くよ。</p>
+
+<div class="wrap">
+  <div class="card">
+    <svg id="chart" viewBox="0 0 800 650" aria-label="ヒストグラム・箱ひげ図・データの点">
+      <g id="bg"></g>
+      <g id="hist"></g>
+      <g id="guides"></g>
+      <g id="box"></g>
+      <g id="dots"></g>
+    </svg>
+    <div class="controls" style="margin-top:8px">
+      <button class="btn" id="normalBtn">📋 ふつうのクラス</button>
+      <button class="btn" id="randomBtn">🎲 ランダム</button>
+      <button class="btn genius" id="geniusBtn">🌟 天才を1人つくる（100点）</button>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="cQ" checked>四分位数の線</label>
+      <label><input type="checkbox" id="cM" checked>平均値の線</label>
+      <label><input type="checkbox" id="cC" checked>5人ずつ色分け</label>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="card">
+      <h2>🔢 データの値</h2>
+      <table class="st" id="stats"></table>
+    </div>
+    <div class="card">
+      <h2>⚖️ 中央値と平均値の動きくらべ</h2>
+      <div class="compare">
+        <div class="cbox med"><div class="lbl">中央値（｜）</div><div class="big" id="medV"></div><div class="sub" id="medD"></div></div>
+        <div class="cbox mean"><div class="lbl">平均値（×）</div><div class="big" id="meanV"></div><div class="sub" id="meanD"></div></div>
+      </div>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
+</div>
+
+<div class="help">
+  <h2>📝 使いかた</h2>
+  <ul>
+    <li>いちばん下の●が、1人ひとりの点数です。ドラッグすると 0〜100点の間で動きます（同じくらいの点数の人は上に積み重なります）。</li>
+    <li>●の色は、点数の低い順に5人ずつ（全体の約25%ずつ）の4グループを表します。箱ひげ図のひげと箱も同じ色です。</li>
+    <li>ヒストグラムの階級は10点ごとです（最後の階級だけ「90点以上100点以下」）。</li>
+    <li>「🌟 天才を1人つくる」を押すと、いちばん点数の高い人が100点になります。中央値と平均値の動き方をくらべよう。</li>
+    <li>四分位数は、データを小さい順にならべて前半10人・後半10人に分け、それぞれの中央値として求めています。</li>
+  </ul>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const N = 20;
+  const X0 = 60, X1 = 760;
+  const sx = v => X0 + (X1 - X0) * v / 100;
+  const QC = ['#42a5f5', '#66bb6a', '#ffa726', '#ec407a'];
+  const MEAN_C = '#8e24aa', MED_C = '#263238';
+  // 各段の位置
+  const H_TOP = 40, H_BASE = 240;          // ヒストグラム
+  const B_MID = 315, B_H = 50;             // 箱ひげ図
+  const D_BASE = 600, D_R = 9, D_STEP = 17; // データの点
+
+  const NORMAL = [18, 25, 28, 30, 32, 35, 36, 38, 40, 40, 42, 44, 45, 47, 48, 50, 52, 55, 58, 62];
+  let data = [...NORMAL];
+
+  // ---- 統計 ----
+  const med = a => { const n = a.length, m = n >> 1; return n % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+  function stats() {
+    const s = [...data].sort((a, b) => a - b);
+    const half = N >> 1;
+    const lower = s.slice(0, half), upper = s.slice(N % 2 ? half + 1 : half);
+    return {
+      min: s[0], q1: med(lower), q2: med(s), q3: med(upper), max: s[N - 1],
+      mean: s.reduce((a, b) => a + b, 0) / N,
+    };
+  }
+  // 小さい順で何グループ目か（0〜3）。同じ点数は登録順で決める
+  function quarterOf() {
+    const order = data.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const q = new Array(N);
+    order.forEach(([, i], rank) => { q[i] = Math.floor(rank / (N / 4)); });
+    return q;
+  }
+  const binOf = v => Math.min(9, Math.floor(v / 10));
+  const f1 = v => (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, '');
+
+  // ---- 背景（軸・目盛り）----
+  (() => {
+    let h = '';
+    const t = (x, y, s, a = 'middle', size = 13, c = '#78909c', w = 'normal') =>
+      `<text x="${x}" y="${y}" font-size="${size}" text-anchor="${a}" fill="${c}" font-weight="${w}">${s}</text>`;
+    // 縦の目盛り線（3段共通）
+    for (let v = 0; v <= 100; v += 10) {
+      h += `<line x1="${sx(v)}" y1="${H_TOP}" x2="${sx(v)}" y2="${D_BASE + 14}" stroke="#eceff1"/>`;
+    }
+    // 各段のタイトル
+    h += t(X0, 22, 'ヒストグラム（人数）', 'start', 15, '#0d47a1', 'bold');
+    h += t(X0, 272, '箱ひげ図', 'start', 15, '#0d47a1', 'bold');
+    h += t(X0, 382, 'データ（20人の点数）', 'start', 15, '#0d47a1', 'bold');
+    // ヒストグラムの軸
+    h += `<line x1="${X0}" y1="${H_BASE}" x2="${X1}" y2="${H_BASE}" stroke="#546e7a" stroke-width="2"/>`;
+    for (let v = 0; v <= 100; v += 10) h += t(sx(v), H_BASE + 16, v, 'middle', 12);
+    // データの軸
+    h += `<line x1="${X0}" y1="${D_BASE + 14}" x2="${X1}" y2="${D_BASE + 14}" stroke="#546e7a" stroke-width="2"/>`;
+    for (let v = 0; v <= 100; v += 10) h += t(sx(v), D_BASE + 32, v, 'middle', 13, '#546e7a', 'bold');
+    h += t(X1 + 26, D_BASE + 32, '(点)', 'middle', 12);
+    $('bg').innerHTML = h;
+  })();
+
+  // ---- アニメーションする値 ----
+  const bars = Array.from({ length: 10 }, () => ({ h: 0, v: 0 }));   // ばねで動く柱
+  let disp = null; // 箱ひげ図の表示中の値
+
+  function histMax(counts) { return Math.max(...counts) > 10 ? 20 : 10; }
+
+  function drawHist(counts, ymax) {
+    const unit = (H_BASE - H_TOP) / ymax;
+    let h = '';
+    // 人数の目盛り
+    for (let c = 0; c <= ymax; c += ymax === 10 ? 2 : 5) {
+      const y = H_BASE - c * unit;
+      if (c) h += `<line x1="${X0}" y1="${y}" x2="${X1}" y2="${y}" stroke="#eceff1" stroke-dasharray="3 3"/>`;
+      h += `<text x="${X0 - 8}" y="${y}" font-size="12" text-anchor="end" dominant-baseline="central" fill="#78909c">${c}</text>`;
+    }
+    bars.forEach((b, i) => {
+      const hh = Math.max(0, b.h) * unit;
+      const x = sx(i * 10) + 1.5, w = sx(10) - sx(0) - 3;
+      h += `<rect x="${x}" y="${H_BASE - hh}" width="${w}" height="${hh}" fill="#90caf9" stroke="#1e88e5" stroke-width="1.5" rx="2"/>`;
+      if (counts[i]) h += `<text x="${x + w / 2}" y="${H_BASE - hh - 8}" font-size="15" font-weight="bold" text-anchor="middle" fill="#1565c0">${counts[i]}</text>`;
+    });
+    $('hist').innerHTML = h;
+  }
+
+  function drawBox(st) {
+    const top = B_MID - B_H / 2, bot = B_MID + B_H / 2;
+    const colorOn = $('cC').checked;
+    const c = i => (colorOn ? QC[i] : '#546e7a');
+    const fillC = i => (colorOn ? QC[i] : '#b0bec5');
+    let h = '';
+    // ひげ
+    h += `<line x1="${sx(st.min)}" y1="${B_MID}" x2="${sx(st.q1)}" y2="${B_MID}" stroke="${c(0)}" stroke-width="4"/>`;
+    h += `<line x1="${sx(st.q3)}" y1="${B_MID}" x2="${sx(st.max)}" y2="${B_MID}" stroke="${c(3)}" stroke-width="4"/>`;
+    h += `<line x1="${sx(st.min)}" y1="${B_MID - 14}" x2="${sx(st.min)}" y2="${B_MID + 14}" stroke="${c(0)}" stroke-width="4"/>`;
+    h += `<line x1="${sx(st.max)}" y1="${B_MID - 14}" x2="${sx(st.max)}" y2="${B_MID + 14}" stroke="${c(3)}" stroke-width="4"/>`;
+    // 箱（左半分・右半分）
+    h += `<rect x="${sx(st.q1)}" y="${top}" width="${Math.max(0, sx(st.q2) - sx(st.q1))}" height="${B_H}" fill="${fillC(1)}" fill-opacity="0.35"/>`;
+    h += `<rect x="${sx(st.q2)}" y="${top}" width="${Math.max(0, sx(st.q3) - sx(st.q2))}" height="${B_H}" fill="${fillC(2)}" fill-opacity="0.35"/>`;
+    h += `<rect x="${sx(st.q1)}" y="${top}" width="${Math.max(0, sx(st.q3) - sx(st.q1))}" height="${B_H}" fill="none" stroke="#37474f" stroke-width="2.5"/>`;
+    // 中央値
+    h += `<line x1="${sx(st.q2)}" y1="${top - 4}" x2="${sx(st.q2)}" y2="${bot + 4}" stroke="${MED_C}" stroke-width="5"/>`;
+    // 平均値 ×
+    const mx = sx(st.mean), s = 9;
+    h += `<path d="M${mx - s},${B_MID - s} L${mx + s},${B_MID + s} M${mx - s},${B_MID + s} L${mx + s},${B_MID - s}" stroke="${MEAN_C}" stroke-width="4.5" stroke-linecap="round"/>`;
+    // 平均値が動いたときの矢印
+    if (moveFrom && Math.abs(st.mean - moveFrom.mean) > 0.3) {
+      const x0 = sx(moveFrom.mean), y = bot + 18;
+      const dir = Math.sign(mx - x0);
+      h += `<line x1="${x0}" y1="${y}" x2="${mx - dir * 6}" y2="${y}" stroke="${MEAN_C}" stroke-width="2.5"/>`;
+      h += `<path d="M${mx},${y} l${-dir * 9},-6 l0,12 z" fill="${MEAN_C}"/>`;
+      h += `<circle cx="${x0}" cy="${y}" r="3.5" fill="${MEAN_C}"/>`;
+    }
+    $('box').innerHTML = h;
+  }
+
+  function drawGuides(st) {
+    let h = '';
+    const line = (v, color, w, dash, label, ly) => {
+      h += `<line x1="${sx(v)}" y1="${H_TOP}" x2="${sx(v)}" y2="${D_BASE + 14}" stroke="${color}" stroke-width="${w}" stroke-dasharray="${dash}" opacity="0.55"/>`;
+      if (label) h += `<text x="${sx(v)}" y="${ly}" font-size="12" font-weight="bold" text-anchor="middle" fill="${color}" stroke="#fff" stroke-width="3" paint-order="stroke">${label}</text>`;
+    };
+    if ($('cQ').checked) {
+      line(st.q1, '#546e7a', 1.8, '5 4', '第1四分位数', B_MID - B_H / 2 - 10);
+      line(st.q3, '#546e7a', 1.8, '5 4', '第3四分位数', B_MID - B_H / 2 - 10);
+      line(st.q2, MED_C, 2.2, '5 4', '中央値', B_MID + B_H / 2 + 36);
+    }
+    if ($('cM').checked) line(st.mean, MEAN_C, 2, '2 4', '平均値', B_MID + B_H / 2 + 52);
+    $('guides').innerHTML = h;
+  }
+
+  // 近い点数の●は上に積み重ねる
+  function dotLayout() {
+    const order = data.map((v, i) => i).sort((a, b) => data[a] - data[b] || a - b);
+    const rows = []; // 各段で最後に置いた x
+    const pos = new Array(N);
+    for (const i of order) {
+      const x = sx(data[i]);
+      let r = 0;
+      while (rows[r] !== undefined && x - rows[r] < D_R * 2 - 1) r++;
+      rows[r] = x;
+      pos[i] = [x, D_BASE - r * D_STEP];
+    }
+    return pos;
+  }
+  function drawDots() {
+    const pos = dotLayout(), q = quarterOf(), colorOn = $('cC').checked;
+    let h = '';
+    pos.forEach(([x, y], i) => {
+      const col = colorOn ? QC[q[i]] : '#1e88e5';
+      const big = dragId === i;
+      h += `<g class="dot" data-i="${i}"><circle cx="${x}" cy="${y}" r="16" fill="transparent"/>` +
+        `<circle cx="${x}" cy="${y}" r="${big ? D_R + 3 : D_R}" fill="${col}" stroke="#fff" stroke-width="2"/></g>`;
+    });
+    if (dragId !== null) {
+      const [x, y] = pos[dragId];
+      h += `<text x="${x}" y="${y - 22}" font-size="16" font-weight="bold" text-anchor="middle" fill="#0d47a1" stroke="#fff" stroke-width="4" paint-order="stroke">${data[dragId]}点</text>`;
+    }
+    $('dots').innerHTML = h;
+  }
+
+  function drawPanels(st) {
+    const rows = [
+      ['最大値', st.max, '#ec407a'],
+      ['第3四分位数', st.q3, '#ffa726'],
+      ['中央値（第2四分位数）', st.q2, MED_C],
+      ['第1四分位数', st.q1, '#66bb6a'],
+      ['最小値', st.min, '#42a5f5'],
+      ['平均値', st.mean, MEAN_C],
+      ['範囲（最大値 − 最小値）', st.max - st.min, '#90a4ae'],
+      ['四分位範囲（第3 − 第1）', st.q3 - st.q1, '#90a4ae'],
+    ];
+    $('stats').innerHTML = rows.map(([n, v, c]) => `<tr><th><span class="sw" style="background:${c}"></span>${n}</th><td class="v">${f1(v)}点</td></tr>`).join('');
+    $('medV').textContent = f1(st.q2) + '点';
+    $('meanV').textContent = f1(st.mean) + '点';
+    const d = (a, b) => { const x = Math.round((a - b) * 100) / 100; return x === 0 ? '±0' : (x > 0 ? '＋' : '−') + f1(Math.abs(x)); };
+    if (moveFrom) {
+      $('medD').textContent = `動かす前 ${f1(moveFrom.q2)} → ${d(st.q2, moveFrom.q2)}点`;
+      $('meanD').textContent = `動かす前 ${f1(moveFrom.mean)} → ${d(st.mean, moveFrom.mean)}点`;
+    } else {
+      $('medD').textContent = '●を動かすと、動いた量が出ます';
+      $('meanD').textContent = '';
+    }
+  }
+
+  // ---- 全体の更新 ----
+  let moveFrom = null;     // 動かす前の統計
+  let dragId = null;
+  let raf = 0;
+  function update() {
+    const st = stats();
+    const counts = new Array(10).fill(0);
+    data.forEach(v => counts[binOf(v)]++);
+    if (!disp) disp = { ...st };
+    // 柱はばねで「びよん」、箱ひげ図はすっと追いかける
+    let moving = false;
+    bars.forEach((b, i) => {
+      b.v = b.v * 0.72 + (counts[i] - b.h) * 0.22;
+      b.h += b.v;
+      if (Math.abs(b.v) > 0.003 || Math.abs(counts[i] - b.h) > 0.003) moving = true; else { b.h = counts[i]; b.v = 0; }
+    });
+    for (const k in st) {
+      const dd = st[k] - disp[k];
+      if (Math.abs(dd) > 0.02) { disp[k] += dd * 0.35; moving = true; } else disp[k] = st[k];
+    }
+    drawHist(counts, histMax(counts));
+    drawGuides(disp);
+    drawBox(disp);
+    drawDots();
+    drawPanels(st);
+    raf = moving ? requestAnimationFrame(update) : 0;
+  }
+  const kick = () => { if (!raf) raf = requestAnimationFrame(update); };
+
+  // ---- ドラッグ ----
+  const svg = $('chart');
+  function scoreOf(e) {
+    const p = svg.createSVGPoint();
+    p.x = e.clientX; p.y = e.clientY;
+    const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    return Math.max(0, Math.min(100, Math.round((q.x - X0) / (X1 - X0) * 100)));
+  }
+  svg.addEventListener('pointerdown', e => {
+    const g = e.target.closest('.dot');
+    if (!g) return;
+    e.preventDefault();
+    stopAnim();
+    dragId = +g.dataset.i;
+    moveFrom = stats();
+    $('msg').textContent = '';
+    try { svg.setPointerCapture(e.pointerId); } catch (_) { /* 捕まえられなくても続ける */ }
+    kick();
+  });
+  svg.addEventListener('pointermove', e => {
+    if (dragId === null) return;
+    const v = scoreOf(e);
+    if (v !== data[dragId]) { data[dragId] = v; kick(); }
+  });
+  const end = () => { if (dragId !== null) { dragId = null; explain(); kick(); } };
+  svg.addEventListener('pointerup', end);
+  svg.addEventListener('pointercancel', end);
+
+  function explain() {
+    if (!moveFrom) return;
+    const st = stats();
+    const dm = Math.abs(st.q2 - moveFrom.q2), da = Math.abs(st.mean - moveFrom.mean);
+    let m = '';
+    if (da > 0.5 && dm < 0.01) m = '💡 中央値は動かないのに、平均値だけが動いた！平均値は、とびぬけた値（外れ値）に引っぱられやすい。';
+    else if (da > 0 && dm > 0) m = '💡 中央値も平均値も動いた。真ん中あたりの人の点数が変わると、中央値も変わるよ。';
+    $('msg').textContent = m;
+  }
+
+  // ---- ボタン ----
+  let anim = 0;
+  function stopAnim() { if (anim) { cancelAnimationFrame(anim); anim = 0; } }
+  // ある人の点数を、なめらかに目標の点数まで動かす
+  function slideTo(i, to, done) {
+    stopAnim();
+    const from = data[i], t0 = performance.now(), dur = 900;
+    (function step(t) {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - (1 - k) ** 3;
+      data[i] = Math.round(from + (to - from) * e);
+      kick();
+      if (k < 1) anim = requestAnimationFrame(step); else { anim = 0; done && done(); }
+    })(t0);
+  }
+  $('geniusBtn').addEventListener('click', () => {
+    // 100点でない人のうち、いちばん点数が高い人を 100点に
+    const cand = data.map((v, i) => [v, i]).filter(([v]) => v < 100).sort((a, b) => b[0] - a[0])[0];
+    if (!cand) return;
+    moveFrom = stats();
+    $('msg').textContent = '';
+    slideTo(cand[1], 100, explain);
+  });
+  $('normalBtn').addEventListener('click', () => { stopAnim(); data = [...NORMAL]; moveFrom = null; $('msg').textContent = ''; kick(); });
+  $('randomBtn').addEventListener('click', () => {
+    stopAnim();
+    // 平均55点くらいの山なりの分布
+    data = Array.from({ length: N }, () => {
+      const r = (Math.random() + Math.random() + Math.random()) / 3;
+      return Math.max(0, Math.min(100, Math.round(20 + r * 70)));
+    });
+    moveFrom = null; $('msg').textContent = ''; kick();
+  });
+  ['cQ', 'cM', 'cC'].forEach(id => $(id).addEventListener('change', kick));
+
+  kick();
+})();
+</script>
+</body>
+</html>
