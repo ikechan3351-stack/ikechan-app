@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>樹形図で確率</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e8f5e9 0%, #fffde7 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #2e7d32; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #1b5e20; text-align: center; }
+  .subtitle { margin: 0 0 12px; font-size: 0.9rem; color: #2e7d32; text-align: center; line-height: 1.8; }
+  .wrap { width: 100%; max-width: 980px; display: flex; flex-direction: column; gap: 12px; }
+  .card-box {
+    background: #fff; border-radius: 16px; padding: 12px 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+  .card-box h2 { font-size: 1.05rem; margin: 0 0 8px; color: #1b5e20; }
+
+  /* 問題えらび */
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pbtn {
+    border: 2px solid #c8e6c9; background: #fff; color: #1b5e20; border-radius: 12px; padding: 8px 12px;
+    font-size: 0.95rem; font-weight: bold; cursor: pointer; touch-action: manipulation; font-family: inherit;
+  }
+  .pbtn.on { background: #2e7d32; color: #fff; border-color: #2e7d32; }
+  .problem { margin-top: 10px; font-size: 1.15rem; font-weight: bold; line-height: 1.6; color: #333; }
+  .toggle { display: none; gap: 6px; margin-top: 8px; }
+  .toggle.on { display: flex; }
+  .toggle button {
+    border: 2px solid #ffcc80; background: #fff; color: #e65100; border-radius: 10px; padding: 6px 12px;
+    font-weight: bold; cursor: pointer; font-family: inherit; font-size: 0.95rem; touch-action: manipulation;
+  }
+  .toggle button.on { background: #ef6c00; color: #fff; border-color: #ef6c00; }
+
+  /* 実験エリア */
+  .table {
+    background: #2e7d32; background-image: radial-gradient(circle at 50% 30%, #43a047, #1b5e20);
+    border-radius: 14px; padding: 16px 10px; min-height: 150px;
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center;
+  }
+  .card { width: clamp(52px, 12vw, 76px); height: clamp(74px, 17vw, 106px); perspective: 600px; transition: transform 0.3s, opacity 0.3s; }
+  .card .inner { position: relative; width: 100%; height: 100%; transition: transform 0.45s; transform-style: preserve-3d; }
+  .card.down .inner { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    -webkit-backface-visibility: hidden; backface-visibility: hidden; box-shadow: 0 3px 8px rgba(0,0,0,0.3); font-weight: bold;
+  }
+  .front { background: #fff; border: 3px solid #fff; }
+  .back { transform: rotateY(180deg); background: repeating-linear-gradient(45deg, #5e35b1 0 8px, #7e57c2 8px 16px); border: 4px solid #fff; }
+  .front .big { font-size: clamp(1.6rem, 5vw, 2.4rem); line-height: 1; }
+  .front .small { font-size: 0.9rem; margin-top: 4px; }
+  .card.num .front { color: #1565c0; }
+  .card.hit .front { color: #d32f2f; background: #fff8e1; }
+  .card.miss .front { color: #546e7a; }
+  .card.picked { transform: translateY(-14px) scale(1.08); }
+  .card.picked .front { box-shadow: 0 0 0 4px #ffd54f, 0 6px 16px rgba(0,0,0,0.4); }
+  .card.used { opacity: 0.35; }
+  .shuffling .card { animation: jiggle 0.7s ease-in-out; }
+  @keyframes jiggle {
+    0%, 100% { transform: translate(0, 0) rotate(0); }
+    20% { transform: translate(-14px, -6px) rotate(-8deg); }
+    45% { transform: translate(12px, 8px) rotate(7deg); }
+    70% { transform: translate(-8px, 4px) rotate(-4deg); }
+  }
+  .coin {
+    width: 110px; height: 110px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 2.6rem; font-weight: bold; color: #6d4c41; background: radial-gradient(circle at 35% 35%, #fff59d, #fbc02d 70%, #f57f17);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.35), inset 0 0 0 6px rgba(255,255,255,0.35);
+  }
+  .coin.spin { animation: spin 0.9s ease-out; }
+  @keyframes spin { 0% { transform: rotateY(0) translateY(0); } 50% { transform: rotateY(900deg) translateY(-40px); } 100% { transform: rotateY(1800deg) translateY(0); } }
+
+  .result-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+  .slots { display: flex; gap: 6px; align-items: center; min-height: 48px; }
+  .slot {
+    min-width: 50px; padding: 6px 10px; border-radius: 10px; background: #fff8e1; border: 2px solid #ffd54f;
+    font-weight: bold; font-size: 1.2rem; text-align: center; line-height: 1.2;
+  }
+  .slot small { display: block; font-size: 0.7rem; color: #8d6e63; font-weight: normal; }
+  .res-text { font-size: 1.25rem; font-weight: bold; color: #e65100; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .btn {
+    border: none; border-radius: 12px; padding: 11px 18px; font-size: 1.05rem; font-weight: bold;
+    cursor: pointer; touch-action: manipulation; font-family: inherit; background: #e8f5e9; color: #1b5e20;
+  }
+  .btn.draw { background: #ef6c00; color: #fff; font-size: 1.15rem; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* 樹形図 */
+  .tree-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #tree { display: block; margin: 0 auto; width: 100%; height: auto; }
+  .flash { animation: flash 0.9s ease-in-out 3; }
+  @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .check-in { animation: pop 0.35s ease-out both; }
+  @keyframes pop { from { opacity: 0; transform: scale(0.2); } to { opacity: 1; transform: scale(1); } }
+  .check-in { transform-box: fill-box; transform-origin: center; }
+
+  /* 確率 */
+  .cond-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .cond-row select {
+    font-size: 1rem; padding: 8px 10px; border-radius: 10px; border: 2px solid #a5d6a7; font-weight: bold; font-family: inherit; max-width: 100%;
+  }
+  .btn.check { background: #2e7d32; color: #fff; }
+  .prob { display: none; margin-top: 12px; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .prob.on { display: flex; }
+  .prob .lead { font-size: 1.2rem; font-weight: bold; }
+  .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; font-weight: bold; }
+  .frac span { padding: 0 8px; line-height: 1.15; }
+  .frac span:first-child { border-bottom: 4px solid currentColor; }
+  .prob .frac { font-size: 2.6rem; }
+  .prob .eq { font-size: 2rem; font-weight: bold; }
+  .prob .words { width: 100%; text-align: center; font-size: 1rem; color: #555; }
+  .tally { margin-top: 10px; background: #f1f8e9; border-radius: 12px; padding: 8px 12px; font-size: 0.98rem; line-height: 1.7; }
+
+  .help {
+    width: 100%; max-width: 980px; margin-top: 12px;
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #1b5e20; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+<h1>🌳 <ruby>樹形図<rt>じゅけいず</rt></ruby>で<ruby>確率<rt>かくりつ</rt></ruby></h1>
+<p class="subtitle">実際に引いてみて、その結果が樹形図のどこにあたるかを見つけよう。</p>
+
+<div class="wrap">
+  <div class="card-box">
+    <h2>📋 問題をえらぶ</h2>
+    <div class="presets" id="presets"></div>
+    <div class="toggle" id="repToggle">
+      <button data-rep="0" class="on">引いたくじをもどさない</button>
+      <button data-rep="1">引いたくじをもどす</button>
+    </div>
+    <div class="problem" id="problem"></div>
+  </div>
+
+  <div class="card-box">
+    <h2>🎴 実験</h2>
+    <div class="table" id="table"></div>
+    <div class="result-row">
+      <span style="font-weight:bold">結果：</span>
+      <div class="slots" id="slots"><span style="color:#999">まだ引いていません</span></div>
+      <span class="res-text" id="resText"></span>
+    </div>
+    <div class="btns">
+      <button class="btn draw" id="drawBtn">🎲 実際に引いてみる</button>
+      <button class="btn" id="draw10Btn">⚡ 10回まとめて</button>
+      <button class="btn" id="clearLogBtn">記録を消す</button>
+    </div>
+  </div>
+
+  <div class="card-box">
+    <h2>🌳 樹形図（すべての場合）</h2>
+    <div class="tree-scroll"><svg id="tree" aria-label="樹形図"></svg></div>
+  </div>
+
+  <div class="card-box">
+    <h2>✅ 確率を求めよう</h2>
+    <div class="cond-row">
+      <select id="condSel"></select>
+      <button class="btn check" id="checkBtn">✅ 条件に合うルートにチェック</button>
+      <button class="btn" id="uncheckBtn">チェックを消す</button>
+    </div>
+    <div class="prob" id="prob"></div>
+    <div class="tally" id="tally"></div>
+  </div>
+</div>
+
+<div class="help">
+  <h2>📝 使いかた</h2>
+  <ul>
+    <li>問題をえらんで「🎲 実際に引いてみる」を押すと、カードがまざって引かれます。結果のルートが樹形図で<b style="color:#f9a825">金色</b>に光ります。</li>
+    <li>条件をえらんで「✅ チェック」を押すと、条件に合うルートに ✓ がつき、確率が分数で出ます。</li>
+    <li>「同時に2本引く」問題では、「当①と は①」と「は①と 当①」は同じ組なので、樹形図には1つだけ書いています。</li>
+    <li>「10回まとめて」で実験を何回もくり返すと、条件に合った割合が確率に近づいていくかをたしかめられます。</li>
+  </ul>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const C = ['①', '②', '③', '④', '⑤'];
+
+  // ---- 問題（プリセット）----
+  const NUM_CARDS = [1, 2, 3, 4].map(v => ({ label: String(v), type: 'num', v }));
+  const LOTS = [
+    { label: '当①', type: 'hit' }, { label: '当②', type: 'hit' },
+    { label: 'は①', type: 'miss' }, { label: 'は②', type: 'miss' }, { label: 'は③', type: 'miss' },
+  ];
+  const COIN = [{ label: '表', type: 'coin' }, { label: '裏', type: 'coin' }];
+  const hits = p => p.filter(x => x.type === 'hit').length;
+  const heads = p => p.filter(x => x.label === '表').length;
+  const PRESETS = {
+    cards: {
+      name: '🔢 カードで整数づくり',
+      text: '1, 2, 3, 4 の4枚のカードから2枚を順に引いて並べ、2けたの整数をつくる。',
+      kind: 'card', items: NUM_CARDS, k: 2, mode: 'perm', col: i => `${i ? '一の位' : '十の位'}`,
+      result: p => `${p[0].v}${p[1].v}`,
+      conds: [
+        ['偶数になる', p => p[1].v % 2 === 0],
+        ['3の倍数になる', p => (p[0].v * 10 + p[1].v) % 3 === 0],
+        ['30以上になる', p => p[0].v * 10 + p[1].v >= 30],
+        ['十の位が一の位より大きい', p => p[0].v > p[1].v],
+      ],
+    },
+    lotsTogether: {
+      name: '🎟️ くじを同時に2本',
+      text: '当たり2本・はずれ3本の5本のくじから、同時に2本引く。',
+      kind: 'card', items: LOTS, k: 2, mode: 'comb', col: i => (i ? '2本目' : '1本目'),
+      result: p => `${p[0].label}・${p[1].label}`,
+      conds: [
+        ['少なくとも1本は当たり', p => hits(p) >= 1],
+        ['2本とも当たり', p => hits(p) === 2],
+        ['1本だけ当たり', p => hits(p) === 1],
+        ['2本ともはずれ', p => hits(p) === 0],
+      ],
+    },
+    coin: {
+      name: '🪙 コインを3回投げる',
+      text: '1枚のコインを3回投げて、表・裏の出方を調べる。',
+      kind: 'coin', items: COIN, k: 3, mode: 'rep', col: i => `${i + 1}回目`,
+      result: p => p.map(x => x.label).join(''),
+      conds: [
+        ['表が2回以上出る', p => heads(p) >= 2],
+        ['3回とも同じ面', p => heads(p) === 0 || heads(p) === 3],
+        ['表がちょうど1回', p => heads(p) === 1],
+        ['少なくとも1回は表', p => heads(p) >= 1],
+      ],
+    },
+    lotsOrder: {
+      name: '🎟️ くじを順に引く',
+      text: '', // もどす／もどさないで変わる
+      kind: 'card', items: LOTS, k: 2, mode: 'perm', col: i => (i ? '2本目' : '1本目'),
+      result: p => `${p[0].label}→${p[1].label}`,
+      conds: [
+        ['1本目が当たり', p => p[0].type === 'hit'],
+        ['2本目が当たり', p => p[1].type === 'hit'],
+        ['2本とも当たり', p => hits(p) === 2],
+        ['少なくとも1本は当たり', p => hits(p) >= 1],
+      ],
+    },
+  };
+
+  let key = 'cards', P = PRESETS.cards, rep = false;
+  let leaves = [];        // すべての場合（index の配列）
+  let lastPath = null;    // 実験の結果
+  let checked = false;    // 条件チェック中か
+  let log = [];           // 実験の記録
+  let busy = false;
+
+  const mode = () => (key === 'lotsOrder' && rep ? 'rep' : P.mode);
+  function problemText() {
+    if (key !== 'lotsOrder') return P.text;
+    return rep
+      ? '当たり2本・はずれ3本の5本のくじから1本引き、<b>くじをもどしてから</b>もう1本引く。'
+      : '当たり2本・はずれ3本の5本のくじから1本引き、<b>もどさずに</b>続けてもう1本引く。';
+  }
+
+  // ---- すべての場合を書き出す ----
+  function enumerate() {
+    const n = P.items.length, out = [], m = mode();
+    (function rec(path) {
+      if (path.length === P.k) { out.push(path); return; }
+      for (let i = 0; i < n; i++) {
+        if (m !== 'rep' && path.includes(i)) continue;
+        if (m === 'comb' && path.length && i < path[path.length - 1]) continue;
+        rec([...path, i]);
+      }
+    })([]);
+    return out;
+  }
+  const items = path => path.map(i => P.items[i]);
+  const keyOf = path => path.join('-');
+
+  // ---- 樹形図 ----
+  const ROW = 32, TOP = 44, COLW = 120, X0 = 30;
+  function renderTree() {
+    const svg = $('tree');
+    const k = P.k, L = leaves.length;
+    const resX = X0 + k * COLW + 10, checkX = resX + 150;
+    const W = checkX + 40, H = TOP + L * ROW + 10;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.style.maxWidth = Math.round(W * 1.35) + 'px';
+    svg.style.minWidth = Math.min(W, 420) + 'px'; // せまい画面では横にスクロール
+
+    const cond = checked ? P.conds[+$('condSel').value][1] : null;
+    const match = new Set(cond ? leaves.filter(p => cond(items(p))).map(keyOf) : []);
+    const expKey = lastPath ? keyOf(lastPath) : null;
+    const onExp = prefix => expKey !== null && (expKey + '-').startsWith(keyOf(prefix) + '-');
+    const onMatch = prefix => [...match].some(m => (m + '-').startsWith(keyOf(prefix) + '-'));
+
+    // 各ノードの縦位置：その下にある葉の真ん中
+    const nodes = new Map(); // keyOf(prefix) -> { y, prefix }
+    leaves.forEach((p, row) => {
+      for (let d = 1; d <= k; d++) {
+        const pre = p.slice(0, d), kk = keyOf(pre);
+        const nd = nodes.get(kk) || { first: row, last: row, prefix: pre };
+        nd.last = row;
+        nodes.set(kk, nd);
+      }
+    });
+    const yOf = nd => TOP + ((nd.first + nd.last) / 2) * ROW + ROW / 2;
+    const xOf = d => X0 + (d - 1) * COLW + 30; // d = 1..k
+
+    let h = '';
+    // 列の見出し
+    for (let d = 1; d <= k; d++) h += `<text x="${xOf(d)}" y="22" font-size="14" font-weight="bold" fill="#2e7d32" text-anchor="middle">${P.col(d - 1)}</text>`;
+    h += `<text x="${resX + 50}" y="22" font-size="14" font-weight="bold" fill="#2e7d32" text-anchor="middle">結果</text>`;
+    // 実験した行の金色の帯
+    if (expKey !== null) {
+      const row = leaves.findIndex(p => keyOf(p) === expKey);
+      if (row >= 0) h += `<rect class="flash" id="expRow" x="4" y="${TOP + row * ROW + 2}" width="${W - 8}" height="${ROW - 4}" rx="8" fill="#fff59d"/>`;
+    }
+    // 枝
+    for (const nd of nodes.values()) {
+      const d = nd.prefix.length;
+      if (d === 1) continue;
+      const parent = nodes.get(keyOf(nd.prefix.slice(0, -1)));
+      const x1 = xOf(d - 1) + 24, y1 = yOf(parent), x2 = xOf(d) - 24, y2 = yOf(nd);
+      const exp = onExp(nd.prefix), ok = onMatch(nd.prefix);
+      const col = exp ? '#f9a825' : ok ? '#43a047' : '#b0bec5';
+      h += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="${exp ? 5 : ok ? 3 : 1.8}" stroke-linecap="round"/>`;
+    }
+    // ノード
+    for (const nd of nodes.values()) {
+      const d = nd.prefix.length, it = P.items[nd.prefix[d - 1]];
+      const exp = onExp(nd.prefix);
+      const fg = it.type === 'hit' ? '#d32f2f' : it.type === 'miss' ? '#546e7a' : '#1565c0';
+      h += `<rect x="${xOf(d) - 24}" y="${yOf(nd) - 13}" width="48" height="26" rx="8" fill="${exp ? '#ffd54f' : '#fff'}" stroke="${exp ? '#f9a825' : '#cfd8dc'}" stroke-width="${exp ? 3 : 1.5}"/>`;
+      h += `<text x="${xOf(d)}" y="${yOf(nd) + 1}" font-size="16" font-weight="bold" fill="${fg}" text-anchor="middle" dominant-baseline="central">${it.label}</text>`;
+    }
+    // 結果とチェック
+    let order = 0;
+    leaves.forEach((p, row) => {
+      const y = TOP + row * ROW + ROW / 2, kk = keyOf(p), ok = match.has(kk);
+      h += `<line x1="${xOf(k) + 26}" y1="${y}" x2="${resX - 4}" y2="${y}" stroke="#eceff1" stroke-dasharray="3 3"/>`;
+      h += `<text x="${resX}" y="${y + 1}" font-size="15" font-weight="${ok || kk === expKey ? 'bold' : 'normal'}" fill="${ok ? '#2e7d32' : '#455a64'}" dominant-baseline="central">${P.result(items(p))}</text>`;
+      if (ok) {
+        h += `<g class="check-in" style="animation-delay:${order++ * 0.06}s"><circle cx="${checkX}" cy="${y}" r="12" fill="#43a047"/><path d="M${checkX - 6},${y} l4,5 l8,-10" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+      }
+    });
+    svg.innerHTML = h;
+  }
+
+  // ---- 確率 ----
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const fracHTML = (a, b, color) => `<span class="frac" style="color:${color}"><span>${a}</span><span>${b}</span></span>`;
+  function renderProb() {
+    const el = $('prob');
+    if (!checked) { el.classList.remove('on'); el.innerHTML = ''; return; }
+    const [name, fn] = P.conds[+$('condSel').value];
+    const a = leaves.filter(p => fn(items(p))).length, b = leaves.length, g = gcd(a, b) || 1;
+    let h = `<div class="lead">「${name}」確率 ＝</div>${fracHTML(a, b, '#2e7d32')}`;
+    if (a === 0) h += `<span class="eq">＝ 0</span>`;
+    else if (a === b) h += `<span class="eq">＝ 1</span>`;
+    else if (g > 1) h += `<span class="eq">＝</span>${fracHTML(a / g, b / g, '#e65100')}`;
+    h += `<div class="words">全部で <b>${b}</b> 通りのうち、条件に合うのは <b style="color:#2e7d32">${a}</b> 通り（どれも同じ程度に起こる）</div>`;
+    el.innerHTML = h;
+    el.classList.add('on');
+  }
+  function renderTally() {
+    const [name, fn] = P.conds[+$('condSel').value];
+    const n = log.length;
+    if (!n) { $('tally').innerHTML = `📊 実験の記録：まだありません。「${name}」が何回起こるか、引いて調べてみよう。`; return; }
+    const m = log.filter(p => fn(items(p))).length;
+    $('tally').innerHTML = `📊 実験 <b>${n}</b> 回のうち「${name}」は <b>${m}</b> 回 → 割合 <b>${(m / n).toFixed(2)}</b>` +
+      `<br><span style="color:#666;font-size:0.9em">実験の回数を多くすると、この割合は確率に近づいていく。</span>`;
+  }
+
+  // ---- 実験エリア ----
+  let cardEls = [];
+  function buildTable() {
+    const t = $('table');
+    t.innerHTML = '';
+    cardEls = [];
+    if (P.kind === 'coin') {
+      const c = document.createElement('div');
+      c.className = 'coin'; c.id = 'coin'; c.textContent = '表';
+      t.appendChild(c);
+      return;
+    }
+    P.items.forEach((it, i) => {
+      const d = document.createElement('div');
+      d.className = `card ${it.type}`;
+      d.dataset.i = i;
+      const front = it.type === 'num' ? `<span class="big">${it.label}</span>`
+        : it.type === 'hit' ? `<span class="big">当</span><span class="small">当たり${it.label.slice(1)}</span>`
+        : `<span class="big" style="font-size:1.5rem">はずれ</span><span class="small">${it.label.slice(1)}</span>`;
+      d.innerHTML = `<div class="inner"><div class="face front">${front}</div><div class="face back"></div></div>`;
+      t.appendChild(d);
+      cardEls.push(d);
+    });
+  }
+  function setSlots(path, partial) {
+    const s = $('slots');
+    if (!path) { s.innerHTML = '<span style="color:#999">まだ引いていません</span>'; return; }
+    s.innerHTML = path.map((i, d) => `<div class="slot"><small>${P.col(d)}</small>${P.items[i].label}</div>`).join('');
+    $('resText').textContent = partial ? '' : '→ ' + P.result(items(path));
+  }
+  async function shuffleCards() {
+    const t = $('table');
+    cardEls.forEach(c => c.classList.add('down'));
+    await sleep(450);
+    t.classList.add('shuffling');
+    await sleep(700);
+    t.classList.remove('shuffling');
+    // 並びをばらばらにする
+    const arr = [...cardEls].sort(() => Math.random() - 0.5);
+    arr.forEach(c => t.appendChild(c));
+    await sleep(150);
+  }
+  function randomPath() {
+    const n = P.items.length, m = mode();
+    if (m === 'rep') return Array.from({ length: P.k }, () => Math.floor(Math.random() * n));
+    const idx = [...Array(n).keys()].sort(() => Math.random() - 0.5).slice(0, P.k);
+    // 同時に引くときは、樹形図と同じ並び（小さい番号から）にそろえる
+    return m === 'comb' ? idx.sort((a, b) => a - b) : idx;
+  }
+
+  async function draw() {
+    if (busy) return;
+    busy = true; setButtons();
+    const path = randomPath();
+    lastPath = null; renderTree();
+    $('resText').textContent = '';
+    if (P.kind === 'coin') {
+      const coin = $('coin');
+      for (let d = 0; d < P.k; d++) {
+        coin.classList.remove('spin'); void coin.offsetWidth; coin.classList.add('spin');
+        await sleep(450);
+        coin.textContent = P.items[path[d]].label;
+        await sleep(500);
+        setSlots(path.slice(0, d + 1), d < P.k - 1);
+      }
+    } else {
+      cardEls.forEach(c => c.classList.remove('picked', 'used'));
+      const m = mode();
+      await shuffleCards();
+      if (m === 'comb') {
+        // 同時に引く：2本いっしょに持ち上げて開く
+        path.forEach(i => cardEls[i].classList.add('picked'));
+        await sleep(350);
+        path.forEach(i => cardEls[i].classList.remove('down'));
+        await sleep(650);
+        setSlots(path, false);
+      } else {
+        for (let d = 0; d < P.k; d++) {
+          const c = cardEls[path[d]];
+          c.classList.add('picked');
+          await sleep(300);
+          c.classList.remove('down');
+          await sleep(650);
+          setSlots(path.slice(0, d + 1), d < P.k - 1);
+          if (m === 'rep') {
+            if (d < P.k - 1) { c.classList.remove('picked'); await sleep(200); await shuffleCards(); }
+          } else {
+            c.classList.remove('picked'); c.classList.add('used');
+          }
+        }
+      }
+    }
+    lastPath = path;
+    log.push(path);
+    setSlots(path, false);
+    renderTree(); renderTally();
+    const row = document.getElementById('expRow');
+    if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    busy = false; setButtons();
+  }
+  function draw10() {
+    if (busy) return;
+    for (let i = 0; i < 10; i++) log.push(randomPath());
+    lastPath = log[log.length - 1];
+    setSlots(lastPath, false);
+    if (P.kind === 'coin') $('coin').textContent = P.items[lastPath[P.k - 1]].label;
+    else { cardEls.forEach(c => c.classList.remove('down', 'picked', 'used')); }
+    renderTree(); renderTally();
+  }
+  function setButtons() { ['drawBtn', 'draw10Btn', 'clearLogBtn'].forEach(id => { $(id).disabled = busy; }); }
+
+  // ---- 問題の切りかえ ----
+  function load(k) {
+    key = k; P = PRESETS[k];
+    document.querySelectorAll('.pbtn').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+    $('repToggle').classList.toggle('on', k === 'lotsOrder');
+    $('problem').innerHTML = '📝 ' + problemText();
+    const sel = $('condSel');
+    sel.innerHTML = '';
+    P.conds.forEach(([name], i) => sel.add(new Option(name, i)));
+    leaves = enumerate();
+    lastPath = null; checked = false; log = [];
+    buildTable(); setSlots(null); $('resText').textContent = '';
+    renderTree(); renderProb(); renderTally();
+  }
+  Object.entries(PRESETS).forEach(([k, p]) => {
+    const b = document.createElement('button');
+    b.className = 'pbtn'; b.dataset.k = k; b.textContent = p.name;
+    b.addEventListener('click', () => { if (!busy) load(k); });
+    $('presets').appendChild(b);
+  });
+  document.querySelectorAll('#repToggle button').forEach(b => b.addEventListener('click', () => {
+    if (busy) return;
+    rep = b.dataset.rep === '1';
+    document.querySelectorAll('#repToggle button').forEach(o => o.classList.toggle('on', o === b));
+    load('lotsOrder');
+  }));
+  $('drawBtn').addEventListener('click', draw);
+  $('draw10Btn').addEventListener('click', draw10);
+  $('clearLogBtn').addEventListener('click', () => { log = []; renderTally(); });
+  $('checkBtn').addEventListener('click', () => { checked = true; renderTree(); renderProb(); });
+  $('uncheckBtn').addEventListener('click', () => { checked = false; renderTree(); renderProb(); });
+  $('condSel').addEventListener('change', () => { if (checked) { renderTree(); renderProb(); } renderTally(); });
+
+  load('cards');
+})();
+</script>
+</body>
+</html>
