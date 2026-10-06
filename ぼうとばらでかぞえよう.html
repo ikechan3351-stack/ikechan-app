@@ -57,6 +57,7 @@
   .disp-main { font-size: clamp(2.4rem, 9vmin, 6rem); font-weight: 900; line-height: 1.1; color: var(--accent-dark); }
   .disp-main.secret { color: #90a4ae; cursor: pointer; }
   .disp-main .target { color: #d81b60; }
+  .disp-main.formula { font-size: clamp(2rem, 7vmin, 4.8rem); }
   .disp-yomi { font-size: clamp(1.05rem, 3.2vmin, 1.9rem); font-weight: bold; min-height: 1.4em; }
   .disp-shiki { font-size: clamp(1rem, 2.8vmin, 1.5rem); display: flex; gap: 0.4em; flex-wrap: wrap; justify-content: center; align-items: center; min-height: 1.6em; }
   .disp-shiki .to { font-weight: bold; }
@@ -243,6 +244,30 @@
 
   [hidden] { display: none !important; }
 
+  /* ===== ならべかた ===== */
+  .stage { display: flex; flex-direction: column; gap: 10px; }
+  /* 電子黒板など 横に 広い 画面：左に ブロック、右に 数字と ボタン */
+  @media (min-width: 1000px) and (orientation: landscape) {
+    .wrap { max-width: none; }
+    .stage {
+      display: grid; gap: 12px; align-items: start;
+      grid-template-columns: minmax(0, 1fr) clamp(380px, 28vw, 520px);
+      grid-template-areas: "board disp" "board ans" "board ctrl";
+      grid-template-rows: auto auto 1fr;
+    }
+    .display  { grid-area: disp; }
+    .board    { grid-area: board; }
+    .answer   { grid-area: ans; }
+    .controls { grid-area: ctrl; }
+    .hide-btn { position: static; margin-top: 4px; }
+    .disp-main { font-size: clamp(2.6rem, 6vw, 6.5rem); white-space: nowrap; }
+    .disp-main.formula { font-size: clamp(1.8rem, 3.2vw, 4.8rem); }
+    .controls .btn-row { width: 100%; }
+    .controls .act-btn { flex: 1 1 45%; justify-content: center; }
+    .controls .b-reset, .controls .b-next { flex-basis: 100%; }
+    .topbar { flex-wrap: nowrap; }
+  }
+
   @media (max-width: 600px) {
     body { padding: 8px 10px 20px; }
     .act-btn { padding: 6px 12px; }
@@ -277,6 +302,8 @@
     <button class="mode-btn" data-mode="teacher">🧑‍🏫 <ruby>先生<rt>せんせい</rt></ruby>モード</button>
   </nav>
 
+  <!-- 広い画面では 左に ブロック、右に 数字と ボタン -->
+  <div class="stage">
   <!-- かずの ひょうじ -->
   <section class="display" id="display" aria-live="polite">
     <div class="disp-main" id="dispMain"></div>
@@ -347,6 +374,7 @@
       </div>
     </div>
   </section>
+  </div>
 </div>
 
 <!-- せってい -->
@@ -454,6 +482,7 @@ const state = {
 // 画面だけの いちじてきな じょうたい（数そのものではない）
 const ui = { busy: false, msg: '', msgAlert: false, msgTimer: 0, hintBreak: false, input: '', lastQ: null };
 
+const WIDE = window.matchMedia("(min-width: 1000px) and (orientation: landscape)");   // 広い画面の ならべかたか
 const ONES_LIMIT = 19;                             // ばらは 19こ まで（それより多いと まとめてもらう）
 const useHundreds = () => settings.max === 999;
 const tensLimit = () => (useHundreds() ? 19 : 9);
@@ -667,6 +696,7 @@ function renderDisplay() {
       else { m.textContent = v; y.textContent = yomi(v); s.innerHTML = exprHTML(); }
       break;
     case 'make':
+      m.classList.add('formula');
       m.innerHTML = q.done ? `⭐ ${q.target} できた！` : `<span class="target">${q.target}</span> を つくろう`;
       y.textContent = q.done ? yomi(q.target) : `「${yomi(q.target)}」を ぼうと ばらで つくってね`;
       s.innerHTML = exprHTML();
@@ -678,8 +708,9 @@ function renderDisplay() {
       break;
     case 'calc': {
       const op = q.op === '+' ? '＋' : '−';
+      m.classList.add('formula');
       m.textContent = `${q.a} ${op} ${q.b} ＝ ${q.phase === 'done' ? q.answer : '？'}`;
-      if (q.phase === 'move') y.innerHTML = `${q.op === '+' ? 'いれる' : 'とる'}：${minisHTML(q.remaining)} あと ${q.remaining}`;
+      if (q.phase === 'move') y.innerHTML = `${q.op === '+' ? 'いれる' : 'とる'}：${minisHTML(q.remaining)} <span style="white-space: nowrap">あと ${q.remaining}</span>`;
       else if (q.phase === 'bundle') y.textContent = '10こ あつまったね。まとめよう！';
       else if (q.phase === 'answer') y.textContent = 'ブロックを 見て、こたえを 入れよう';
       else y.textContent = yomi(q.answer);
@@ -776,6 +807,7 @@ function render(opts) {
   renderControls();
   renderBubble();
   renderSettings();
+  fitUnit();
 }
 // 数を かえたあとは かならず これを よぶ（もんだいの すすみぐあい → がめん）
 function commit(opts) {
@@ -791,9 +823,23 @@ function fitUnit() {
   const stack = useHundreds() && W < 640;
   board.classList.toggle('stack', stack);
   const byW = useHundreds() ? (stack ? W / 21 : W / 34) : W / 21;
-  const byH = Math.max(H * 0.42, H - 480) / 11;
-  const u = Math.max(14, Math.min(46, byW, byH));
+  const wide = WIDE.matches;
+  const byH = wide ? (H - 250) / 11 : Math.max(H * 0.42, H - 480) / 11;
+  let u = Math.max(14, Math.min(wide ? 80 : 46, byW, byH));
   board.style.setProperty('--u', u.toFixed(1) + 'px');
+  // 1がめんに おさまるように、はみ出した分だけ 小さくする
+  //  広い画面：ブロックの ばしょが 画面の下に おさまれば よい
+  //  ふつう　：下の ボタンまで おさめる（こたえる ところは 出たときに スクロールするので 数えない）
+  for (let i = 0; i < 3; i++) {
+    const ans = $('#answer');
+    const extra = ans.hidden ? 0 : ans.offsetHeight + 10;
+    const over = wide
+      ? board.getBoundingClientRect().bottom + window.scrollY + 20 - H
+      : document.documentElement.scrollHeight - extra - H;
+    if (over <= 2 || u <= 18 || window.innerWidth < 900) break;   // スマホなどは スクロールで よい
+    u = Math.max(18, u - over / 10.5);
+    board.style.setProperty('--u', u.toFixed(1) + 'px');
+  }
 }
 
 /* =========================================================
