@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大きな数の 位取り表</title>
+<style>
+  :root {
+    --ink: #263238; --accent: #3949ab; --accent-dark: #283593; --soft: #c5cae9;
+    --warn: #bf360c; --warn-bg: #fff3e0; --good: #e65100; --good-bg: #fffde7;
+    /* 4けたの まとまりの 色（色だけで なく 枠線の 形でも 区別する） */
+    --g0: #546e7a; --g0-bg: #f5f7f8;   /* 一（一の位〜千の位）：灰・細い実線 */
+    --g1: #2e7d32; --g1-bg: #edf7ee;   /* 万：緑・点線 */
+    --g2: #1565c0; --g2-bg: #e8f1fc;   /* 億：青・太い実線 */
+    --g3: #ad1457; --g3-bg: #fcebf2;   /* 兆：赤むらさき・二重線 */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f4f5fc 0%, #dfe3f5 100%);
+    min-height: 100vh;
+    padding: 10px 16px 24px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  button, input { font-family: inherit; color: inherit; }
+  .no-ruby rt { display: none; }
+  [hidden] { display: none !important; }
+  .wrap { width: 100%; max-width: 1500px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ===== 上の段 ===== */
+  .topbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .back-link { font-size: 0.85rem; color: var(--accent-dark); text-decoration: none; }
+  .title-box { flex: 1; text-align: center; min-width: 220px; }
+  h1 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.8rem); color: var(--accent-dark); }
+  .subtitle { margin: 0; font-size: 0.8rem; color: #546e7a; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tool-btn {
+    min-height: 48px; min-width: 48px; padding: 4px 12px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 0.95rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    min-height: 52px; padding: 6px 14px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: clamp(0.9rem, 2vmin, 1.1rem); font-weight: bold; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .chip {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.active::before { content: "✔ "; }
+  .setup {
+    background: #fff; border-radius: 18px; padding: 6px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; gap: 8px 14px; align-items: center; justify-content: center; flex-wrap: wrap;
+  }
+  .setup:empty { display: none; }
+  .sgrp { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .slabel { font-weight: 900; color: var(--accent-dark); }
+
+  /* ===== ひとこと ===== */
+  .say {
+    font-size: clamp(1.05rem, 2.4vmin, 1.4rem); line-height: 1.9; font-weight: bold; text-align: center;
+    background: #fff; border-radius: 14px; padding: 4px 16px; min-height: 2.2em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .say::before { content: "🔢 "; }
+  .say.warn { background: var(--warn-bg); color: var(--warn); }
+  .say.warn::before { content: "🤔 "; }
+  .say.good { background: var(--good-bg); color: var(--good); }
+  .say.good::before { content: "⭐ "; }
+
+  /* ===== ボタン ===== */
+  .act-btn {
+    min-height: 52px; min-width: 52px; padding: 4px 12px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: clamp(1rem, 2.2vmin, 1.2rem); font-weight: 900; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12); line-height: 1.25;
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+  .b-reset { background: #f5f5f5; border-color: #cfd8dc; }
+  .b-main { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .b-up { background: #fff3e0; border-color: #ffb74d; font-size: clamp(1.2rem, 3vmin, 1.6rem); min-width: 120px; }
+  .b-down { background: #e1f5fe; border-color: #4fc3f7; font-size: clamp(1.2rem, 3vmin, 1.6rem); min-width: 120px; }
+  .b-hint { background: #f3e5f5; border-color: #ce93d8; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+  /* ===== ならび ===== */
+  .stage { display: grid; gap: 10px; align-items: start; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); }
+  .stage > .full { grid-column: 1 / -1; }
+  .card {
+    background: #fff; border-radius: 18px; padding: 6px 12px 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  }
+  .card h3 { margin: 0; font-size: clamp(0.95rem, 2vmin, 1.15rem); color: var(--accent-dark); }
+  .note { margin: 0; font-size: 0.95rem; font-weight: bold; text-align: center; line-height: 1.7; }
+
+  /* ===== 位取り表 =====
+     4けた（千・百・十・一）ずつの まとまりを 1つの わく（.grp）に する。
+     まとまりは 色と 枠線の 形の 両方で 区別する（色が 見分けにくい 子にも わかるように）。 */
+  .pt-scroll { overflow-x: auto; padding: 4px 2px 6px; }
+  .pt { display: flex; gap: 6px; min-width: max-content; margin: 0 auto; width: 100%; }
+  .grp {
+    flex: 1 1 0; min-width: calc(4 * 46px + 16px); border-radius: 14px; padding: 0 4px 4px;
+    display: flex; flex-direction: column;
+  }
+  .grp.g0 { background: var(--g0-bg); border: 3px solid var(--g0); }
+  .grp.g1 { background: var(--g1-bg); border: 4px dashed var(--g1); }
+  .grp.g2 { background: var(--g2-bg); border: 5px solid var(--g2); }
+  .grp.g3 { background: var(--g3-bg); border: 7px double var(--g3); }
+  .grp-h {
+    text-align: center; font-weight: 900; font-size: clamp(1.3rem, 3.2vmin, 2rem); line-height: 1.5;
+    border-bottom: 2px solid rgba(0,0,0,0.12); margin: 0 -4px 2px;
+  }
+  .g0 .grp-h { color: var(--g0); } .g1 .grp-h { color: var(--g1); }
+  .g2 .grp-h { color: var(--g2); } .g3 .grp-h { color: var(--g3); }
+  .grp-h small { font-size: 0.5em; margin-left: 2px; }
+  .cols { display: grid; grid-template-columns: repeat(4, minmax(46px, 1fr)); gap: 4px; }
+  .col { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; }
+  .sub { text-align: center; font-weight: 900; font-size: clamp(1rem, 2.3vmin, 1.35rem); color: #37474f; }
+  .col.c3 .sub { border-left: 0; }
+  .ud {
+    min-height: 48px; border-radius: 10px; border: 2px solid #cfd8dc; background: #fff; cursor: pointer;
+    font-size: 1.1rem; font-weight: 900; color: #546e7a; touch-action: manipulation; padding: 0;
+  }
+  .ud:active { background: #eceff1; }
+  .dg {
+    position: relative; min-height: clamp(64px, 11vmin, 104px); border-radius: 12px; border: 3px solid #90a4ae; background: #fff;
+    cursor: pointer; touch-action: manipulation; padding: 0; overflow: visible;
+    font-size: clamp(2rem, 6vmin, 3.6rem); font-weight: 900; line-height: 1;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12);
+  }
+  .dg .dv { display: inline-block; position: relative; z-index: 2; }
+  .dg.lead .dv { color: #cfd8dc; }                /* 上の位の 0（まだ つかって いない 位）は うすく */
+  .dg.zero:not(.lead) { background: #fffde7; border-color: #f9a825; }   /* とちゅうの 0 は 目立たせる */
+  .dg.zero:not(.lead) .dv { color: #e65100; }
+  .dg.hit { outline: 5px solid #fdd835; outline-offset: 1px; }
+  .dg.pop .dv { animation: pop 0.7s ease-out; }
+  @keyframes pop { 0% { transform: scale(0.2); opacity: 0; } 60% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); } }
+  .dv.moving { transition: transform 0.75s cubic-bezier(.4,.1,.3,1), opacity 0.75s; }
+  .dv.fade { opacity: 0; }
+  .pname { text-align: center; font-size: clamp(0.72rem, 1.6vmin, 0.95rem); font-weight: bold; color: #455a64; line-height: 1.3; min-height: 1.3em; white-space: nowrap; }
+  .pname.rep { color: #e65100; }
+  .no-pname .pname { display: none; }
+
+  /* ===== 読み方の パネル ===== */
+  .reads { display: flex; flex-direction: column; gap: 6px; }
+  .rrow { display: grid; grid-template-columns: 7.5em 1fr; gap: 8px; align-items: center; border-radius: 12px; border: 2px solid #e8eaf6; padding: 4px 10px; }
+  .rlab { font-weight: 900; color: var(--accent-dark); font-size: 0.95rem; line-height: 1.4; }
+  .rval { font-weight: 900; font-size: clamp(1.3rem, 3.6vmin, 2.2rem); line-height: 1.5; word-break: break-all; }
+  .rval.kana { font-size: clamp(1.05rem, 2.8vmin, 1.6rem); color: #37474f; }
+  .rval .gs { display: inline-block; padding: 0 0.12em; border-radius: 6px; }
+  .rval .gs.g1 { color: var(--g1); } .rval .gs.g2 { color: var(--g2); } .rval .gs.g3 { color: var(--g3); }
+  .unit-k { font-size: 0.8em; }
+  .unit-k.g1 { color: var(--g1); } .unit-k.g2 { color: var(--g2); } .unit-k.g3 { color: var(--g3); }
+  .digits-big { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 0; font-weight: 900; font-size: clamp(1.8rem, 5.5vmin, 3.2rem); line-height: 1.2; padding: 4px 0 2px; }
+  .digits-big .d { display: inline-block; min-width: 0.62em; text-align: center; }
+  .digits-big .d.cur { background: #fff59d; border-radius: 6px; }
+  .digits-big .sep {
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    width: 0.5em; align-self: stretch; transition: width 0.3s;
+  }
+  .digits-big .sep i { display: block; width: 4px; flex: 1; border-radius: 2px; }
+  .digits-big .sep b { font-size: 0.42em; line-height: 1.2; white-space: nowrap; }
+  .digits-big .sep.g1 i { background: var(--g1); } .digits-big .sep.g1 b { color: var(--g1); }
+  .digits-big .sep.g2 i { background: var(--g2); } .digits-big .sep.g2 b { color: var(--g2); }
+  .digits-big .sep.g3 i { background: var(--g3); } .digits-big .sep.g3 b { color: var(--g3); }
+  .digits-big .sep.off { width: 0; visibility: hidden; }
+  .digits-big .sep.drop i { animation: drop 0.45s ease-out; transform-origin: top; }
+  @keyframes drop { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  .keta { text-align: center; font-weight: 900; color: #546e7a; margin: 0; }
+
+  /* ===== きろく ===== */
+  .log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-weight: 900; font-size: clamp(1rem, 2.4vmin, 1.3rem); }
+  .log li { border-radius: 10px; padding: 2px 10px; background: #f3f4fb; border: 2px solid #e8eaf6; line-height: 1.6; }
+  .log li .op-up { color: #e65100; } .log li .op-down { color: #0277bd; }
+  .rule-box { border: 4px solid #fdd835; background: #fffde7; border-radius: 16px; padding: 6px 10px; text-align: center; font-weight: 900; line-height: 1.8; margin: 0; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+
+  /* ===== 問題 ===== */
+  .qhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .progress { font-weight: 900; font-size: 1.15rem; color: var(--accent-dark); }
+  .qtag { font-weight: 900; background: #e8eaf6; color: var(--accent-dark); border-radius: 999px; padding: 2px 12px; }
+  .qlead { margin: 0; font-weight: 900; font-size: clamp(1.05rem, 2.5vmin, 1.35rem); text-align: center; line-height: 1.8; }
+  .qbig { margin: 0; text-align: center; font-weight: 900; font-size: clamp(1.8rem, 5.5vmin, 3.4rem); line-height: 1.5; word-break: break-all; }
+  .qbig.num { letter-spacing: 0.04em; }
+  .qbig .op-up { color: #e65100; } .qbig .op-down { color: #0277bd; }
+  .box-note { border: 3px solid #fdd835; background: #fffde7; border-radius: 14px; padding: 6px 10px; font-weight: bold; line-height: 1.8; text-align: center; margin: 0; font-size: clamp(1rem, 2.3vmin, 1.25rem); }
+  .hsegs { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .hseg { display: flex; flex-direction: column; align-items: center; border-radius: 12px; padding: 2px 12px; font-weight: 900; }
+  .hseg b { font-size: clamp(1.2rem, 3vmin, 1.7rem); } .hseg small { font-size: 0.8rem; } .hseg span { letter-spacing: 0.1em; color: #78909c; }
+  .hseg.g0 { background: var(--g0-bg); border: 3px solid var(--g0); }
+  .hseg.g1 { background: var(--g1-bg); border: 4px dashed var(--g1); }
+  .hseg.g2 { background: var(--g2-bg); border: 5px solid var(--g2); }
+  .hseg.g3 { background: var(--g3-bg); border: 7px double var(--g3); }
+  .choices { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .choice { min-height: 56px; min-width: 120px; padding: 4px 16px; border-radius: 16px; border: 4px solid var(--soft); background: #fff; font-size: clamp(1.1rem, 2.8vmin, 1.5rem); font-weight: 900; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,0.12); touch-action: manipulation; }
+  .choice:disabled { opacity: 0.35; cursor: default; }
+  .pt.ro .dg { cursor: default; }
+  .dg.pred { outline: 6px dashed #8e24aa; outline-offset: 2px; }
+  .dg.pred::after { content: "よそう"; position: absolute; left: 50%; top: -1.6em; transform: translateX(-50%); font-size: 0.8rem; color: #8e24aa; background: #fff; border-radius: 6px; padding: 0 4px; white-space: nowrap; }
+
+  /* ===== 入力パッド ===== */
+  .pad { display: flex; flex-direction: column; gap: 8px; }
+  .pad-box { min-height: 1.6em; border: 4px solid var(--accent); border-radius: 14px; background: #fffde7; text-align: right; padding: 0 12px; font-weight: 900; font-size: clamp(1.6rem, 4.6vmin, 2.6rem); word-break: break-all; line-height: 1.5; }
+  .pad-box.empty { color: #bdbdbd; font-size: 1.1rem; line-height: 2.6; }
+  .pad-count { color: #546e7a; font-size: 0.9rem; }
+  .keypad { display: grid; grid-template-columns: repeat(3, minmax(56px, 1fr)); gap: 6px; }
+  .pad-units .keypad, .pad-kanji .keypad { grid-template-columns: repeat(3, minmax(56px, 1fr)); }
+  .kp { min-height: 54px; border-radius: 12px; border: 2px solid var(--soft); background: #fff; font-size: 1.6rem; font-weight: 900; cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.1); }
+  .kp:active { background: #e8eaf6; }
+  .kp-0 { grid-column: span 3; }
+  .pad-units .kp-0 { grid-column: span 3; }
+  .kp-u { background: #f3e5f5; border-color: #ce93d8; }
+  .kp-w { font-size: 1rem; grid-column: span 1; }
+  .kp-ok { font-size: 1.15rem; background: var(--accent); border-color: var(--accent); color: #fff; }
+  .m4pad { max-width: 520px; margin: 0 auto; width: 100%; }
+
+  /* ===== 数直線 ===== */
+  .nl { display: block; width: 100%; height: auto; max-height: 40vh; font-family: inherit; touch-action: manipulation; }
+  .nl text { font-family: inherit; pointer-events: none; }
+  .nl-axis { stroke: #37474f; stroke-width: 4; }
+  .nl-big { stroke: #37474f; stroke-width: 4; }
+  .nl-small { stroke: #78909c; stroke-width: 2.5; }
+  .nl-lab { font-size: 28px; font-weight: 900; fill: #263238; }
+  .nl-lab2 { font-size: 20px; font-weight: 900; fill: #7986cb; }
+  .nl-arrow path { fill: #e65100; } .nl-arrow text { font-size: 30px; font-weight: 900; fill: #e65100; }
+  .nl-pick circle { fill: #8e24aa; fill-opacity: 0.75; } .nl-pick text { font-size: 24px; font-weight: 900; fill: #8e24aa; }
+  .nl-hit { fill: rgba(0,0,0,0); }
+  .nl-hit[data-act] { cursor: pointer; }
+
+  /* ===== 計算の 考え方 ===== */
+  .steps { margin: 0; padding-left: 1.8em; display: flex; flex-direction: column; gap: 4px; font-weight: 900; font-size: clamp(1.05rem, 2.6vmin, 1.4rem); line-height: 1.8; }
+  .steps:empty { display: none; }
+  .fb-card:empty { display: none; }
+  .steps li { border-radius: 10px; padding: 0 8px; cursor: pointer; border: 2px solid transparent; }
+  .steps li.cur { background: #fffde7; border-color: #fdd835; }
+  .steps b { color: #e65100; }
+
+  /* ===== 話題カード ===== */
+  .topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+  .topic { border: 3px solid #e8eaf6; border-radius: 14px; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; }
+  .topic.stat { border-style: dashed; border-color: #b39ddb; }
+  .topic p { margin: 0; line-height: 1.7; }
+  .tq { font-weight: 900; }
+  .tv { font-weight: 900; font-size: 1.5rem; color: var(--accent-dark); }
+  .ts { font-size: 0.9rem; color: #546e7a; font-weight: bold; }
+  .ta { font-weight: 900; color: #e65100; }
+  .topic summary { cursor: pointer; font-weight: bold; color: var(--accent); min-height: 32px; line-height: 32px; }
+
+  /* ===== 先生モード ===== */
+  .t-input { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .t-input input { flex: 1 1 320px; min-height: 52px; font-size: 1.2rem; border: 3px solid var(--soft); border-radius: 12px; padding: 0 12px; }
+  .t-reads .rval { font-size: clamp(1.6rem, 5vmin, 3rem); }
+  .t-reads .rval.kana { font-size: clamp(1.2rem, 3.4vmin, 2rem); }
+  .hidden-row { min-height: 52px; width: 100%; border: 3px dashed #b0bec5; background: #fafafa; border-radius: 12px; font-size: 1.2rem; font-weight: 900; color: #78909c; cursor: pointer; }
+  .t-topic { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; border: 2px solid #e8eaf6; border-radius: 12px; padding: 6px 10px; font-weight: bold; font-size: 0.95rem; }
+  .t-topic input:not([type]) { min-height: 40px; font-size: 1rem; border: 2px solid var(--soft); border-radius: 8px; padding: 0 8px; width: 11em; }
+  .t-topic input.short { width: 4em; }
+  .t-topic .ck input { width: 22px; height: 22px; vertical-align: middle; }
+  .t-check { flex-basis: 100%; color: #2e7d32; }
+
+  .res-big { font-size: 1.6rem; font-weight: 900; color: #e65100; text-align: center; margin: 0; }
+  .cheer {
+    position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 95; pointer-events: none;
+    background: #fff; border: 5px solid #fdd835; border-radius: 24px; padding: 14px 34px;
+    font-size: clamp(1.5rem, 7vw, 4.5rem); font-weight: 900; color: #e65100; white-space: nowrap;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: cheer 1.4s ease-out forwards;
+  }
+  @keyframes cheer {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+    15% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+    25%, 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  }
+
+  .spark { position: fixed; z-index: 91; pointer-events: none; font-size: clamp(18px, 3vmin, 34px); color: #ffd600; text-shadow: 0 0 6px #fff; animation: spark 1.1s ease-out forwards; }
+  @keyframes spark { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 30% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; } 100% { transform: translate(-50%, -120%) scale(0.6); opacity: 0; } }
+  .shake { animation: shake 0.4s; }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+  /* ===== まど ===== */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+  .modal.open { display: flex; }
+  .modal-card { background: #fff; border-radius: 20px; padding: 16px 20px; max-width: 760px; width: 100%; max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .modal-card h2 { margin: 0; color: var(--accent-dark); font-size: 1.4rem; }
+  .modal-card h3 { margin: 6px 0 0; color: var(--accent-dark); font-size: 1.05rem; }
+  .modal-card p, .modal-card li { line-height: 1.7; }
+  .modal-card ul { margin: 4px 0; padding-left: 1.4em; }
+  .set-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .set-label { font-weight: bold; min-width: 9em; }
+  .ed-note { font-size: 0.85rem; color: #546e7a; margin: 0; line-height: 1.6; }
+
+  /* 「うごきを へらす」 */
+  .calm .spark, .calm .cheer, .calm .dg.pop .dv, .calm .shake, .calm .sep.drop i { animation: none; }
+
+  @media (max-width: 900px) {
+    body { padding: 8px 10px 20px; }
+    .stage { grid-template-columns: 1fr; }
+    .rrow { grid-template-columns: 1fr; gap: 0; }
+  }
+  @media (min-width: 900px) and (orientation: landscape) and (max-height: 820px) {
+    body { padding-top: 6px; }
+    .wrap { gap: 6px; }
+    .subtitle { display: none; }
+    h1 { font-size: 1.3rem; }
+    .mode-btn { min-height: 48px; padding: 4px 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+    <div class="title-box">
+      <h1>🔢 <ruby>大<rt>おお</rt></ruby>きな<ruby>数<rt>かず</rt></ruby>の <ruby>位取<rt>くらいど</rt></ruby>り<ruby>表<rt>ひょう</rt></ruby></h1>
+      <p class="subtitle">一・十・百・千 の くりかえしで 万・<ruby>億<rt>おく</rt></ruby>・<ruby>兆<rt>ちょう</rt></ruby>（<ruby>大<rt>おお</rt></ruby>きい<ruby>数<rt>かず</rt></ruby>・4<ruby>年<rt>ねん</rt></ruby>）</p>
+    </div>
+    <div class="tools">
+      <button class="tool-btn" id="btnHowto">❓ <ruby>先生<rt>せんせい</rt></ruby>へ</button>
+      <button class="tool-btn" id="btnFull">⛶ ぜんがめん</button>
+      <button class="tool-btn" id="btnSettings">⚙️ せってい</button>
+    </div>
+  </div>
+
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn" data-mode="free">🧱 じゆうに つくる</button>
+    <button class="mode-btn" data-mode="read">✏️ <ruby>読<rt>よ</rt></ruby>もう・<ruby>書<rt>か</rt></ruby>こう</button>
+    <button class="mode-btn" data-mode="ten">↔️ 10<ruby>倍<rt>ばい</rt></ruby>と 1/10</button>
+    <button class="mode-btn" data-mode="line">📏 <ruby>数直線<rt>すうちょくせん</rt></ruby></button>
+    <button class="mode-btn" data-mode="calc">➕ <ruby>大<rt>おお</rt></ruby>きな<ruby>数<rt>かず</rt></ruby>の <ruby>計算<rt>けいさん</rt></ruby></button>
+    <button class="mode-btn" data-mode="teacher">🧑‍🏫 <ruby>先生<rt>せんせい</rt></ruby>モード</button>
+  </div>
+
+  <div class="setup" id="setupBar"></div>
+  <div class="say" id="say" aria-live="polite"></div>
+  <section class="stage" id="stage"></section>
+</div>
+
+<!-- せってい -->
+<div class="modal" id="modalSettings" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>⚙️ せってい</h2>
+    <div class="set-line"><span class="set-label">あつかう <ruby>位<rt>くらい</rt></ruby></span>
+      <button class="chip" data-set="max" data-val="12"><ruby>億<rt>おく</rt></ruby>まで（千億の<ruby>位<rt>くらい</rt></ruby>）</button>
+      <button class="chip" data-set="max" data-val="16"><ruby>兆<rt>ちょう</rt></ruby>まで（千兆の<ruby>位<rt>くらい</rt></ruby>）</button></div>
+    <div class="set-line"><span class="set-label"><ruby>問題<rt>もんだい</rt></ruby>の <ruby>数<rt>かず</rt></ruby></span>
+      <button class="chip" data-set="count" data-val="3">3</button>
+      <button class="chip" data-set="count" data-val="5">5</button>
+      <button class="chip" data-set="count" data-val="10">10</button></div>
+    <div class="set-line"><span class="set-label">ふりがな</span>
+      <button class="chip" data-set="ruby" data-val="true">つける</button>
+      <button class="chip" data-set="ruby" data-val="false">つけない</button></div>
+    <div class="set-line"><span class="set-label">こうかおん</span>
+      <button class="chip" data-set="sound" data-val="true">ON</button>
+      <button class="chip" data-set="sound" data-val="false">OFF</button></div>
+    <div class="set-line"><span class="set-label">うごき</span>
+      <button class="chip" data-set="motion" data-val="auto">じどう</button>
+      <button class="chip" data-set="motion" data-val="less">へらす</button>
+      <button class="chip" data-set="motion" data-val="normal">ふつう</button></div>
+    <p class="ed-note">「あつかう位」を「億まで」にすると、位取り表が 千億の位（12けた）までに なり、問題も 億までの 数だけに なります。「じどう」は パソコンの「視差効果を減らす」などの 設定に あわせます。せっていは この ブラウザに 保存されます。</p>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- 先生へ -->
+<div class="modal" id="modalHowto" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>❓ 先生へ（つかい方）</h2>
+    <p>4年「大きい数」の教材です。一・十・百・千 が4けたずつくり返されて 万・億・兆 と位が進むこと、10倍・1/10 で位が1つずつ動くことを、位取り表を操作しながら確かめます。下の「💡大きさを感じよう」には、1億円は1万円札が何まい？などの話題カードがあります。</p>
+    <h3>🧱 じゆうに つくる</h3>
+    <ul>
+      <li>位取り表の数字カードをタップすると 0→1→…→9→0 と変わります（▲▼でも変えられます）。下の「数字・漢数字・数字と漢字・読み方」が同時に変わります。</li>
+      <li>とちゅうの 0 は黄色いカードで目立たせ、まだ使っていない上の位の 0 はうすく表示します。</li>
+      <li>4けたのまとまりは、色と枠線の形の両方で区別しています（一：細い線／万：点線／億：太い線／兆：二重線）。</li>
+      <li>「×10」「÷10」を押すと、数字が1つとなりの位へスライドします。いちばん上の位に数字があるときの ×10、一の位が 0 でないときの ÷10 は、理由を出して止めます。</li>
+      <li>「✂️ 4けたで くぎる」は、右から4けたずつ区切り線を入れて 万・億・兆 を見つけるアニメです。</li>
+      <li>「位の名前」を「出す」にすると、各カードの下に「十万」「一億」などの位の名前が出て、一・十・百・千 のくり返しが見えます。</li>
+    </ul>
+    <h3>✏️ 読もう・書こう</h3>
+    <ul>
+      <li>「書こう」は漢数字→数字、「読もう」は数字→漢数字です（「まぜる」で交互）。0の多い数（何もない「万」のまとまりなど）を多めに出します。</li>
+      <li>数字は数字ボタン（PCならキーボードでも可）、漢数字は 一〜九・十百千・万億兆 のボタンで入れます。「千万」と「一千万」はどちらも正解にします。</li>
+      <li><b>0の位をとばした答え</b>（0以外の数字の並びは同じで、けたが少ない）を見つけると「何けた足りないか」を伝え、子どもの答えを位取り表に入れて「七百八十六万」のように読める形で見せます。2回まちがえると、正しい数を表で示します。</li>
+      <li>「ヒント」は、書こう：漢数字をまとまりごとに分けて □□□□（4けた）を示す／読もう：右から4けたずつ区切った数字を示します。</li>
+    </ul>
+    <h3>↔️ 10倍と 1/10</h3>
+    <ul>
+      <li>10倍・100倍・1000倍・1/10 が出ます。光っているいちばん上の数字がどの位へ動くかを、カードをタップして予想してから「たしかめる」を押すと、数字が1つずつスライドします。</li>
+      <li>1/10 は一の位が0の数だけで出題します（小数にならないように）。</li>
+    </ul>
+    <h3>📏 数直線</h3>
+    <ul>
+      <li>0〜1億・0〜10億・1億〜2億・0〜1兆・0〜10兆・5兆〜6兆などの数直線です。はしと真ん中だけに数を書いています。</li>
+      <li>「アの目もり」の問題では、①1目もりの大きさを3つから選ぶ → ②数を「3500万」のように入れる、の2段階です。1目もりを別の大きさで数えた答えには、それを指摘します。</li>
+      <li>「◯◯はどこ？」の問題では、目もりをタップします（近くの目もりにすいつきます）。</li>
+    </ul>
+    <h3>➕ 大きな数の 計算</h3>
+    <ul>
+      <li>前半はたし算・ひき算（3億＋5億、36兆−17兆 など）、後半は0のあるかけ算（20万×300 など）です。</li>
+      <li>「考え方（1つずつ）」で「3億は 1億が3こ」→「1億が（3＋5）こ」→「8億」と1行ずつ出し、下の位取り表がその数に変わります。行をタップすると、その時の数を表で見られます。</li>
+      <li>かけ算は「0をとって 2×3＝6 → とった0は 5こ＋2こ → 6に0を7こつける」の流れです。数字は合っていて0の数だけちがう答えには、0の数を見直すよう声をかけます。</li>
+    </ul>
+    <h3>🧑‍🏫 先生モード</h3>
+    <ul>
+      <li>数字・「3兆5000億20万」・漢数字のどれでも入力でき、位取り表と数字・漢数字・読み方を大きく表示します。</li>
+      <li>上の「かくす」で、表・数字・漢数字・読み方をそれぞれ「？」にできます（タップで表示）。「じゆうに つくるで うごかす」で、その数を位取り表で操作できます。</li>
+      <li>「話題カード」の題名・数・単位・出典メモを入れると、「じゆうに つくる」の下にカードが出ます。人口などの統計の数値はアプリに書きこんでいません。出典を確かめて入力してください。</li>
+    </ul>
+    <h3>そのほか</h3>
+    <ul>
+      <li>終わりの画面に「1回めで正解した数」が出ます（記録は保存しません）。保存されるのは「せってい」と話題カードの数だけです。授業での使い方の例は README（大きな数の 位取り表_README.md）にあります。</li>
+    </ul>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- けっか -->
+<div class="modal" id="modalResult" role="dialog" aria-modal="true">
+  <div class="modal-card" id="resultCard"></div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================
+   1. 小さな 道具
+   ========================================================= */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const R = (kanji, kana) => `<ruby>${kanji}<rt>${kana}</rt></ruby>`;   // ルビつきの 漢字
+const rnd = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = rnd(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const stripRuby = (html) => html.replace(/<rt>.*?<\/rt>|<\/?ruby>/g, '');
+const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
+// よく つかう ことば（4年生までの 漢字＋ふりがな）
+const KURAI = R('位', 'くらい'), BAI = R('倍', 'ばい'), KAZU = R('数', 'かず'), OKU = R('億', 'おく'), CHOU = R('兆', 'ちょう');
+const YOMI = R('読', 'よ'), KANSUUJI = R('漢数字', 'かんすうじ'), SUUJI = R('数字', 'すうじ'), UE = R('上', 'あ'), SAGA = R('下', 'さ');
+const CHII = R('小', 'ちい'), KAZO = R('数', 'かぞ'), HIDARI = R('左', 'ひだり'), MIGI = R('右', 'みぎ'), ICHI = R('一', 'いち'), NAMAE = R('名前', 'なまえ');
+
+/* =========================================================
+   2. せってい（この ブラウザに ほぞん。ほぞん できなくても うごく）
+   ========================================================= */
+const SETTINGS_KEY = 'ookinakazu-settings';
+const DEFAULTS = { sound: true, ruby: true, motion: 'auto', max: 16, count: 5 };
+const settings = (() => {
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch (e) { return { ...DEFAULTS }; }
+})();
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ほぞん できなくても よい */ }
+}
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const calm = () => settings.motion === 'less' || (settings.motion === 'auto' && reduceMQ.matches);
+const MAXP = () => settings.max;   // あつかう 位の 数（12 ＝ 千億の位まで、16 ＝ 千兆の位まで）
+
+/* =========================================================
+   3. 音（ブラウザで 音を つくる。ファイルは つかわない）
+   ========================================================= */
+let actx = null;
+function play(notes) {
+  if (!settings.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const now = actx.currentTime;
+    for (const [f, t, dur, type = 'sine', vol = 0.14] of notes) {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, now + t);
+      g.gain.exponentialRampToValueAtTime(vol, now + t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + t + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(now + t); o.stop(now + t + dur + 0.05);
+    }
+  } catch (e) { /* 音が 出せなくても うごく */ }
+}
+const sfx = {
+  tap:     () => play([[880, 0, 0.05, 'sine', 0.08]]),
+  tick:    () => play([[700, 0, 0.03, 'triangle', 0.05]]),
+  up:      () => play([[523, 0, 0.1, 'triangle'], [784, 0.12, 0.18, 'triangle']]),
+  down:    () => play([[784, 0, 0.1, 'triangle'], [523, 0.12, 0.18, 'triangle']]),
+  cut:     () => play([[1046, 0, 0.05, 'square', 0.04]]),
+  correct: () => play([[784, 0, 0.12], [988, 0.1, 0.12], [1175, 0.2, 0.12], [1568, 0.3, 0.35]]),
+  soft:    () => play([[392, 0, 0.15, 'triangle', 0.1], [440, 0.15, 0.2, 'triangle', 0.1]]),
+  done:    () => play([[523, 0, 0.1], [659, 0.08, 0.1], [784, 0.16, 0.18], [1047, 0.26, 0.3]]),
+};
+
+/* =========================================================
+   4. 数の もち方（★ここが きほん）
+      数は「位ごとの 配列」で もつ。d[0] が 一の位、d[1] が 十の位 … d[15] が 千兆の位。
+      計算する ときは BigInt（けたが いくつ あっても 正しく 計算できる 数）に かえる。
+   ========================================================= */
+const PLACES = 16;                                   // 位取り表の 位の 数（千兆の位まで）
+const zeros = () => Array(PLACES).fill(0);
+// 配列 → BigInt
+function toBig(d) {
+  let b = 0n;
+  for (let i = PLACES - 1; i >= 0; i--) b = b * 10n + BigInt(d[i]);
+  return b;
+}
+// BigInt（または 数字の 文字）→ 配列。16けたを こえる 分は すてずに null を かえす
+function fromBig(b) {
+  const s = BigInt(b).toString();
+  if (s.length > PLACES || s.startsWith('-')) return null;
+  const d = zeros();
+  for (let i = 0; i < s.length; i++) d[i] = +s[s.length - 1 - i];
+  return d;
+}
+// いちばん 上の 0でない 位（0 の ときは -1）
+const topIndex = (d) => { for (let i = PLACES - 1; i >= 0; i--) if (d[i]) return i; return -1; };
+const isZero = (d) => topIndex(d) < 0;
+// 4けたの まとまり g（0＝一、1＝万、2＝億、3＝兆）の 数字 [一,十,百,千]
+const group = (d, g) => d.slice(g * 4, g * 4 + 4);
+const groupVal = (d, g) => { const a = group(d, g); return a[0] + a[1] * 10 + a[2] * 100 + a[3] * 1000; };
+
+/* ---------- 位の 名前 ---------- */
+const SMALL = ['一', '十', '百', '千'];               // 4けたの 中の 位
+const BIG = ['', '万', '億', '兆'];                    // 4けたの まとまりの 名前
+const BIG_KANA = ['', 'まん', 'おく', 'ちょう'];
+const GROUP_LABEL = ['一', '万', '億', '兆'];
+// i 番目の 位の 名前（ルビなし）："一" "十" … "一万" "十万" … "千兆"
+function placeName(i) {
+  const s = SMALL[i % 4], b = BIG[i >> 2];
+  return b ? s + b : s;
+}
+// ルビつき（億・兆 だけ ふりがな）
+const rubyBig = (s) => s.replace(/億/g, OKU).replace(/兆/g, CHOU);
+const placeNameR = (i) => rubyBig(placeName(i));
+
+/* ---------- 漢数字に する ---------- */
+const KJ = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+// 4けた（[一,十,百,千]）を 漢数字に。1 の ときは「十」「百」「千」（一十・一百・一千 とは 書かない）
+function groupKanji(a) {
+  let s = '';
+  for (let p = 3; p >= 0; p--) {
+    const n = a[p];
+    if (!n) continue;
+    s += (p > 0 && n === 1 ? '' : KJ[n]) + (p > 0 ? SMALL[p] : '');
+  }
+  return s;
+}
+// 数 → 漢数字（例：三兆五千億二十万）
+function toKanji(d) {
+  if (isZero(d)) return '〇';
+  let s = '';
+  for (let g = 3; g >= 0; g--) {
+    const a = group(d, g);
+    if (a.some((n) => n)) s += groupKanji(a) + BIG[g];
+  }
+  return s;
+}
+
+/* ---------- 数字と 漢字の まじった 書き方 ---------- */
+// 例：3兆5000億20万（教科書で よく つかう 書き方）
+function toMixed(d) {
+  if (isZero(d)) return '0';
+  let s = '';
+  for (let g = 3; g >= 0; g--) {
+    const v = groupVal(d, g);
+    if (v) s += v + BIG[g];
+  }
+  return s;
+}
+
+/* ---------- 読み方（ひらがな）を つくる ---------- */
+// 音が かわる ところ（さんびゃく・はっぴゃく・さんぜん・はっせん など）は 表で もつ
+const KANA_1 = ['', 'いち', 'に', 'さん', 'よん', 'ご', 'ろく', 'なな', 'はち', 'きゅう'];
+const KANA_10 = ['', 'じゅう', 'にじゅう', 'さんじゅう', 'よんじゅう', 'ごじゅう', 'ろくじゅう', 'ななじゅう', 'はちじゅう', 'きゅうじゅう'];
+const KANA_100 = ['', 'ひゃく', 'にひゃく', 'さんびゃく', 'よんひゃく', 'ごひゃく', 'ろっぴゃく', 'ななひゃく', 'はっぴゃく', 'きゅうひゃく'];
+const KANA_1000 = ['', 'せん', 'にせん', 'さんぜん', 'よんせん', 'ごせん', 'ろくせん', 'ななせん', 'はっせん', 'きゅうせん'];
+const groupKana = (a) => KANA_1000[a[3]] + KANA_100[a[2]] + KANA_10[a[1]] + KANA_1[a[0]];
+// 「兆」の 前で 音が つまる：いっちょう・はっちょう・じゅっちょう
+function withBigKana(s, g) {
+  if (g === 3) s = s.replace(/いち$/, 'いっ').replace(/はち$/, 'はっ').replace(/じゅう$/, 'じゅっ');
+  return s + BIG_KANA[g];
+}
+// 数 → 読み方（まとまりごとに 配列で かえす：[{ g, kana }]）
+function toReadingParts(d) {
+  if (isZero(d)) return [{ g: 0, kana: 'れい' }];
+  const parts = [];
+  for (let g = 3; g >= 0; g--) {
+    const a = group(d, g);
+    if (a.some((n) => n)) parts.push({ g, kana: withBigKana(groupKana(a), g) });
+  }
+  return parts;
+}
+const toReading = (d) => toReadingParts(d).map((p) => p.kana).join(' ');
+
+/* ---------- 数字の 表示（右から 4けたごとに すきま） ---------- */
+function toDigits(d, sep = ' ') {
+  const t = topIndex(d);
+  if (t < 0) return '0';
+  let s = '';
+  for (let i = t; i >= 0; i--) { s += d[i]; if (i % 4 === 0 && i) s += sep; }
+  return s;
+}
+
+/* =========================================================
+   5. 画面の ようす（state）と ひとこと
+   ========================================================= */
+const state = {
+  mode: 'free',
+  say: { html: '', kind: '' },
+  busy: false,                          // アニメ中は ボタンを うけつけない
+  free: { d: zeros(), names: false, log: [] },
+};
+function say(html, kind = '') { state.say = { html, kind }; renderSay(); }
+function renderSay() {
+  const el = $('#say');
+  el.className = `say ${state.say.kind}`;
+  if (el.innerHTML !== state.say.html) el.innerHTML = state.say.html;
+}
+const chip = (act, val, label, on) => `<button class="chip${on ? ' active' : ''}" data-act="${act}" data-v="${val}">${label}</button>`;
+
+const VIEWS = {};
+const curView = () => VIEWS[state.mode];
+function setMode(mode) {
+  state.busy = false;
+  state.mode = mode;
+  curView().enter?.();
+  render(true);
+}
+function render(full = false) {
+  document.body.classList.toggle('no-ruby', !settings.ruby);
+  document.body.classList.toggle('calm', calm());
+  $$('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === state.mode));
+  if (full) { renderSetup(); curView().build(); }
+  curView().update?.();
+  renderSay();
+}
+const renderSetup = () => { $('#setupBar').innerHTML = curView().setup?.() || ''; };
+
+/* =========================================================
+   6. 位取り表（どの モードでも つかう 部品）
+      opts.id     … 表の id（1つの 画面に 2つ 出す ときに 区別する）
+      opts.edit   … カードを タップして 数を かえられるか
+      opts.names  … カードの 下に 位の 名前を 出すか
+      opts.act    … カードを タップした ときの うごき（ACTS の なまえ）
+      opts.hl     … 光らせる 位の 番号の 配列
+   ========================================================= */
+function tableHTML(d, opts = {}) {
+  const n = MAXP(), groups = n / 4, t = topIndex(d), id = opts.id || 'pt';
+  const act = opts.act || (opts.edit ? 'tapDigit' : ''), hl = opts.hl || [];
+  let h = `<div class="pt-scroll"><div class="pt${opts.names ? '' : ' no-pname'}${act ? '' : ' ro'}" id="${id}">`;
+  for (let g = groups - 1; g >= 0; g--) {
+    h += `<div class="grp g${g}"><div class="grp-h">${g ? rubyBig(GROUP_LABEL[g]) : `<span aria-label="一の まとまり">一</span>`}</div><div class="cols">`;
+    for (let p = 3; p >= 0; p--) {
+      const i = g * 4 + p, v = d[i];
+      const cls = `dg${v === 0 ? ' zero' : ''}${i > t && !(t < 0 && i === 0) ? ' lead' : ''}${hl.includes(i) ? ' hit' : ''}`;
+      h += `<div class="col c${p}">
+        <div class="sub">${SMALL[p]}</div>
+        ${opts.edit ? `<button class="ud" data-act="inc" data-i="${i}" aria-label="${placeName(i)}の位を 1 ふやす">▲</button>` : ''}
+        <button class="${cls}" data-i="${i}" ${act ? `data-act="${act}"` : 'tabindex="-1"'} aria-label="${placeName(i)}の位 ${v}"><span class="dv">${v}</span></button>
+        ${opts.edit ? `<button class="ud" data-act="dec" data-i="${i}" aria-label="${placeName(i)}の位を 1 へらす">▼</button>` : ''}
+        <div class="pname${p === 0 && g ? ' rep' : ''}">${placeNameR(i)}</div>
+      </div>`;
+    }
+    h += `</div></div>`;
+  }
+  return h + `</div></div>`;
+}
+// 表の 数字だけを かきかえる（表を 作りなおさないので ちらつかない）
+function updateTable(d, id = 'pt', hl = null) {
+  const t = topIndex(d);
+  $$(`#${id} .dg`).forEach((b) => {
+    const i = +b.dataset.i, v = d[i];
+    b.querySelector('.dv').textContent = v;
+    b.classList.toggle('zero', v === 0);
+    b.classList.toggle('lead', i > t && !(t < 0 && i === 0));
+    b.setAttribute('aria-label', `${placeName(i)}の位 ${v}`);
+    if (hl) b.classList.toggle('hit', hl.includes(i));
+  });
+}
+const cardOf = (id, i) => $(`#${id} .dg[data-i="${i}"]`);
+
+/* ---------- ×10・÷10 の スライド アニメ ----------
+   dir = +1 … ×10（数字が 1つ 左の 位へ）、dir = -1 … ÷10（1つ 右の 位へ）
+   await で まつと、アニメが おわってから つぎへ すすむ */
+async function slideDigits(id, d, dir) {
+  const t = topIndex(d);
+  if (calm() || t < 0) return;
+  const moves = [];
+  for (let i = 0; i <= t; i++) {
+    const from = cardOf(id, i), to = cardOf(id, i + dir);
+    const dv = from.querySelector('.dv');
+    if (!to) { dv.classList.add('moving', 'fade'); moves.push(dv); continue; }   // ÷10 で 消える 一の位の 0
+    const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+    dv.classList.add('moving');
+    dv.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px)`;
+    moves.push(dv);
+  }
+  await wait(800);
+  moves.forEach((dv) => { dv.classList.remove('moving', 'fade'); dv.style.transform = ''; });
+}
+
+/* =========================================================
+   7. 🧱 じゆうに つくる
+   ========================================================= */
+VIEWS.free = {
+  enter() {
+    const F = state.free;
+    F.d = F.d.map((v, i) => (i < MAXP() ? v : 0));      // 「億まで」に したら 上の 位は 0 に
+    say(`カードを タップして ${KAZU}を つくろう。${YOMI}み${R('方', 'かた')}が いっしょに かわるよ`);
+  },
+  setup() {
+    const F = state.free;
+    return `<div class="sgrp"><span class="slabel">${KURAI}の ${NAMAE}</span>${chip('names', 1, '出す', F.names)}${chip('names', 0, '出さない', !F.names)}</div>
+      <div class="sgrp"><span class="slabel">はやく つくる</span><div class="presets">
+        ${chip('preset', '1e4', '1万', false)}${chip('preset', '1e8', `1${OKU}`, false)}${MAXP() > 12 ? chip('preset', '1e12', `1${CHOU}`, false) : ''}
+        ${chip('preset', 'rand', '🎲 0の ある数', false)}${chip('preset', 'clear', 'ぜんぶ 0', false)}</div></div>`;
+  },
+  build() {
+    const F = state.free;
+    $('#stage').innerHTML = `
+      <div class="card full">
+        ${tableHTML(F.d, { edit: true, names: F.names })}
+        <div class="btn-row">
+          <button class="act-btn b-up" data-act="times" data-v="1">×10</button>
+          <button class="act-btn b-down" data-act="times" data-v="-1">÷10</button>
+          <button class="act-btn b-hint" data-act="cutAnim">✂️ 4けたで くぎる</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>📖 ${YOMI}み${R('方', 'かた')}・${R('書', 'か')}き${R('方', 'かた')}</h3>
+        <div class="digits-big" id="bigDigits"></div>
+        <p class="keta" id="keta"></p>
+        <div class="reads">
+          <div class="rrow"><span class="rlab">${KANSUUJI}</span><span class="rval" id="rKanji"></span></div>
+          <div class="rrow"><span class="rlab">${SUUJI}と ${R('漢字', 'かんじ')}</span><span class="rval" id="rMixed"></span></div>
+          <div class="rrow"><span class="rlab">${YOMI}み${R('方', 'かた')}</span><span class="rval kana" id="rKana"></span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>📝 10${BAI}・1/10 の きろく</h3>
+        <p class="rule-box">10${BAI}すると ${KURAI}が 1つ ${UE}がる（${HIDARI}へ）<br>1/10に すると ${KURAI}が 1つ ${SAGA}がる（${MIGI}へ）</p>
+        <ul class="log" id="freeLog"></ul>
+      </div>
+      <div class="card full">
+        <h3>💡 ${R('大', 'おお')}きさを ${R('感', 'かん')}じよう</h3>
+        ${topicsHTML()}
+      </div>`;
+  },
+  update() {
+    const F = state.free;
+    updateTable(F.d);
+    $('#bigDigits').innerHTML = digitsBigHTML(F.d);
+    const t = topIndex(F.d);
+    $('#keta').innerHTML = t < 0 ? '' : `${t + 1}けたの ${KAZU}（いちばん ${R('上', 'うえ')}は ${placeNameR(t)}の${KURAI}）`;
+    $('#rKanji').innerHTML = kanjiHTML(F.d);
+    $('#rMixed').innerHTML = mixedHTML(F.d);
+    $('#rKana').textContent = toReading(F.d);
+    $('#freeLog').innerHTML = F.log.length ? F.log.map((x) => `<li>${x}</li>`).join('') : `<li style="color:#90a4ae">×10・÷10 を おすと ここに のこるよ</li>`;
+  },
+};
+
+// 漢数字（万・億・兆 の 字に まとまりの 色）
+function kanjiHTML(d) {
+  if (isZero(d)) return '〇';
+  let s = '';
+  for (let g = 3; g >= 0; g--) {
+    const a = group(d, g);
+    if (a.some((n) => n)) s += groupKanji(a) + (g ? `<span class="unit-k g${g}">${BIG[g]}</span>` : '');
+  }
+  return s;
+}
+function mixedHTML(d) {
+  if (isZero(d)) return '0';
+  let s = '';
+  for (let g = 3; g >= 0; g--) {
+    const v = groupVal(d, g);
+    if (v) s += v + (g ? `<span class="unit-k g${g}">${BIG[g]}</span>` : '');
+  }
+  return s;
+}
+// 大きな 数字の ならび（右から 4けたごとに 区切り線と 万・億・兆）
+//   cut … 区切り線を 出す 位置の 数（アニメ用）。null なら ぜんぶ 出す
+function digitsBigHTML(d, cut = null, cur = -1) {
+  const t = Math.max(topIndex(d), 0);
+  let h = '';
+  for (let i = t; i >= 0; i--) {
+    h += `<span class="d${i === cur ? ' cur' : ''}">${d[i]}</span>`;
+    if (i % 4 === 0 && i) {
+      const g = i / 4, on = cut === null || g <= cut;
+      h += `<span class="sep g${g}${on ? '' : ' off'}${cut === g ? ' drop' : ''}" aria-hidden="true"><i></i><b>${on ? rubyBig(BIG[g]) : ''}</b></span>`;
+    }
+  }
+  return h;
+}
+
+/* ---------- 位取り表の 操作 ---------- */
+const ACTS = {};
+function changeDigit(i, delta) {
+  if (state.busy) return;
+  const F = state.free;
+  F.d[i] = (F.d[i] + delta + 10) % 10;
+  sfx.tick();
+  render();
+  const c = cardOf('pt', i);
+  c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
+  say(`${placeNameR(i)}の${KURAI}を ${F.d[i]}に したよ（${i ? placeNameR(i) : '1'}が ${F.d[i]}こ）`);
+}
+Object.assign(ACTS, {
+  tapDigit: (b) => changeDigit(+b.dataset.i, 1),
+  inc: (b) => changeDigit(+b.dataset.i, 1),
+  dec: (b) => changeDigit(+b.dataset.i, -1),
+  names: (b) => { state.free.names = b.dataset.v === '1'; sfx.tap(); renderSetup(); $('#pt').classList.toggle('no-pname', !state.free.names);
+    if (state.free.names) say(`一・十・百・千 の あとは 一万・十万・百万・千万。また 一・十・百・千 が くりかえすね`); },
+  preset: (b) => {
+    if (state.busy) return;
+    const F = state.free, v = b.dataset.v;
+    if (v === 'clear') F.d = zeros();
+    else if (v === 'rand') F.d = randomZeroNumber(rnd(6, MAXP()));
+    else F.d = fromBig(BigInt('1' + '0'.repeat(+v.slice(2))));
+    F.log = [];
+    sfx.tap(); render();
+    say(`${toMixed(F.d)}（${toReading(F.d)}）`);
+  },
+  times: (b) => timesTen(+b.dataset.v),
+  cutAnim: () => cutAnimation(),
+});
+
+// 0 の 多い 数を つくる（けた数 keta）
+function randomZeroNumber(keta) {
+  const d = zeros();
+  d[keta - 1] = rnd(1, 9);
+  for (let i = 0; i < keta - 1; i++) d[i] = Math.random() < 0.55 ? 0 : rnd(1, 9);
+  return d;
+}
+
+// ×10（dir=1）・÷10（dir=-1）
+async function timesTen(dir) {
+  const F = state.free;
+  if (state.busy) return;
+  const t = topIndex(F.d);
+  if (t < 0) { sfx.soft(); say(`0は 10${BAI}しても 1/10に しても 0だよ。まず ${KAZU}を つくろう`, 'warn'); return; }
+  if (dir > 0 && t >= MAXP() - 1) {
+    sfx.soft(); shake(cardOf('pt', t));
+    say(`いちばん ${R('上', 'うえ')}の ${placeNameR(t)}の${KURAI}に ${SUUJI}が あるので、10${BAI}すると ${R('表', 'ひょう')}から はみ出して しまうよ`, 'warn');
+    return;
+  }
+  if (dir < 0 && F.d[0] !== 0) {
+    sfx.soft(); shake(cardOf('pt', 0));
+    say(`${ICHI}の${KURAI}が 0では ないので、1/10に すると ${R('小数', 'しょうすう')}に なるよ。ここでは ${ICHI}の${KURAI}が 0の ときに ためそう`, 'warn');
+    return;
+  }
+  state.busy = true;
+  const before = F.d.slice();
+  dir > 0 ? sfx.up() : sfx.down();
+  await slideDigits('pt', F.d, dir);
+  F.d = dir > 0 ? [0, ...F.d.slice(0, PLACES - 1)] : [...F.d.slice(1), 0];
+  F.log.unshift(`${toMixed(before)} <span class="${dir > 0 ? 'op-up' : 'op-down'}">${dir > 0 ? '×10' : '÷10'}</span> ＝ ${toMixed(F.d)}`);
+  F.log = F.log.slice(0, 6);
+  state.busy = false;
+  render();
+  if (dir > 0) {
+    const c = cardOf('pt', 0); c.classList.add('pop');
+    say(`10${BAI}すると、どの ${SUUJI}も ${KURAI}が 1つ ${UE}がった！ ${ICHI}の${KURAI}には 0が はいるよ`, 'good');
+  } else {
+    say(`1/10に すると、どの ${SUUJI}も ${KURAI}が 1つ ${SAGA}がった！ ${ICHI}の${KURAI}の 0が とれたね`, 'good');
+  }
+}
+function shake(el) {
+  if (!el || calm()) return;
+  el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+}
+
+// 右から 4けたごとに 区切る アニメ
+async function cutAnimation() {
+  const F = state.free;
+  if (state.busy) return;
+  const t = topIndex(F.d);
+  if (t < 4) { sfx.soft(); say(`5けたより ${R('大', 'おお')}きい ${KAZU}で ためそう（「1${OKU}」や「🎲」を おしてみて）`, 'warn'); return; }
+  state.busy = true;
+  const box = $('#bigDigits');
+  box.innerHTML = digitsBigHTML(F.d, 0);
+  say(`${MIGI}から 4けたずつ ${KAZO}えて、${R('線', 'せん')}を ひこう`);
+  const step = calm() ? 350 : 900;
+  for (let g = 1; g <= (t >> 2); g++) {
+    // 4けた 分を 1つずつ ゆびさす
+    for (let k = 0; k < 4 && !calm(); k++) {
+      box.innerHTML = digitsBigHTML(F.d, g - 1, (g - 1) * 4 + k);
+      sfx.tick();
+      await wait(220);
+    }
+    box.innerHTML = digitsBigHTML(F.d, g);
+    sfx.cut();
+    say(`4けた ${KAZO}えたら ${R('線', 'せん')}。ここから ${R('左', 'ひだり')}が「${rubyBig(BIG[g])}」の まとまり`);
+    await wait(step);
+  }
+  state.busy = false;
+  render();
+  say(`${MIGI}から 4けたごとに 万・${OKU}・${CHOU}。${YOMI}むと「${toReading(F.d)}」`, 'good');
+}
+
+/* =========================================================
+   8. 文字 → 数 に もどす（こたえの チェック・先生の 入力 用）
+      どれも BigInt を かえす。読めない ときは null。
+   ========================================================= */
+// 全角の 数字・カンマ・空白・「約」を ととのえる
+const normalize = (s) => String(s).replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+  .replace(/[,，、\s　]/g, '').replace(/^(約|およそ)/, '');
+// 数字と 漢字の まじった 書き方（3兆5000億20万）・数字だけ（35000）
+function parseMixed(s) {
+  s = normalize(s);
+  const m = s.match(/^(?:(\d+)兆)?(?:(\d+)億)?(?:(\d+)万)?(\d*)$/);
+  if (!m || !/\d/.test(s)) return null;
+  const [, c, o, w, r] = m;
+  return BigInt(c || 0) * 10n ** 12n + BigInt(o || 0) * 10n ** 8n + BigInt(w || 0) * 10n ** 4n + BigInt(r || 0);
+}
+// 漢数字（三兆五千億二十万）。一千万・千万 の どちらも よめる。三三 の ような ならびは null
+function parseKanji(s) {
+  s = normalize(s).replace(/[〇零]/g, '');
+  if (!s) return null;
+  const SM = { 十: 1, 百: 2, 千: 3 }, BG = { 万: 4, 億: 8, 兆: 12 };
+  let total = 0n, grp = 0, digit = null, lastBig = 99, lastSmall = 99;
+  for (const ch of s) {
+    const k = KJ.indexOf(ch);
+    if (k > 0) { if (digit !== null) return null; digit = k; }
+    else if (SM[ch]) {
+      if (SM[ch] >= lastSmall) return null;
+      grp += (digit ?? 1) * 10 ** SM[ch]; digit = null; lastSmall = SM[ch];
+    } else if (BG[ch]) {
+      if (BG[ch] >= lastBig) return null;
+      if (digit !== null) { grp += digit; digit = null; }
+      if (!grp) return null;
+      total += BigInt(grp) * 10n ** BigInt(BG[ch]);
+      grp = 0; lastBig = BG[ch]; lastSmall = 99;
+    } else return null;
+  }
+  if (digit !== null) grp += digit;
+  return total + BigInt(grp);
+}
+// なんでも（数字・まじり・漢数字）
+function parseAny(s) {
+  const t = normalize(s);
+  if (!t) return null;
+  return /\d/.test(t) ? parseMixed(t) : parseKanji(t);
+}
+const LIMIT = () => 10n ** BigInt(MAXP());                 // あつかえる 数の 上限（これより 小さい 数）
+const bigMixed = (b) => toMixed(fromBig(b));               // BigInt → 3兆5000億20万
+const bigMixedR = (b) => rubyBig(bigMixed(b));
+const pow10 = (k) => 10n ** BigInt(k);
+
+/* =========================================================
+   9. 入力パッド（数字・万億兆・漢数字 を ボタンで 入れる）
+      kind: 'digits'（数字だけ）・'units'（数字＋万・億・兆）・'kanji'（漢数字）
+      ★ キーボードの 数字・Backspace・Enter でも 入れられる
+   ========================================================= */
+state.input = '';
+function padHTML(kind) {
+  const k = (v, label = v, cls = '') => `<button class="kp ${cls}" data-act="key" data-v="${v}">${label}</button>`;
+  let keys = '';
+  if (kind === 'kanji') {
+    keys = ['一', '二', '三', '四', '五', '六', '七', '八', '九'].map((x) => k(x)).join('')
+      + k('十') + k('百') + k('千') + k('万', '万', 'kp-u') + k('億', OKU, 'kp-u') + (MAXP() > 12 ? k('兆', CHOU, 'kp-u') : '');
+  } else {
+    keys = [7, 8, 9, 4, 5, 6, 1, 2, 3].map((x) => k(x)).join('') + k(0, '0', 'kp-0');
+    if (kind === 'units') keys += k('万', '万', 'kp-u') + k('億', OKU, 'kp-u') + (MAXP() > 12 ? k('兆', CHOU, 'kp-u') : '');
+  }
+  return `<div class="pad pad-${kind}">
+    <div class="pad-box" id="padBox" aria-live="polite"></div>
+    <div class="keypad">${keys}
+      <button class="kp kp-w" data-act="back">⌫ 1つ けす</button>
+      <button class="kp kp-w" data-act="clr">ぜんぶ けす</button>
+      <button class="kp kp-ok" data-act="ok">${R('答', 'こた')}える</button>
+    </div></div>`;
+}
+function renderPad() {
+  const box = $('#padBox');
+  if (!box) return;
+  box.classList.toggle('empty', !state.input);
+  box.textContent = state.input || 'ここに 出るよ';
+  const c = $('#padCount');
+  if (c) c.textContent = state.input && /^\d+$/.test(state.input) ? `${state.input.length}けた` : '';
+}
+Object.assign(ACTS, {
+  key: (b) => { if (state.input.length >= 24 || curView().locked?.()) return; state.input += b.dataset.v; sfx.tick(); renderPad(); },
+  back: () => { state.input = state.input.slice(0, -1); sfx.tick(); renderPad(); },
+  clr: () => { state.input = ''; sfx.tick(); renderPad(); },
+  ok: () => { if (!state.input || curView().locked?.()) return; curView().answer?.(state.input); },
+});
+document.addEventListener('keydown', (e) => {
+  if (!$('#padBox') || e.target.closest?.('input, textarea') || $('.modal.open')) return;
+  const map = { '万': '万', '億': '億', '兆': '兆' };
+  if (/^[0-9]$/.test(e.key) && !$('.pad-kanji')) ACTS.key({ dataset: { v: e.key } });
+  else if (map[e.key]) ACTS.key({ dataset: { v: map[e.key] } });
+  else if (e.key === 'Backspace') { e.preventDefault(); ACTS.back(); }
+  else if (e.key === 'Enter') { e.preventDefault(); ACTS.ok(); }
+});
+
+/* =========================================================
+   10. 問題の すすめ方（どの モードも 同じ しくみ）
+      Q.list … 問題の 配列、Q.i … いま 何問目、Q.ok … 1回目で 正解した 数
+   ========================================================= */
+function quizNew(list) { return { list, i: 0, ok: 0, tries: 0, done: false }; }
+const progressHTML = (Q) => `<span class="progress">${Q.i + 1} / ${Q.list.length} ${R('問', 'もん')}</span>`;
+function quizCorrect(Q, el, text = 'せいかい！') {
+  if (!Q.tries) Q.ok++;
+  Q.done = true;
+  sfx.correct(); sparkle(el); cheer(text);
+}
+function quizNext(Q, view) {
+  Q.i++; Q.tries = 0; Q.done = false; state.input = '';
+  if (Q.i >= Q.list.length) { showResult(Q); return; }
+  view.build(); view.update?.();
+}
+function showResult(Q) {
+  sfx.done();
+  const n = Q.list.length;
+  $('#resultCard').innerHTML = `<h2>🎉 おしまい！</h2>
+    <p class="res-big">${n}${R('問', 'もん')}中 1${R('回', 'かい')}めで せいかい ${Q.ok}${R('問', 'もん')}</p>
+    <p class="note">${Q.ok === n ? 'ぜんぶ 1回めで できたね！' : 'まちがえた ところも、さいごまで よく 考えたね'}</p>
+    <div class="btn-row"><button class="act-btn b-main" data-act="again">もう いちど</button><button class="act-btn b-reset" data-close>とじる</button></div>`;
+  openModal('#modalResult');
+}
+ACTS.again = () => { closeModals(); setMode(state.mode); };
+
+/* 0 の 多い 問題の 数を つくる
+   いちばん 上の まとまり（万・億・兆）を きめて、下の まとまりは
+   「ぜんぶ 0」「1つだけ 数字」「0 まじり」の どれかに する */
+function genZeroNumber(minG = 1) {
+  const maxG = MAXP() / 4 - 1, topG = rnd(minG, maxG), d = zeros();
+  const L = rnd(1, 4);                                       // いちばん 上の まとまりの けた数
+  d[topG * 4 + L - 1] = rnd(1, 9);
+  for (let i = topG * 4; i < topG * 4 + L - 1; i++) d[i] = Math.random() < 0.5 ? 0 : rnd(1, 9);
+  for (let g = topG - 1; g >= 0; g--) {
+    const r = Math.random();
+    if (r < 0.35) continue;                                  // ぜんぶ 0 の まとまり
+    if (r < 0.7) { d[g * 4 + rnd(0, 3)] = rnd(1, 9); continue; }   // 1つだけ
+    for (let p = 0; p < 4; p++) d[g * 4 + p] = Math.random() < 0.5 ? 0 : rnd(1, 9);
+  }
+  return d;
+}
+// 同じ 数が 2回 出ない ように つくる
+function uniqueList(n, make, keyOf) {
+  const seen = new Set(), list = [];
+  for (let k = 0; list.length < n && k < n * 30; k++) {
+    const x = make(), key = keyOf(x);
+    if (seen.has(key)) continue;
+    seen.add(key); list.push(x);
+  }
+  return list;
+}
+
+/* =========================================================
+   11. ✏️ 読もう・書こう
+      書こう：漢数字 → 数字。 読もう：数字 → 漢数字。
+      ★ 0 の 位を とばす まちがいを 見つけて、位取り表に 入れて 見せる
+   ========================================================= */
+state.m2 = { dir: 'write', Q: null, hint: false, fb: '' };
+VIEWS.read = {
+  enter() {
+    const M = state.m2;
+    M.Q = quizNew(uniqueList(settings.count, () => genZeroNumber(), (d) => d.join('')));
+    M.Q.list = M.Q.list.map((d, k) => ({ d, dir: M.dir === 'mix' ? (k % 2 ? 'read' : 'write') : M.dir }));
+    state.input = ''; M.hint = false; M.fb = '';
+  },
+  setup() {
+    const M = state.m2;
+    return `<div class="sgrp"><span class="slabel">${R('問題', 'もんだい')}</span>
+      ${chip('m2dir', 'write', `${R('書', 'か')}こう（${KANSUUJI}→${SUUJI}）`, M.dir === 'write')}
+      ${chip('m2dir', 'read', `${YOMI}もう（${SUUJI}→${KANSUUJI}）`, M.dir === 'read')}
+      ${chip('m2dir', 'mix', 'まぜる', M.dir === 'mix')}</div>`;
+  },
+  locked: () => state.m2.Q.done,
+  build() {
+    const M = state.m2, Q = M.Q, q = Q.list[Q.i];
+    M.hint = false; M.fb = '';
+    const w = q.dir === 'write';
+    say(w ? `${KANSUUJI}を ${SUUJI}で ${R('書', 'か')}こう。0の ${KURAI}を わすれずに` : `${SUUJI}を ${KANSUUJI}で ${R('書', 'か')}こう。${MIGI}から 4けたずつ ${R('区切', 'くぎ')}ると ${YOMI}みやすいよ`);
+    $('#stage').innerHTML = `
+      <div class="card">
+        <div class="qhead">${progressHTML(Q)}<span class="qtag">${w ? `${R('書', 'か')}こう` : `${YOMI}もう`}</span></div>
+        <p class="qlead">${w ? `つぎの ${KAZU}を ${SUUJI}で ${R('書', 'か')}きましょう` : `つぎの ${KAZU}を ${KANSUUJI}で ${R('書', 'か')}きましょう`}</p>
+        <div class="qbig ${w ? 'kanji' : 'num'}">${w ? kanjiHTML(q.d) : toDigits(q.d, '')}</div>
+        <div class="btn-row">
+          <button class="act-btn b-hint" data-act="m2hint">💡 ヒント</button>
+          <button class="act-btn b-main" data-act="m2next" id="m2next" hidden>つぎへ ▶</button>
+        </div>
+        <div id="m2hintBox"></div>
+      </div>
+      <div class="card">
+        <h3>${w ? `✏️ ${SUUJI}を 入れよう` : `✏️ ${KANSUUJI}を 入れよう`} <small id="padCount" class="pad-count"></small></h3>
+        ${padHTML(w ? 'digits' : 'kanji')}
+      </div>
+      <div class="card full fb-card" id="m2fb"></div>`;
+    renderPad();
+  },
+  answer(text) {
+    const M = state.m2, Q = M.Q, q = Q.list[Q.i], target = toBig(q.d);
+    const w = q.dir === 'write';
+    if (w && !/^\d+$/.test(text)) return;
+    const val = w ? BigInt(text) : parseKanji(text);
+    if (val === target) {
+      quizCorrect(Q, $('#padBox'));
+      say(`せいかい！ ${toMixed(q.d)}（${toReading(q.d)}）`, 'good');
+      $('#m2fb').innerHTML = `<p class="box-note">${toMixed(q.d)}<br><small>${toReading(q.d)}</small></p>` + tableHTML(q.d, { id: 'pt2' });
+      $('#m2next').hidden = false;
+      return;
+    }
+    sfx.soft();
+    if (val === null) {
+      say(`${KANSUUJI}の ${R('書', 'か')}き${R('方', 'かた')}を たしかめよう（${R('例', 'れい')}：二千三百、五十億）`, 'warn');
+      return;
+    }
+    Q.tries++;
+    const tStr = target.toString(), aStr = val.toString(), nz = (s) => s.replace(/0/g, '');
+    let msg;
+    if (w && nz(tStr) === nz(aStr) && aStr.length < tStr.length) {
+      msg = `0の ${KURAI}を とばして いないかな？ ${R('答', 'こた')}えは ${tStr.length}けた、きみの ${KAZU}は ${aStr.length}けた。${R('表', 'ひょう')}に 入れて たしかめよう`;
+    } else if (w && nz(tStr) === nz(aStr)) {
+      msg = `0が ${R('多', 'おお')}すぎるみたい。${R('答', 'こた')}えは ${tStr.length}けた、きみの ${KAZU}は ${aStr.length}けた`;
+    } else {
+      const bad = [3, 2, 1, 0].filter((g) => g * 4 < MAXP() && groupVal(fromBig(val) || zeros(), g) !== groupVal(q.d, g));
+      msg = `おしい！ ${bad.map((g) => `「${g ? rubyBig(BIG[g]) : ICHI}」`).join('')}の まとまりが ちがうよ`;
+    }
+    say(msg, 'warn');
+    const ad = val < pow10(PLACES) ? fromBig(val) : null;
+    let fb = ad
+      ? `<p class="box-note">きみの ${KAZU}を ${KURAI}取り${R('表', 'ひょう')}に 入れると「${kanjiHTML(ad)}」に なるよ</p>${tableHTML(ad, { id: 'pt2', hl: diffIdx(ad, q.d) })}`
+      : `<p class="box-note">けたが ${R('多', 'おお')}すぎて ${R('表', 'ひょう')}に 入らないよ</p>`;
+    if (Q.tries >= 2) {
+      fb += `<p class="box-note">${R('答', 'こた')}えは <b>${w ? toDigits(q.d) : toKanji(q.d)}</b>（${toReading(q.d)}）。とちゅうの 0も わすれずに！</p>${tableHTML(q.d, { id: 'pt3', hl: diffIdx(ad || zeros(), q.d) })}`;
+      Q.done = true; $('#m2next').hidden = false;
+    }
+    $('#m2fb').innerHTML = fb;
+  },
+};
+// 2つの 数で 数字が ちがう 位
+const diffIdx = (a, b) => [...Array(MAXP()).keys()].filter((i) => a[i] !== b[i]);
+// 書こうの ヒント：漢数字を まとまりごとに 分けて 見せる
+function m2HintHTML(d, write) {
+  if (!write) return `<p class="note">${MIGI}から 4けたずつ ${R('区切', 'くぎ')}ると…</p><div class="digits-big">${digitsBigHTML(d)}</div>`;
+  const t = topIndex(d) >> 2;
+  let h = '';
+  for (let g = t; g >= 0; g--) {
+    const a = group(d, g), k = groupKanji(a);
+    h += `<div class="hseg g${g}"><b>${k ? k + (g ? rubyBig(BIG[g]) : '') : 'なし'}</b><small>${g ? `${rubyBig(BIG[g])}の まとまり` : `${ICHI}の まとまり`}</small><span>□□□□</span></div>`;
+  }
+  return `<div class="hsegs">${h}</div><p class="note">まとまりごとに 4けた（□□□□）。なにも ない まとまりは 0000 と ${R('書', 'か')}くよ</p>`;
+}
+Object.assign(ACTS, {
+  m2dir: (b) => { state.m2.dir = b.dataset.v; sfx.tap(); setMode('read'); },
+  m2hint: () => {
+    const M = state.m2, q = M.Q.list[M.Q.i];
+    sfx.tap();
+    $('#m2hintBox').innerHTML = m2HintHTML(q.d, q.dir === 'write');
+  },
+  m2next: () => { sfx.tap(); quizNext(state.m2.Q, VIEWS.read); },
+});
+
+/* =========================================================
+   12. ↔️ 10倍と 1/10
+      いちばん 上の 数字が どの 位へ いくか、カードを タップして よそう → たしかめる
+   ========================================================= */
+const OPS = [
+  { name: '×10', shift: 1, text: `10${BAI}` }, { name: '×100', shift: 2, text: `100${BAI}` },
+  { name: '×1000', shift: 3, text: `1000${BAI}` }, { name: '÷10', shift: -1, text: '1/10' },
+];
+state.m3 = { Q: null, pred: -1, d: null, busy: false };
+function genTenQ() {
+  const op = pick([OPS[0], OPS[0], OPS[1], OPS[2], OPS[3], OPS[3]]);
+  const L = rnd(1, 3);                                        // 0 で ない 数字の けた数
+  const lo = Math.max(L - 1 + (op.shift < 0 ? 1 : 0), 4);     // 万の位より 上から はじめる
+  const hi = MAXP() - 1 - Math.max(op.shift, 0);
+  const t = rnd(lo, hi), d = zeros();
+  d[t] = rnd(1, 9);
+  for (let i = t - L + 1; i < t; i++) d[i] = rnd(0, 9);
+  return { d, op };
+}
+VIEWS.ten = {
+  enter() {
+    state.m3.Q = quizNew(uniqueList(settings.count, genTenQ, (q) => q.d.join('') + q.op.name));
+  },
+  build() {
+    const M = state.m3, Q = M.Q, q = Q.list[Q.i], t = topIndex(q.d);
+    M.pred = -1; M.d = q.d.slice(); M.busy = false;
+    say(`${placeNameR(t)}の${KURAI}の「${q.d[t]}」は、${q.op.text}すると どの ${KURAI}へ いくかな？ カードを タップして よそうしよう`);
+    $('#stage').innerHTML = `
+      <div class="card full">
+        <div class="qhead">${progressHTML(Q)}<span class="qtag">${R('予想', 'よそう')}</span></div>
+        <p class="qbig num">${bigMixedR(toBig(q.d))} <span class="op-${q.op.shift > 0 ? 'up' : 'down'}">${q.op.name}</span> ＝ <span id="m3ans">？</span></p>
+        ${tableHTML(q.d, { id: 'pt3', act: 'm3pred', hl: [t], names: true })}
+        <div class="btn-row">
+          <button class="act-btn ${q.op.shift > 0 ? 'b-up' : 'b-down'}" data-act="m3go" id="m3go" disabled>▶ ${q.op.name} で たしかめる</button>
+          <button class="act-btn b-main" data-act="m3next" id="m3next" hidden>つぎへ ▶</button>
+        </div>
+        <p class="rule-box">10${BAI} → ${KURAI}が 1つ ${UE}がる　100${BAI} → 2つ　1000${BAI} → 3つ<br>1/10 → ${KURAI}が 1つ ${SAGA}がる</p>
+      </div>`;
+  },
+};
+Object.assign(ACTS, {
+  m3pred: (b) => {
+    const M = state.m3, Q = M.Q;
+    if (Q.done || M.busy) return;
+    M.pred = +b.dataset.i; sfx.tap();
+    $$('#pt3 .dg').forEach((c) => c.classList.toggle('pred', +c.dataset.i === M.pred));
+    $('#m3go').disabled = false;
+    say(`${placeNameR(M.pred)}の${KURAI}と よそうしたね。「たしかめる」を おそう`);
+  },
+  m3go: async () => {
+    const M = state.m3, Q = M.Q, q = Q.list[Q.i];
+    if (M.busy || Q.done || M.pred < 0) return;
+    M.busy = true; $('#m3go').disabled = true;
+    const t = topIndex(q.d), dir = Math.sign(q.op.shift);
+    $$('#pt3 .dg').forEach((c) => c.classList.remove('hit'));
+    for (let k = 0; k < Math.abs(q.op.shift); k++) {
+      dir > 0 ? sfx.up() : sfx.down();
+      await slideDigits('pt3', M.d, dir);
+      M.d = dir > 0 ? [0, ...M.d.slice(0, PLACES - 1)] : [...M.d.slice(1), 0];
+      updateTable(M.d, 'pt3', [t + dir * (k + 1)]);
+      if (calm()) await wait(300);
+    }
+    M.busy = false;
+    const goal = t + q.op.shift, after = toBig(M.d);
+    $('#m3ans').innerHTML = bigMixedR(after);
+    const n = Math.abs(q.op.shift), ud = q.op.shift > 0 ? UE : SAGA;
+    if (M.pred === goal) {
+      quizCorrect(Q, cardOf('pt3', goal), 'あたり！');
+      say(`あたり！ ${q.op.text}すると ${KURAI}が ${n}つ ${ud}がって、${placeNameR(goal)}の${KURAI}へ。${bigMixedR(toBig(q.d))} ${q.op.name} ＝ ${bigMixedR(after)}`, 'good');
+    } else {
+      Q.tries++; Q.done = true; sfx.soft();
+      say(`${placeNameR(M.pred)}の${KURAI}を よそうしたね。${q.op.text}は ${KURAI}が ${n}つ ${ud}がるので、${placeNameR(goal)}の${KURAI}だよ`, 'warn');
+    }
+    $('#m3next').hidden = false;
+  },
+  m3next: () => { sfx.tap(); quizNext(state.m3.Q, VIEWS.ten); },
+});
+
+/* =========================================================
+   13. 📏 数直線
+      ① 1目もりの 大きさを 考える → ② ↓の 目もりの 数を 答える
+      または「この 数は どこ？」で 目もりを タップする
+   ========================================================= */
+const NL_CFGS = [
+  { start: 0n, big: pow10(7), n: 10, sub: 10 },               // 0〜1億（1目もり 100万）
+  { start: 0n, big: pow10(7), n: 10, sub: 5 },                // 0〜1億（1目もり 200万）
+  { start: 0n, big: pow10(8), n: 10, sub: 10 },               // 0〜10億
+  { start: pow10(8), big: pow10(7), n: 10, sub: 10 },         // 1億〜2億
+  { start: 0n, big: pow10(11), n: 10, sub: 10, need: 16 },    // 0〜1兆
+  { start: 0n, big: pow10(12), n: 10, sub: 10, need: 16 },    // 0〜10兆
+  { start: 0n, big: pow10(12), n: 10, sub: 2, need: 16 },     // 0〜10兆（1目もり 5000億）
+  { start: 5n * pow10(12), big: pow10(11), n: 10, sub: 10, need: 16 },   // 5兆〜6兆
+];
+const NL = { W: 1000, H: 230, X0: 60, X1: 940, Y: 120 };
+const nlStep = (c) => c.big / BigInt(c.sub);
+const nlN = (c) => c.n * c.sub;
+const nlVal = (c, k) => c.start + nlStep(c) * BigInt(k);
+const nlX = (c, k) => NL.X0 + (NL.X1 - NL.X0) * k / nlN(c);
+const nlLabeled = (c, k) => k === 0 || k === nlN(c) || k === nlN(c) / 2;
+state.m4 = { Q: null, phase: '', pick: -1, wrongStep: null };
+function genLineQ() {
+  const cfg = pick(NL_CFGS.filter((c) => !c.need || MAXP() >= c.need));
+  let k;
+  do k = rnd(1, nlN(cfg) - 1); while (nlLabeled(cfg, k));
+  return { cfg, k, type: Math.random() < 0.6 ? 'read' : 'place' };
+}
+function nlSVG(q, M) {
+  const c = q.cfg, N = nlN(c), done = M.Q.done;
+  let s = `<line class="nl-axis" x1="${NL.X0 - 20}" y1="${NL.Y}" x2="${NL.X1 + 30}" y2="${NL.Y}"/>`;
+  for (let k = 0; k <= N; k++) {
+    const x = nlX(c, k), bigT = k % c.sub === 0, half = c.sub === 10 && k % 5 === 0 && !bigT;
+    const h = bigT ? 30 : half ? 21 : 13;
+    s += `<line class="${bigT ? 'nl-big' : 'nl-small'}" x1="${x}" y1="${NL.Y - h}" x2="${x}" y2="${NL.Y + h}"/>`;
+    if (nlLabeled(c, k)) s += `<text class="nl-lab" x="${x}" y="${NL.Y + 66}" text-anchor="middle">${bigMixed(nlVal(c, k))}</text>`;
+    else if (bigT && done && Math.abs(k - q.k) < c.sub) s += `<text class="nl-lab2" x="${x}" y="${NL.Y + 60}" text-anchor="middle">${bigMixed(nlVal(c, k))}</text>`;
+  }
+  if (q.type === 'read' || done) {
+    const x = nlX(c, q.k);
+    s += `<g class="nl-arrow"><path d="M${x} ${NL.Y - 34} l-14 -26 h28 z"/><text x="${x}" y="${NL.Y - 68}" text-anchor="middle">${done && q.type === 'read' ? bigMixed(nlVal(c, q.k)) : q.type === 'read' ? 'ア' : bigMixed(nlVal(c, q.k))}</text></g>`;
+  }
+  if (q.type === 'place' && M.pick >= 0 && !(done && M.pick === q.k)) {
+    const x = nlX(c, M.pick);
+    s += `<g class="nl-pick"><circle cx="${x}" cy="${NL.Y}" r="13"/><text x="${x}" y="${NL.Y + 100}" text-anchor="middle">${bigMixed(nlVal(c, M.pick))}</text></g>`;
+  }
+  s += `<rect class="nl-hit" x="0" y="0" width="${NL.W}" height="${NL.H}" ${q.type === 'place' && !done ? 'data-act="m4tap"' : ''}/>`;
+  return `<svg class="nl" id="nlSvg" viewBox="0 0 ${NL.W} ${NL.H}" role="img" aria-label="数直線">${s}</svg>`;
+}
+VIEWS.line = {
+  enter() { state.m4.Q = quizNew(uniqueList(settings.count, genLineQ, (q) => `${q.cfg.start}-${q.cfg.big}-${q.cfg.sub}-${q.k}`)); },
+  locked: () => state.m4.Q.done || state.m4.phase !== 'value',
+  build() {
+    const M = state.m4, Q = M.Q, q = Q.list[Q.i], c = q.cfg;
+    M.pick = -1; M.wrongStep = null;
+    M.phase = q.type === 'read' ? 'step' : 'place';
+    const lo = bigMixed(c.start), hi = bigMixed(nlVal(c, nlN(c)));
+    $('#stage').innerHTML = `
+      <div class="card full">
+        <div class="qhead">${progressHTML(Q)}<span class="qtag">${lo}〜${hi}</span></div>
+        <div id="nlBox"></div>
+        <div id="m4ask"></div>
+        <div class="btn-row"><button class="act-btn b-main" data-act="m4next" id="m4next" hidden>つぎへ ▶</button></div>
+      </div>`;
+    this.drawAsk();
+  },
+  drawAsk() {
+    const M = state.m4, Q = M.Q, q = Q.list[Q.i], c = q.cfg, step = nlStep(c);
+    $('#nlBox').innerHTML = nlSVG(q, M);
+    const ask = $('#m4ask');
+    if (M.phase === 'step') {
+      say(`まず、いちばん ${CHII}さい 1目もりの ${R('大', 'おお')}きさを 考えよう`);
+      const ch = [step, c.big, step % 10n === 0n ? step / 10n : step * 10n].filter((v, i, a) => a.indexOf(v) === i);
+      ask.innerHTML = `<p class="qlead">1目もりは いくつ？</p><div class="choices">${shuffle(ch).map((v) => `<button class="choice" data-act="m4step" data-v="${v}">${bigMixedR(v)}</button>`).join('')}</div>`;
+    } else if (M.phase === 'value') {
+      say(`1目もりは ${bigMixedR(step)}。アの 目もりが あらわす ${KAZU}は？（${SUUJI}と 万・${OKU}・${CHOU}で 入れよう）`);
+      ask.innerHTML = `<div class="m4pad">${padHTML('units')}</div>`;
+      renderPad();
+    } else if (M.phase === 'place') {
+      say(`${bigMixedR(nlVal(c, q.k))}は どこ？ ${R('数直線', 'すうちょくせん')}の 目もりを タップしよう`);
+      ask.innerHTML = `<p class="qlead">「${bigMixedR(nlVal(c, q.k))}」の 目もりを タップ</p>`;
+    } else ask.innerHTML = `<p class="box-note">1目もりは ${bigMixedR(step)}。${R('大', 'おお')}きい 目もり（${bigMixedR(c.big)}）の ${R('間', 'あいだ')}が ${c.sub}こに 分かれて いるよ</p>`;
+  },
+  answer(text) {
+    const M = state.m4, Q = M.Q, q = Q.list[Q.i], c = q.cfg, goal = nlVal(c, q.k);
+    const v = parseMixed(text);
+    if (v === null) { sfx.soft(); say(`${SUUJI}と 万・${OKU}・${CHOU}で 入れてね（${R('例', 'れい')}：3500万）`, 'warn'); return; }
+    if (v === goal) { this.finish(true); return; }
+    Q.tries++; sfx.soft();
+    // 1目もりを ちがう 大きさで 数えた？
+    const off = v - c.start, kk = BigInt(q.k);
+    if (kk && off % kk === 0n && off / kk !== nlStep(c)) say(`1目もりを ${bigMixedR(off / kk)}として 数えたかな？ 1目もりは ${bigMixedR(nlStep(c))}だよ`, 'warn');
+    else say(`ちがうみたい。${R('近', 'ちか')}くの ${R('大', 'おお')}きい 目もりから、1目もりずつ 数えてみよう`, 'warn');
+    if (Q.tries >= 2) this.finish(false);
+  },
+  finish(ok) {
+    const M = state.m4, Q = M.Q, q = Q.list[Q.i], goal = nlVal(q.cfg, q.k);
+    if (ok) { quizCorrect(Q, $('#nlSvg')); say(`せいかい！ ${bigMixedR(goal)}`, 'good'); }
+    else { Q.done = true; say(`${R('答', 'こた')}えは ${bigMixedR(goal)}。${R('大', 'おお')}きい 目もりの ${KAZU}も 見てみよう`, 'warn'); }
+    M.phase = 'done'; state.input = '';
+    this.drawAsk();
+    $('#m4next').hidden = false;
+  },
+};
+Object.assign(ACTS, {
+  m4step: (b) => {
+    const M = state.m4, q = M.Q.list[M.Q.i], c = q.cfg, v = BigInt(b.dataset.v);
+    if (v === nlStep(c)) { sfx.correct(); M.phase = 'value'; VIEWS.line.drawAsk(); return; }
+    M.Q.tries++; sfx.soft();
+    b.disabled = true;
+    say(v === c.big
+      ? `${bigMixedR(c.big)}は ${R('大', 'おお')}きい 目もり 1つ分。その ${R('間', 'あいだ')}は ${c.sub}こに 分かれて いるね`
+      : `${bigMixedR(c.big)}の ${R('間', 'あいだ')}に 小さい 目もりが いくつ あるか 数えよう（${c.sub}こに 分かれて いるよ）`, 'warn');
+  },
+  m4tap: (b, e) => {
+    const M = state.m4, Q = M.Q, q = Q.list[Q.i], c = q.cfg;
+    if (Q.done) return;
+    const svg = $('#nlSvg'), m = svg.getScreenCTM();
+    const x = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse()).x;
+    const k = Math.max(0, Math.min(nlN(c), Math.round((x - NL.X0) / (NL.X1 - NL.X0) * nlN(c))));
+    M.pick = k; sfx.tap();
+    if (k === q.k) { VIEWS.line.finish(true); return; }
+    Q.tries++; sfx.soft();
+    if (Q.tries >= 2) { VIEWS.line.finish(false); return; }
+    VIEWS.line.drawAsk();
+    say(`そこは ${bigMixedR(nlVal(c, k))}。1目もりは ${bigMixedR(nlStep(c))}だよ。もう いちど`, 'warn');
+  },
+  m4next: () => { sfx.tap(); quizNext(state.m4.Q, VIEWS.line); },
+});
+
+/* =========================================================
+   14. ➕ 大きな数の 計算
+      3億＋5億 は「1億が (3＋5)こ」。0の ある かけ算は 0を とって 計算して あとで つける
+   ========================================================= */
+state.m5 = { Q: null, show: 0, cur: -1 };
+function calcUnits() {
+  const u = [pow10(4), pow10(7), pow10(8), pow10(10), pow10(11)];
+  if (MAXP() > 12) u.push(pow10(12), pow10(12), pow10(11));
+  return u;
+}
+// a×U ＋ b×U（kind: 'add' / 'sub'）
+function genAddSub(kind) {
+  for (;;) {
+    const U = pick(calcUnits()), small = Math.random() < 0.6;
+    let a = small ? rnd(1, 9) : rnd(11, 99), b = small ? rnd(1, 9) : rnd(11, 99);
+    if (kind === 'sub') { if (a === b) continue; if (a < b) [a, b] = [b, a]; }
+    const A = BigInt(a) * U, B = BigInt(b) * U, s = kind === 'add' ? a + b : a - b, ans = BigInt(s) * U;
+    if (A >= LIMIT() || B >= LIMIT() || ans >= LIMIT()) continue;
+    const u = bigMixedR(U), sign = kind === 'add' ? '＋' : '−';
+    const steps = [
+      { html: `${bigMixedR(A)}は、${u}が ${a}こ`, n: A, hl: [] },
+      { html: `${bigMixedR(B)}は、${u}が ${b}こ`, n: B, hl: [] },
+      { html: `${u}が（${a} ${sign} ${b}）こ ＝ ${u}が ${s}こ`, n: ans, hl: [] },
+      { html: `${u}が ${s}こで、${R('答', 'こた')}えは <b>${bigMixedR(ans)}</b>`, n: ans, hl: [] },
+    ];
+    const ui = U.toString().length - 1;
+    steps.forEach((st) => { st.hl = [ui, ui + 1].filter((i) => i < MAXP()); });
+    return { kind, text: `${bigMixedR(A)} ${sign} ${bigMixedR(B)}`, ans, steps };
+  }
+}
+// x×10^k × y×10^m（0の ある かけ算）
+function genMul() {
+  for (;;) {
+    const x = pick([2, 3, 4, 5, 6, 8, 12, 15, 25]), y = pick([2, 3, 4, 5, 6, 7, 8, 9]);
+    const k = rnd(4, 9), m = rnd(1, 3);
+    const A = BigInt(x) * pow10(k), B = BigInt(y) * pow10(m), p = x * y, ans = BigInt(p) * pow10(k + m);
+    if (A >= LIMIT() || ans >= LIMIT()) continue;
+    const z = (n) => `0が ${n}こ`;
+    const steps = [
+      { html: `${bigMixedR(A)}は ${A}（${z(k)}）、${B}は（${z(m)}）`, n: A, hl: [] },
+      { html: `0を とって ${x} × ${y} ＝ ${p}`, n: BigInt(p), hl: [] },
+      { html: `とった 0は ${k}こ ＋ ${m}こ ＝ ${k + m}こ`, n: BigInt(p), hl: [] },
+      { html: `${p}の ${MIGI}に 0を ${k + m}こ つけて <b>${bigMixedR(ans)}</b>`, n: ans, hl: [...Array(k + m).keys()] },
+    ];
+    return { kind: 'mul', text: `${bigMixedR(A)} × ${B}`, ans, steps };
+  }
+}
+VIEWS.calc = {
+  enter() {
+    const n = settings.count, nMul = Math.max(1, Math.round(n * 0.4)), nAS = n - nMul;
+    const as = uniqueList(nAS, () => genAddSub(Math.random() < 0.55 ? 'add' : 'sub'), (q) => q.text);
+    const mul = uniqueList(nMul, genMul, (q) => q.text);
+    state.m5.Q = quizNew([...as, ...mul]);      // たし算・ひき算の あとに 0の ある かけ算
+  },
+  locked: () => state.m5.Q.done,
+  build() {
+    const M = state.m5, Q = M.Q, q = Q.list[Q.i];
+    M.show = 0; M.cur = -1;
+    say(q.kind === 'mul' ? `0を とって 計算して、あとで 0を つけよう` : `「${R('何', 'なん')}が いくつ」と 考えると かんたん！`);
+    $('#stage').innerHTML = `
+      <div class="card">
+        <div class="qhead">${progressHTML(Q)}<span class="qtag">${q.kind === 'add' ? 'たし算' : q.kind === 'sub' ? 'ひき算' : 'かけ算'}</span></div>
+        <p class="qbig num">${q.text} ＝ <span id="m5ans">？</span></p>
+        <div class="btn-row">
+          <button class="act-btn b-hint" data-act="m5step" id="m5hint">💡 ${R('考', 'かんが')}え${R('方', 'かた')}（1つずつ）</button>
+          <button class="act-btn b-main" data-act="m5next" id="m5next" hidden>つぎへ ▶</button>
+        </div>
+        <ol class="steps" id="m5steps"></ol>
+      </div>
+      <div class="card">
+        <h3>✏️ ${R('答', 'こた')}えを 入れよう</h3>
+        ${padHTML('units')}
+      </div>
+      <div class="card full fb-card" id="m5table"></div>`;
+    renderPad();
+  },
+  drawSteps() {
+    const M = state.m5, q = M.Q.list[M.Q.i];
+    $('#m5steps').innerHTML = q.steps.slice(0, M.show).map((st, j) => `<li class="${j === M.cur ? 'cur' : ''}" data-act="m5show" data-v="${j}">${st.html}</li>`).join('');
+    if (M.cur >= 0) {
+      const st = q.steps[M.cur], d = fromBig(st.n);
+      $('#m5table').innerHTML = tableHTML(d, { id: 'pt5', hl: st.hl.filter((i) => d[i] !== undefined) });
+      const top = topIndex(d);
+      if (top >= 0) cardOf('pt5', top)?.classList.add('pop');
+    }
+    $('#m5hint').hidden = M.show >= q.steps.length;
+  },
+  answer(text) {
+    const M = state.m5, Q = M.Q, q = Q.list[Q.i], v = parseMixed(text);
+    if (v === null) { sfx.soft(); say(`${SUUJI}と 万・${OKU}・${CHOU}で 入れてね（${R('例', 'れい')}：8${OKU}）`, 'warn'); return; }
+    if (v === q.ans) {
+      quizCorrect(Q, $('#padBox'));
+      say(`せいかい！ ${q.text} ＝ ${bigMixedR(q.ans)}`, 'good');
+      this.reveal();
+      return;
+    }
+    Q.tries++; sfx.soft();
+    const r = v > q.ans ? v / q.ans : q.ans / v, exact = v > q.ans ? v % q.ans === 0n : q.ans % v === 0n;
+    if (v && exact && /^10+$/.test(r.toString())) say(`${SUUJI}は あって いるよ。0の ${KAZU}（${KURAI}）を もう いちど たしかめよう`, 'warn');
+    else say(`ちがうみたい。「${R('考', 'かんが')}え${R('方', 'かた')}」を 見てみよう`, 'warn');
+    if (Q.tries >= 2) { Q.done = true; this.reveal(); }
+  },
+  reveal() {
+    const M = state.m5, q = M.Q.list[M.Q.i];
+    M.Q.done = true;
+    $('#m5ans').innerHTML = bigMixedR(q.ans);
+    M.show = q.steps.length; M.cur = q.steps.length - 1;
+    this.drawSteps();
+    $('#m5next').hidden = false;
+  },
+};
+Object.assign(ACTS, {
+  m5step: () => { const M = state.m5; M.show++; M.cur = M.show - 1; sfx.tap(); VIEWS.calc.drawSteps(); },
+  m5show: (b) => { state.m5.cur = +b.dataset.v; sfx.tick(); VIEWS.calc.drawSteps(); },
+  m5next: () => { sfx.tap(); quizNext(state.m5.Q, VIEWS.calc); },
+});
+
+/* =========================================================
+   15. 💡 大きさを 感じよう（話題カード）
+      計算で きまる ものは ここで 計算する。
+      人口などの 統計の 数は 先生が 先生モードで 入れる（プログラムには 書かない）
+   ========================================================= */
+const TOPIC_KEY = 'ookinakazu-topics';
+const TOPIC_DEFAULT = [
+  { title: '日本の 人口', value: '', unit: '人', approx: true, src: '' },
+  { title: '世界の 人口', value: '', unit: '人', approx: true, src: '' },
+  { title: '日本の 1年間の 予算', value: '', unit: '円', approx: true, src: '' },
+];
+const topics = (() => {
+  try { const t = JSON.parse(localStorage.getItem(TOPIC_KEY) || 'null'); return Array.isArray(t) ? t : TOPIC_DEFAULT.map((x) => ({ ...x })); }
+  catch (e) { return TOPIC_DEFAULT.map((x) => ({ ...x })); }
+})();
+function saveTopics() { try { localStorage.setItem(TOPIC_KEY, JSON.stringify(topics)); } catch (e) { /* ほぞん できなくても よい */ } }
+// 計算で 答えが きまる 話題（統計の 数は つかわない）
+function calcTopics() {
+  const list = [
+    { q: `1${OKU}${R('円', 'えん')}は、1万${R('円', 'えん')}${R('札', 'さつ')}が ${R('何', 'なん')}まい？`, a: `1万まい（1${OKU}は 1万が 1万こ）`, n: pow10(8) },
+    { q: `1${OKU}は、1000万を いくつ あつめた ${KAZU}？`, a: `10こ（1000万の 10${BAI}が 1${OKU}）`, n: pow10(8) },
+    { q: `1${OKU}${R('秒', 'びょう')}は、${R('何', 'なん')}${R('年', 'ねん')}くらい？`, a: `${R('約', 'やく')}3${R('年', 'ねん')}（1${R('日', 'にち')}は 8万6400${R('秒', 'びょう')}。1${OKU}÷8万6400 で ${R('約', 'やく')}1157${R('日', 'にち')}）`, n: pow10(8) },
+  ];
+  if (MAXP() > 12) list.push(
+    { q: `1${CHOU}${R('円', 'えん')}は、1万${R('円', 'えん')}${R('札', 'さつ')}が ${R('何', 'なん')}まい？`, a: `1${OKU}まい（1${CHOU}は 1万が 1${OKU}こ）`, n: pow10(12) },
+    { q: `1${CHOU}は、1${OKU}を いくつ あつめた ${KAZU}？`, a: `1万こ（1${OKU}の 1万${BAI}が 1${CHOU}）`, n: pow10(12) },
+  );
+  return list;
+}
+function topicsHTML() {
+  const ct = calcTopics().map((t, j) => `<div class="topic">
+      <p class="tq">${t.q}</p>
+      <details><summary>${R('答', 'こた')}えを 見る</summary><p class="ta">${t.a}</p></details>
+      <button class="chip" data-act="topicLoad" data-v="${t.n}">${KURAI}取り${R('表', 'ひょう')}に 入れる</button></div>`).join('');
+  const st = topics.map((t) => {
+    const v = parseAny(t.value);
+    const ok = v !== null && v > 0n && v < LIMIT();
+    return `<div class="topic stat">
+      <p class="tq">${esc(t.title) || '（題名なし）'}</p>
+      ${ok ? `<p class="tv">${t.approx ? `${R('約', 'やく')}` : ''}${bigMixedR(v)}${esc(t.unit)}</p><p class="ts">${toReading(fromBig(v))}${t.src ? `<br>（${esc(t.src)}）` : ''}</p>
+        <button class="chip" data-act="topicLoad" data-v="${v}">${KURAI}取り${R('表', 'ひょう')}に 入れる</button>`
+        : `<p class="ts">${R('先生', 'せんせい')}が ${R('先生', 'せんせい')}モードで ${KAZU}を 入れると 出るよ</p>`}</div>`;
+  }).join('');
+  return `<div class="topics">${ct}${st}</div>`;
+}
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+ACTS.topicLoad = (b) => {
+  const d = fromBig(BigInt(b.dataset.v));
+  if (!d) return;
+  state.free.d = d; state.free.log = [];
+  sfx.tap();
+  if (state.mode !== 'free') setMode('free'); else render();
+  say(`${toMixed(d)}（${toReading(d)}）。${KURAI}取り${R('表', 'ひょう')}で 見てみよう`);
+  $('#pt')?.scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'center' });
+};
+
+/* =========================================================
+   16. 🧑‍🏫 先生モード
+      数を 入れて 大きく 出す。数字・漢数字・読み方を それぞれ かくせる
+   ========================================================= */
+state.m6 = { d: zeros(), hide: { table: false, digits: false, kanji: true, mixed: true, kana: true }, text: '' };
+const HIDE_LABELS = { table: `${KURAI}取り${R('表', 'ひょう')}`, digits: SUUJI, kanji: KANSUUJI, mixed: `${SUUJI}と${R('漢字', 'かんじ')}`, kana: `${YOMI}み${R('方', 'かた')}` };
+VIEWS.teacher = {
+  enter() { say(`${KAZU}を 入れて「${R('表示', 'ひょうじ')}」。${R('答', 'こた')}えを かくして、${R('子', 'こ')}どもに ${YOMI}ませる ことも できます`); },
+  setup() {
+    const H = state.m6.hide;
+    return `<div class="sgrp"><span class="slabel">かくす</span>${Object.keys(HIDE_LABELS).map((k) => chip('m6hide', k, HIDE_LABELS[k], H[k])).join('')}</div>`;
+  },
+  build() {
+    const M = state.m6;
+    $('#stage').innerHTML = `
+      <div class="card full">
+        <div class="t-input">
+          <input id="m6in" type="text" inputmode="text" placeholder="例：3500000200000 ／ 3兆5000億20万 ／ 三兆五千億二十万" value="${esc(M.text)}" aria-label="表示する数">
+          <button class="act-btn b-main" data-act="m6show">${R('表示', 'ひょうじ')}</button>
+          <button class="act-btn" data-act="m6rand">🎲 0の ある数</button>
+          <button class="act-btn" data-act="m6toFree">🧱 じゆうに つくるで うごかす</button>
+        </div>
+        <div id="m6err" class="note" style="color:var(--warn)"></div>
+        <div id="m6table" class="hideable"></div>
+        <div class="reads t-reads" id="m6reads"></div>
+      </div>
+      <div class="card full">
+        <h3>💡 ${R('話題', 'わだい')}カードの ${KAZU}（${R('先生', 'せんせい')}が 入れる）</h3>
+        <p class="ed-note">「じゆうに つくる」の下に出る話題カードの数です。統計の数値は年や調べ方で変わるので、出典を確かめて入れてください（このブラウザに保存されます）。数は「1億2300万」「123000000」「一億二千三百万」のどれでも入れられます。</p>
+        <div id="m6topics"></div>
+        <div class="btn-row"><button class="act-btn" data-act="m6addTopic">＋ カードを ふやす</button></div>
+      </div>`;
+    this.drawTopics();
+  },
+  update() {
+    const M = state.m6, H = M.hide, d = M.d;
+    $('#m6table').innerHTML = H.table ? `<button class="hidden-row" data-act="m6reveal" data-v="table">？ ${HIDE_LABELS.table}（タップで 見る）</button>` : tableHTML(d, { id: 'pt6', names: true });
+    const row = (k, html, cls = '') => `<div class="rrow"><span class="rlab">${HIDE_LABELS[k]}</span>${H[k]
+      ? `<button class="hidden-row" data-act="m6reveal" data-v="${k}">？（タップで 見る）</button>` : `<span class="rval ${cls}">${html}</span>`}</div>`;
+    $('#m6reads').innerHTML = row('digits', `<span class="digits-big">${digitsBigHTML(d)}</span>`) + row('kanji', kanjiHTML(d)) + row('mixed', mixedHTML(d)) + row('kana', toReading(d), 'kana');
+  },
+  drawTopics() {
+    $('#m6topics').innerHTML = topics.map((t, j) => `<div class="t-topic">
+      <label>題名 <input data-topic="${j}" data-k="title" value="${esc(t.title)}"></label>
+      <label>数 <input data-topic="${j}" data-k="value" value="${esc(t.value)}" placeholder="例：1億2300万"></label>
+      <label>単位 <input data-topic="${j}" data-k="unit" value="${esc(t.unit)}" class="short"></label>
+      <label class="ck"><input type="checkbox" data-topic="${j}" data-k="approx" ${t.approx ? 'checked' : ''}> 約</label>
+      <label>出典メモ <input data-topic="${j}" data-k="src" value="${esc(t.src)}" placeholder="例：〇〇調べ（2025年）"></label>
+      <span class="t-check" id="tchk${j}">${topicCheck(t)}</span>
+      <button class="act-btn b-reset" data-act="m6delTopic" data-v="${j}">けす</button></div>`).join('') || '<p class="note">カードは ありません</p>';
+  },
+};
+function topicCheck(t) {
+  if (!t.value) return '（まだ 入っていません）';
+  const v = parseAny(t.value);
+  if (v === null) return '⚠️ 数として 読めません';
+  if (v >= LIMIT()) return `⚠️ ${MAXP() > 12 ? '千兆の位' : '千億の位'}より 大きい数です`;
+  return `✔ ${bigMixed(v)}（${toReading(fromBig(v))}）`;
+}
+function m6Show(text) {
+  const M = state.m6, v = parseAny(text);
+  if (v === null) { $('#m6err').textContent = '数として 読めませんでした。数字・「3兆5000億20万」・漢数字 の どれかで 入れてください'; sfx.soft(); return; }
+  if (v >= LIMIT()) { $('#m6err').textContent = `${MAXP() > 12 ? '千兆の位' : '千億の位（せっていで「兆まで」にすると 千兆の位まで）'}より 大きい数は 出せません`; sfx.soft(); return; }
+  $('#m6err').textContent = '';
+  M.d = fromBig(v); M.text = text;
+  sfx.tap(); render();
+}
+Object.assign(ACTS, {
+  m6show: () => m6Show($('#m6in').value),
+  m6rand: () => { const d = genZeroNumber(); $('#m6in').value = toDigits(d, ''); m6Show(toDigits(d, '')); },
+  m6hide: (b) => { const H = state.m6.hide; H[b.dataset.v] = !H[b.dataset.v]; sfx.tap(); renderSetup(); render(); },
+  m6reveal: (b) => { state.m6.hide[b.dataset.v] = false; sfx.correct(); renderSetup(); render(); },
+  m6toFree: () => { state.free.d = state.m6.d.slice(); state.free.log = []; sfx.tap(); setMode('free'); },
+  m6addTopic: () => { topics.push({ title: '', value: '', unit: '', approx: true, src: '' }); saveTopics(); VIEWS.teacher.drawTopics(); },
+  m6delTopic: (b) => { topics.splice(+b.dataset.v, 1); saveTopics(); sfx.tap(); VIEWS.teacher.drawTopics(); },
+});
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.dataset?.topic === undefined) return;
+  const t = topics[+el.dataset.topic];
+  t[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value;
+  saveTopics();
+  const c = $(`#tchk${el.dataset.topic}`); if (c) c.textContent = topicCheck(t);
+});
+document.addEventListener('keydown', (e) => { if (e.target.id === 'm6in' && e.key === 'Enter') ACTS.m6show(); });
+
+/* ---------- おいわい ---------- */
+function sparkle(el, num = 12) {
+  if (calm() || !el) return;
+  const r = el.getBoundingClientRect();
+  for (let i = 0; i < num; i++) {
+    const s = document.createElement('div');
+    s.className = 'spark'; s.textContent = '✦';
+    s.style.left = `${r.left + Math.random() * r.width}px`;
+    s.style.top = `${r.top + Math.random() * Math.min(r.height, innerHeight)}px`;
+    s.style.animationDelay = `${Math.random() * 0.3}s`;
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 1500);
+  }
+}
+function cheer(text) {
+  const c = document.createElement('div');
+  c.className = 'cheer'; c.textContent = stripRuby(text);
+  document.body.appendChild(c);
+  setTimeout(() => c.remove(), calm() ? 900 : 1500);
+}
+
+/* =========================================================
+   17. ボタンの うけつけ（data-act の ついた ボタンを おすと ACTS[なまえ] が よばれる）
+   ========================================================= */
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (b && !b.disabled && ACTS[b.dataset.act]) ACTS[b.dataset.act](b, e);
+  const m = e.target.closest('.mode-btn');
+  if (m) { sfx.tap(); setMode(m.dataset.mode); }
+});
+
+/* =========================================================
+   18. まど（せってい・先生へ・けっか）
+   ========================================================= */
+function openModal(id) { $(id).classList.add('open'); }
+function closeModals() { $$('.modal').forEach((m) => m.classList.remove('open')); }
+$$('.modal').forEach((m) => m.addEventListener('click', (e) => {
+  if (e.target === m || e.target.closest('[data-close]')) closeModals();
+}));
+function renderSettings() {
+  $$('[data-set]').forEach((b) => b.classList.toggle('active', String(settings[b.dataset.set]) === b.dataset.val));
+}
+$('#btnSettings').onclick = () => { renderSettings(); openModal('#modalSettings'); };
+$('#btnHowto').onclick = () => openModal('#modalHowto');
+$('#btnFull').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+};
+$$('[data-set]').forEach((b) => {
+  b.onclick = () => {
+    const raw = b.dataset.val, k = b.dataset.set;
+    settings[k] = raw === 'true' ? true : raw === 'false' ? false : /^\d+$/.test(raw) ? +raw : raw;
+    saveSettings(); renderSettings();
+    // あつかう 位・問題の 数を かえたら、いまの モードを さいしょから
+    if (k === 'max' || k === 'count') setMode(state.mode);
+    else render();
+  };
+});
+
+reduceMQ.addEventListener?.('change', () => render());
+setMode('free');
+</script>
+</body>
+</html>
