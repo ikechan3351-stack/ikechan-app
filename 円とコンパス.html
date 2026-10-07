@@ -1,0 +1,1903 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>コンパスで 円を かこう</title>
+<style>
+  :root {
+    --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb;
+    /* 半径と 直径は 色だけで なく、線の 太さと 形でも くべつする
+       半径 ＝ 赤（オレンジより）・ふつうの 太さの 実線
+       直径 ＝ 青・太い 点線 */
+    --rad: #d84315; --rad-bg: #fbe9e7; --dia: #1565c0; --dia-bg: #e3f2fd;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3fbfa 0%, #dcefeb 100%);
+    min-height: 100vh;
+    padding: 10px 16px 24px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  button, input { font-family: inherit; color: inherit; }
+  .no-ruby rt:not(.keep), .no-ruby .rk { display: none; }
+  [hidden] { display: none !important; }
+  .wrap { width: 100%; max-width: 1400px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ===== 上の段 ===== */
+  .topbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .back-link { font-size: 0.85rem; color: var(--accent-dark); text-decoration: none; }
+  .title-box { flex: 1; text-align: center; min-width: 220px; }
+  h1 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.8rem); color: var(--accent-dark); }
+  .subtitle { margin: 0; font-size: 0.85rem; color: #546e7a; font-weight: bold; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tool-btn {
+    min-height: 48px; min-width: 48px; padding: 4px 12px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 0.95rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    min-height: 52px; padding: 6px 14px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: clamp(0.9rem, 2vmin, 1.1rem); font-weight: bold; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .mode-btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+  .chip {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.active::before { content: "✔ "; }
+
+  /* ===== ひとこと（メッセージ） ===== */
+  .say {
+    font-size: clamp(1.05rem, 2.4vmin, 1.4rem); line-height: 1.9; font-weight: bold; text-align: center;
+    background: #fff; border-radius: 14px; padding: 4px 16px;
+    min-height: calc(3.8em + 8px);   /* 2行ぶん とって おく（ことばが かわっても 図が 上下に ずれない） */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .say::before { content: "🧭 "; }
+  .say.warn { background: #fff3e0; color: #bf360c; }
+  .say.warn::before { content: "🤔 "; }
+  .say.good { background: #fffde7; color: #e65100; }
+  .say.good::before { content: "⭐ "; }
+
+  /* ===== ボタン ===== */
+  .act-btn {
+    min-height: 52px; min-width: 52px; padding: 4px 12px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: clamp(1rem, 2.2vmin, 1.2rem); font-weight: 900; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12); line-height: 1.25;
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+  .act-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .b-reset { background: #f5f5f5; border-color: #cfd8dc; }
+  .b-main { background: var(--accent); border-color: var(--accent); color: #fff; font-size: clamp(1.2rem, 2.8vmin, 1.5rem); }
+  .b-rad.on { background: var(--rad); border-color: var(--rad); }
+  .b-dia.on { background: var(--dia); border-color: var(--dia); }
+  .b-danger { background: #fff; border-color: #ef9a9a; }
+  .b-danger.arm { background: #c62828; border-color: #c62828; color: #fff; }
+
+  /* ===== ずの ならび ===== */
+  .stage { display: grid; gap: 10px; align-items: start; grid-template-columns: minmax(0, 1fr) 320px; }
+  .card {
+    background: #fff; border-radius: 18px; padding: 8px 12px 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; flex-direction: column; gap: 8px; min-width: 0; user-select: none; -webkit-user-select: none;
+  }
+  .card h3 { margin: 0; font-size: clamp(0.95rem, 2vmin, 1.1rem); color: var(--accent-dark); }
+  #board {
+    display: block; width: 100%; height: auto; max-height: 74vh;
+    touch-action: none; border-radius: 10px; background: #fff;
+  }
+  .svgtxt { font-family: inherit; font-weight: 900; }
+  .board-note { margin: 0; font-size: 0.85rem; color: #607d8b; text-align: center; }
+  .grp { display: flex; flex-direction: column; gap: 6px; border-top: 2px dashed #e0f2f1; padding-top: 8px; }
+  .grp:first-child { border-top: none; padding-top: 0; }
+  .grp-title { font-size: 0.9rem; font-weight: 900; color: #607d8b; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .row > .act-btn { flex: 1 1 auto; }
+  .readout { text-align: center; font-weight: 900; }
+  .readout .lbl { font-size: 1rem; color: #607d8b; }
+  .readout .num { font-size: clamp(2rem, 5vmin, 2.8rem); color: var(--rad); line-height: 1.2; }
+  .formula {
+    border: 3px solid #fdd835; background: #fffde7; border-radius: 14px; padding: 6px 10px;
+    font-weight: 900; text-align: center; line-height: 1.8; font-size: 1.05rem;
+  }
+  .t-rad { color: var(--rad); border-bottom: 3px solid var(--rad); }
+  .t-dia { color: var(--dia); border-bottom: 4px dotted var(--dia); }
+  .sw { display: inline-block; width: 1em; height: 1em; border-radius: 50%; vertical-align: -0.15em; border: 2px solid #fff; box-shadow: 0 0 0 1px #90a4ae; }
+  .pen.active { background: #eceff1; border-color: #455a64; color: var(--ink); }
+  .tip { margin: 0; font-size: 0.85rem; color: #607d8b; line-height: 1.6; }
+
+  /* ===== まど（せってい・先生へ） ===== */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+  .modal.open { display: flex; }
+  .modal-card { background: #fff; border-radius: 20px; padding: 16px 20px; max-width: 760px; width: 100%; max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .modal-card h2 { margin: 0; color: var(--accent-dark); font-size: 1.4rem; }
+  .modal-card h3 { margin: 6px 0 0; color: var(--accent-dark); font-size: 1.05rem; }
+  .modal-card p, .modal-card li { line-height: 1.7; }
+  .modal-card ul { margin: 4px 0; padding-left: 1.4em; }
+  .set-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .set-label { font-weight: bold; min-width: 9em; }
+  .set-note { font-size: 0.85rem; color: #607d8b; }
+
+
+  /* ===== もんだい・てじゅん ===== */
+  .qbox { border: 3px solid var(--soft); border-radius: 14px; padding: 6px 10px; text-align: center; background: #f3fbfa; }
+  .progress { font-weight: 900; color: var(--accent-dark); font-size: 0.95rem; }
+  .qtext { font-size: clamp(1.2rem, 3vmin, 1.6rem); font-weight: 900; line-height: 1.9; }
+  .hintbox { border: 3px dashed #ce93d8; background: #f3e5f5; border-radius: 14px; padding: 6px 10px; font-weight: bold; line-height: 1.8; text-align: center; }
+  .b-hint { background: #f3e5f5; border-color: #ce93d8; }
+  .b-next { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ans { min-height: 56px; font-size: clamp(1.05rem, 2.6vmin, 1.3rem); }
+  .ans.bad { border-style: dashed; border-color: #bf360c; color: #bf360c; background: #fff3e0; text-decoration: line-through; }
+  .ans.right { border-color: #f9a825; background: #fffde7; }
+  .ans.right::before { content: "⭕ "; }
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .steps li, .steps button {
+    display: block; width: 100%; text-align: left; padding: 6px 10px; border-radius: 10px; background: #f5f5f5;
+    border: 3px solid transparent; font-weight: bold; line-height: 1.7; font-size: 0.98rem;
+  }
+  .steps button { cursor: pointer; min-height: 48px; touch-action: manipulation; }
+  .steps .now { background: #e0f2f1; border-color: var(--accent); color: var(--ink); }
+  .steps .now::before { content: "▶ "; color: var(--accent-dark); }
+  .steps .done { color: #78909c; }
+  .steps .done::before { content: "✔ "; color: #2e7d32; }
+  .say.big { font-size: clamp(1.4rem, 3.6vmin, 2.3rem); line-height: 1.8; background: #fffde7; border: 4px solid #fdd835; }
+  .say.big::before { content: "🧑‍🏫 "; }
+  .sizes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .sizes .chip { min-width: 64px; }
+  .sizes .lbl { font-weight: 900; font-size: 0.9rem; color: #607d8b; width: 100%; }
+  .slider-row { display: flex; align-items: center; gap: 8px; font-weight: 900; }
+  .slider-row input[type="range"] { flex: 1; height: 48px; accent-color: var(--accent); }
+  #ballSvg { display: block; width: 100%; height: auto; max-height: 74vh; touch-action: none; border-radius: 10px; background: #fafafa; }
+
+  .cheer {
+    position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 95; pointer-events: none;
+    background: #fff; border: 5px solid #fdd835; border-radius: 24px; padding: 14px 34px;
+    font-size: clamp(1.5rem, 7vw, 4.5rem); font-weight: 900; color: #e65100; white-space: nowrap;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: cheer 1.4s ease-out forwards;
+  }
+  @keyframes cheer {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+    15% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+    25%, 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  }
+
+  @media (max-width: 900px) {
+    body { padding: 8px 10px 20px; }
+    .stage { grid-template-columns: minmax(0, 1fr); }
+    #board, #ballSvg { max-height: 60vh; }
+  }
+  @media (min-width: 900px) and (orientation: landscape) and (max-height: 820px) {
+    body { padding-top: 6px; }
+    .wrap { gap: 6px; }
+    .subtitle { display: none; }
+    h1 { font-size: 1.3rem; }
+    .mode-btn { min-height: 48px; padding: 4px 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+    <div class="title-box">
+      <h1>🧭 コンパスで <ruby>円<rt>えん</rt></ruby>を かこう</h1>
+      <p class="subtitle">コンパスを <ruby>使<rt>つか</rt></ruby>おう！</p>
+    </div>
+    <div class="tools">
+      <button class="tool-btn" id="btnHowto">❓ <ruby>先生<rt>せんせい</rt></ruby>へ</button>
+      <button class="tool-btn" id="btnFull">⛶ ぜんがめん</button>
+      <button class="tool-btn" id="btnSettings">⚙️ せってい</button>
+    </div>
+  </div>
+
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn" data-mode="free">✏️ じゆうに かく</button>
+    <button class="mode-btn" data-mode="task">🎯 この <ruby>円<rt>えん</rt></ruby>を かこう</button>
+    <button class="mode-btn" data-mode="copy">📏 <ruby>長<rt>なが</rt></ruby>さを うつす</button>
+    <button class="mode-btn" data-mode="tri">🔺 <ruby>三角形<rt>さんかくけい</rt></ruby>を かこう</button>
+    <button class="mode-btn" data-mode="ball">⚽ <ruby>球<rt>きゅう</rt></ruby></button>
+    <button class="mode-btn" data-mode="teacher">🧑‍🏫 <ruby>先生<rt>せんせい</rt></ruby>モード</button>
+  </div>
+
+  <div class="say" id="say" aria-live="polite"></div>
+
+  <section class="stage" id="stage">
+    <!-- 作図エリア -->
+    <div class="card" id="boardCard">
+      <svg id="board" viewBox="0 0 960 640" role="img" aria-label="方眼の 作図エリアと コンパス">
+        <rect x="0" y="0" width="960" height="640" fill="#fff"/>
+        <g id="gGrid"></g>
+        <g id="gShapes"></g>
+        <g id="gOver"></g>
+        <g id="gCompass"></g>
+      </svg>
+      <p class="board-note">※ がめんの 1cmは、ほんとうの 1cmでは ありません。<ruby>方眼<rt>ほうがん</rt></ruby>の 1マスを 1cmと します。</p>
+    </div>
+
+    <!-- 球 -->
+    <div class="card" id="ballCard" hidden>
+      <svg id="ballSvg" viewBox="0 0 960 640" role="img" aria-label="球を 切った ようす"></svg>
+      <p class="board-note">※ 球（ボールの ような 形）を かんたんな 立体の ずで あらわして います。</p>
+    </div>
+
+    <!-- 右の パネル -->
+    <div class="card" id="sideCard"></div>
+  </section>
+</div>
+
+<!-- せってい -->
+<div class="modal" id="modalSettings" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>⚙️ せってい</h2>
+    <div class="set-line"><span class="set-label">ほうがん（マス目）</span>
+      <button class="chip" data-set="grid" data-val="true">あり</button>
+      <button class="chip" data-set="grid" data-val="false">なし</button></div>
+    <div class="set-line"><span class="set-label">目もりに すいつく</span>
+      <button class="chip" data-set="snap" data-val="true">あり</button>
+      <button class="chip" data-set="snap" data-val="false">なし</button></div>
+    <p class="set-note">「あり」のときは、はりの いちと コンパスの ひらきが 5mm（0.5cm）ずつ に なります。「なし」のときは 1mm ずつ です。どちらでも、線の はしや 点（ア・イ・★ など）の 近くでは、そこに すいつきます。</p>
+    <div class="set-line"><span class="set-label">もんだいの かず</span>
+      <button class="chip" data-set="qcount" data-val="3">3</button>
+      <button class="chip" data-set="qcount" data-val="5">5</button>
+      <button class="chip" data-set="qcount" data-val="8">8</button></div>
+    <div class="set-line"><span class="set-label">おと</span>
+      <button class="chip" data-set="sound" data-val="true">あり</button>
+      <button class="chip" data-set="sound" data-val="false">なし</button></div>
+    <div class="set-line"><span class="set-label">ふりがな</span>
+      <button class="chip" data-set="ruby" data-val="true">あり</button>
+      <button class="chip" data-set="ruby" data-val="false">なし</button></div>
+    <p class="set-note">「なし」にしても、4年生いじょうで ならう 漢字（半径の「径」、辺 など）には ふりがなが のこります。</p>
+    <div class="set-line"><span class="set-label">うごき</span>
+      <button class="chip" data-set="motion" data-val="auto">パソコンに あわせる</button>
+      <button class="chip" data-set="motion" data-val="normal">ふつう</button>
+      <button class="chip" data-set="motion" data-val="less">へらす</button></div>
+    <p class="set-note">「へらす」にすると、コンパスを まわす アニメなどを しないで、すぐに かけます。</p>
+    <p class="set-note">せっていは この たんまつの ブラウザに ほぞんされます（かいた ずや せいせきは ほぞんしません）。</p>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- 先生へ -->
+<div class="modal" id="modalHowto" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>❓ 先生へ：つかいかた</h2>
+    <p>画面上のコンパスを操作して、円の中心・半径・直径の意味と、コンパスの使い方（半径に開く→中心に針をさす→回す／長さを写し取る）、コンパスを使った二等辺三角形・正三角形のかき方を体感する教材です。方眼の1マスを1cmとして扱います（画面の1cmは実物の1cmではありません）。長さは3年生の学習に合わせて「2cm5mm」のように cm と mm で表示します。</p>
+    <h3>コンパスの操作（どのモードも共通）</h3>
+    <ul>
+      <li><b>はり</b>（とがった足）をドラッグ → 円の中心を決めます。コンパス全体が動きます（開きは変わりません）。</li>
+      <li><b>えんぴつ</b>の足をドラッグ → 開き（＝半径）を決めます。はりは動きません。</li>
+      <li><b>🔄 まわす</b> → コンパスが1回転し、線がのびていくように円がかけます。上の<b>つまみ</b>をドラッグして自分でまわすこともでき、とちゅうで止めると円の一部（弧）が残ります。</li>
+      <li><b>📏 ものさし</b>：はりの位置を0にしたものさしを、コンパスの足にそって表示します。ものさしに当てて開く練習に使えます。</li>
+      <li>線のはしや点（ア・イ・★など）の近くでは、はり・えんぴつがそこに吸いつきます。</li>
+    </ul>
+    <h3>モード</h3>
+    <ul>
+      <li><b>じゆうに かく</b>：自由に円をかき、中心をずらした円を重ねて模様づくりができます。「半径／直径を 見る」で、選んだ円（円の線をタップ）に半径・直径を表示し、線の先の ○ で向きを変えても長さが同じことを確かめます。「📌 線を のこす」で何本も残せます。「📍 点を うつ」では、中心から同じ長さの点をたくさん打つと円の形が見えてきます（円の定義の導入）。</li>
+      <li><b>この 円を かこう</b>：「半径3cmの円」「直径8cmの円」を★を中心にかきます。出題は 半径／直径／まぜる から選べます。</li>
+      <li><b>長さを うつす</b>：ななめの2本の線 あ・い の長さを、コンパスで写し取ってくらべます。開きの長さは「？」で隠してあり、答えると長さが表示されます。</li>
+      <li><b>三角形を かこう</b>：二等辺三角形・正三角形を、辺の長さを選んで、手順どおりにかきます（辺アイをひく → コンパスを開く → アとイを中心に円の一部をかく → 交わった点ウ → むすぶ）。いまの手順が右に表示されます。</li>
+      <li><b>球</b>：「切ってみよう」で、球をどこで切っても切り口が円になること、真ん中で切るといちばん大きいことを確かめます（切る位置は図をドラッグしても変えられます）。「直径を はかろう」は、箱ではさんで球の直径をはかる方法です。</li>
+      <li><b>先生モード</b>：「円の かき方」「円って なに？」「長さの うつし方」「二等辺三角形」「正三角形」の作図手順を、1ステップずつ大きな文字とアニメで見せます。「つぎ ▶」「◀ まえ」「↺ もう一度」で進めます。とちゅうでコンパスを手で動かすこともできます。</li>
+    </ul>
+    <h3>つまずきへの対応</h3>
+    <ul>
+      <li><b>直径で出題されたのに、その長さのまま開く誤り</b>：開いた時点と円をかいた時点で検知して「コンパスで ひらくのは 半径だよ」とヒントを出します。かいた円は灰色の点線で残るので、正しい円と大きさをくらべられます。</li>
+      <li>半径で出題されたのに半分に開いた場合、中心に針をささなかった場合、三角形で開きや針の位置がちがう場合にも声かけをします。</li>
+    </ul>
+    <h3>色と形のきまり（色覚の多様性に配慮）</h3>
+    <ul>
+      <li><b style="color:var(--rad)">半径＝赤・ふつうの太さの実線</b>／<b style="color:var(--dia)">直径＝青・太い点線</b>。ラベルにも「半径」「直径」と文字で書きます。</li>
+      <li>線 あ・い は名前の札でも区別します。三角形の同じ長さの辺には、同じ印（｜）をつけます。</li>
+    </ul>
+    <p>問題の結果（1回でできた数）は、その場で表示するだけで保存しません。授業での使い方の例は README（円とコンパス_README.md）にあります。</p>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const R = (kanji, kana) => `<ruby>${kanji}<rt>${kana}</rt></ruby>`;   // ルビつきの 漢字（せっていで けせる）
+const RA = (kanji, kana) => `<ruby>${kanji}<rt class="keep">${kana}</rt></ruby>`; // まだ ならわない 漢字（いつも ルビ）
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+const rnd = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = rnd(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const TAU = Math.PI * 2;
+const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+const near = (a, b, tol = 0.06) => Math.abs(a - b) <= tol;          // 長さが 同じと 見なす（0.6mm まで）
+const nearP = (p, q, tol = 0.1) => dist(p, q) <= tol;               // 点が 同じと 見なす
+const normA = (a) => { while (a > Math.PI) a -= TAU; while (a <= -Math.PI) a += TAU; return a; };
+
+// よく つかう ことば（3年生までの 漢字＋ふりがな。4年生いじょうの 漢字は RA で いつも ふりがな）
+const EN = R('円', 'えん'), CHUUSHIN = R('中心', 'ちゅうしん'), HANKEI = `${R('半', 'はん')}${RA('径', 'けい')}`, CHOKKEI = `${R('直', 'ちょっ')}${RA('径', 'けい')}`;
+const NAGA = R('長', 'なが'), ONA = R('同', 'おな'), SEN = R('線', 'せん'), TEN = R('点', 'てん'), MI = R('見', 'み');
+const KATACHI = R('形', 'かたち'), MUKI = R('向', 'む'), IRO = R('色', 'いろ'), ZENBU = R('全部', 'ぜんぶ');
+const HIRA = R('開', 'ひら'), HANBUN = R('半分', 'はんぶん'), NAN = R('何', 'なん'), ICHIBU = R('一部', 'いちぶ'), MAJI = R('交', 'まじ');
+const HEN = RA('辺', 'へん'), NITOU = `${R('二', 'に')}${R('等', 'とう')}${RA('辺', 'へん')}${R('三角形', 'さんかくけい')}`, SEISAN = R('正三角形', 'せいさんかくけい');
+const CHOKUSEN = R('直線', 'ちょくせん'), KYUU = R('球', 'きゅう'), KIRIKUCHI = `${R('切', 'き')}り${R('口', 'くち')}`, KI = R('切', 'き');
+const MANNAKA = `${R('真', 'ま')}ん${R('中', 'なか')}`, OO = R('大', 'おお'), CHII = R('小', 'ちい'), SOTO = R('外', 'そと'), UCHI = R('内', 'うち');
+const MONDAI = R('問題', 'もんだい'), TSUGI = R('次', 'つぎ'), KAI = R('回', 'かい'), HAKO = R('箱', 'はこ'), AIDA = R('間', 'あいだ'), KANGA = R('考', 'かんが');
+
+/* =========================================================
+   1. 大きさの きまり
+      作図エリアの 中では、長さを すべて「cm」で もつ。
+      SVG に かく ときだけ U（＝40）を かける。
+   ========================================================= */
+const U = 40;            // 1cm ＝ SVG の 40
+const BW = 24, BH = 16;  // 作図エリアの 大きさ（よこ 24cm・たて 16cm）
+const LEG = 6.5;         // コンパスの 足の 長さ（cm）
+const RMAX = 12;         // ひらける いちばん 大きい 長さ（cm）
+const RMIN = 0.5;
+const MAG = 0.45;        // 点の 近く（この 長さ いない）では はり・えんぴつが すいつく
+const PENS = [            // もようづくり用の ペンの 色（半径の 赤・直径の 青とは ちがう 色）
+  { name: 'くろ', c: '#263238' },
+  { name: 'みどり', c: '#2e7d32' },
+  { name: 'むらさき', c: '#7b1fa2' },
+  { name: 'ちゃいろ', c: '#8d6e00' },
+];
+const TASK_C = { x: 15, y: 8 };   // 「この 円を かこう」の 中心（★）
+
+/* =========================================================
+   2. せってい（この ブラウザに ほぞん。ほぞん できなくても うごく）
+   ========================================================= */
+const SETTINGS_KEY = 'en-compass-settings';
+const DEFAULTS = { grid: true, snap: true, sound: true, ruby: true, motion: 'auto', qcount: 5 };
+const settings = (() => {
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch (e) { return { ...DEFAULTS }; }
+})();
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ほぞん できなくても よい */ }
+}
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const calm = () => settings.motion === 'less' || (settings.motion === 'auto' && reduceMQ.matches);
+
+/* =========================================================
+   3. じょうたい
+      shapes … かいた 図形の 一覧（「ひとつもどす」は さいごの 1つを とる）
+        { t:'circle', cx, cy, r, c, wrong? }  円（wrong … もんだいで ちがった 円。灰色の 点線で のこす）
+        { t:'arc', cx, cy, r, a0, span, c }   円の 一部（とちゅうまで まわした 線）
+        { t:'dot', x, y, cx, cy }             点をうつ の 点（cx,cy は その ときの 中心）
+        { t:'seg', kind:'rad'|'dia', x1, y1, x2, y2, len }  のこした 半径・直径
+        { t:'line', x1, y1, x2, y2, c, tag }  三角形の 辺など（tag … 'base' 'sideA' 'sideB'）
+   ========================================================= */
+const state = {
+  mode: 'free',
+  tool: 'compass',            // 'compass'（コンパス） | 'dots'（点を うつ）
+  N: { x: 8, y: 10 },         // はりの いち（＝円の 中心）
+  r: 3,                       // コンパスの ひらき（＝半径）
+  ang: 0,                     // はりから 見た えんぴつの 向き（ラジアン。0 は 右）
+  side: 1,                    // コンパスを たおす 向き（1 か -1。作図エリアから はみ出さない ほうに する）
+  pen: 0,
+  shapes: [],
+  store: {},                  // 「じゆうに かく」の 図形を モードを かえても のこして おく
+  sel: -1,                    // えらんで いる 円（shapes の 番号）
+  showR: false, showD: false, // 半径・直径を 見る
+  showRuler: false,           // コンパスの 足に そって ものさしを 出す
+  rAng: -Math.PI / 4, dAng: Math.PI / 6,
+  rulerAng: -Math.PI / 6,     // 点を うつ ものさしの 向き
+  drag: null,                 // いま ドラッグ して いる もの
+  trace: null,                // まわして いる とちゅうの 線 { a0, span }
+  lineTrace: null,            // ひいて いる とちゅうの 直線 { p, q, e }
+  spinning: false,            // アニメちゅう（その 間は さわれない）
+  arcing: false,              // 円を かいて いる とちゅう（コンパスを たおす 向きを かえない）
+  clearArm: false,            // 「ぜんぶ けす」を 1回 おした
+  say: null,
+  task: null, copy: null, tri: null, teach: null,
+  ball: { sub: 'cut', h: 0.45, dir: 0, boxT: 1 },
+  triPick: { kind: 'iso', base: 6, side: 5 },
+  taskKind: 'mix',
+};
+const P = () => ({ x: state.N.x + state.r * Math.cos(state.ang), y: state.N.y + state.r * Math.sin(state.ang) });
+const say = (html, tone = '') => { state.say = { html, tone }; renderSay(); };
+
+// 長さの 書き方（3年生は 小数を まだ ならって いないので cm と mm で 書く）
+function fmtLen(cm) {
+  const mm = Math.round(cm * 10);
+  const c = Math.floor(mm / 10), m = mm % 10;
+  if (c === 0) return `${m}mm`;
+  return m ? `${c}cm${m}mm` : `${c}cm`;
+}
+// 目もりに すいつく（あり：0.5cm ずつ／なし：1mm ずつ）
+const step = () => (settings.snap ? 0.5 : 0.1);
+const snapV = (v) => Math.round(v / step()) * step();
+const roundMM = (v) => Math.round(v * 10) / 10;
+
+/* =========================================================
+   4. 音（ブラウザで 音を つくる。ファイルは つかわない）
+   ========================================================= */
+let actx = null;
+function play(notes) {
+  if (!settings.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const now = actx.currentTime;
+    for (const [f, t, dur, type = 'sine', vol = 0.14] of notes) {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, now + t);
+      g.gain.exponentialRampToValueAtTime(vol, now + t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + t + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(now + t); o.stop(now + t + dur + 0.05);
+    }
+  } catch (e) { /* 音が 出せなくても うごく */ }
+}
+const sfx = {
+  tap:     () => play([[880, 0, 0.05, 'sine', 0.08]]),
+  click:   () => play([[1200, 0, 0.03, 'square', 0.03]]),
+  tick:    (i) => play([[500 + i * 40, 0, 0.06, 'triangle', 0.08]]),
+  dot:     () => play([[1046, 0, 0.06, 'sine', 0.09]]),
+  done:    () => play([[523, 0, 0.1], [659, 0.08, 0.1], [784, 0.16, 0.1], [1046, 0.24, 0.3]]),
+  correct: () => play([[784, 0, 0.12], [988, 0.1, 0.12], [1175, 0.2, 0.12], [1568, 0.3, 0.35]]),
+  soft:    () => play([[392, 0, 0.15, 'triangle', 0.1], [330, 0.15, 0.2, 'triangle', 0.1]]),
+  undo:    () => play([[440, 0, 0.08, 'triangle', 0.1], [330, 0.06, 0.1, 'triangle', 0.08]]),
+};
+function cheer(text) {
+  if (calm()) return;
+  const el = document.createElement('div');
+  el.className = 'cheer'; el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+}
+
+/* =========================================================
+   5. SVG を かく ための 道具
+   ========================================================= */
+const board = $('#board');
+const px = (cm) => +(cm * U).toFixed(1);
+const fmtA = (rad) => +(rad * 180 / Math.PI).toFixed(2);
+
+// SVG の 文字（ふりがなつき）。parts は [文字, ふりがな, いつも出す] の ならび。ふりがなの ない ところは [文字]
+// 漢字・かなは 1字 ＝ fs、英数字は 1字 ＝ 0.62fs の はばと して ふりがなの いちを きめる
+const textW = (str, fs) => [...str].reduce((w, ch) => w + (/[\x20-\x7e]/.test(ch) ? 0.62 : 1) * fs, 0);
+function svgLabel(x, y, parts, color, fs = 24) {
+  const total = parts.reduce((w, [s]) => w + textW(s, fs), 0);
+  let cx = x - total / 2, kana = '';
+  for (const [s, k, keep] of parts) {
+    const w = textW(s, fs);
+    if (k) {
+      const cls = keep ? '' : 'rk';   // keep … まだ ならわない 漢字が ある ことば（いつも ふりがな）
+      kana += `<text class="svgtxt ${cls}" x="${(cx + w / 2).toFixed(1)}" y="${(y - fs * 0.92).toFixed(1)}" font-size="${fs * 0.45}" text-anchor="middle" fill="${color}" stroke="#fff" stroke-width="4" paint-order="stroke">${k}</text>`;
+    }
+    cx += w;
+  }
+  const main = `<text class="svgtxt" x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${fs}" text-anchor="middle" fill="${color}" stroke="#fff" stroke-width="6" paint-order="stroke" stroke-linejoin="round">${parts.map((p) => p[0]).join('')}</text>`;
+  return kana + main;
+}
+const lblRad = (len) => [['半径', 'はんけい', true], [' ' + fmtLen(len)]];
+const lblDia = (len) => [['直径', 'ちょっけい', true], [' ' + fmtLen(len)]];
+
+// 円の 一部の パス（中心 c、半径 r、a0 から span だけ。span は マイナスでも よい）
+function arcPath(cx, cy, r, a0, span) {
+  if (Math.abs(span) >= TAU - 1e-6) {   // 1しゅう ＝ 2つの 半円で かく
+    const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+    const x1 = cx - r * Math.cos(a0), y1 = cy - r * Math.sin(a0);
+    return `M${px(x0)},${px(y0)} A${px(r)},${px(r)} 0 1 1 ${px(x1)},${px(y1)} A${px(r)},${px(r)} 0 1 1 ${px(x0)},${px(y0)}`;
+  }
+  const a1 = a0 + span;
+  const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+  const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+  const large = Math.abs(span) > Math.PI ? 1 : 0, sweep = span > 0 ? 1 : 0;
+  return `M${px(x0)},${px(y0)} A${px(r)},${px(r)} 0 ${large} ${sweep} ${px(x1)},${px(y1)}`;
+}
+// 円・円の 一部が 点 pt を とおるか
+function passes(sh, pt) {
+  if (!near(dist({ x: sh.cx, y: sh.cy }, pt), sh.r, 0.08)) return false;
+  if (sh.t === 'circle') return true;
+  const a = Math.atan2(pt.y - sh.cy, pt.x - sh.cx);
+  let d = (a - sh.a0) * Math.sign(sh.span);
+  d = ((d % TAU) + TAU) % TAU;
+  return d <= Math.abs(sh.span) + 0.02;
+}
+
+/* =========================================================
+   6. 方眼
+   ========================================================= */
+function renderGrid() {
+  let s = '';
+  if (settings.grid) {
+    for (let i = 0; i <= BW; i++) {
+      const b = i % 5 === 0;
+      s += `<line x1="${i * U}" y1="0" x2="${i * U}" y2="${BH * U}" stroke="${b ? '#80cbc4' : '#cfe8e4'}" stroke-width="${b ? 2 : 1}"/>`;
+    }
+    for (let j = 0; j <= BH; j++) {
+      const b = j % 5 === 0;
+      s += `<line x1="0" y1="${j * U}" x2="${BW * U}" y2="${j * U}" stroke="${b ? '#80cbc4' : '#cfe8e4'}" stroke-width="${b ? 2 : 1}"/>`;
+    }
+    // 1マス ＝ 1cm の しるし（左上）
+    s += `<rect x="${U}" y="${U}" width="${U}" height="${U}" fill="rgba(255,213,79,0.35)" stroke="#f9a825" stroke-width="2"/>`;
+    s += `<text class="svgtxt" x="${2 * U + 8}" y="${1.5 * U + 8}" font-size="20" fill="#8d6e00">1マス ＝ 1cm</text>`;
+  }
+  s += `<rect x="1" y="1" width="${BW * U - 2}" height="${BH * U - 2}" fill="none" stroke="#80cbc4" stroke-width="2"/>`;
+  $('#gGrid').innerHTML = s;
+}
+
+/* =========================================================
+   7. かいた 図形
+   ========================================================= */
+function renderShapes() {
+  let s = '', hits = '';
+  const showSel = (state.showR || state.showD) && state.shapes[state.sel];
+  state.shapes.forEach((sh, i) => {
+    if (sh.t === 'circle') {
+      if (showSel && i === state.sel) s += `<circle cx="${px(sh.cx)}" cy="${px(sh.cy)}" r="${px(sh.r)}" fill="none" stroke="#ffe082" stroke-width="12"/>`;
+      const st = sh.wrong ? 'stroke="#9e9e9e" stroke-dasharray="10 8"' : `stroke="${sh.c}"`;
+      s += `<circle cx="${px(sh.cx)}" cy="${px(sh.cy)}" r="${px(sh.r)}" fill="none" ${st} stroke-width="3.5"/>`;
+      s += `<circle cx="${px(sh.cx)}" cy="${px(sh.cy)}" r="3.5" fill="${sh.wrong ? '#9e9e9e' : sh.c}"/>`;   // はりの あと（中心）
+      // 円を タップして えらぶ ための 当たり（じゆうに かく だけ）
+      if (state.tool === 'compass' && state.mode === 'free') hits += `<circle data-h="c:${i}" cx="${px(sh.cx)}" cy="${px(sh.cy)}" r="${px(sh.r)}" fill="none" stroke="transparent" stroke-width="26" style="cursor:pointer"/>`;
+    } else if (sh.t === 'arc') {
+      s += `<path d="${arcPath(sh.cx, sh.cy, sh.r, sh.a0, sh.span)}" fill="none" stroke="${sh.c}" stroke-width="3.5" stroke-linecap="round"/>`;
+      s += `<circle cx="${px(sh.cx)}" cy="${px(sh.cy)}" r="3" fill="${sh.c}"/>`;
+    } else if (sh.t === 'dot') {
+      s += `<line x1="${px(sh.cx)}" y1="${px(sh.cy)}" x2="${px(sh.x)}" y2="${px(sh.y)}" stroke="#b0bec5" stroke-width="1.5"/>`;
+      s += `<circle cx="${px(sh.x)}" cy="${px(sh.y)}" r="7" fill="#e65100" stroke="#fff" stroke-width="2"/>`;
+    } else if (sh.t === 'seg') {
+      s += segSVG(sh.kind, sh.x1, sh.y1, sh.x2, sh.y2, sh.len, false);
+    } else if (sh.t === 'line') {
+      s += `<line x1="${px(sh.x1)}" y1="${px(sh.y1)}" x2="${px(sh.x2)}" y2="${px(sh.y2)}" stroke="${sh.c}" stroke-width="5" stroke-linecap="round"/>`;
+    }
+  });
+  $('#gShapes').innerHTML = s + hits;
+}
+
+// 半径・直径の 線（ラベルつき）
+// ラベルは 円の 外がわ（線の 先の むこう）に 出して、線や 中心と かさならない ように する。
+// live … いま うごかせる 線（「半径 3cm」と 大きく）／ のこした 線（「3cm」だけ 小さく）
+function segSVG(kind, x1, y1, x2, y2, len, live) {
+  const rad = kind === 'rad';
+  const col = rad ? 'var(--rad)' : 'var(--dia)';
+  const colHex = rad ? '#d84315' : '#1565c0';
+  const w = rad ? 6 : 9;
+  const dash = rad ? '' : 'stroke-dasharray="18 10"';
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+  const fs = live ? 24 : 18;
+  const parts = live ? (rad ? lblRad(len) : lblDia(len)) : [[fmtLen(len)]];
+  const halfW = parts.reduce((t, [str]) => t + textW(str, fs), 0) / 2 / U;
+  const d = 0.5 + Math.abs(ux) * halfW + Math.abs(uy) * (live ? 0.55 : 0.35);
+  const tx = px(x2 + ux * d), ty = px(y2 + uy * d) + fs * 0.35;
+  let s = `<line x1="${px(x1)}" y1="${px(y1)}" x2="${px(x2)}" y2="${px(y2)}" stroke="${col}" stroke-width="${w}" ${dash} stroke-linecap="round" opacity="${live ? 1 : 0.75}"/>`;
+  s += svgLabel(tx, ty, parts, colHex, fs);
+  return s;
+}
+
+/* =========================================================
+   8. 図の 上に かさねる もの
+      （半径・直径を 見る・まわして いる 線・ものさし・モードごとの しるし）
+   ========================================================= */
+function renderOver() {
+  let s = modeOverSVG();
+  const c = state.shapes[state.sel];
+  if (c && c.t === 'circle' && (state.showR || state.showD)) {
+    if (state.showD) {
+      const ux = Math.cos(state.dAng), uy = Math.sin(state.dAng);
+      const ax = c.cx - c.r * ux, ay = c.cy - c.r * uy, bx = c.cx + c.r * ux, by = c.cy + c.r * uy;
+      // 半径と 同じ 向きの はしには ラベルを 出さない（かさならない ように 反対の はしに 出す）
+      const nearR = state.showR && Math.abs(normA(state.rAng - state.dAng)) < Math.PI / 4;
+      s += nearR ? segSVG('dia', bx, by, ax, ay, c.r * 2, true) : segSVG('dia', ax, ay, bx, by, c.r * 2, true);
+      s += handle(ax, ay, 'dh:a', '#1565c0') + handle(bx, by, 'dh:b', '#1565c0');
+    }
+    if (state.showR) {
+      const ex = c.cx + c.r * Math.cos(state.rAng), ey = c.cy + c.r * Math.sin(state.rAng);
+      s += segSVG('rad', c.cx, c.cy, ex, ey, c.r, true);
+      s += handle(ex, ey, 'rh', '#d84315');
+    }
+    // 中心の しるし
+    s += `<circle cx="${px(c.cx)}" cy="${px(c.cy)}" r="8" fill="#fff" stroke="#263238" stroke-width="4"/>`;
+    s += svgLabel(px(c.cx), px(c.cy) + 38, [['中心', 'ちゅうしん']], '#263238', 22);
+  }
+  // まわして いる とちゅうの 線
+  if (state.trace) {
+    s += `<path d="${arcPath(state.N.x, state.N.y, state.r, state.trace.a0, state.trace.span)}" fill="none" stroke="${PENS[state.pen].c}" stroke-width="3.5" stroke-linecap="round"/>`;
+  }
+  // ひいて いる とちゅうの 直線
+  if (state.lineTrace) {
+    const { p, q, e } = state.lineTrace;
+    s += `<line x1="${px(p.x)}" y1="${px(p.y)}" x2="${px(p.x + (q.x - p.x) * e)}" y2="${px(p.y + (q.y - p.y) * e)}" stroke="#263238" stroke-width="5" stroke-linecap="round"/>`;
+  }
+  if (state.tool === 'dots') s += dotsRulerSVG();
+  else if (state.showRuler) s += measureRulerSVG();
+  $('#gOver').innerHTML = s;
+}
+// ドラッグ できる ○（線の 先）
+const handle = (x, y, h, col) =>
+  `<circle cx="${px(x)}" cy="${px(y)}" r="13" fill="#fff" stroke="${col}" stroke-width="5"/>` +
+  `<circle data-h="${h}" cx="${px(x)}" cy="${px(y)}" r="30" fill="transparent" style="cursor:grab"/>`;
+
+// ものさし（x,y が 0 の ところ。ang の 向きに のびる）
+// flip … ものさしを 線の どちらがわに おくか（1 か -1）。numbers … 目もりの 数字を 書く
+function rulerSVG(x, y, ang, len, { flip = 1, numbers = false, mark = null } = {}) {
+  const H = U * 1.15, deg = fmtA(ang);
+  let s = `<g transform="translate(${px(x)},${px(y)}) rotate(${deg})">`;
+  s += `<rect x="-8" y="${flip > 0 ? 0 : -H}" width="${px(len) + 16}" height="${H}" rx="6" fill="#fff8e1" stroke="#f9a825" stroke-width="2" opacity="0.95"/>`;
+  for (let k = 0; k <= Math.floor(len * 10 + 1e-6); k++) {
+    const t = k % 10 === 0 ? 20 : k % 5 === 0 ? 14 : 8;   // 1cm・5mm・1mm の 目もり
+    s += `<line x1="${k * U / 10}" y1="0" x2="${k * U / 10}" y2="${flip * t}" stroke="#5d4037" stroke-width="${k % 10 === 0 ? 2 : 1}"/>`;
+  }
+  if (numbers) {
+    // 数字は さかさに ならない ように、ものさしと いっしょに まわさない
+    s += `</g>`;
+    const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy * flip, ny = ux * flip;
+    for (let k = 0; k <= Math.floor(len + 1e-6); k++) {
+      s += `<text class="svgtxt" x="${px(x + ux * k + nx * 0.72)}" y="${px(y + uy * k + ny * 0.72) + 7}" font-size="18" text-anchor="middle" fill="#5d4037">${k}</text>`;
+    }
+  } else {
+    s += `</g>`;
+  }
+  if (mark != null) {
+    // しるし（三角）と 0 から しるしまでの 点線
+    s += `<g transform="translate(${px(x)},${px(y)}) rotate(${deg})">`;
+    s += `<path d="M${px(mark)},${flip * 2} l-11,${flip * 22} h22 z" fill="#e65100" stroke="#fff" stroke-width="2"/>`;
+    s += `<line x1="0" y1="0" x2="${px(mark)}" y2="0" stroke="#e65100" stroke-width="3" stroke-dasharray="6 5"/></g>`;
+  }
+  return s;
+}
+// 点を うつ ための ものさし（中心から コンパスの ひらきと 同じ 長さの ところに しるし）
+function dotsRulerSVG() {
+  const { x, y } = state.N, r = state.r;
+  let s = rulerSVG(x, y, state.rulerAng, r + 1.2, { mark: r });
+  s += `<circle cx="${px(x)}" cy="${px(y)}" r="8" fill="#fff" stroke="#263238" stroke-width="4"/>`;
+  const ex = x + (r + 1.6) * Math.cos(state.rulerAng), ey = y + (r + 1.6) * Math.sin(state.rulerAng);
+  s += svgLabel(px(ex), px(ey) + 8, [[fmtLen(r)]], '#e65100', 24);
+  return s;
+}
+// コンパスの 足に そわせる ものさし（はりが 0。ちょうつがいと 反対がわに おく）
+function measureRulerSVG() {
+  const len = Math.min(RMAX + 1, Math.max(6, Math.ceil(state.r) + 1));
+  return rulerSVG(state.N.x, state.N.y, state.ang, len, { flip: state.side, numbers: true });
+}
+// しるしの 点（★ など）
+function markSVG(p, parts, col = '#e65100') {
+  return `<circle cx="${px(p.x)}" cy="${px(p.y)}" r="16" fill="#fff3e0" stroke="${col}" stroke-width="3"/>` +
+    `<text class="svgtxt" x="${px(p.x)}" y="${px(p.y) + 9}" font-size="26" text-anchor="middle" fill="${col}">★</text>` +
+    (parts ? svgLabel(px(p.x), px(p.y) + 46, parts, col, 20) : '');
+}
+
+/* =========================================================
+   9. コンパスの え
+      はり（N）と えんぴつ（P）を むすぶ 線の 横に ちょうつがい（H）が ある。
+      H は 2本の 足が LEG cm に なる ところ。
+   ========================================================= */
+function legPoly(H, T, w0, w1, stopAt) {
+  // H から T に 向かう 足を、T の stopAt cm 手前まで、はば w0→w1 の 四角形で かく
+  const dx = T.x - H.x, dy = T.y - H.y, L = Math.hypot(dx, dy);
+  const vx = dx / L, vy = dy / L, qx = -vy, qy = vx;
+  const E = { x: T.x - vx * stopAt, y: T.y - vy * stopAt };
+  const pts = [
+    [H.x + qx * w0 / 2, H.y + qy * w0 / 2], [E.x + qx * w1 / 2, E.y + qy * w1 / 2],
+    [E.x - qx * w1 / 2, E.y - qy * w1 / 2], [H.x - qx * w0 / 2, H.y - qy * w0 / 2],
+  ];
+  return { d: pts.map((p) => `${px(p[0])},${px(p[1])}`).join(' '), E, vx, vy, qx, qy };
+}
+function compassGeom() {
+  const N = state.N, Pp = P(), r = state.r;
+  const ux = Math.cos(state.ang), uy = Math.sin(state.ang);
+  const h = Math.sqrt(Math.max(0.01, LEG * LEG - (r / 2) * (r / 2)));
+  const mx = (N.x + Pp.x) / 2, my = (N.y + Pp.y) / 2;
+  // つまみの 先が 作図エリアの 中に 入るか
+  const fits = (sd) => {
+    const kx = mx + uy * sd * (h + 1.6), ky = my - ux * sd * (h + 1.6);
+    return kx > 0.3 && kx < BW - 0.3 && ky > 0.3 && ky < BH - 0.3;
+  };
+  // まわして いる ときは たおす 向きを かえない（くるっと はんてん しない ように）
+  if (!state.arcing && state.drag?.kind !== 'knob' && !fits(state.side) && fits(-state.side)) state.side = -state.side;
+  const nx = uy * state.side, ny = -ux * state.side;   // side=1：えんぴつが 右なら 上 向き
+  const H = { x: mx + nx * h, y: my + ny * h };
+  const K = { x: H.x + nx * 1.3, y: H.y + ny * 1.3 };   // つまみの 先
+  return { N, P: Pp, H, K, nx, ny };
+}
+function renderCompass() {
+  const g = $('#gCompass');
+  if (state.tool !== 'compass') { g.innerHTML = ''; return; }
+  const { N, P: Pp, H, K, nx, ny } = compassGeom();
+  // 半径・直径を 見て いる ときや 三角形が できた ときは、図が 見える ように うすく する
+  const triDone = (state.mode === 'tri' && state.tri && triStatus().done) || (state.mode === 'teacher' && state.teach?.flags.done);
+  const faded = ((state.showR || state.showD) || triDone) && !state.drag && !state.spinning;
+  let s = `<g opacity="${faded ? (triDone ? 0.25 : 0.45) : 1}">`;
+  // かげ
+  s += `<g transform="translate(5,7)" opacity="0.15">`;
+  s += `<polygon points="${legPoly(H, N, 0.42, 0.26, 0.7).d}" fill="#000"/><polygon points="${legPoly(H, Pp, 0.42, 0.34, 0.6).d}" fill="#000"/></g>`;
+  // はりの 足
+  const a = legPoly(H, N, 0.42, 0.26, 0.7);
+  s += `<polygon points="${a.d}" fill="#b0bec5" stroke="#546e7a" stroke-width="2.5" stroke-linejoin="round"/>`;
+  s += `<line x1="${px(a.E.x)}" y1="${px(a.E.y)}" x2="${px(N.x)}" y2="${px(N.y)}" stroke="#37474f" stroke-width="3.5" stroke-linecap="round"/>`;
+  // えんぴつの 足（上は 金ぞく、下は 黄色い えんぴつ、先は しん）
+  const b = legPoly(H, Pp, 0.42, 0.36, 2.4);
+  s += `<polygon points="${b.d}" fill="#b0bec5" stroke="#546e7a" stroke-width="2.5" stroke-linejoin="round"/>`;
+  const E1 = b.E, E2 = { x: Pp.x - b.vx * 0.55, y: Pp.y - b.vy * 0.55 }, w = 0.34;
+  s += `<polygon points="${[[E1.x + b.qx * w / 2, E1.y + b.qy * w / 2], [E2.x + b.qx * w / 2, E2.y + b.qy * w / 2], [E2.x - b.qx * w / 2, E2.y - b.qy * w / 2], [E1.x - b.qx * w / 2, E1.y - b.qy * w / 2]].map((p) => `${px(p[0])},${px(p[1])}`).join(' ')}" fill="#ffca28" stroke="#f57f17" stroke-width="2"/>`;
+  s += `<polygon points="${px(E2.x + b.qx * w / 2)},${px(E2.y + b.qy * w / 2)} ${px(Pp.x)},${px(Pp.y)} ${px(E2.x - b.qx * w / 2)},${px(E2.y - b.qy * w / 2)}" fill="#ffe0b2" stroke="#a1887f" stroke-width="1.5"/>`;
+  s += `<circle cx="${px(Pp.x)}" cy="${px(Pp.y)}" r="3.5" fill="#37474f"/>`;
+  // つまみ と ちょうつがい
+  s += `<line x1="${px(H.x)}" y1="${px(H.y)}" x2="${px(K.x)}" y2="${px(K.y)}" stroke="#78909c" stroke-width="13" stroke-linecap="round"/>`;
+  s += `<circle cx="${px(K.x)}" cy="${px(K.y)}" r="12" fill="#ffb74d" stroke="#e65100" stroke-width="3"/>`;
+  s += `<circle cx="${px(H.x)}" cy="${px(H.y)}" r="15" fill="#90a4ae" stroke="#455a64" stroke-width="3"/>`;
+  s += `<circle cx="${px(H.x)}" cy="${px(H.y)}" r="5" fill="#455a64"/>`;
+  // 名前（足の 先の 外がわ）
+  const lab = (T, text, col) => svgLabel(px(T.x - nx * 0.9), px(T.y - ny * 0.9) + 8, [[text]], col, 20);
+  s += lab(N, 'はり', '#37474f') + lab(Pp, 'えんぴつ', '#e65100');
+  s += svgLabel(px(K.x + nx * 0.75), px(K.y + ny * 0.75) + 7, [['つまみ']], '#e65100', 17);
+  // ドラッグの 目じるし（点線の わ）
+  s += `<circle cx="${px(N.x)}" cy="${px(N.y)}" r="20" fill="none" stroke="#37474f" stroke-width="2.5" stroke-dasharray="5 4"/>`;
+  s += `<circle cx="${px(Pp.x)}" cy="${px(Pp.y)}" r="20" fill="none" stroke="#e65100" stroke-width="2.5" stroke-dasharray="5 4"/>`;
+  s += `</g>`;
+  // 当たり（さわれる ところ。見えない）
+  s += `<polygon data-h="move" points="${a.d}" fill="transparent" stroke="transparent" stroke-width="18" style="cursor:move"/>`;
+  s += `<polygon data-h="pencil" points="${b.d}" fill="transparent" stroke="transparent" stroke-width="18" style="cursor:grab"/>`;
+  s += `<circle data-h="move" cx="${px(H.x)}" cy="${px(H.y)}" r="22" fill="transparent" style="cursor:move"/>`;
+  s += `<circle data-h="needle" cx="${px(N.x)}" cy="${px(N.y)}" r="34" fill="transparent" style="cursor:move"/>`;
+  s += `<circle data-h="pencil" cx="${px(Pp.x)}" cy="${px(Pp.y)}" r="34" fill="transparent" style="cursor:grab"/>`;
+  s += `<circle data-h="knob" cx="${px(K.x)}" cy="${px(K.y)}" r="30" fill="transparent" style="cursor:grab"/>`;
+  g.innerHTML = s;
+}
+
+/* =========================================================
+   10. アニメの 道具
+       animToken … モードや 手じゅんが かわったら ふやす。古い アニメは そこで とまる。
+   ========================================================= */
+let animToken = 0;
+// とちゅうで とめた アニメの つづきを うちきる ための しるし（モードや 手じゅんが かわった ときに 投げる）
+const CANCEL = Symbol('cancel');
+const safe = (p) => p.catch((e) => { if (e !== CANCEL) throw e; return null; });
+function tween(ms, fn, tok) {
+  return new Promise((res) => {
+    if (!ms) { fn(1); res(); return; }
+    const t0 = performance.now();
+    const frame = (now) => {
+      if (tok !== animToken) { res(); return; }
+      const t = Math.min(1, (now - t0) / ms);
+      fn(t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);   // はじめと おわりは ゆっくり
+      renderOver(); renderCompass();
+      if (t < 1) requestAnimationFrame(frame); else res();
+    };
+    requestAnimationFrame(frame);
+  });
+}
+// コンパスを うごかす（N：はりの いち、r：ひらき、ang：えんぴつの 向き。書かない ものは そのまま）
+async function moveCompass(tg, anim, ms = 1000) {
+  const tok = animToken;
+  const f = { N: { ...state.N }, r: state.r, ang: state.ang };
+  const t = { N: tg.N ? { ...tg.N } : f.N, r: tg.r ?? f.r, ang: tg.ang ?? f.ang };
+  const dA = normA(t.ang - f.ang);
+  state.spinning = true;
+  await tween(anim ? ms : 0, (e) => {
+    state.N = { x: f.N.x + (t.N.x - f.N.x) * e, y: f.N.y + (t.N.y - f.N.y) * e };
+    state.r = f.r + (t.r - f.r) * e;
+    state.ang = f.ang + dA * e;
+  }, tok);
+  state.spinning = false;
+  if (tok !== animToken) throw CANCEL;
+}
+// コンパスを まわして 線を かく（span が 1しゅうなら 円、それより 小さければ 円の 一部）
+async function drawArc(a0, span, anim, ms = 1800) {
+  const tok = animToken;
+  state.spinning = state.arcing = true;
+  state.trace = { a0, span: 0 };
+  if (anim) renderSide();
+  let lastK = -1;
+  await tween(anim ? ms : 0, (e) => {
+    state.trace.span = span * e;
+    state.ang = a0 + span * e;
+    const k = Math.floor(Math.abs(span * e) / (Math.PI / 4));
+    if (anim && k !== lastK) { lastK = k; sfx.tick(k % 8); }
+  }, tok);
+  state.spinning = state.arcing = false;
+  state.trace = null;
+  if (tok !== animToken) throw CANCEL;
+  const full = Math.abs(span) >= TAU - 1e-6;
+  if (full) state.ang = a0;
+  const c = state.mode === 'teacher' ? PENS[0].c : PENS[state.pen].c;
+  const sh = full ? { t: 'circle', cx: state.N.x, cy: state.N.y, r: state.r, c }
+    : { t: 'arc', cx: state.N.x, cy: state.N.y, r: state.r, a0, span, c };
+  addShape(sh);
+  return sh;
+}
+// 直線を ひく（ものさしで ひく ように 少しずつ のびる）
+async function drawLine(p, q, tag, anim, ms = 800) {
+  const tok = animToken;
+  state.spinning = true;
+  state.lineTrace = { p, q, e: 0 };
+  await tween(anim ? ms : 0, (e) => { state.lineTrace.e = e; }, tok);
+  state.lineTrace = null; state.spinning = false;
+  if (tok !== animToken) throw CANCEL;
+  addShape({ t: 'line', x1: p.x, y1: p.y, x2: q.x, y2: q.y, c: '#263238', tag });
+  renderShapes(); renderOver();
+  return true;
+}
+
+/* =========================================================
+   11. 図形を ふやす・もどす
+   ========================================================= */
+function lastCircle() {
+  for (let i = state.shapes.length - 1; i >= 0; i--) if (state.shapes[i].t === 'circle' && !state.shapes[i].wrong) return i;
+  return -1;
+}
+function addShape(sh) {
+  state.shapes.push(sh);
+  if (sh.t === 'circle' && !sh.wrong) state.sel = state.shapes.length - 1;
+  state.clearArm = false;
+}
+function undo() {
+  if (!state.shapes.length || state.spinning || state.mode === 'teacher' || state.mode === 'ball') return;
+  state.shapes.pop();
+  if (!state.shapes[state.sel] || state.shapes[state.sel].t !== 'circle') state.sel = lastCircle();
+  sfx.undo();
+  say('ひとつ もどしたよ。');
+  render();
+}
+let clearTimer = 0;
+function clearAll() {
+  if (!state.clearArm) {
+    state.clearArm = true; renderSide();
+    clearTimeout(clearTimer);
+    clearTimer = setTimeout(() => { state.clearArm = false; renderSide(); }, 3000);
+    return;
+  }
+  state.shapes = []; state.sel = -1; state.clearArm = false;
+  sfx.undo();
+  say(`${ZENBU} けしたよ。また かいて みよう。`);
+  render();
+}
+async function spin() {
+  if (state.spinning) return;
+  const sh = await safe(drawArc(state.ang, TAU, !calm()));
+  if (sh) shapeDone(sh);
+}
+// 円・円の 一部が かけた とき（モードごとに たしかめる）
+function shapeDone(sh) {
+  const m = state.mode;
+  if (m === 'free') {
+    if (sh.t === 'circle') {
+      sfx.done();
+      say(`${HANKEI} ${fmtLen(sh.r)}の ${EN}が かけたよ！ ${CHUUSHIN}を ずらして かさねると、もようが できるよ。`, 'good');
+    } else {
+      sfx.tap();
+      say(`とちゅうまで かけたよ。${EN}の ${ICHIBU}だね。1まわり させると ${EN}に なるよ。`);
+    }
+  } else if (m === 'task') checkTask(sh);
+  else if (m === 'copy') copyShapeMsg(sh);
+  else if (m === 'tri') triShapeCheck(sh);
+  else sfx.done();
+  render();
+}
+
+/* =========================================================
+   12. 点を うつ（じゆうに かく）
+   ========================================================= */
+const pushDot = (ang) => addShape({ t: 'dot', x: state.N.x + state.r * Math.cos(ang), y: state.N.y + state.r * Math.sin(ang), cx: state.N.x, cy: state.N.y });
+function addDot(ang) {
+  pushDot(ang);
+  sfx.dot();
+  const n = state.shapes.filter((s) => s.t === 'dot').length;
+  if (n >= 24) say(`${TEN}が ${n}こ。だんだん ${EN}の ${KATACHI}に なって きたね！ ${ZENBU} ${CHUUSHIN}から ${fmtLen(state.r)}の ところだよ。`, 'good');
+  else if (n >= 8) say(`${TEN}が ${n}こ。どれも ${CHUUSHIN}から ${fmtLen(state.r)}。もっと うつと どんな ${KATACHI}に なるかな？`);
+  else say(`${CHUUSHIN}から ${fmtLen(state.r)}の ところに ${TEN}を うったよ。いろいろな ${MUKI}きに うって みよう。`);
+}
+async function dotsAnim(angles, anim, gap, withMsg) {
+  const tok = animToken;
+  state.spinning = true; if (anim) renderSide();
+  for (const a of angles) {
+    if (tok !== animToken) throw CANCEL;
+    state.rulerAng = a;
+    if (withMsg) addDot(a); else { pushDot(a); if (anim) sfx.dot(); }
+    if (anim) { renderShapes(); renderOver(); await sleep(gap); }
+  }
+  state.spinning = false;
+}
+async function dots12() {
+  const base = Math.random() * TAU;
+  const ok = await safe(dotsAnim(Array.from({ length: 12 }, (_, i) => base + i * TAU / 12 + (Math.random() - 0.5) * 0.25), !calm(), 140, true).then(() => true));
+  if (ok) render();
+}
+
+/* =========================================================
+   13. この 円を かこう
+   ========================================================= */
+function startTask() {
+  const n = settings.qcount, kind = state.taskKind;
+  const rads = shuffle([2, 3, 4, 5, 6]), dias = shuffle([4, 6, 8, 10, 12]);
+  const list = [];
+  for (let i = 0; i < n; i++) {
+    const k = kind === 'mix' ? (i % 2 ? 'dia' : 'rad') : kind;
+    if (k === 'rad') list.push({ kind: 'rad', r: rads[i % rads.length] });
+    else list.push({ kind: 'dia', r: dias[i % dias.length] / 2 });
+  }
+  if (kind === 'mix') list.sort(() => Math.random() - 0.5);
+  state.task = { list, idx: 0, tries: 0, hint: 0, solved: false, done: false, firstOK: 0 };
+  state.N = { x: 4, y: 12 }; state.r = 2; state.ang = 0;
+  taskQuestion();
+}
+const taskWord = (q) => (q.kind === 'rad' ? `<span class="t-rad">${HANKEI} ${fmtLen(q.r)}</span>` : `<span class="t-dia">${CHOKKEI} ${fmtLen(q.r * 2)}</span>`);
+function taskQuestion() {
+  const T = state.task, q = T.list[T.idx];
+  state.shapes = []; state.sel = -1; state.showR = state.showD = false;
+  T.tries = 0; T.hint = 0; T.solved = false;
+  say(`${taskWord(q)}の ${EN}を、★を ${CHUUSHIN}に して かこう。`);
+}
+function checkTask(sh) {
+  const T = state.task;
+  if (!T || T.solved || T.done) return;
+  const q = T.list[T.idx];
+  if (sh.t !== 'circle') { sfx.tap(); say(`1まわり させて ${EN}に しよう。`, 'warn'); return; }
+  if (!nearP({ x: sh.cx, y: sh.cy }, TASK_C)) {
+    sh.wrong = true; T.tries++; sfx.soft();
+    state.sel = lastCircle();
+    say(`はりを ★に さしてから まわそう。★が ${EN}の ${CHUUSHIN}に なるよ。`, 'warn');
+    return;
+  }
+  if (near(sh.r, q.r)) {
+    T.solved = true;
+    if (T.tries === 0) T.firstOK++;
+    state.sel = state.shapes.indexOf(sh);
+    state.showR = state.showD = true;
+    sfx.correct(); cheer('できた！');
+    say(q.kind === 'dia'
+      ? `${CHOKKEI} ${fmtLen(q.r * 2)}の ${EN}は、コンパスを ${HANKEI}の ${fmtLen(q.r)}に ${HIRA}いて かけたね！`
+      : `${HANKEI} ${fmtLen(q.r)}の ${EN}が かけたね！ ${CHOKKEI}は ${fmtLen(q.r * 2)}だよ。`, 'good');
+    return;
+  }
+  // まちがい：かいた 円は 灰色の 点線で のこして くらべられる ように する
+  sh.wrong = true; T.tries++; sfx.soft();
+  state.sel = lastCircle();
+  if (q.kind === 'dia' && near(sh.r, q.r * 2)) {
+    T.hint = Math.max(T.hint, 1);
+    say(`コンパスで ${HIRA}くのは ${HANKEI}だよ。${CHOKKEI} ${fmtLen(q.r * 2)}の ${HANBUN}は ${NAN}cm かな？`, 'warn');
+  } else if (q.kind === 'rad' && near(sh.r, q.r / 2)) {
+    say(`${HANKEI}は ${CHUUSHIN}から まわりまでの ${NAGA}さ。${HIRA}きを ${fmtLen(q.r)}に しよう。`, 'warn');
+  } else {
+    say(`${HIRA}きが ${fmtLen(sh.r)}で、${sh.r > q.r ? OO + 'きすぎた' : CHII + 'さすぎた'}よ。もう一ど ${HIRA}きを たしかめよう。`, 'warn');
+  }
+}
+// えんぴつを はなした ときに、直径の 長さに ひらいて いたら すぐに 知らせる
+function taskAfterOpen() {
+  const q = state.task?.list[state.task.idx];
+  if (!q || state.task.solved) return;
+  if (q.kind === 'dia' && near(state.r, q.r * 2)) {
+    say(`まって！ コンパスで ${HIRA}くのは ${HANKEI}だよ。${CHOKKEI}は ${HANKEI}の 2つ分。`, 'warn');
+  } else {
+    say(`${HIRA}きは ${fmtLen(state.r)}。はりを ★に さして、「まわす」で かこう。`);
+  }
+}
+function taskNext() {
+  const T = state.task;
+  T.idx++;
+  if (T.idx >= T.list.length) {
+    T.done = true; sfx.done(); cheer('おわり！');
+    say(`${T.list.length}${MONDAI}中 ${T.firstOK}${MONDAI} 1${KAI}で かけたよ。よく がんばったね！`, 'good');
+    state.showR = state.showD = false;
+    return;
+  }
+  taskQuestion();
+}
+
+/* =========================================================
+   14. 長さを うつす
+       あ・い 2本の ななめの 線を、コンパスで うつしとって くらべる
+   ========================================================= */
+function makeCopyQ() {
+  for (let n = 0; n < 500; n++) {
+    const la = 3 + 0.5 * rnd(0, 8);
+    const lb = la + pick([-1, -0.5, 0, 0.5, 1, -0.5, 0.5]);
+    if (lb < 2.5 || lb > 8.5) continue;
+    const aa = pick([-1, 1]) * (10 + rnd(0, 18)) * Math.PI / 180;   // ゆるい ななめ
+    const ab = pick([-1, 1]) * (35 + rnd(0, 25)) * Math.PI / 180;   // きつい ななめ
+    const A1 = { x: 2 + rnd(0, 2), y: 4 + rnd(0, 4) };
+    const B1 = { x: 13 + rnd(0, 3), y: ab < 0 ? 11 + rnd(0, 3) : 3 + rnd(0, 2) };
+    const A2 = { x: A1.x + la * Math.cos(aa), y: A1.y + la * Math.sin(aa) };
+    const B2 = { x: B1.x + lb * Math.cos(ab), y: B1.y + lb * Math.sin(ab) };
+    const ok = [A1, A2, B1, B2].every((p) => p.x > 1 && p.x < BW - 1 && p.y > 2.5 && p.y < BH - 1);
+    if (!ok || A2.x > B1.x - 2) continue;
+    return { a: { p1: A1, p2: A2, len: la }, b: { p1: B1, p2: B2, len: lb }, ans: near(la, lb) ? 'same' : la > lb ? 'a' : 'b' };
+  }
+  return null;
+}
+function startCopy() {
+  state.copy = { n: settings.qcount, idx: 0, q: makeCopyQ(), tries: 0, picked: [], revealed: false, firstOK: 0, done: false, hint: false };
+  state.N = { x: 6, y: 13 }; state.r = 2; state.ang = 0;
+  say(`あ と い、どちらが ${NAGA}いかな？ コンパスで ${NAGA}さを うつしとって くらべよう。`);
+}
+const lineEnds = (L) => [L.p1, L.p2];
+// コンパスの はりと えんぴつが、線の 両はしに ぴったり あって いるか
+const tipsOn = (L) => (nearP(state.N, L.p1) && nearP(P(), L.p2)) || (nearP(state.N, L.p2) && nearP(P(), L.p1));
+function copyTipsMsg() {
+  const C = state.copy;
+  if (!C || C.revealed) return;
+  if (tipsOn(C.q.a)) say(`あの ${NAGA}さを コンパスに うつしとったよ！ ${HIRA}きを かえないで、はりを いの はしに さそう。`, 'good');
+  else if (tipsOn(C.q.b)) say(`いの ${NAGA}さを コンパスに うつしとったよ！ ${HIRA}きを かえないで、はりを あの はしに さそう。`, 'good');
+  else if (lineEnds(C.q.b).some((p) => nearP(state.N, p)) && near(state.r, C.q.a.len, 0.08)) say(`いの はしに はりを さしたね。つまみを 少し まわして、いの ${SEN}の 上に ${EN}の ${ICHIBU}を かこう。`);
+  else if (lineEnds(C.q.a).some((p) => nearP(state.N, p)) && near(state.r, C.q.b.len, 0.08)) say(`あの はしに はりを さしたね。つまみを 少し まわして、あの ${SEN}の 上に ${EN}の ${ICHIBU}を かこう。`);
+  else say(`はりと えんぴつを、${SEN}の 両はしに あわせて みよう。`);
+}
+function copyShapeMsg(sh) {
+  sfx.tap();
+  const C = state.copy;
+  if (!C || C.revealed) return;
+  const c = { x: sh.cx, y: sh.cy };
+  const onA = lineEnds(C.q.a).some((p) => nearP(c, p)), onB = lineEnds(C.q.b).some((p) => nearP(c, p));
+  if (onB && near(sh.r, C.q.a.len, 0.08)) say(`あの ${NAGA}さで かいたよ。いの はしは、${EN}の ${ICHIBU}の ${UCHI}がわ？ ${SOTO}がわ？ ぴったり？`);
+  else if (onA && near(sh.r, C.q.b.len, 0.08)) say(`いの ${NAGA}さで かいたよ。あの はしは、${EN}の ${ICHIBU}の ${UCHI}がわ？ ${SOTO}がわ？ ぴったり？`);
+  else say(`${EN}の ${ICHIBU}と ${SEN}の はしを くらべて、どちらが ${NAGA}いか ${KANGA}えよう。`);
+}
+function copyAnswer(v) {
+  const C = state.copy;
+  if (!C || C.revealed || C.picked.includes(v)) return;
+  if (v === C.q.ans) {
+    C.revealed = true;
+    if (C.tries === 0) C.firstOK++;
+    sfx.correct(); cheer('せいかい！');
+    const { a, b } = C.q;
+    say(`せいかい！ あは ${fmtLen(a.len)}、いは ${fmtLen(b.len)}。${C.q.ans === 'same' ? `${ONA}じ ${NAGA}さ だね。` : `コンパスで くらべられたね。`}`, 'good');
+  } else {
+    C.picked.push(v); C.tries++; sfx.soft();
+    say(`もう一ど たしかめよう。はりと えんぴつを あの 両はしに あわせて、${HIRA}きを かえずに いの はしに はりを さして かいて みよう。`, 'warn');
+  }
+}
+function copyNext() {
+  const C = state.copy;
+  C.idx++;
+  if (C.idx >= C.n) {
+    C.done = true; sfx.done(); cheer('おわり！');
+    say(`${C.n}${MONDAI}中 ${C.firstOK}${MONDAI} 1${KAI}で せいかい。コンパスで ${NAGA}さを うつす 名人だね！`, 'good');
+    return;
+  }
+  Object.assign(C, { q: makeCopyQ(), tries: 0, picked: [], revealed: false, hint: false });
+  state.shapes = [];
+  say(`あ と い、どちらが ${NAGA}いかな？ コンパスで しらべよう。`);
+}
+// 線 あ・い の え（名前の 札つき。こたえた あとは 長さも 出す）
+function copyLinesSVG(q, reveal) {
+  if (!q) return '';
+  const one = (L, name, col) => {
+    const { p1, p2 } = L, dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy);
+    let nx = dy / len, ny = -dx / len;
+    if (ny > 0) { nx = -nx; ny = -ny; }
+    const m = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    let s = `<line x1="${px(p1.x)}" y1="${px(p1.y)}" x2="${px(p2.x)}" y2="${px(p2.y)}" stroke="${col}" stroke-width="6" stroke-linecap="round"/>`;
+    for (const p of [p1, p2]) {   // はしの しるし（短い たて線）
+      s += `<line x1="${px(p.x + nx * 0.3)}" y1="${px(p.y + ny * 0.3)}" x2="${px(p.x - nx * 0.3)}" y2="${px(p.y - ny * 0.3)}" stroke="${col}" stroke-width="4"/>`;
+      s += `<circle cx="${px(p.x)}" cy="${px(p.y)}" r="5" fill="#fff" stroke="${col}" stroke-width="3"/>`;
+    }
+    const b = { x: m.x + nx * 1.0, y: m.y + ny * 1.0 };
+    s += `<circle cx="${px(b.x)}" cy="${px(b.y)}" r="20" fill="#fff" stroke="${col}" stroke-width="4"/>`;
+    s += `<text class="svgtxt" x="${px(b.x)}" y="${px(b.y) + 9}" font-size="26" text-anchor="middle" fill="${col}">${name}</text>`;
+    if (reveal) s += svgLabel(px(m.x - nx * 0.9), px(m.y - ny * 0.9) + 9, [[fmtLen(L.len)]], col, 24);
+    return s;
+  };
+  return one(q.a, 'あ', '#6a1b9a') + one(q.b, 'い', '#00838f');
+}
+
+/* =========================================================
+   15. 三角形を かこう（二等辺三角形・正三角形）
+       辺アイを ひく → コンパスを 開く → アと イを 中心に 円の 一部 → 交わった 点ウ → むすぶ
+   ========================================================= */
+function makeTri(kind, base, side) {
+  if (kind === 'eq') side = base;
+  const A = { x: Math.round((BW / 2 - base / 2) * 2) / 2, y: 13 };
+  const B = { x: A.x + base, y: 13 };
+  const C = { x: A.x + base / 2, y: 13 - Math.sqrt(side * side - base * base / 4) };
+  return { kind, base, side, A, B, C, pts: [A, B, C] };
+}
+function newTri() {
+  const k = state.triPick;
+  state.tri = makeTri(k.kind, k.base, k.side);
+  state.shapes = []; state.sel = -1;
+  state.N = { x: 3, y: 5 }; state.r = 2; state.ang = 0;
+  say(`${triName(state.tri)}を かこう。「かき方の じゅんばん」の とおりに すすめよう。`);
+}
+const triName = (t) => (t.kind === 'eq' ? SEISAN : NITOU);
+const isoSides = (base) => [3, 4, 5, 6, 7, 8].filter((s) => s !== base && 2 * s > base + 0.5);
+function triStatus(t = state.tri, shapes = state.shapes) {
+  const base = shapes.some((s) => s.t === 'line' && s.tag === 'base');
+  const arcAt = (Q) => shapes.some((s) => (s.t === 'arc' || s.t === 'circle') && nearP({ x: s.cx, y: s.cy }, Q) && passes(s, t.C));
+  const arcA = arcAt(t.A), arcB = arcAt(t.B);
+  const open = arcA || arcB || near(state.r, t.side);
+  const join = shapes.some((s) => s.tag === 'sideA') && shapes.some((s) => s.tag === 'sideB');
+  const C = arcA && arcB;
+  const cur = !base ? 0 : !open ? 1 : !arcA ? 2 : !arcB ? 3 : !join ? 5 : 6;
+  return { base, open, arcA, arcB, C, join, cur, done: join };
+}
+function triSteps(t) {
+  return [
+    `${t.base}cmの ${HEN}アイを ひく`,
+    t.kind === 'eq' ? `コンパスを ${HEN}アイと ${ONA}じ ${t.side}cmに ${HIRA}く` : `コンパスを ${t.side}cmに ${HIRA}く`,
+    `はりを アに さして、${EN}の ${ICHIBU}を かく`,
+    `はりを イに さして、${EN}の ${ICHIBU}を かく`,
+    `2つが ${MAJI}わった ${TEN}を ウと する`,
+    `アと ウ、イと ウを ${CHOKUSEN}で むすぶ`,
+  ];
+}
+function triShapeCheck(sh) {
+  const t = state.tri, before = triStatus(t, state.shapes.slice(0, -1)), st = triStatus();
+  const c = { x: sh.cx, y: sh.cy };
+  const atA = nearP(c, t.A), atB = nearP(c, t.B);
+  if (!atA && !atB) { sfx.soft(); say(`はりを ア か イに さしてから かこう。`, 'warn'); return; }
+  if (!near(sh.r, t.side)) { sfx.soft(); say(`コンパスの ${HIRA}きが ${fmtLen(sh.r)}だよ。${t.side}cmに ${HIRA}いてから かこう。`, 'warn'); return; }
+  if (!passes(sh, t.C)) { sfx.soft(); say(`${EN}の ${ICHIBU}が みじかいかな。アイの ${SEN}の 上の ほうを とおる ように かこう。`, 'warn'); return; }
+  if (st.C && !before.C) { sfx.correct(); say(`2つの ${EN}の ${ICHIBU}が ${MAJI}わったね！ その ${TEN}が ウ だよ。つぎは アと ウ、イと ウを むすぼう。`, 'good'); return; }
+  sfx.tap();
+  say(`${atA ? 'ア' : 'イ'}から ${t.side}cmの ところに ${EN}の ${ICHIBU}が かけたね。つぎは はりを ${atA ? 'イ' : 'ア'}に さそう。`);
+}
+async function triJoin() {
+  const t = state.tri, anim = !calm();
+  if (!await safe(drawLine(t.A, t.C, 'sideA', anim))) return;
+  if (!await safe(drawLine(t.B, t.C, 'sideB', anim))) return;
+  if (triStatus().done) {
+    sfx.correct(); cheer('できた！');
+    say(t.kind === 'eq'
+      ? `${SEISAN}が できたね！ 3つの ${HEN}が ${ZENBU} ${t.base}cmで ${ONA}じ ${NAGA}さ だよ。`
+      : `${NITOU}が できたね！ アウと イウの 2つの ${HEN}が ${ONA}じ ${t.side}cm だよ。`, 'good');
+  }
+  render();
+}
+// 三角形の しるし（ア・イ・ウ、できたら 色と 長さと 同じ 長さの しるし）
+function triMarksSVG(t, { C = false, done = false } = {}) {
+  let s = '';
+  const { A, B } = t, Cp = t.C;
+  if (done) s += `<polygon points="${[A, B, Cp].map((p) => `${px(p.x)},${px(p.y)}`).join(' ')}" fill="rgba(255,213,79,0.35)"/>`;
+  const lab = (p, name, dx, dy) => `<circle cx="${px(p.x)}" cy="${px(p.y)}" r="6" fill="#263238"/>` +
+    `<text class="svgtxt" x="${px(p.x + dx)}" y="${px(p.y + dy)}" font-size="28" text-anchor="middle" fill="#263238" stroke="#fff" stroke-width="6" paint-order="stroke">${name}</text>`;
+  s += lab(A, 'ア', -0.6, 0.9) + lab(B, 'イ', 0.6, 0.9);
+  if (C || done) s += `<circle cx="${px(Cp.x)}" cy="${px(Cp.y)}" r="11" fill="none" stroke="#e65100" stroke-width="3"/>` + lab(Cp, 'ウ', 0, -0.55);
+  if (done) {
+    const G = { x: (A.x + B.x + Cp.x) / 3, y: (A.y + B.y + Cp.y) / 3 };
+    const sideLab = (p, q, len, ticks) => {
+      const m = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy);
+      let nx = dy / L, ny = -dx / L;
+      if ((m.x - G.x) * nx + (m.y - G.y) * ny < 0) { nx = -nx; ny = -ny; }   // 三角形の 外がわ
+      let o = '';
+      for (let k = 0; k < ticks; k++) {   // 同じ 長さの しるし（｜）
+        const off = (k - (ticks - 1) / 2) * 0.22, cx = m.x + dx / L * off, cy = m.y + dy / L * off;
+        o += `<line x1="${px(cx + nx * 0.3)}" y1="${px(cy + ny * 0.3)}" x2="${px(cx - nx * 0.3)}" y2="${px(cy - ny * 0.3)}" stroke="#e65100" stroke-width="4"/>`;
+      }
+      return o + svgLabel(px(m.x + nx * 1.0), px(m.y + ny * 1.0) + 9, [[fmtLen(len)]], '#263238', 24);
+    };
+    const eq = t.kind === 'eq';
+    s += sideLab(A, B, t.base, eq ? 1 : 0) + sideLab(A, Cp, t.side, 1) + sideLab(B, Cp, t.side, 1);
+  }
+  return s;
+}
+
+/* =========================================================
+   16. 先生モード（作図の 手じゅんを 1つずつ 大きく 見せる）
+       手じゅんごとに run(anim) が ある。前の 手じゅんは アニメなしで 一気に すすめ、
+       いまの 手じゅんだけ アニメで 見せる。
+   ========================================================= */
+const COPY_DEMO = (() => {
+  const A1 = { x: 2, y: 5 }, aa = 15 * Math.PI / 180, B1 = { x: 13, y: 12 }, ab = -50 * Math.PI / 180;
+  return {
+    a: { p1: A1, p2: { x: A1.x + 5 * Math.cos(aa), y: A1.y + 5 * Math.sin(aa) }, len: 5, ang: aa },
+    b: { p1: B1, p2: { x: B1.x + 5.5 * Math.cos(ab), y: B1.y + 5.5 * Math.sin(ab) }, len: 5.5, ang: ab },
+  };
+})();
+const tf = () => state.teach.flags;
+function triProc(kind, base, side) {
+  const t = makeTri(kind, base, side);
+  const aA = Math.atan2(t.C.y - t.A.y, t.C.x - t.A.x), aB = Math.atan2(t.C.y - t.B.y, t.C.x - t.B.x);
+  const st = triSteps(t);
+  return {
+    name: kind === 'eq' ? SEISAN : NITOU, cfg: t, pts: t.pts,
+    setup() { state.N = { x: 3, y: 5 }; state.r = 2; state.ang = 0; },
+    over: () => triMarksSVG(t, { C: tf().C, done: tf().done }),
+    steps: [
+      { text: `① ${st[0]}`, run: (a) => drawLine(t.A, t.B, 'base', a) },
+      { text: `② ${st[1]}`, run: async (a) => {
+        if (kind === 'eq') await moveCompass({ N: t.A, r: base, ang: 0 }, a, 1500);
+        else { state.showRuler = true; await moveCompass({ N: { x: 3, y: 4 }, r: side, ang: 0 }, a, 1500); }
+      } },
+      { text: `③ ${st[2]}`, run: async (a) => {
+        state.showRuler = false;
+        await moveCompass({ N: t.A, r: side, ang: aA - 0.45 }, a, 1100);
+        await drawArc(aA - 0.45, 0.9, a, 1000);
+      } },
+      { text: `④ ${st[3]}`, run: async (a) => {
+        await moveCompass({ N: t.B, ang: aB + 0.45 }, a, 1100);
+        await drawArc(aB + 0.45, -0.9, a, 1000);
+      } },
+      { text: `⑤ ${st[4]}`, run: async () => { tf().C = true; } },
+      { text: `⑥ ${st[5]}`, run: async (a) => {
+        tf().C = true;
+        await moveCompass({ N: { x: 3, y: 5 }, ang: 0 }, a, 700);
+        await drawLine(t.A, t.C, 'sideA', a);
+        await drawLine(t.B, t.C, 'sideB', a);
+      } },
+      { text: kind === 'eq' ? `⑦ ${SEISAN}の できあがり！ 3つの ${HEN}が ${ZENBU} ${ONA}じ ${base}cm` : `⑦ ${NITOU}の できあがり！ アウと イウが ${ONA}じ ${side}cm`,
+        run: async () => { tf().C = true; tf().done = true; } },
+    ],
+  };
+}
+const PROCS = {
+  circle: {
+    name: `${EN}の かき方`, pts: [{ x: 12, y: 8 }],
+    setup() { state.N = { x: 3, y: 13 }; state.r = 1.5; state.ang = 0; },
+    over: () => markSVG({ x: 12, y: 8 }, [['中心', 'ちゅうしん'], ['に する ところ']]),
+    steps: [
+      { text: `① コンパスを ものさしに あてて、4cmに ${HIRA}く`, run: async (a) => { state.showRuler = true; await moveCompass({ r: 4, ang: 0 }, a, 1600); } },
+      { text: `② ${HIRA}きを かえないで、はりを ${CHUUSHIN}に さす`, run: async (a) => { state.showRuler = false; await moveCompass({ N: { x: 12, y: 8 } }, a, 1300); } },
+      { text: `③ つまみを もって、くるっと 1まわり させる`, run: (a) => drawArc(state.ang, TAU, a, 2200) },
+      { text: `④ ${CHUUSHIN}から まわりまでが ${HANKEI}（4cm）、${CHUUSHIN}を とおって まわりから まわりまでが ${CHOKKEI}（8cm）`,
+        run: async () => { state.sel = lastCircle(); state.showR = state.showD = true; } },
+    ],
+  },
+  def: {
+    name: `${EN}って なに？`, pts: [],
+    setup() { state.N = { x: 12, y: 8 }; state.r = 4; state.ang = 0; state.tool = 'dots'; state.rulerAng = -Math.PI / 2; },
+    over: () => '',
+    steps: [
+      { text: `① ${CHUUSHIN}から 4cmの ところに ${TEN}を うつ`, run: (a) => dotsAnim([-Math.PI / 2 + 0.3], a, 300) },
+      { text: `② ちがう ${MUKI}きにも、${CHUUSHIN}から 4cmの ところに ${TEN}を うつ`, run: (a) => dotsAnim(Array.from({ length: 11 }, (_, i) => -Math.PI / 2 + 0.3 + (i + 1) * TAU / 12), a, 260) },
+      { text: `③ もっと たくさん うつと…？`, run: (a) => dotsAnim(Array.from({ length: 36 }, (_, i) => (i + 0.5) * TAU / 36), a, 70) },
+      { text: `④ ${CHUUSHIN}から ${ONA}じ ${NAGA}さの ${TEN}を ${ZENBU} とおる ${KATACHI}。これが ${EN}！`,
+        run: async (a) => { state.tool = 'compass'; state.ang = 0; await drawArc(0, TAU, a, 2000); } },
+    ],
+  },
+  copy: {
+    name: `${NAGA}さの うつし方`, pts: [COPY_DEMO.a.p1, COPY_DEMO.a.p2, COPY_DEMO.b.p1, COPY_DEMO.b.p2],
+    setup() { state.N = { x: 5, y: 12 }; state.r = 2; state.ang = 0; },
+    over: () => copyLinesSVG(COPY_DEMO, tf().reveal),
+    steps: [
+      { text: `① はりを あの はしに さす`, run: (a) => moveCompass({ N: COPY_DEMO.a.p1, ang: COPY_DEMO.a.ang }, a, 1300) },
+      { text: `② えんぴつを あの もう 一方の はしに あわせる（${NAGA}さを うつしとる）`, run: (a) => moveCompass({ r: COPY_DEMO.a.len, ang: COPY_DEMO.a.ang }, a, 1300) },
+      { text: `③ ${HIRA}きを かえないで、はりを いの はしに さす`, run: (a) => moveCompass({ N: COPY_DEMO.b.p1, ang: COPY_DEMO.b.ang }, a, 1500) },
+      { text: `④ いの ${SEN}の 上に ${EN}の ${ICHIBU}を かいて くらべる`, run: (a) => drawArc(COPY_DEMO.b.ang - 0.35, 0.7, a, 1000) },
+      { text: `⑤ いの はしは ${EN}の ${ICHIBU}より ${SOTO}がわ。だから いの ほうが ${NAGA}い`, run: async () => { tf().reveal = true; } },
+    ],
+  },
+  iso: triProc('iso', 6, 5),
+  eq: triProc('eq', 5, 5),
+};
+const PROC_ORDER = ['def', 'circle', 'copy', 'iso', 'eq'];
+async function teachGo(k) {
+  const tok = ++animToken;
+  const T = state.teach, pr = PROCS[T.proc];
+  k = clamp(k, 0, pr.steps.length - 1);
+  Object.assign(state, { shapes: [], sel: -1, showR: false, showD: false, showRuler: false, tool: 'compass', trace: null, lineTrace: null, spinning: false, arcing: false });
+  T.flags = {}; T.step = k;
+  pr.setup();
+  try {
+    for (let i = 0; i < k; i++) await pr.steps[i].run(false);
+    if (tok !== animToken) return;
+    render();
+    sfx.tap();
+    await pr.steps[k].run(!calm());
+  } catch (e) {
+    if (e === CANCEL) return;   // とちゅうで べつの 手じゅんに うつった
+    throw e;
+  }
+  if (tok !== animToken) return;
+  state.spinning = false;
+  render();
+}
+
+/* =========================================================
+   17. 球（切り口は 円・真ん中で 切ると いちばん 大きい・はこで はさんで 直径を はかる）
+   ========================================================= */
+const BALL = { cx: 270, cy: 375, R: 200 };
+function renderBall() {
+  const B = state.ball;
+  let s = `<defs><radialGradient id="gBall" cx="0.35" cy="0.3" r="0.75">
+    <stop offset="0" stop-color="#e3f2fd"/><stop offset="0.55" stop-color="#64b5f6"/><stop offset="1" stop-color="#1565c0"/></radialGradient></defs>`;
+  if (B.sub === 'cut') {
+    const { cx, cy, R } = BALL, yc = -B.h * R, a = R * Math.sqrt(1 - B.h * B.h), ry = Math.max(6, a * 0.3), sep = ry * 1.2 + 30;   // 上の かたまりを もちあげる 高さ（切り口が 見える ように）
+    const mid = Math.abs(B.h) < 0.02;
+    s += `<g transform="translate(${cx},${cy}) rotate(${B.dir})">`;
+    s += `<clipPath id="cpTop"><rect x="${-R - 10}" y="${-R - 10}" width="${2 * R + 20}" height="${yc + R + 10}"/></clipPath>`;
+    s += `<clipPath id="cpBot"><rect x="${-R - 10}" y="${yc}" width="${2 * R + 20}" height="${R - yc + 10}"/></clipPath>`;
+    // 下の かたまり と 切り口
+    s += `<g clip-path="url(#cpBot)"><circle r="${R}" fill="url(#gBall)" stroke="#0d47a1" stroke-width="3"/></g>`;
+    s += `<ellipse cx="0" cy="${yc}" rx="${a}" ry="${ry}" fill="#ffcc80" stroke="#e65100" stroke-width="4"/>`;
+    if (mid) {
+      s += `<line x1="${-a}" y1="${yc}" x2="${a}" y2="${yc}" stroke="#1565c0" stroke-width="7" stroke-dasharray="16 9"/>`;
+      s += `<circle cx="0" cy="${yc}" r="7" fill="#fff" stroke="#263238" stroke-width="4"/>`;
+    }
+    // 上の かたまり（少し もちあげる。下の 丸みも つける）
+    s += `<g transform="translate(0,${-sep})"><g clip-path="url(#cpTop)"><circle r="${R}" fill="url(#gBall)" stroke="#0d47a1" stroke-width="3"/></g>`;
+    s += `<path d="M${-a},${yc} A${a},${ry} 0 0 0 ${a},${yc} Z" fill="#42a5f5"/>`;
+    s += `<path d="M${-a},${yc} A${a},${ry} 0 0 0 ${a},${yc}" fill="none" stroke="#0d47a1" stroke-width="3"/></g>`;
+    s += `</g>`;
+    // ことば（まわさない）
+    const th = B.dir * Math.PI / 180, fx = cx - yc * Math.sin(th), fy = cy + yc * Math.cos(th);
+    const lx = fx + (a + 60) * Math.cos(th), ly = fy + (a + 60) * Math.sin(th);
+    s += svgLabel(clamp(lx, 60, 520), clamp(ly + 8, 40, 620), [['切', 'き'], ['り'], ['口', 'くち']], '#e65100', 26);
+    if (mid) s += svgLabel(fx, fy + 44, [['球', 'きゅう'], ['の '], ['中心', 'ちゅうしん']], '#263238', 20);
+    s += svgLabel(cx, 28, [['ドラッグで '], ['切', 'き'], ['る ところを かえられるよ']], '#607d8b', 18);
+    // 右：切り口を まっすぐ 見ると
+    const k = 150 / R, ox = 760, oy = 340, ar = a * k;
+    s += svgLabel(ox, 70, [['切', 'き'], ['り'], ['口', 'くち'], ['を まっすぐ '], ['見', 'み'], ['ると']], '#263238', 26);
+    s += `<circle cx="${ox}" cy="${oy}" r="150" fill="none" stroke="#9e9e9e" stroke-width="3" stroke-dasharray="10 8"/>`;
+    s += `<circle cx="${ox}" cy="${oy}" r="${ar}" fill="#ffcc80" stroke="#e65100" stroke-width="5"/>`;
+    s += `<line x1="${ox - ar}" y1="${oy}" x2="${ox + ar}" y2="${oy}" stroke="#1565c0" stroke-width="7" stroke-dasharray="16 9"/>`;
+    s += `<circle cx="${ox}" cy="${oy}" r="5" fill="#263238"/>`;
+    s += mid
+      ? svgLabel(ox, oy + 190, [['いちばん '], ['大', 'おお'], ['きい！']], '#e65100', 28)
+      : svgLabel(ox, oy + 190, [['点線', 'てんせん'], ['＝いちばん '], ['大', 'おお'], ['きい '], ['切', 'き'], ['り'], ['口', 'くち']], '#757575', 20);
+  } else {
+    // はこで はさんで 直径を はかる
+    const cx = 480, cy = 290, R = 200, off = (1 - B.boxT) * 170, ground = cy + R;
+    s += `<line x1="40" y1="${ground}" x2="920" y2="${ground}" stroke="#8d6e63" stroke-width="4"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#gBall)" stroke="#0d47a1" stroke-width="3"/>`;
+    const box = (x0, w) => `<rect x="${x0}" y="${ground - 260}" width="${w}" height="260" fill="#d7ccc8" stroke="#6d4c41" stroke-width="4"/>` +
+      `<line x1="${x0 + 8}" y1="${ground - 252}" x2="${x0 + w - 8}" y2="${ground - 252}" stroke="#a1887f" stroke-width="3"/>`;
+    s += box(cx - R - 130 - off, 130) + box(cx + R + off, 130);
+    s += svgLabel(cx - R - 65 - off, ground - 270, [['箱', 'はこ']], '#6d4c41', 24) + svgLabel(cx + R + 65 + off, ground - 270, [['箱', 'はこ']], '#6d4c41', 24);
+    // ものさし（0 が 左の 箱の 内がわ）
+    const x0 = cx - R;
+    s += `<rect x="${x0 - 14}" y="${ground + 8}" width="${12 * U + 28}" height="56" rx="6" fill="#fff8e1" stroke="#f9a825" stroke-width="2"/>`;
+    for (let k = 0; k <= 120; k++) {
+      const t = k % 10 === 0 ? 20 : k % 5 === 0 ? 14 : 8;
+      s += `<line x1="${x0 + k * 4}" y1="${ground + 8}" x2="${x0 + k * 4}" y2="${ground + 8 + t}" stroke="#5d4037" stroke-width="${k % 10 === 0 ? 2 : 1}"/>`;
+      if (k % 10 === 0) s += `<text class="svgtxt" x="${x0 + k * 4}" y="${ground + 52}" font-size="18" text-anchor="middle" fill="#5d4037">${k / 10}</text>`;
+    }
+    if (B.boxT >= 1) {
+      s += `<line x1="${cx - R}" y1="${cy}" x2="${cx + R}" y2="${cy}" stroke="#1565c0" stroke-width="9" stroke-dasharray="18 10"/>`;
+      s += `<line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - R}" stroke="#d84315" stroke-width="6"/>`;
+      s += `<circle cx="${cx}" cy="${cy}" r="8" fill="#fff" stroke="#263238" stroke-width="4"/>`;
+      s += svgLabel(cx + 100, cy - 16, lblDia(10), '#1565c0', 26);
+      s += svgLabel(cx - 70, cy - 110, lblRad(5), '#d84315', 24);
+      s += svgLabel(cx, cy + 44, [['球', 'きゅう'], ['の '], ['中心', 'ちゅうしん']], '#263238', 20);
+      s += `<line x1="${cx - R}" y1="${ground - 4}" x2="${cx - R}" y2="${ground + 30}" stroke="#1565c0" stroke-width="4"/><line x1="${cx + R}" y1="${ground - 4}" x2="${cx + R}" y2="${ground + 30}" stroke="#1565c0" stroke-width="4"/>`;
+    }
+  }
+  $('#ballSvg').innerHTML = s;
+}
+function ballMsg() {
+  const B = state.ball;
+  if (B.sub === 'cut') {
+    if (Math.abs(B.h) < 0.02) say(`${MANNAKA}で ${KI}ると、${KIRIKUCHI}が いちばん ${OO}きい ${EN}に なるよ。この ${EN}の ${CHUUSHIN}・${HANKEI}・${CHOKKEI}が、${KYUU}の ${CHUUSHIN}・${HANKEI}・${CHOKKEI}だよ。`, 'good');
+    else say(`${KYUU}を どこで ${KI}っても、${KIRIKUCHI}は ${EN}。${MANNAKA}から はなれるほど ${CHII}さく なるね。`);
+  } else {
+    say(`${KYUU}を ${HAKO}で はさむと、${HAKO}と ${HAKO}の ${AIDA}の ${NAGA}さが ${KYUU}の ${CHOKKEI}（10cm）。${HANKEI}は その ${HANBUN}で 5cm だよ。`);
+  }
+}
+async function ballBoxes() {
+  const B = state.ball, tok = ++animToken;
+  if (calm()) { B.boxT = 1; renderBall(); return; }
+  B.boxT = 0; renderBall();
+  const t0 = performance.now();
+  while (true) {
+    await new Promise((r) => requestAnimationFrame(r));
+    if (tok !== animToken) return;
+    B.boxT = Math.min(1, (performance.now() - t0) / 1200);
+    renderBall();
+    if (B.boxT >= 1) { sfx.tap(); return; }
+  }
+}
+// 球の 図を ドラッグして 切る ところを かえる
+const ballSvg = $('#ballSvg');
+let ballDrag = false;
+function ballSetFromPointer(e) {
+  const pt = ballSvg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const q = pt.matrixTransform(ballSvg.getScreenCTM().inverse());
+  const th = state.ball.dir * Math.PI / 180, dx = q.x - BALL.cx, dy = q.y - BALL.cy;
+  let h = -(-dx * Math.sin(th) + dy * Math.cos(th)) / BALL.R;
+  h = clamp(h, -0.95, 0.95);
+  if (Math.abs(h) < 0.06) h = 0;   // 真ん中に すいつく
+  state.ball.h = Math.round(h * 100) / 100;
+  renderBall(); ballMsg();
+  const sl = $('#ballH'); if (sl) sl.value = Math.round(state.ball.h * 100);
+}
+ballSvg.addEventListener('pointerdown', (e) => {
+  if (state.ball.sub !== 'cut' || e.clientX > ballSvg.getBoundingClientRect().left + ballSvg.getBoundingClientRect().width * 0.6) return;
+  ballDrag = true;
+  try { ballSvg.setPointerCapture(e.pointerId); } catch (err) { /* とらえられなくても うごく */ }
+  ballSetFromPointer(e);
+});
+ballSvg.addEventListener('pointermove', (e) => { if (ballDrag) ballSetFromPointer(e); });
+ballSvg.addEventListener('pointerup', () => { ballDrag = false; });
+ballSvg.addEventListener('pointercancel', () => { ballDrag = false; });
+
+/* =========================================================
+   18. モードごとの しるし・すいつく 点・はなした ときの ことば
+   ========================================================= */
+function modeOverSVG() {
+  const m = state.mode;
+  if (m === 'task' && state.task && !state.task.done && !state.task.solved) return markSVG(TASK_C, [['中心', 'ちゅうしん'], ['に する ところ']]);
+  if (m === 'copy' && state.copy) return copyLinesSVG(state.copy.q, state.copy.revealed);
+  if (m === 'tri' && state.tri) { const st = triStatus(); return triMarksSVG(state.tri, { C: st.C, done: st.done }); }
+  if (m === 'teacher') return PROCS[state.teach.proc].over();
+  return '';
+}
+function magnets() {
+  const m = state.mode;
+  if (m === 'task') return [TASK_C];
+  if (m === 'copy' && state.copy?.q) return [...lineEnds(state.copy.q.a), ...lineEnds(state.copy.q.b)];
+  if (m === 'tri' && state.tri) return triStatus().C ? state.tri.pts : [state.tri.A, state.tri.B];
+  if (m === 'teacher') return PROCS[state.teach.proc].pts;
+  return [];
+}
+function afterMove() {
+  const m = state.mode;
+  if (m === 'free') say(`${CHUUSHIN}が きまったね。つぎは えんぴつを うごかして、${HIRA}きを きめよう。`);
+  else if (m === 'task' && state.task && !state.task.solved && !state.task.done) {
+    if (nearP(state.N, TASK_C)) say(`★に はりを さしたね。${HIRA}きを たしかめて、「まわす」で かこう。`);
+    else say(`はりを ★に さそう。★の 近くで はなすと すいつくよ。`);
+  } else if (m === 'copy') copyTipsMsg();
+  else if (m === 'tri') {
+    const t = state.tri;
+    if (nearP(state.N, t.A) || nearP(state.N, t.B)) {
+      const nm = nearP(state.N, t.A) ? 'ア' : 'イ';
+      say(near(state.r, t.side) ? `${nm}に はりを さしたね。つまみを 少し まわして、${EN}の ${ICHIBU}を かこう。` : `${nm}に はりを さしたね。コンパスを ${t.side}cmに ${HIRA}こう。`);
+    }
+  }
+}
+function afterOpen() {
+  const m = state.mode;
+  if (m === 'free') say(`${HIRA}きは ${fmtLen(state.r)}。この ${NAGA}さが ${EN}の ${HANKEI}に なるよ。「まわす」で かいて みよう。`);
+  else if (m === 'task') taskAfterOpen();
+  else if (m === 'copy') copyTipsMsg();
+  else if (m === 'tri') {
+    const t = state.tri;
+    if (near(state.r, t.side)) say(`${HIRA}きが ${t.side}cmに なったね。はりを ア（か イ）に さして、${EN}の ${ICHIBU}を かこう。`, 'good');
+    else say(`いまの ${HIRA}きは ${fmtLen(state.r)}。${t.side}cmに ${HIRA}こう。`);
+  }
+}
+
+/* =========================================================
+   19. 右の パネル
+   ========================================================= */
+function compassBlock({ hide = false, ruler = true } = {}) {
+  return `<div class="grp"><div class="readout"><div class="lbl">いまの ${HIRA}き${hide ? '' : `（＝${HANKEI}）`}</div><div class="num">${hide ? '？' : fmtLen(state.r)}</div></div>
+    <button class="act-btn b-main" data-act="spin" ${state.spinning ? 'disabled' : ''}>🔄 まわす（1まわり）</button>
+    <p class="tip">オレンジの「つまみ」を ゆびで まわすと、とちゅうで やめて ${EN}の ${ICHIBU}も かけるよ。</p>
+    ${ruler ? `<button class="act-btn ${state.showRuler ? 'on' : ''}" data-act="ruler">📏 ものさし</button>` : ''}</div>`;
+}
+function footBlock() {
+  const dis = state.shapes.length && !state.spinning ? '' : 'disabled';
+  return `<div class="grp"><div class="row">
+    <button class="act-btn b-reset" data-act="undo" ${dis}>↩ ひとつ もどす</button>
+    <button class="act-btn b-danger ${state.clearArm ? 'arm' : ''}" data-act="clear" ${dis}>${state.clearArm ? 'もう1回 おすと けすよ' : '🗑 ぜんぶ けす'}</button></div></div>`;
+}
+const chips = (act, list, cur) => list.map(([v, label]) => `<button class="chip ${String(cur) === String(v) ? 'active' : ''}" data-act="${act}" data-v="${v}">${label}</button>`).join('');
+
+function sideFree() {
+  const c = state.shapes[state.sel];
+  const hasCircle = c && c.t === 'circle';
+  const dots = state.shapes.filter((s) => s.t === 'dot').length;
+  let h = `<div class="grp"><div class="grp-title">どうぐ</div><div class="row">
+    <button class="act-btn ${state.tool === 'compass' ? 'on' : ''}" data-act="tool" data-v="compass">🧭 コンパス</button>
+    <button class="act-btn ${state.tool === 'dots' ? 'on' : ''}" data-act="tool" data-v="dots">📍 ${TEN}を うつ</button></div></div>`;
+  if (state.tool === 'compass') {
+    h += compassBlock();
+    h += `<div class="grp"><div class="grp-title">ペンの ${IRO}</div><div class="row">${PENS.map((p, i) =>
+      `<button class="chip pen ${state.pen === i ? 'active' : ''}" data-act="pen" data-v="${i}"><span class="sw" style="background:${p.c}"></span> ${p.name}</button>`).join('')}</div></div>`;
+    h += `<div class="grp"><div class="grp-title">${HANKEI}・${CHOKKEI}を ${MI}る</div><div class="row">
+      <button class="act-btn b-rad ${state.showR ? 'on' : ''}" data-act="showR">━ ${HANKEI}</button>
+      <button class="act-btn b-dia ${state.showD ? 'on' : ''}" data-act="showD">┅ ${CHOKKEI}</button></div>`;
+    if ((state.showR || state.showD) && hasCircle) {
+      h += `<button class="act-btn" data-act="keep">📌 ${SEN}を のこす</button>
+        <p class="tip">${SEN}の 先の ○を うごかすと、${MUKI}きが かわるよ。${NAGA}さは かわる かな？</p>`;
+      if (state.showR && state.showD) h += formulaHTML(c.r);
+    }
+    h += `</div>`;
+  } else {
+    h += `<div class="grp"><div class="readout"><div class="lbl">${CHUUSHIN}からの ${NAGA}さ</div><div class="num" style="color:#e65100">${fmtLen(state.r)}</div></div>
+      <p class="tip">${CHUUSHIN}と ${NAGA}さは コンパスの はりと ${HIRA}きと ${ONA}じ。かえる ときは コンパスに もどってね。</p>
+      <p class="tip">がめんを さわって ものさしを まわし、はなすと ${TEN}が うてるよ。</p>
+      <button class="act-btn" data-act="dots12" ${state.spinning ? 'disabled' : ''}>✨ まとめて 12こ うつ</button>
+      <div class="readout"><div class="lbl">うった ${TEN}</div><div class="num" style="color:var(--ink)">${dots}こ</div></div></div>`;
+  }
+  return h + footBlock();
+}
+const formulaHTML = (r) => `<div class="formula"><span class="t-dia">${CHOKKEI} ${fmtLen(r * 2)}</span> ＝ <span class="t-rad">${HANKEI} ${fmtLen(r)}</span> × 2</div>`;
+
+function sideTask() {
+  const T = state.task;
+  let h = '';
+  if (T.done) {
+    h += `<div class="qbox"><div class="qtext">${T.list.length}${MONDAI}中<br>${T.firstOK}${MONDAI} 1${KAI}で できた！</div></div>
+      <button class="act-btn b-next" data-act="again">🔁 もう一ど</button>`;
+  } else {
+    const q = T.list[T.idx];
+    h += `<div class="qbox"><div class="progress">${MONDAI} ${T.idx + 1} / ${T.list.length}</div>
+      <div class="qtext">${taskWord(q)}の ${EN}を かこう</div><div class="tip">★を ${CHUUSHIN}に してね</div></div>`;
+    if (T.solved) {
+      h += formulaHTML(q.r);
+      h += `<button class="act-btn b-next" data-act="next">${TSUGI}の ${MONDAI} ▶</button>`;
+    } else {
+      h += compassBlock();
+      h += `<button class="act-btn b-hint" data-act="hint">💡 ヒント</button>`;
+      if (T.hint >= 1) h += `<div class="hintbox">${q.kind === 'dia'
+        ? `${CHOKKEI}は ${HANKEI}の 2つ分。<br><span class="t-dia">${CHOKKEI} ${fmtLen(q.r * 2)}</span> ＝ <span class="t-rad">${HANKEI} ${T.hint >= 2 ? fmtLen(q.r) : '□'}</span> × 2`
+        : `${HANKEI}は ${CHUUSHIN}から まわりまでの ${NAGA}さ。<br>コンパスを ${T.hint >= 2 ? fmtLen(q.r) : '？'}に ${HIRA}こう`}</div>`;
+      if (T.hint >= 2) h += `<p class="tip">📏「ものさし」を 出すと、${HIRA}きを たしかめやすいよ。</p>`;
+    }
+  }
+  h += `<div class="grp"><div class="grp-title">${MONDAI}の しゅるい</div><div class="row">${chips('taskKind', [['rad', HANKEI + 'で'], ['dia', CHOKKEI + 'で'], ['mix', 'まぜる']], state.taskKind)}</div></div>`;
+  return h + footBlock();
+}
+
+function sideCopy() {
+  const C = state.copy;
+  let h = '';
+  if (C.done) {
+    h += `<div class="qbox"><div class="qtext">${C.n}${MONDAI}中<br>${C.firstOK}${MONDAI} 1${KAI}で せいかい！</div></div>
+      <button class="act-btn b-next" data-act="again">🔁 もう一ど</button>`;
+    return h + footBlock();
+  }
+  h += `<div class="qbox"><div class="progress">${MONDAI} ${C.idx + 1} / ${C.n}</div>
+    <div class="qtext">あ と い、どちらが ${NAGA}い？</div><div class="tip">ものさしを つかわないで、コンパスで くらべよう</div></div>`;
+  h += compassBlock({ hide: !C.revealed, ruler: false });
+  const ans = [['a', `あ の ほうが ${NAGA}い`], ['b', `い の ほうが ${NAGA}い`], ['same', `${ONA}じ ${NAGA}さ`]];
+  h += `<div class="grp"><div class="grp-title">こたえ</div>${ans.map(([v, l]) => {
+    const cls = C.revealed && v === C.q.ans ? 'right' : C.picked.includes(v) ? 'bad' : '';
+    return `<button class="act-btn ans ${cls}" data-act="ans" data-v="${v}" ${C.revealed ? 'disabled' : ''}>${l}</button>`;
+  }).join('')}</div>`;
+  if (C.revealed) h += `<button class="act-btn b-next" data-act="next">${TSUGI}の ${MONDAI} ▶</button>`;
+  else {
+    h += `<button class="act-btn b-hint" data-act="hint">💡 やりかた</button>`;
+    if (C.hint) h += `<div class="hintbox" style="text-align:left">① はりを あの はしに さす<br>② えんぴつを あの もう 一方の はしに あわせる<br>③ ${HIRA}きを かえずに、はりを いの はしに さす<br>④ いの ${SEN}の 上に ${EN}の ${ICHIBU}を かいて くらべる</div>`;
+  }
+  return h + footBlock();
+}
+
+function sideTri() {
+  const t = state.tri, st = triStatus(), pk = state.triPick;
+  let h = `<div class="grp"><div class="row">${chips('triKind', [['iso', NITOU], ['eq', SEISAN]], pk.kind)}</div>
+    <div class="sizes"><span class="lbl">${HEN}アイ</span>${chips('triBase', [3, 4, 5, 6, 7, 8].map((v) => [v, v + 'cm']), pk.base)}</div>`;
+  if (pk.kind === 'iso') h += `<div class="sizes"><span class="lbl">${HEN}アウ・${HEN}イウ</span>${chips('triSide', isoSides(pk.base).map((v) => [v, v + 'cm']), pk.side)}</div>`;
+  h += `</div>`;
+  const steps = triSteps(t);
+  const doneAt = [st.base, st.open, st.arcA, st.arcB, st.C, st.join];
+  h += `<div class="grp"><div class="grp-title">かき方の じゅんばん</div><ol class="steps">${steps.map((s, i) =>
+    `<li class="${doneAt[i] ? 'done' : i === st.cur ? 'now' : ''}">${s}</li>`).join('')}</ol>`;
+  if (st.cur === 0) h += `<button class="act-btn b-next" data-act="triLine" ${state.spinning ? 'disabled' : ''}>📏 ${HEN}アイを ひく</button>`;
+  if (st.cur === 5) h += `<button class="act-btn b-next" data-act="triJoin" ${state.spinning ? 'disabled' : ''}>📏 アウ・イウを むすぶ</button>`;
+  if (st.done) h += `<button class="act-btn b-next" data-act="triNew">🔁 もう一ど かく</button>`;
+  h += `</div>`;
+  if (!st.done && st.cur >= 1) h += compassBlock();
+  return h + footBlock();
+}
+
+function sideTeacher() {
+  const T = state.teach, pr = PROCS[T.proc];
+  let h = `<div class="grp"><div class="grp-title">見せる もの</div><div class="row">${chips('proc', PROC_ORDER.map((k) => [k, PROCS[k].name]), T.proc)}</div></div>`;
+  h += `<div class="grp"><div class="grp-title">てじゅん（おすと そこから 見せます）</div><div class="steps">${pr.steps.map((s, i) =>
+    `<button data-act="tstep" data-v="${i}" class="${i < T.step ? 'done' : i === T.step ? 'now' : ''}">${s.text}</button>`).join('')}</div></div>`;
+  h += `<div class="grp"><div class="row">
+    <button class="act-btn" data-act="tprev" ${T.step > 0 ? '' : 'disabled'}>◀ まえ</button>
+    <button class="act-btn" data-act="treplay">↺ もう一ど</button>
+    <button class="act-btn b-next" data-act="tnext" ${T.step < pr.steps.length - 1 ? '' : 'disabled'}>つぎ ▶</button></div></div>`;
+  return h;
+}
+
+function sideBall() {
+  const B = state.ball;
+  let h = `<div class="grp"><div class="row">${chips('ballSub', [['cut', `✂️ ${KI}って みよう`], ['measure', `📦 ${CHOKKEI}を はかろう`]], B.sub)}</div></div>`;
+  if (B.sub === 'cut') {
+    h += `<div class="grp"><div class="grp-title">${KI}る ${MUKI}き</div><div class="row">${chips('ballDir', [[0, R('横', 'よこ') + 'に'], [90, 'たてに'], [35, 'ななめに']], B.dir)}</div></div>`;
+    h += `<div class="grp"><div class="grp-title">${KI}る ところ</div>
+      <div class="slider-row"><span>はし</span><input type="range" id="ballH" min="-95" max="95" step="1" value="${Math.round(B.h * 100)}" aria-label="切る ところ"><span>はし</span></div>
+      <div class="row"><button class="act-btn" data-act="ballPos" data-v="0">${MANNAKA}で ${KI}る</button>
+      <button class="act-btn" data-act="ballPos" data-v="0.75">はしの ほうで ${KI}る</button></div></div>`;
+    h += `<p class="tip">左の ${KYUU}を 上下に ドラッグしても、${KI}る ところが かわるよ。</p>`;
+  } else {
+    h += `<button class="act-btn b-next" data-act="ballBox">📦 もう一ど はさむ</button>
+      <p class="tip">${HAKO}で はさむと、${KYUU}の いちばん はしと はしの ${AIDA}が はかれるよ。</p>`;
+  }
+  return h;
+}
+
+function renderSide() {
+  const m = state.mode;
+  const h = m === 'free' ? sideFree() : m === 'task' ? sideTask() : m === 'copy' ? sideCopy()
+    : m === 'tri' ? sideTri() : m === 'teacher' ? sideTeacher() : sideBall();
+  $('#sideCard').innerHTML = h;
+}
+
+function renderSay() {
+  const s = state.say;
+  $('#say').className = `say ${s ? s.tone : ''}`;
+  $('#say').innerHTML = s ? s.html : '';
+}
+
+function renderBoard() { renderShapes(); renderOver(); renderCompass(); }
+function render() {
+  document.body.classList.toggle('no-ruby', !settings.ruby);
+  $$('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === state.mode));
+  const ball = state.mode === 'ball';
+  $('#boardCard').hidden = ball;
+  $('#ballCard').hidden = !ball;
+  if (ball) renderBall();
+  else { renderGrid(); renderBoard(); }
+  if (state.mode === 'teacher') {
+    const pr = PROCS[state.teach.proc];
+    state.say = { html: pr.steps[state.teach.step].text, tone: 'big' };
+  }
+  renderSide();
+  renderSay();
+}
+
+/* =========================================================
+   20. ゆび・マウスの そうさ（作図エリア）
+   ========================================================= */
+function toCm(e) {
+  const pt = board.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const q = pt.matrixTransform(board.getScreenCTM().inverse());
+  return { x: q.x / U, y: q.y / U };
+}
+const magnetNear = (p, except) => magnets().find((q) => dist(q, p) < MAG && (!except || dist(q, except) >= RMIN));
+
+board.addEventListener('pointerdown', (e) => {
+  if (state.drag || state.spinning) return;
+  const p = toCm(e);
+  const h = e.target.closest('[data-h]')?.dataset.h || '';
+  let d = null;
+  if (h.startsWith('c:')) {                     // 円を えらぶ
+    state.sel = +h.slice(2); sfx.tap();
+    if (!state.showR && !state.showD) say(`この ${EN}を えらんだよ。「${HANKEI}」「${CHOKKEI}」で ${SEN}を ${MI}て みよう。`);
+    renderBoard(); renderSide();
+    return;
+  } else if (h === 'needle' || h === 'move') {
+    d = { kind: 'move', ox: p.x - state.N.x, oy: p.y - state.N.y };
+  } else if (h === 'pencil') {
+    d = { kind: 'pencil' };
+  } else if (h === 'knob') {
+    d = { kind: 'knob', a0: state.ang, prev: Math.atan2(p.y - state.N.y, p.x - state.N.x), span: 0, ticks: 0 };
+    state.trace = { a0: state.ang, span: 0 };
+  } else if (h === 'rh') {
+    d = { kind: 'rh' };
+  } else if (h.startsWith('dh:')) {
+    d = { kind: 'dh', end: h.slice(3) };
+  } else if (state.tool === 'dots' && state.mode === 'free') {
+    d = { kind: 'ruler' };
+    state.rulerAng = Math.atan2(p.y - state.N.y, p.x - state.N.x);
+  }
+  if (!d) return;
+  d.id = e.pointerId;
+  state.drag = d;
+  try { board.setPointerCapture(e.pointerId); } catch (err) { /* とらえられなくても うごく */ }
+  e.preventDefault();
+  sfx.click();
+  renderOver(); renderCompass();
+});
+
+board.addEventListener('pointermove', (e) => {
+  const d = state.drag;
+  if (!d || e.pointerId !== d.id) return;
+  const p = toCm(e);
+  const c = state.shapes[state.sel];
+  if (d.kind === 'move') {
+    // はりを うごかす（コンパス ぜんたいが うごく。ひらきは そのまま）。点の 近くでは すいつく
+    const cand = { x: p.x - d.ox, y: p.y - d.oy }, m = magnetNear(cand);
+    const nx = m ? m.x : clamp(snapV(cand.x), 0, BW), ny = m ? m.y : clamp(snapV(cand.y), 0, BH);
+    if (nx !== state.N.x || ny !== state.N.y) { state.N = { x: nx, y: ny }; d.moved = true; }
+  } else if (d.kind === 'pencil') {
+    // えんぴつを うごかす（はりは そのまま。ひらきが かわる）。点の 近くでは すいつく
+    const m = magnetNear(p, state.N), tg = m || p;
+    const dx = tg.x - state.N.x, dy = tg.y - state.N.y, L = Math.hypot(dx, dy);
+    if (L > 0.2) state.ang = Math.atan2(dy, dx);
+    const r = m ? clamp(L, RMIN, RMAX) : clamp(roundMM(snapV(L)), RMIN, RMAX);
+    if (Math.abs(r - state.r) > 1e-9) { state.r = r; sfx.click(); renderSide(); }
+    d.moved = true;
+  } else if (d.kind === 'knob') {
+    // つまみで まわす（まわった ぶんだけ 線が のびる。1しゅうで 円）
+    if (d.finished) return;
+    const a = Math.atan2(p.y - state.N.y, p.x - state.N.x);
+    d.span += normA(a - d.prev); d.prev = a;
+    state.ang = d.a0 + d.span;
+    state.trace.span = d.span;
+    const k = Math.floor(Math.abs(d.span) / (Math.PI / 4));
+    if (k > d.ticks) { d.ticks = k; sfx.tick(k % 8); }
+    if (Math.abs(d.span) >= TAU) {
+      d.finished = true;
+      state.ang = d.a0; state.trace = null;
+      const sh = { t: 'circle', cx: state.N.x, cy: state.N.y, r: state.r, c: PENS[state.mode === 'teacher' ? 0 : state.pen].c };
+      addShape(sh);
+      shapeDone(sh);
+      return;
+    }
+  } else if (d.kind === 'rh' && c) {
+    state.rAng = Math.atan2(p.y - c.cy, p.x - c.cx);
+  } else if (d.kind === 'dh' && c) {
+    const a = Math.atan2(p.y - c.cy, p.x - c.cx);
+    state.dAng = d.end === 'b' ? a : a + Math.PI;
+  } else if (d.kind === 'ruler') {
+    if (Math.hypot(p.x - state.N.x, p.y - state.N.y) > 0.3) state.rulerAng = Math.atan2(p.y - state.N.y, p.x - state.N.x);
+  }
+  renderOver(); renderCompass();
+});
+
+function endDrag(e) {
+  const d = state.drag;
+  if (!d || e.pointerId !== d.id) return;
+  state.drag = null;
+  if (d.kind === 'move' && d.moved) afterMove();
+  else if (d.kind === 'pencil' && d.moved) afterOpen();
+  else if (d.kind === 'knob' && !d.finished) {
+    state.trace = null;
+    if (Math.abs(d.span) > 0.15) {
+      const sh = { t: 'arc', cx: state.N.x, cy: state.N.y, r: state.r, a0: d.a0, span: d.span, c: PENS[state.mode === 'teacher' ? 0 : state.pen].c };
+      addShape(sh);
+      shapeDone(sh);
+      return;
+    }
+  } else if (d.kind === 'rh') {
+    say(`${CHUUSHIN}から ${EN}の まわりまで ひいた ${SEN}が ${HANKEI}。どこに ひいても ${fmtLen(state.shapes[state.sel].r)}だね。`);
+  } else if (d.kind === 'dh') {
+    say(`${CHUUSHIN}を とおって、まわりから まわりまで ひいた ${SEN}が ${CHOKKEI}。どの ${MUKI}きでも ${fmtLen(state.shapes[state.sel].r * 2)}だね。`);
+  } else if (d.kind === 'ruler' && e.type === 'pointerup') {
+    addDot(state.rulerAng);
+  }
+  render();
+}
+board.addEventListener('pointerup', endDrag);
+board.addEventListener('pointercancel', endDrag);
+
+/* =========================================================
+   21. パネルの ボタン
+   ========================================================= */
+$('#sideCard').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const act = b.dataset.act, v = b.dataset.v;
+  if (act !== 'clear') state.clearArm = false;
+  switch (act) {
+    case 'tool':
+      state.tool = v; sfx.tap();
+      if (v === 'dots') say(`ものさしで ${CHUUSHIN}から ${ONA}じ ${NAGA}さの ところに ${TEN}を たくさん うって みよう。`);
+      else say(`はり・えんぴつ・つまみを うごかして ${EN}を かこう。`);
+      break;
+    case 'spin': spin(); return;
+    case 'ruler': state.showRuler = !state.showRuler; sfx.tap(); break;
+    case 'pen': state.pen = +v; sfx.tap(); break;
+    case 'showR': case 'showD':
+      state[act] = !state[act]; sfx.tap();
+      if (state.sel < 0) state.sel = lastCircle();
+      if (state.sel < 0) say(`まず コンパスで ${EN}を かいてね。`, 'warn');
+      else if (state[act]) say(act === 'showR'
+        ? `${CHUUSHIN}から ${EN}の まわりまでの ${SEN}が ${HANKEI}（赤い ふつうの ${SEN}）。`
+        : `${CHUUSHIN}を とおって、まわりから まわりまでの ${SEN}が ${CHOKKEI}（青い 太い 点${SEN}）。`);
+      break;
+    case 'keep': {
+      const c = state.shapes[state.sel];
+      if (!c) break;
+      const list = [];
+      if (state.showD) {
+        const ux = Math.cos(state.dAng), uy = Math.sin(state.dAng);
+        list.push({ t: 'seg', kind: 'dia', x1: c.cx - c.r * ux, y1: c.cy - c.r * uy, x2: c.cx + c.r * ux, y2: c.cy + c.r * uy, len: c.r * 2 });
+      }
+      if (state.showR) list.push({ t: 'seg', kind: 'rad', x1: c.cx, y1: c.cy, x2: c.cx + c.r * Math.cos(state.rAng), y2: c.cy + c.r * Math.sin(state.rAng), len: c.r });
+      list.forEach(addShape);
+      // つぎの 線が かさならないように 少し まわしておく
+      state.rAng += Math.PI / 3; state.dAng += Math.PI / 5;
+      sfx.dot();
+      say(`のこしたよ。ほかの ${MUKI}きにも ひいて、${NAGA}さを くらべよう。`);
+      break;
+    }
+    case 'dots12': dots12(); return;
+    case 'undo': undo(); return;
+    case 'clear': clearAll(); return;
+    // この 円を かこう・長さを うつす
+    case 'taskKind': state.taskKind = v; sfx.tap(); startTask(); break;
+    case 'hint':
+      sfx.tap();
+      if (state.mode === 'task') state.task.hint = Math.min(2, state.task.hint + 1);
+      else state.copy.hint = true;
+      break;
+    case 'next': sfx.tap(); if (state.mode === 'task') taskNext(); else copyNext(); break;
+    case 'again': sfx.tap(); if (state.mode === 'task') startTask(); else startCopy(); state.shapes = []; break;
+    case 'ans': copyAnswer(v); break;
+    // 三角形を かこう
+    case 'triKind': state.triPick.kind = v; sfx.tap(); newTri(); break;
+    case 'triBase': {
+      const pk = state.triPick;
+      pk.base = +v;
+      if (!isoSides(pk.base).includes(pk.side)) pk.side = isoSides(pk.base)[Math.min(1, isoSides(pk.base).length - 1)];
+      sfx.tap(); newTri(); break;
+    }
+    case 'triSide': state.triPick.side = +v; sfx.tap(); newTri(); break;
+    case 'triLine':
+      safe(drawLine(state.tri.A, state.tri.B, 'base', !calm())).then((ok) => {
+        if (!ok) return;
+        say(`${HEN}アイが ひけたね。つぎは コンパスを ${state.tri.side}cmに ${HIRA}こう。${state.tri.kind === 'eq' ? 'はりを アに、えんぴつを イに あわせても いいよ。' : ''}`);
+        render();
+      });
+      renderSide();
+      return;
+    case 'triJoin': triJoin(); renderSide(); return;
+    case 'triNew': sfx.tap(); newTri(); break;
+    // 先生モード
+    case 'proc': state.teach.proc = v; teachGo(0); return;
+    case 'tstep': teachGo(+v); return;
+    case 'tprev': teachGo(state.teach.step - 1); return;
+    case 'tnext': teachGo(state.teach.step + 1); return;
+    case 'treplay': teachGo(state.teach.step); return;
+    // 球
+    case 'ballSub':
+      state.ball.sub = v; sfx.tap(); render(); ballMsg();
+      if (v === 'measure') ballBoxes();
+      return;
+    case 'ballDir': state.ball.dir = +v; sfx.tap(); render(); ballMsg(); return;
+    case 'ballPos': state.ball.h = +v; sfx.tap(); render(); ballMsg(); return;
+    case 'ballBox': ballBoxes(); return;
+  }
+  render();
+});
+$('#sideCard').addEventListener('input', (e) => {
+  if (e.target.id === 'ballH') {
+    let h = +e.target.value / 100;
+    if (Math.abs(h) < 0.04) h = 0;
+    state.ball.h = h; renderBall(); ballMsg();
+  }
+});
+
+/* =========================================================
+   22. モード・まど（せってい・先生へ）
+   ========================================================= */
+function setMode(m) {
+  animToken++;
+  Object.assign(state, { spinning: false, arcing: false, trace: null, lineTrace: null, drag: null, clearArm: false, showR: false, showD: false, showRuler: false, tool: 'compass' });
+  if (state.mode === 'free') state.store.free = state.shapes;
+  state.mode = m;
+  state.shapes = m === 'free' ? (state.store.free || []) : [];
+  state.sel = lastCircle();
+  if (m === 'free') say(`① はりを うごかして ${CHUUSHIN}を きめる → ② えんぴつを うごかして ${HIRA}きを きめる → ③「まわす」で ${EN}を かこう。`);
+  else if (m === 'task') startTask();
+  else if (m === 'copy') startCopy();
+  else if (m === 'tri') newTri();
+  else if (m === 'ball') { state.ball.boxT = 1; ballMsg(); }
+  else if (m === 'teacher') {
+    state.teach = state.teach || { proc: 'circle', step: 0, flags: {} };
+    teachGo(0);
+    return;
+  }
+  render();
+}
+$('#modeRow').addEventListener('click', (e) => {
+  const b = e.target.closest('.mode-btn');
+  if (b && !b.disabled) { sfx.tap(); setMode(b.dataset.mode); }
+});
+function openModal(id) { $(id).classList.add('open'); }
+function closeModals() { $$('.modal').forEach((m) => m.classList.remove('open')); }
+$$('.modal').forEach((m) => m.addEventListener('click', (e) => {
+  if (e.target === m || e.target.closest('[data-close]')) closeModals();
+}));
+function renderSettings() {
+  $$('[data-set]').forEach((b) => b.classList.toggle('active', String(settings[b.dataset.set]) === b.dataset.val));
+}
+$('#btnSettings').onclick = () => { renderSettings(); openModal('#modalSettings'); };
+$('#btnHowto').onclick = () => openModal('#modalHowto');
+$('#btnFull').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+};
+$$('[data-set]').forEach((b) => {
+  b.onclick = () => {
+    const key = b.dataset.set, raw = b.dataset.val;
+    settings[key] = raw === 'true' ? true : raw === 'false' ? false : /^\d+$/.test(raw) ? +raw : raw;
+    saveSettings(); renderSettings();
+    // もんだいの かずが かわったら、もんだいを つくりなおす
+    if (key === 'qcount' && state.mode === 'task') startTask();
+    if (key === 'qcount' && state.mode === 'copy') { startCopy(); state.shapes = []; }
+    render();
+  };
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModals();
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+  if (state.mode === 'teacher' && !$('.modal.open')) {
+    if (e.key === 'ArrowRight') teachGo(state.teach.step + 1);
+    if (e.key === 'ArrowLeft') teachGo(state.teach.step - 1);
+  }
+});
+
+reduceMQ.addEventListener?.('change', render);
+setMode('free');
+</script>
+</body>
+</html>
