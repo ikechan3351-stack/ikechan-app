@@ -1,0 +1,2142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ならべて くらべて データの調べ方</title>
+<style>
+  :root {
+    --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb;
+    --warn: #bf360c; --warn-bg: #fff3e0; --good: #e65100; --good-bg: #fffde7;
+    --g0: #1e6fd9; --g1: #e8710a;            /* 1組＝青●、2組＝オレンジ▲ */
+    --mean: #d32f2f; --median: #7b1fa2; --mode: #f9a825;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3faf8 0%, #d9efea 100%);
+    min-height: 100vh;
+    padding: 10px 16px 24px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  button, input, textarea { font-family: inherit; color: inherit; }
+  .no-ruby ruby:not(.keep) rt { display: none; }
+  [hidden] { display: none !important; }
+  .wrap { width: 100%; max-width: 1600px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ===== 上の段 ===== */
+  .topbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .back-link { font-size: 0.85rem; color: var(--accent-dark); text-decoration: none; }
+  .title-box { flex: 1; text-align: center; min-width: 220px; }
+  h1 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.8rem); color: var(--accent-dark); }
+  .subtitle { margin: 0; font-size: 0.85rem; color: #546e7a; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tool-btn {
+    min-height: 48px; min-width: 48px; padding: 4px 12px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 0.95rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    min-height: 52px; padding: 6px 14px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: clamp(0.9rem, 2vmin, 1.1rem); font-weight: bold; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .chip {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.active::before { content: "✔ "; }
+
+  /* ===== ひとこと ===== */
+  .say {
+    font-size: clamp(1.05rem, 2.4vmin, 1.4rem); line-height: 1.9; font-weight: bold; text-align: center;
+    background: #fff; border-radius: 14px; padding: 4px 16px; min-height: 2.2em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .say::before { content: "📊 "; }
+  .say.warn { background: var(--warn-bg); color: var(--warn); }
+  .say.warn::before { content: "🤔 "; }
+  .say.good { background: var(--good-bg); color: var(--good); }
+  .say.good::before { content: "⭐ "; }
+
+  /* ===== ボタン ===== */
+  .act-btn {
+    min-height: 52px; min-width: 52px; padding: 4px 12px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: clamp(1rem, 2.2vmin, 1.15rem); font-weight: 900; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12); line-height: 1.25;
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+  .act-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .act-btn.sm { min-height: 48px; min-width: 48px; font-size: 0.95rem; padding: 2px 10px; }
+  .b-reset { background: #f5f5f5; border-color: #cfd8dc; }
+  .b-main { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .b-mean { border-color: #ef9a9a; background: #ffebee; }
+  .b-mean.on { background: var(--mean); border-color: var(--mean); }
+  .b-median { border-color: #ce93d8; background: #f3e5f5; }
+  .b-median.on { background: var(--median); border-color: var(--median); }
+  .b-mode { border-color: #ffe082; background: #fffde7; }
+  .b-mode.on { background: #f9a825; border-color: #f9a825; color: #3e2723; }
+  .b-out { border-color: #90a4ae; background: #eceff1; }
+  .pulse { animation: pulse 0.7s ease-in-out infinite alternate; border-color: #f9a825 !important; }
+  @keyframes pulse { from { box-shadow: 0 0 0 0 rgba(249,168,37,0.7); } to { box-shadow: 0 0 0 10px rgba(249,168,37,0); } }
+  .calm .pulse { animation: none; box-shadow: 0 0 0 5px #fdd835; }
+  .toolbar { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .toolbar .sep { width: 2px; align-self: stretch; background: #e0e0e0; margin: 0 2px; }
+
+  /* ===== ならび（左：入力｜中央：ドットプロット｜右：まとめ） ===== */
+  .stage { display: grid; gap: 10px; align-items: start;
+    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(280px, 360px); }
+  .card {
+    background: #fff; border-radius: 18px; padding: 8px 12px 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  }
+  .card h3 { margin: 0; font-size: clamp(0.95rem, 2vmin, 1.15rem); color: var(--accent-dark); }
+  .card-head { display: flex; align-items: center; gap: 6px; justify-content: space-between; flex-wrap: wrap; }
+
+  /* 左：データ入力 */
+  .gtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .gtab {
+    min-height: 52px; border-radius: 14px; border: 3px solid #cfd8dc; background: #fff; cursor: pointer;
+    font-size: 1.05rem; font-weight: 900; touch-action: manipulation; line-height: 1.2;
+  }
+  .gtab small { display: block; font-size: 0.75rem; font-weight: bold; color: #607d8b; }
+  .gtab.g0.active { border-color: var(--g0); background: #e3f0fd; color: var(--g0); }
+  .gtab.g1.active { border-color: var(--g1); background: #fff1e3; color: #b45309; }
+  .field { display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 0.9rem; }
+  .field input {
+    flex: 1; min-width: 0; min-height: 44px; border: 2px solid #cfd8dc; border-radius: 10px; padding: 2px 8px; font-size: 1rem; font-weight: bold;
+  }
+  .field input.short { flex: 0 0 4.5em; }
+  textarea.data {
+    width: 100%; min-height: 9em; resize: vertical; border: 2px solid #cfd8dc; border-radius: 12px; padding: 6px 10px;
+    font-size: 1.1rem; font-weight: bold; line-height: 1.5; font-variant-numeric: tabular-nums;
+  }
+  textarea.data:focus, .field input:focus { outline: 3px solid #80cbc4; border-color: var(--accent); }
+  .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .btn-grid .wide { grid-column: span 2; }
+  .sample-badge { background: #fff8e1; border: 2px dashed #ffb300; border-radius: 10px; padding: 2px 8px; font-size: 0.85rem; font-weight: bold; color: #8d6e00; line-height: 1.6; }
+  .privacy { font-size: 0.8rem; color: #607d8b; margin: 0; line-height: 1.6; }
+  details.more summary { cursor: pointer; font-weight: bold; color: var(--accent-dark); min-height: 40px; display: flex; align-items: center; }
+
+  /* キーパッド（1つずつ入れる） */
+  .pad { border: 3px solid #80cbc4; border-radius: 14px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+  .pad-disp { font-size: clamp(1.4rem, 4vmin, 2rem); font-weight: 900; text-align: center; min-height: 1.6em; background: #f5f5f5; border-radius: 10px; padding: 2px 8px; letter-spacing: 0.04em; }
+  .pad-disp .ph { font-size: 0.55em; color: #90a4ae; letter-spacing: 0; font-weight: bold; }
+  .keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .key { min-height: 50px; border-radius: 12px; border: 2px solid #b2dfdb; background: #fff; font-size: 1.35rem; font-weight: 900; cursor: pointer; touch-action: manipulation; }
+  .key.op { background: #e0f2f1; font-size: 1.05rem; }
+  .key.ok { grid-column: span 3; background: var(--accent); border-color: var(--accent); color: #fff; font-size: 1.2rem; }
+
+  /* 中央：ドットプロット */
+  .svgwrap { position: relative; width: 100%; height: clamp(300px, 56vh, 760px); border-radius: 14px; overflow: hidden;
+    background: linear-gradient(180deg, #fbfefd 0%, #eef6f4 100%); touch-action: none; user-select: none; -webkit-user-select: none; }
+  .svgwrap svg { display: block; width: 100%; height: 100%; }
+  .svghint { position: absolute; left: 8px; right: 8px; bottom: 4px; text-align: center; font-size: 0.8rem; color: #78909c; font-weight: bold; pointer-events: none; }
+  .glowdot { animation: glow 0.8s ease-in-out infinite alternate; }
+  @keyframes glow { from { opacity: 1; } to { opacity: 0.35; } }
+  .calm .glowdot { animation: none; }
+
+  /* 右：代表値の まとめ */
+  .rep {
+    display: grid; grid-template-columns: auto 1fr; gap: 0 10px; align-items: center;
+    border: 3px solid #eceff1; border-radius: 14px; padding: 4px 10px; cursor: pointer; background: #fff;
+    touch-action: manipulation; min-height: 64px; text-align: left; width: 100%;
+  }
+  .rep .ic { font-size: 1.6rem; grid-row: span 2; width: 1.4em; text-align: center; font-weight: 900; }
+  .rep .nm { font-weight: 900; font-size: 1.05rem; }
+  .rep .val { font-weight: 900; font-size: clamp(1.3rem, 3.4vmin, 1.8rem); }
+  .rep .how { grid-column: 2; font-size: 0.85rem; color: #546e7a; font-weight: bold; line-height: 1.5; }
+  .rep.mean { border-color: #ef9a9a; } .rep.mean .ic, .rep.mean .val { color: var(--mean); }
+  .rep.median { border-color: #ce93d8; } .rep.median .ic, .rep.median .val { color: var(--median); }
+  .rep.mode { border-color: #ffe082; } .rep.mode .ic { color: #f9a825; } .rep.mode .val { color: #8d6e00; }
+  .rep.hide .val { color: #b0bec5; }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .facts div { background: #f5f7f8; border-radius: 10px; padding: 4px 6px; text-align: center; font-weight: bold; font-size: 0.8rem; color: #546e7a; line-height: 1.4; }
+  .facts b { display: block; font-size: 1.3rem; color: var(--ink); }
+  .note { font-size: 0.9rem; color: #546e7a; margin: 0; line-height: 1.7; }
+  .task { font-size: clamp(1rem, 2.4vmin, 1.2rem); font-weight: 900; line-height: 1.9; text-align: center; border: 4px solid #fdd835; background: #fffde7; border-radius: 14px; padding: 6px 10px; }
+  .concl { border: 4px solid #66bb6a; background: #f1f8e9; border-radius: 14px; padding: 6px 10px; font-weight: bold; line-height: 1.9; text-align: center; }
+  .concl .big { font-size: clamp(1.1rem, 2.8vmin, 1.4rem); font-weight: 900; }
+  .balbars { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; font-weight: bold; }
+  .balbars .bar { height: 22px; border-radius: 6px; background: #eceff1; overflow: hidden; }
+  .balbars .bar > i { display: block; height: 100%; background: #90caf9; }
+  .balbars .bar.r > i { background: #ffcc80; }
+  .cmp { width: 100%; border-collapse: collapse; text-align: center; font-weight: 900; font-size: clamp(1rem, 2.3vmin, 1.2rem); }
+  .cmp th { background: #eceff1; font-size: 0.8em; padding: 4px; }
+  .cmp td { border-top: 1px solid #dfe5e8; padding: 4px; }
+  .cmp td.d { font-size: 0.85em; }
+  .cmp .big-move { color: var(--mean); } .cmp .small-move { color: var(--median); }
+  /* 度数分布表 */
+  .wctl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; font-weight: 900; }
+  .wctl input[type=range] { width: min(240px, 50vw); height: 48px; accent-color: var(--accent); cursor: pointer; }
+  .wctl .wv { font-size: 1.4rem; color: var(--accent-dark); min-width: 3.2em; text-align: center; }
+  .ftbl { width: 100%; border-collapse: collapse; text-align: center; font-weight: 900; font-size: clamp(1rem, 2.3vmin, 1.2rem); }
+  .ftbl th { background: #eceff1; font-size: 0.8em; padding: 4px; line-height: 1.5; }
+  .ftbl td { border-top: 1px solid #dfe5e8; padding: 3px 4px; cursor: pointer; }
+  .ftbl td + td, .ftbl th + th { border-left: 2px solid #dfe5e8; }
+  .ftbl tr.sel td { background: #fff59d; }
+  .ftbl tr.mx td:last-child { color: var(--good); }
+  .ftbl tr.tot td { background: #f5f7f8; cursor: default; }
+  .ftbl .cls { font-size: 0.85em; }
+  .zoom { border: 3px dashed #ffb74d; border-radius: 14px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; background: #fffaf2; }
+  .zoom svg { width: 100%; height: auto; display: block; }
+  .two-btn { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .two-btn .act-btn { font-size: 0.95rem; }
+  /* 2つを 比べる */
+  .cmp .g0 { color: var(--g0); } .cmp .g1 { color: #b45309; }
+  .opin { display: flex; flex-direction: column; gap: 6px; border: 3px solid #b2dfdb; border-radius: 14px; padding: 6px 8px; }
+  .opin textarea, .ps textarea { width: 100%; min-height: 5em; resize: vertical; border: 2px solid #cfd8dc; border-radius: 12px; padding: 6px 10px; font-size: 1.05rem; line-height: 1.6; }
+  .opin .field input { font-size: 0.95rem; }
+  .pick { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .pick .act-btn { font-size: 0.95rem; padding: 2px 4px; }
+  .pick .act-btn.on.g0 { background: var(--g0); border-color: var(--g0); }
+  .pick .act-btn.on.g1 { background: var(--g1); border-color: var(--g1); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips .chip { min-height: 44px; font-size: 0.9rem; padding: 2px 10px; }
+  .review { border: 3px solid #fdd835; background: #fffde7; border-radius: 14px; padding: 4px 10px; }
+  .review ul { margin: 4px 0; padding-left: 1.3em; line-height: 1.8; font-weight: bold; }
+  /* 先生モード */
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .steps li { border: 2px solid #eceff1; border-radius: 10px; padding: 4px 8px; font-weight: bold; line-height: 1.7; color: #90a4ae; cursor: pointer; font-size: clamp(1rem, 2.2vmin, 1.3rem); }
+  .steps li.done { color: #37474f; }
+  .steps li.cur { border-color: #fdd835; background: #fffde7; color: #263238; }
+  .bigval { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; font-weight: 900; font-size: clamp(1.1rem, 2.6vmin, 1.5rem); }
+  .bigval b { font-size: 1.35em; }
+  .stage.full { grid-template-columns: 1fr; }
+  .stage.teach { grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); }
+  .stage.teach.in { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(280px, 340px); }
+  .stage.teach > .right { grid-column: auto; }
+  /* PPDACノート */
+  .sheet { max-width: 1100px; width: 100%; margin: 0 auto; }
+  .sheet-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: space-between; }
+  .sheet-head h2 { margin: 0; color: var(--accent-dark); font-size: clamp(1.2rem, 3vmin, 1.6rem); }
+  .cycle { display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap; font-weight: 900; }
+  .cycle span { border-radius: 999px; padding: 2px 12px; background: #e0f2f1; border: 2px solid #80cbc4; }
+  .cycle i { font-style: normal; color: #90a4ae; }
+  .ps { border: 3px solid #e0f2f1; border-radius: 14px; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; break-inside: avoid; }
+  .ps-h { font-weight: 900; font-size: 1.15rem; color: var(--accent-dark); display: flex; align-items: center; gap: 8px; }
+  .ps-h .pl { display: inline-grid; place-items: center; width: 1.8em; height: 1.8em; border-radius: 50%; background: var(--accent); color: #fff; }
+  .ps-h small { color: #90a4ae; font-weight: bold; font-size: 0.75em; }
+  .hint { margin: 0; padding-left: 1.3em; color: #546e7a; font-size: 0.92rem; line-height: 1.7; }
+  .auto-data { background: #f5f7f8; border-radius: 10px; padding: 4px 10px; font-weight: bold; line-height: 1.8; }
+  .pp-graph svg { width: 100%; height: auto; display: block; border: 2px solid #eceff1; border-radius: 10px; }
+  .checks label { display: flex; align-items: center; gap: 8px; min-height: 40px; font-weight: bold; line-height: 1.5; }
+  .checks input { width: 26px; height: 26px; accent-color: var(--accent); flex: none; }
+  .pt, .print-only { display: none; }
+  @media print {
+    body { background: #fff; padding: 0; display: block; }
+    .topbar, .mode-row, .say, .no-print, .modal { display: none !important; }
+    .wrap { max-width: none; }
+    .card { box-shadow: none; padding: 0; }
+    .ps textarea { display: none; }
+    .pt { display: block; white-space: pre-wrap; min-height: 3.5em; border-bottom: 1px dashed #999; line-height: 1.7; }
+    .print-only { display: inline; }
+    .ps { border-width: 2px; }
+  }
+  .soon { text-align: center; padding: 40px 10px; font-weight: bold; color: #607d8b; line-height: 2; }
+
+  .spark { position: fixed; z-index: 91; pointer-events: none; font-size: clamp(18px, 3vmin, 34px); color: #ffd600; text-shadow: 0 0 6px #fff; animation: spark 1.1s ease-out forwards; }
+  @keyframes spark { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 30% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; } 100% { transform: translate(-50%, -160%) scale(0.6); opacity: 0; } }
+  .calm .spark { animation: none; }
+
+  /* ===== まど ===== */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+  .modal.open { display: flex; }
+  .modal-card { background: #fff; border-radius: 20px; padding: 16px 20px; max-width: 760px; width: 100%; max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .modal-card h2 { margin: 0; color: var(--accent-dark); font-size: 1.4rem; }
+  .modal-card h3 { margin: 6px 0 0; color: var(--accent-dark); font-size: 1.05rem; }
+  .modal-card p, .modal-card li { line-height: 1.7; }
+  .modal-card ul { margin: 4px 0; padding-left: 1.4em; }
+  .set-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .set-label { font-weight: bold; min-width: 9em; }
+  .ed-note { font-size: 0.85rem; color: #546e7a; margin: 0; line-height: 1.6; }
+
+  @media (max-width: 1180px) {
+    .stage { grid-template-columns: minmax(250px, 290px) minmax(0, 1fr); }
+    .stage > .right { grid-column: 1 / -1; }
+  }
+  @media (max-width: 820px) {
+    body { padding: 8px 10px 20px; }
+    .stage { grid-template-columns: 1fr; }
+    .stage > .center { order: -1; }   /* せまい 画面では グラフを いちばん 上に */
+    .stage.teach, .stage.teach.in { grid-template-columns: 1fr; }
+    .svgwrap { height: clamp(280px, 52vh, 600px); }
+  }
+  @media (min-width: 900px) and (orientation: landscape) and (max-height: 820px) {
+    body { padding-top: 6px; }
+    .wrap { gap: 6px; }
+    .subtitle { display: none; }
+    h1 { font-size: 1.3rem; }
+    .mode-btn { min-height: 48px; padding: 4px 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="index.html">← アプリ一覧にもどる</a>
+    <div class="title-box">
+      <h1>📊 ならべて くらべて データの<ruby>調<rt>しら</rt></ruby>べ<ruby>方<rt>かた</rt></ruby></h1>
+      <p class="subtitle">ドットプロット・<ruby>代表値<rt>だいひょうち</rt></ruby>・<ruby>度数分布表<rt>どすうぶんぷひょう</rt></ruby>・<ruby>柱状<rt>ちゅうじょう</rt></ruby>グラフで、データの <ruby>特<rt>とく</rt></ruby>ちょうを しらべよう（6<ruby>年<rt>ねん</rt></ruby>）</p>
+    </div>
+    <div class="tools">
+      <button class="tool-btn" id="btnHowto">❓ <ruby>先生<rt>せんせい</rt></ruby>へ</button>
+      <button class="tool-btn" id="btnFull">⛶ ぜんがめん</button>
+      <button class="tool-btn" id="btnSettings">⚙️ せってい</button>
+    </div>
+  </div>
+
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn" data-mode="make">⚫ ドットプロット</button>
+    <button class="mode-btn" data-mode="rep">⚖️ <ruby>代表値<rt>だいひょうち</rt></ruby></button>
+    <button class="mode-btn" data-mode="freq">📶 <ruby>柱状<rt>ちゅうじょう</rt></ruby>グラフ</button>
+    <button class="mode-btn" data-mode="two">👥 2つを <ruby>比<rt>くら</rt></ruby>べる</button>
+    <button class="mode-btn" data-mode="ppdac">📝 PPDACノート</button>
+    <button class="mode-btn" data-mode="teacher">🧑‍🏫 <ruby>先生<rt>せんせい</rt></ruby>モード</button>
+  </div>
+
+  <div class="say" id="say" aria-live="polite"></div>
+  <section class="stage" id="stage"></section>
+</div>
+
+<input type="file" id="fileCsv" accept=".csv,.txt,text/csv,text/plain" hidden>
+
+<!-- せってい -->
+<div class="modal" id="modalSettings" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>⚙️ せってい</h2>
+    <div class="set-line"><span class="set-label"><ruby>平均値<rt>へいきんち</rt></ruby>の あらわし<ruby>方<rt>かた</rt></ruby></span>
+      <button class="chip" data-set="place" data-val="1"><ruby>小数第<rt>しょうすうだい</rt></ruby>1<ruby>位<rt>い</rt></ruby>まで</button>
+      <button class="chip" data-set="place" data-val="2"><ruby>小数第<rt>しょうすうだい</rt></ruby>2<ruby>位<rt>い</rt></ruby>まで</button></div>
+    <div class="set-line"><span class="set-label">ふりがな</span>
+      <button class="chip" data-set="ruby" data-val="true">つける</button>
+      <button class="chip" data-set="ruby" data-val="false">つけない</button></div>
+    <div class="set-line"><span class="set-label">こうかおん</span>
+      <button class="chip" data-set="sound" data-val="true">ON</button>
+      <button class="chip" data-set="sound" data-val="false">OFF</button></div>
+    <div class="set-line"><span class="set-label">うごき</span>
+      <button class="chip" data-set="motion" data-val="auto">じどう</button>
+      <button class="chip" data-set="motion" data-val="less">へらす</button>
+      <button class="chip" data-set="motion" data-val="normal">ふつう</button></div>
+    <p class="ed-note">平均値は、わりきれないとき「約」をつけて、えらんだ位までの がい数（その下の位を四捨五入）で表します。データが小数（例：8.4秒）のときは、データより1けた下の位まで表します。「最頻値」の「頻」は小学校で習わない漢字なので、ふりがなを「つけない」にしても いつも ふりがなをつけます。「じどう」は パソコンの「視差効果を減らす」などに あわせます。</p>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- 先生へ -->
+<div class="modal" id="modalHowto" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>❓ 先生へ（つかい方）</h2>
+    <p>6年「データの調べ方」の教材です。ドットプロットでデータの散らばりを表し、代表値（平均値・中央値・最頻値）の意味と、データによってどれが適しているかがちがうことを体感します。</p>
+    <h3>データの 入れ方（左の らん）</h3>
+    <ul><li><b>数だけ</b>を入れます。児童の名前は入れません。改行・カンマ・スペースで区切って貼りつけ、「グラフに する」をおします。</li>
+      <li>「CSV」で表計算ソフトのCSVを読みこめます。数字でない列（名前など）と、1, 2, 3, … と続く番号の列は読みこみません。数の列が2つあれば 1組・2組 に入ります。</li>
+      <li>「サンプル」は<b>架空の</b>ソフトボール投げの記録です（1組21人・2組20人）。1組は平均値が高いのに中央値は低く、2組は散らばりが小さい、という くらべがいのある数にしています。</li>
+      <li>データは このページを とじると消えます。のこしたいときは「CSVで ほぞん」をおしてください。グラフは「🖼️ PNG」で画像にできます。</li></ul>
+    <h3>⚫ ドットプロットを つくろう</h3>
+    <ul><li>キーパッドで数を1つずつ入れると、点が数直線の上に落ちてきて積み上がります。パソコンのキーボードの数字と Enter でも入れられます。</li>
+      <li>「サンプルを 1つずつ」で、架空の記録が1つずつ落ちてきます。</li></ul>
+    <h3>⚖️ 代表値を くらべよう</h3>
+    <ul><li>右の代表値のカードは、はじめは「？」です。予想させてからタップすると数が出て、グラフに印がつきます。</li>
+      <li>「てんびんで 平均値」：数直線を てんびんの うでにみたて、▲（ささえ）をドラッグします。平均値の場所だけで つり合います。右には「ささえから左の点までの きょりの合計」と「右の きょりの合計」が出て、つり合うと等しくなります。</li>
+      <li>「ならべて 中央値」：点が小さい順に1列にならび、両はしから1こずつ消えていき、真ん中がのこります。<b>データが偶数個</b>（2組の20人など）のときは真ん中が2つのこり、「（25＋26）÷2」で中央値を求める様子を見せます。</li>
+      <li>「とびぬけた 値を 入れる」：とても大きな値を1つ加えると、平均値は大きく動き、中央値はあまり動かないことを、前の位置（うすい印）と矢印で見せます。奇数個のデータに1つ足すと偶数個になるので、中央値の求め方のちがいも話題にできます。</li></ul>
+    <h3>📶 柱状グラフ（度数分布表と柱状グラフ）</h3>
+    <ul><li>上にドットプロット、下に柱状グラフ（ヒストグラム）を<b>同じ数直線</b>でかきます。階級ごとの帯が上から下までつながっているので、点の数がそのまま柱の高さになることが見えます。</li>
+      <li>「階級のはば」のスライダー（＋・－）で幅を変えると、表と柱状グラフがいっしょに変わります。階級が多すぎる・少なすぎるときは、ひとことで知らせます。「区切りをずらす」で、同じ幅でも区切りの位置によって形が変わることも見せられます。</li>
+      <li>表の行や柱をタップすると、その階級が光ります。いちばん度数の多い階級と、中央値が入る階級も表の下に出ます。</li>
+      <li><b>境目のデータ</b>（例：25m で、20以上25未満と25以上30未満の境目）はドットプロットでオレンジのわくがつきます。右の「さかい目」の拡大図で「どちらの階級に入るかな？」と問い、正解すると点が「25以上」の箱に入るアニメ、「未満」を選ぶと「未満はその数をふくまない」と説明します。</li></ul>
+    <h3>👥 2つを 比べる</h3>
+    <ul><li>1組（青・●）と2組（オレンジ・▲）を上下に並べ、同じ数直線でくらべます。ドットプロットと柱状グラフ（階級はそろえてあります）を切りかえられ、平均値▲・中央値・最頻値の印を出せます。</li>
+      <li>右に代表値の表、問い（書きかえ可）、「どちらと言えるか」「理由にしたこと」「自分の意見」の欄があります。「意見を見直そう」で、平均値と中央値で結論が変わること・散らばりのちがい・とびぬけた値・人数のちがい・データの数は十分か、などをデータから問いかけます。</li>
+      <li>サンプルは、1組が平均値は高い（約25.8m）のに中央値は低い（23m）、2組は散らばりが小さい、という数にしてあるので、意見が分かれやすくなっています。</li></ul>
+    <h3>📝 PPDACノート</h3>
+    <ul><li>問題（Problem）→ 計画（Plan）→ データ（Data）→ 分析（Analysis）→ 結論（Conclusion）を書きこむワークシートです。データの欄には、いま入っているデータのまとめが自動で出ます。</li>
+      <li>「いまのグラフと代表値をはる」で、くらべのグラフと表を分析の欄にはれます。「2つを比べるの意見をうつす」で結論の欄に意見を入れられます。結論の下に、見直しのチェックと「つぎに調べたいこと」があります。</li>
+      <li>「いんさつ」で、ボタンなどをのぞいた形で印刷できます（PDFに保存も可）。名前は印刷した紙に手で書く欄になっています。「例を入れる」で記入例（サンプルの架空の記録）が入ります。</li></ul>
+    <h3>🧑‍🏫 先生モード</h3>
+    <ul><li>電子黒板向けに文字を大きくし、入力らんをかくします（「📥 データ」で出し入れ、クラスの数を入れられます）。</li>
+      <li>「すすむ」で、数直線 → 点を落とす → 最頻値 → 小さい順に並べて中央値 → てんびんのささえがすべって平均値でつり合う → 柱状グラフ → 2つのグループのくらべ、の順に1つずつ見せます。右の手順をタップするとそこへとびます。→キー・スペースですすみ、←キーでもどれます（プレゼン用リモコンでも使えます）。「じどう」で自動で進みます。</li></ul>
+    <p class="ed-note">せっていは このブラウザに保存されます。データ・意見・PPDACノートは保存しません（ページを閉じるときに確認が出ます）。ネット接続は不要です。</p>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================
+   1. 小さな 道具
+   ========================================================= */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+// ルビつきの 漢字。keep を true に すると「ふりがな なし」でも いつも ふりがなを つける
+const R = (kanji, kana, keep = false) => `<ruby${keep ? ' class="keep"' : ''}>${kanji}<rt>${kana}</rt></ruby>`;
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+const near = (a, b) => Math.abs(a - b) < 1e-7;
+const fmt = (n) => String(Math.round(n * 1000) / 1000);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// よく つかう ことば（6年生までの 漢字＋ふりがな）
+const HEIKIN = R('平均値', 'へいきんち'), CHUOU = R('中央値', 'ちゅうおうち'), SAIHIN = R('最頻値', 'さいひんち', true);
+const DAIHYOU = R('代表値', 'だいひょうち'), ATAI = R('値', 'あたい'), CHIRA = R('散', 'ち') + 'らばり';
+const NARABE = R('並', 'なら') + 'べ', MANNAKA = R('真', 'ま') + 'ん' + R('中', 'なか');
+const CHIISAI = R('小', 'ちい') + 'さい', OOKII = R('大', 'おお') + 'きい', JUN = R('順', 'じゅん');
+const GOUKEI = R('合計', 'ごうけい'), NINZUU = R('人数', 'にんずう'), BANME = R('番目', 'ばんめ');
+const KAZU = R('数', 'かず'), TEN = R('点', 'てん'), OOI = R('多', 'おお') + 'い';
+
+/* =========================================================
+   2. せってい（この ブラウザに ほぞん。ほぞん できなくても うごく）
+      ※ データ（記録の 数）は ほぞんしない
+   ========================================================= */
+const SETTINGS_KEY = 'narabete-kurabete-data-settings';
+const DEFAULTS = { sound: true, ruby: true, motion: 'auto', place: '1' };
+const settings = (() => {
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch (e) { return { ...DEFAULTS }; }
+})();
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ほぞん できなくても よい */ }
+}
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const calm = () => settings.motion === 'less' || (settings.motion === 'auto' && reduceMQ.matches);
+
+/* =========================================================
+   3. 音（ブラウザで 音を つくる。ファイルは つかわない）
+   ========================================================= */
+let actx = null;
+function play(notes) {
+  if (!settings.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const now = actx.currentTime;
+    for (const [f, t, dur, type = 'sine', vol = 0.14] of notes) {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, now + t);
+      g.gain.exponentialRampToValueAtTime(vol, now + t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + t + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(now + t); o.stop(now + t + dur + 0.05);
+    }
+  } catch (e) { /* 音が 出せなくても うごく */ }
+}
+let lastPlop = 0;
+const sfx = {
+  tap:     () => play([[880, 0, 0.05, 'sine', 0.08]]),
+  // 点が 着地した 音（たくさん 落ちる ときは 間を あける）
+  plop:    (h = 0.5) => { const n = performance.now(); if (n - lastPlop < 55) return; lastPlop = n; play([[420 + 500 * h, 0, 0.07, 'triangle', 0.09]]); },
+  take:    () => play([[500, 0, 0.06, 'triangle', 0.08], [380, 0.05, 0.08, 'triangle', 0.06]]),
+  step:    () => play([[660, 0, 0.06, 'sine', 0.07]]),
+  correct: () => play([[784, 0, 0.12], [988, 0.1, 0.12], [1175, 0.2, 0.12], [1568, 0.3, 0.35]]),
+  soft:    () => play([[392, 0, 0.15, 'triangle', 0.1], [440, 0.15, 0.2, 'triangle', 0.1]]),
+  big:     () => play([[220, 0, 0.25, 'sawtooth', 0.06], [330, 0.12, 0.3, 'triangle', 0.08]]),
+};
+
+/* =========================================================
+   4. アニメ（数を 少しずつ 変える）
+      tween(もの, 'キー', 目標, ミリ秒) … 動きを 減らす ときは すぐに 目標へ
+   ========================================================= */
+let tweens = [], rafId = 0;
+const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+// はずむ 動き（点が 落ちて 着地する とき）
+function bounce(t) {
+  const n1 = 7.5625, d1 = 2.75;
+  if (t < 1 / d1) return n1 * t * t;
+  if (t < 2 / d1) return n1 * (t -= 1.5 / d1) * t + 0.75;
+  if (t < 2.5 / d1) return n1 * (t -= 2.25 / d1) * t + 0.9375;
+  return n1 * (t -= 2.625 / d1) * t + 0.984375;
+}
+function tween(obj, key, to, ms, linear = false) {
+  return new Promise((res) => {
+    if (calm() || ms <= 0) { obj[key] = to; requestDraw(); res(); return; }
+    tweens = tweens.filter((t) => !(t.obj === obj && t.key === key));
+    tweens.push({ obj, key, from: obj[key], to, t0: performance.now(), ms, res, linear });
+    requestDraw();
+  });
+}
+function stopTweens() {
+  const list = tweens; tweens = [];
+  for (const t of list) { t.obj[t.key] = t.to; t.res(); }
+}
+function requestDraw() {
+  if (rafId) return;
+  rafId = requestAnimationFrame((now) => {
+    rafId = 0;
+    const done = [];
+    tweens = tweens.filter((t) => {
+      const k = clamp((now - t.t0) / t.ms, 0, 1);
+      t.obj[t.key] = t.from + (t.to - t.from) * (t.linear ? k : ease(k));
+      if (k >= 1) { done.push(t); return false; }
+      return true;
+    });
+    draw();
+    done.forEach((t) => t.res());
+    if (tweens.length) requestDraw();
+  });
+}
+const wait = (ms) => new Promise((res) => setTimeout(res, calm() ? 0 : ms));
+// モードを かえたら 進行中の アニメの つづきを 止めるための 番号
+let seq = 0;
+
+/* =========================================================
+   5. 計算（データの 配列 → 代表値・度数分布）
+      ここは 画面に ふれない。数を うけとって 答えを 返すだけ。
+   ========================================================= */
+const Stats = {
+  // 同じ 値か どうかを くらべる ための かぎ（小数の 計算の ずれを ふせぐ）
+  key: (v) => Math.round(v * 1000) / 1000,
+  // 小数第 何位 まで あるか（いちばん 細かい もの。2まで）
+  decimals(values) {
+    let d = 0;
+    for (const v of values) {
+      for (let k = 0; k <= 2; k++) { if (near(v * 10 ** k, Math.round(v * 10 ** k))) { d = Math.max(d, k); break; } if (k === 2) d = 2; }
+    }
+    return d;
+  },
+  sum: (values) => values.reduce((a, b) => a + b, 0),
+  mean: (values) => (values.length ? Stats.sum(values) / values.length : NaN),
+  sorted: (values) => [...values].sort((a, b) => a - b),
+  // 中央値：小さい順に ならべて 真ん中。偶数個なら 真ん中 2つの 平均
+  //   idx … 真ん中の 番号（0から）。奇数なら [i]、偶数なら [i, i+1]
+  median(values) {
+    const s = Stats.sorted(values), n = s.length;
+    if (!n) return { value: NaN, idx: [], sorted: s };
+    if (n % 2) { const i = (n - 1) / 2; return { value: s[i], idx: [i], sorted: s }; }
+    const i = n / 2 - 1;
+    return { value: (s[i] + s[i + 1]) / 2, idx: [i, i + 1], sorted: s };
+  },
+  // 値ごとの 個数（かぎ → 個数）
+  counts(values) {
+    const m = new Map();
+    for (const v of values) { const k = Stats.key(v); m.set(k, (m.get(k) || 0) + 1); }
+    return m;
+  },
+  // 最頻値：いちばん 多く 出てくる 値。同じ 数で ならんだら ぜんぶ。
+  //   どの 値も 1こずつ（同じ 個数）なら none: true
+  modes(values) {
+    const c = Stats.counts(values);
+    if (!c.size) return { values: [], count: 0, none: true };
+    const max = Math.max(...c.values());
+    const vals = [...c.keys()].filter((k) => c.get(k) === max).sort((a, b) => a - b);
+    return { values: vals, count: max, none: vals.length === c.size && c.size > 1 };
+  },
+  // まとめて ぜんぶ
+  all(values) {
+    const n = values.length;
+    return {
+      n, sum: Stats.sum(values), mean: Stats.mean(values), median: Stats.median(values), modes: Stats.modes(values),
+      min: n ? Math.min(...values) : NaN, max: n ? Math.max(...values) : NaN, dec: Stats.decimals(values),
+    };
+  },
+  // 度数分布：start から width ずつの 階級に わけて 数える（「○以上 △未満」）
+  //   maxV まで ある 階級を ぜんぶ つくる（2つの グループで 階級を そろえる ため）
+  freq(values, width, start, maxV) {
+    const out = [];
+    if (maxV === undefined) maxV = values.length ? Math.max(...values) : start;
+    for (let i = 0; i < 300; i++) {
+      const lo = Stats.key(start + width * i), hi = Stats.key(start + width * (i + 1));
+      if (lo > maxV + 1e-9) break;
+      out.push({ lo, hi, count: values.filter((v) => v >= lo - 1e-9 && v < hi - 1e-9).length });
+    }
+    return out;
+  },
+  // 文字から 数を とりだす。区切りは 改行・カンマ・タブ・スペース（全角も）
+  //   「25m」のように たんいが ついていても よい。数で ない もの（名前など）は 読まない
+  parse(text, unit = '') {
+    const z2h = (s) => s.replace(/[０-９．－，]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+    const tokens = z2h(String(text)).split(/[\s,、，;；]+/).filter(Boolean);
+    const values = []; let bad = 0;
+    const u = z2h(unit).trim();
+    for (let t of tokens) {
+      if (u && t.endsWith(u)) t = t.slice(0, -u.length);
+      if (/^-?\d+(\.\d+)?$/.test(t)) values.push(Stats.key(Number(t)));
+      else bad++;
+    }
+    return { values, bad };
+  },
+};
+
+// 平均値を 画面に 出す 形に（わりきれない ときは「約」と がい数）
+function meanText(m, dec) {
+  const place = Math.max(Number(settings.place) || 1, dec + 1);
+  const p = 10 ** place, r = Math.round(m * p) / p;
+  return { approx: !near(r, m), text: fmt(r) };
+}
+const meanHTML = (m, dec) => { const t = meanText(m, dec); return `${t.approx ? R('約', 'やく') : ''}${t.text}`; };
+const meanPlain = (m, dec) => { const t = meanText(m, dec); return `${t.approx ? '約' : ''}${t.text}`; };
+
+/* =========================================================
+   6. データ（グループ ごとの 点）
+      点 1つ ＝ { id, v: 値, drop: 落ちる すすみ 0〜1, out: とびぬけた値か }
+   ========================================================= */
+// 架空の ソフトボール投げの 記録（m）。1組 21人・2組 20人。
+//   1組は 平均値が 高いが 中央値は ひくい。2組は 散らばりが 小さい。
+const SAMPLE = [
+  [22, 36, 18, 25, 20, 42, 22, 15, 30, 23, 21, 38, 19, 26, 22, 33, 17, 40, 24, 20, 28],
+  [25, 28, 21, 26, 30, 24, 27, 18, 25, 29, 23, 31, 26, 22, 28, 25, 33, 20, 27, 24],
+];
+let nextId = 1;
+const mkItem = (v, extra = {}) => ({ id: nextId++, v, drop: 1, ...extra });
+
+const state = {
+  mode: 'make',
+  g: 0,                         // 見ている（入れている）グループ
+  topic: 'ソフトボール投げの 記録',
+  unit: 'm',
+  groups: [
+    { name: '1組', items: [], sample: false, draft: null },
+    { name: '2組', items: [], sample: false, draft: null },
+  ],
+  show: { mean: false, median: false, mode: false },   // 代表値の 印を 出すか
+  pad: '',                      // キーパッドの 入力中の 数
+};
+const G = () => state.groups[state.g];
+const valuesOf = (g) => state.groups[g].items.map((i) => i.v);
+const allValues = () => state.groups.flatMap((gr) => gr.items.map((i) => i.v));
+
+// てんびん・ならべる・とびぬけた値 の ようす
+const BAL = { on: false, f: 0, ang: 0, done: false, drag: false };
+const SORT = { phase: 'idle', p: 0, elim: 0 };          // idle → fly → elim → done
+const OUT = { on: false, id: 0, before: null };
+
+function resetExperiments() {
+  seq++;
+  stopTweens();
+  BAL.on = false; BAL.ang = 0; BAL.done = false; BAL.drag = false;
+  SORT.phase = 'idle'; SORT.p = 0; SORT.elim = 0;
+  if (OUT.on) { for (const gr of state.groups) gr.items = gr.items.filter((i) => !i.out); }
+  OUT.on = false; OUT.before = null;
+}
+
+// 点を まとめて 落とす（少しずつ ずらして）
+async function dropItems(list) {
+  const my = ++seq;
+  if (calm()) { list.forEach((it) => { it.drop = 1; }); requestDraw(); return; }
+  list.forEach((it) => { it.drop = 0; });
+  const gap = clamp(1600 / Math.max(list.length, 1), 25, 90);
+  for (let i = 0; i < list.length; i++) {
+    if (my !== seq) { list.forEach((it) => { it.drop = 1; }); requestDraw(); return; }
+    const it = list[i];
+    tween(it, 'drop', 1, 650, true).then(() => sfx.plop(0.5));
+    await wait(gap);
+  }
+}
+
+/* =========================================================
+   7. ドットプロットの 形を きめる（計算だけ。かくのは 8）
+   ========================================================= */
+// 数直線の はんいと 目もり
+function plotRange(values, W, fs) {
+  const dec = Stats.decimals(values);
+  const unit = 10 ** -dec;
+  let min = values.length ? Math.min(...values) : 0, max = values.length ? Math.max(...values) : 50;
+  if (max - min < unit * 10) { const c = (min + max) / 2; min = c - unit * 5; max = c + unit * 5; }
+  const maxTicks = Math.max(4, Math.floor((W - fs * 4) / (fs * 3.2)));
+  let step = unit;
+  const cands = [];
+  for (let e = -2; e <= 6; e++) for (const m of [1, 2, 5]) cands.push(m * 10 ** e);
+  for (const c of cands) { if (c < unit - 1e-9) continue; step = c; if ((max - min) / c <= maxTicks - 1) break; }
+  let lo = Math.floor(min / step + 1e-9) * step, hi = Math.ceil(max / step - 1e-9) * step;
+  if (near(lo, min)) lo -= step;           // はしの 点が 目もりの はしに くっつかない ように
+  if (near(hi, max)) hi += step;
+  if (min >= 0 && lo < 0) lo = 0;
+  return { lo, hi, step, unit, dec };
+}
+
+// 1つの グループの ドットプロット（点の 位置）
+function plotModel(W, H) {
+  const fs = clamp(Math.min(W, H * 1.4) / 34, 12, FSMAX());
+  const items = G().items;
+  const vals = items.map((i) => i.v);
+  const rng = plotRange(allValues(), W, fs);
+  const mx = fs * 2.4;
+  const stripOn = SORT.phase !== 'idle';
+  const stripH = stripOn ? fs * 5 : 0;
+  const top = stripH + fs * 2.6;
+  const axisY = H - fs * 5.6;
+  const X = (v) => mx + (v - rng.lo) / (rng.hi - rng.lo) * (W - 2 * mx);
+  const unitPx = (W - 2 * mx) * rng.unit / (rng.hi - rng.lo);
+  const cnt = Stats.counts(vals);
+  const maxC = Math.max(5, ...cnt.values());
+  // 小数の データ（目もりが こまかい）でも 点が 見える 大きさは たもつ（となりと 少し かさなっても よい）
+  const r = clamp(Math.min(Math.max(unitPx * 0.47, fs * 0.55), (axisY - top) / (2.08 * maxC + 0.4)), 2.5, fs * 1.05);
+  const lvl = new Map(), pos = new Map();
+  for (const it of items) {
+    const k = Stats.key(it.v), L = lvl.get(k) || 0;
+    lvl.set(k, L + 1);
+    pos.set(it.id, { x: X(it.v), y: axisY - r - L * 2.08 * r, lv: L });
+  }
+  return { W, H, fs, mx, top, stripH, axisY, X, r, rng, items, vals, cnt, pos, st: Stats.all(vals) };
+}
+
+/* =========================================================
+   8. ドットプロットを かく（SVG）
+   ========================================================= */
+const GCOL = ['#1e6fd9', '#e8710a'];
+// グループの 形（1組＝●、2組＝▲）
+function shape(g, x, y, r, attrs = '') {
+  if (g === 0) return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.92).toFixed(1)}" ${attrs}/>`;
+  const h = r * 0.95;
+  return `<polygon points="${x.toFixed(1)},${(y - h).toFixed(1)} ${(x + h * 1.05).toFixed(1)},${(y + h * 0.8).toFixed(1)} ${(x - h * 1.05).toFixed(1)},${(y + h * 0.8).toFixed(1)}" ${attrs}/>`;
+}
+// SVGの 文字の はば（だいたい）
+const tw = (s, fs) => [...String(s)].reduce((w, c) => w + (/[\x20-\x7e]/.test(c) ? 0.6 : 1) * fs, 0);
+// SVGに ふりがなつきの 文字を かく。parts … ['ふつうの 文字' か ['漢字','かな', keep]] の 配列
+function svgText(x, y, parts, fs, color, anchor = 'middle', weight = 900) {
+  const segs = parts.map((p) => (Array.isArray(p) ? { t: p[0], k: p[1], keep: p[2] } : { t: p }));
+  const total = segs.reduce((w, s) => w + tw(s.t, fs), 0);
+  let x0 = anchor === 'middle' ? x - total / 2 : anchor === 'end' ? x - total : x;
+  let out = `<text x="${x0.toFixed(1)}" y="${y.toFixed(1)}" font-size="${fs.toFixed(1)}" font-weight="${weight}" fill="${color}">${segs.map((s) => esc(s.t)).join('')}</text>`;
+  for (const s of segs) {
+    const w = tw(s.t, fs);
+    if (s.k && (settings.ruby || s.keep)) {
+      out += `<text x="${(x0 + w / 2).toFixed(1)}" y="${(y - fs * 0.95).toFixed(1)}" font-size="${(fs * 0.45).toFixed(1)}" font-weight="bold" fill="${color}" text-anchor="middle">${esc(s.k)}</text>`;
+    }
+    x0 += w;
+  }
+  return out;
+}
+const fmtV = (v) => fmt(v);
+
+function draw() {
+  const svg = $('#plot');
+  if (!svg) return;
+  const wrap = svg.parentElement;
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!W || !H) return;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const v = view();
+  if (v === 'freq') { svg.innerHTML = buildFreq(W, H); lastModel = null; drawZoom(); return; }
+  if (v === 'two') { svg.innerHTML = buildCompare(W, H); lastModel = null; return; }
+  const M = plotModel(W, H);
+  // てんびんの かたむきを 少しずつ 目標へ（動きを 減らす ときは すぐ）
+  if (BAL.on) {
+    const t = balTarget(M);
+    if (calm() || Math.abs(t - BAL.ang) < 0.03) BAL.ang = t;
+    else { BAL.ang += (t - BAL.ang) * 0.18; requestDraw(); }
+  }
+  svg.innerHTML = buildPlot(M);
+  lastModel = M;
+  updateLive(M);
+}
+// いま かく グラフ：'dot'（1つの グループの ドットプロット）・'freq'（ドットプロット＋柱状グラフ）・'two'（2つの グループ）
+function view() {
+  if (state.mode === 'freq') return 'freq';
+  if (state.mode === 'two') return 'two';
+  if (state.mode === 'teacher') return TC.step === 5 ? 'freq' : TC.step === 6 ? 'two' : 'dot';
+  return 'dot';
+}
+const FSMAX = () => (state.mode === 'teacher' ? 32 : 21);   // 先生モードは 文字を 大きく
+let lastModel = null;
+
+function buildPlot(M) {
+  const { W, fs, mx, top, axisY, X, r, rng, items, st } = M;
+  const g = state.g, col = GCOL[g];
+  let back = '', beam = '', front = '';
+  const hideDots = state.mode === 'teacher' && TC.step === 0;   // 先生モードの さいしょは 数直線だけ
+
+  // ---- 数直線（目もりと 数） ----
+  beam += `<line x1="${mx - fs}" y1="${axisY}" x2="${W - mx + fs * 0.6}" y2="${axisY}" stroke="#37474f" stroke-width="3"/>`;
+  const unitPx = X(rng.lo + rng.unit) - X(rng.lo);
+  if (unitPx >= 6) {
+    for (let v = rng.lo; v <= rng.hi + 1e-9; v += rng.unit) {
+      beam += `<line x1="${X(v).toFixed(1)}" y1="${axisY}" x2="${X(v).toFixed(1)}" y2="${axisY + fs * 0.35}" stroke="#90a4ae" stroke-width="1.5"/>`;
+    }
+  }
+  for (let v = rng.lo; v <= rng.hi + 1e-9; v += rng.step) {
+    const xv = X(v);
+    beam += `<line x1="${xv.toFixed(1)}" y1="${axisY}" x2="${xv.toFixed(1)}" y2="${axisY + fs * 0.6}" stroke="#37474f" stroke-width="2.5"/>`;
+    beam += `<text x="${xv.toFixed(1)}" y="${(axisY + fs * 1.6).toFixed(1)}" font-size="${fs}" font-weight="bold" fill="#37474f" text-anchor="middle">${fmtV(Stats.key(v))}</text>`;
+  }
+  beam += `<text x="${W - mx + fs * 0.9}" y="${(axisY + fs * 0.4).toFixed(1)}" font-size="${fs * 0.9}" font-weight="bold" fill="#546e7a">(${esc(state.unit)})</text>`;
+
+  if (!items.length && !hideDots) {
+    front += svgText(W / 2, (top + axisY) / 2, ['キーパッドや 左の らんから 数を 入れよう'], fs * 1.1, '#90a4ae');
+  }
+
+  // ---- 最頻値（いちばん 高い 列を 光らせる） ----
+  if (state.show.mode && items.length && !st.modes.none && !hideDots) {
+    for (const v of st.modes.values) {
+      const h = st.modes.count * 2.08 * r;
+      back += `<rect x="${(X(v) - r * 1.5).toFixed(1)}" y="${(axisY - h - r * 0.5).toFixed(1)}" width="${(r * 3).toFixed(1)}" height="${(h + r * 0.5).toFixed(1)}" rx="${r}" fill="#fff59d" stroke="#f9a825" stroke-width="3"/>`;
+      front += svgText(X(v), axisY - h - r * 0.9, [['最頻値', 'さいひんち', true]], fs * 0.85, '#8d6e00');
+    }
+  }
+
+  // ---- 点 ----
+  const fade = SORT.phase !== 'idle' ? 0.45 : 1;
+  for (const it of hideDots ? [] : items) {
+    const p = M.pos.get(it.id);
+    const y0 = top - r * 3;
+    const y = it.drop >= 1 ? p.y : y0 + (p.y - y0) * bounce(clamp(it.drop, 0, 1));
+    const fill = it.out ? '#fff' : col;
+    beam += shape(g, p.x, y, r, `fill="${fill}" stroke="${it.out ? col : '#fff'}" stroke-width="${it.out ? 3 : 1.2}" opacity="${fade}"`);
+    if (it.out && it.drop >= 1) beam += svgText(p.x, y - r * 1.8, ['とびぬけた ', ['値', 'あたい']], fs * 0.75, '#455a64', 'end');
+  }
+
+  // ---- 中央値（たての 線） ----
+  if (state.show.median && items.length) {
+    const xm = X(st.median.value);
+    front += `<line x1="${xm.toFixed(1)}" y1="${top - fs * 0.6}" x2="${xm.toFixed(1)}" y2="${axisY}" stroke="#7b1fa2" stroke-width="3" stroke-dasharray="8 6"/>`;
+    front += svgText(xm, top - fs * 0.9, [['中央値', 'ちゅうおうち'], ` ${fmtV(st.median.value)}${state.unit}`], fs * 0.95, '#7b1fa2');
+  }
+  // とびぬけた値を 入れる 前の 印（うすく）
+  if (OUT.on && OUT.before) {
+    if (state.show.median) {
+      const xb = X(OUT.before.median);
+      back += `<line x1="${xb.toFixed(1)}" y1="${top + fs * 0.6}" x2="${xb.toFixed(1)}" y2="${axisY}" stroke="#ce93d8" stroke-width="2" stroke-dasharray="3 5"/>`;
+    }
+  }
+
+  // ---- 平均値（てんびんの ささえ ▲） ----
+  let tri = '';
+  const showMean = (state.show.mean || BAL.on) && items.length;
+  if (showMean) {
+    const fv = BAL.on ? BAL.f : st.mean;
+    const xf = X(fv), ty = axisY + fs * 2.1, th = fs * 1.9;
+    if (OUT.on && OUT.before && state.show.mean) {
+      const xb = X(OUT.before.mean);
+      tri += `<polygon points="${xb},${ty} ${xb + th * 0.6},${ty + th} ${xb - th * 0.6},${ty + th}" fill="none" stroke="#ef9a9a" stroke-width="2.5" stroke-dasharray="4 3"/>`;
+      if (Math.abs(xf - xb) > th) {
+        const dir = xf > xb ? 1 : -1;
+        tri += `<line x1="${xb + dir * th * 0.7}" y1="${ty + th * 0.55}" x2="${xf - dir * th * 0.8}" y2="${ty + th * 0.55}" stroke="#d32f2f" stroke-width="3" marker-end="url(#arrR)"/>`;
+      }
+    }
+    tri += `<line x1="${xf.toFixed(1)}" y1="${axisY}" x2="${xf.toFixed(1)}" y2="${ty}" stroke="#d32f2f" stroke-width="2" stroke-dasharray="3 3"/>`;
+    tri += `<polygon points="${xf.toFixed(1)},${ty} ${(xf + th * 0.6).toFixed(1)},${(ty + th).toFixed(1)} ${(xf - th * 0.6).toFixed(1)},${(ty + th).toFixed(1)}" fill="#d32f2f" stroke="#fff" stroke-width="2" ${BAL.on ? 'style="cursor:ew-resize"' : ''}/>`;
+    const lbl = BAL.on && !BAL.done
+      ? ['ささえ ', `${meanPlain(fv, rng.dec)}`]
+      : [['平均値', 'へいきんち'], ` ${meanPlain(st.mean, rng.dec)}${state.unit}`];
+    const lx = clamp(xf, mx + fs * 3, W - mx - fs * 3);
+    tri += svgText(lx, ty + th + fs * 1.05, lbl, fs * 0.95, '#d32f2f');
+  }
+
+  // ---- 小さい順に ならべた 列（中央値） ----
+  let strip = '';
+  if (SORT.phase !== 'idle' && items.length) strip = buildStrip(M);
+
+  // てんびん：うで（数直線と 点）を ささえの まわりに かたむける
+  const rot = BAL.on ? `transform="rotate(${BAL.ang.toFixed(2)} ${X(BAL.f).toFixed(1)} ${axisY})"` : '';
+  const defs = `<defs><marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d32f2f"/></marker>
+    <marker id="arrP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b1fa2"/></marker></defs>`;
+  return `${defs}<g ${rot}>${back}${beam}${front}</g>${tri}${strip}`;
+}
+
+// 小さい順に ならべた 列：点が 飛んできて ならび、両はしから 1こずつ 消える
+function buildStrip(M) {
+  const { W, fs, mx, items, st } = M;
+  const g = state.g, col = GCOL[g];
+  const n = items.length;
+  const sorted = [...items].sort((a, b) => a.v - b.v || a.id - b.id);
+  const cw = (W - 2 * mx) / n, rs = clamp(cw * 0.38, 3, fs * 0.8), cy = fs * 2.3;
+  const k = ease(clamp(SORT.p, 0, 1));
+  const mid = st.median.idx;
+  let s = `<rect x="${mx - fs * 0.6}" y="${cy - rs - fs * 1.5}" width="${W - 2 * mx + fs * 1.2}" height="${rs * 2 + fs * 3.2}" rx="12" fill="#fff" stroke="#e1bee7" stroke-width="2" opacity="${k}"/>`;
+  const lblFs = clamp(cw * 0.55, 0, fs * 0.8);
+  sorted.forEach((it, rank) => {
+    const p = M.pos.get(it.id);
+    const tx = mx + cw * (rank + 0.5);
+    const x = p.x + (tx - p.x) * k, y = p.y + (cy - p.y) * k;
+    const gone = SORT.phase !== 'fly' && (rank < SORT.elim || rank >= n - SORT.elim);
+    const isMid = SORT.phase === 'done' && mid.includes(rank);
+    if (isMid) s += `<circle cx="${tx}" cy="${cy}" r="${rs * 1.9}" fill="#f3e5f5" stroke="#7b1fa2" stroke-width="3" class="glowdot"/>`;
+    s += shape(g, x, y, rs, `fill="${gone ? '#cfd8dc' : col}" stroke="#fff" stroke-width="1"`);
+    if (k >= 1 && (lblFs >= 8 || isMid)) {
+      s += `<text x="${tx.toFixed(1)}" y="${(cy + rs + Math.max(lblFs, 10) * 1.1).toFixed(1)}" font-size="${Math.max(lblFs, isMid ? 11 : 8).toFixed(1)}" font-weight="bold" fill="${gone ? '#b0bec5' : isMid ? '#7b1fa2' : '#37474f'}" text-anchor="middle">${fmtV(it.v)}</text>`;
+    }
+    if (k >= 1 && isMid) s += `<text x="${tx.toFixed(1)}" y="${(cy - rs - fs * 0.4).toFixed(1)}" font-size="${(fs * 0.7).toFixed(1)}" font-weight="900" fill="#7b1fa2" text-anchor="middle">${rank + 1}番目</text>`;
+  });
+  if (k >= 1) {
+    s += `<text x="${mx}" y="${(cy - rs - fs * 0.4).toFixed(1)}" font-size="${(fs * 0.6).toFixed(1)}" font-weight="bold" fill="#78909c">${CHIISAI_PLAIN}</text>`;
+    s += `<text x="${W - mx}" y="${(cy - rs - fs * 0.4).toFixed(1)}" font-size="${(fs * 0.6).toFixed(1)}" font-weight="bold" fill="#78909c" text-anchor="end">${OOKII_PLAIN}</text>`;
+  }
+  return s;
+}
+const CHIISAI_PLAIN = '← 小さい', OOKII_PLAIN = '大きい →';
+
+/* =========================================================
+   9. 画面を 組み立てる（HTML）
+   ========================================================= */
+function say(html, kind = '') {
+  const el = $('#say');
+  el.className = 'say' + (kind ? ' ' + kind : '');
+  el.innerHTML = html;
+  // ひとことが 2行に なると グラフが 下に ずれるので、高さを あわせなおす
+  const w = $('#plotWrap');
+  if (w) { const h = w.style.height; fitPlot(); if (w.style.height !== h) draw(); }
+}
+
+function render() {
+  document.body.classList.toggle('no-ruby', !settings.ruby);
+  document.body.classList.toggle('calm', calm());
+  $$('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === state.mode));
+  const stage = $('#stage');
+  const tc = state.mode === 'teacher';
+  stage.className = 'stage' + (state.mode === 'ppdac' ? ' full' : tc ? (TC.input ? ' teach in' : ' teach') : '');
+  if (state.mode === 'ppdac') { stage.innerHTML = ppdacHTML(); return; }
+  stage.innerHTML = `
+    ${!tc || TC.input ? `<div class="card left" id="left">${leftHTML()}</div>` : ''}
+    <div class="card center">
+      <div class="card-head"><h3 id="plotTitle">${plotTitleHTML()}</h3>
+        <button class="act-btn sm b-reset" data-act="png">🖼️ PNG</button></div>
+      <div class="toolbar">${toolbarHTML()}</div>
+      <div class="svgwrap" id="plotWrap"><svg id="plot" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ドットプロット"></svg><div class="svghint" id="svghint"></div></div>
+    </div>
+    <div class="card right" id="right">${rightHTML()}</div>`;
+  bindPlot();
+  fitPlot();
+  draw();
+}
+// グラフの 高さを、画面の のこりに ぴったり あわせる（スクロール しなくても 数直線まで 見える）
+function fitPlot() {
+  const w = $('#plotWrap'); if (!w) return;
+  if (innerWidth <= 820) { w.style.height = ''; return; }
+  const top = w.getBoundingClientRect().top + scrollY;
+  w.style.height = `${clamp(innerHeight - top - 22, 300, 900)}px`;
+}
+addEventListener('resize', () => { fitPlot(); draw(); });
+// 右と ツールバーだけ 作りなおす（左の 入力らんは さわらない）
+function refresh() {
+  const r = $('#right'); if (r) r.innerHTML = rightHTML();
+  const t = $('.center .toolbar'); if (t) t.innerHTML = toolbarHTML();
+  const h = $('#plotTitle'); if (h) h.innerHTML = plotTitleHTML();
+  fitPlot();
+  draw();
+}
+function refreshLeft() { const l = $('#left'); if (l) l.innerHTML = leftHTML(); }
+
+function plotTitleHTML() {
+  const gr = G();
+  if (view() === 'two') {
+    const sm = state.groups.some((x) => x.sample);
+    return `${state.groups.map((x, i) => `<span style="color:${GCOL[i]}">${i ? '▲' : '●'} ${esc(x.name)}（${x.items.length}${R('人', 'にん')}）</span>`).join(' と ')} の ${esc(state.topic)}${sm ? ` <span class="sample-badge">${R('架空', 'かくう')}の ${KAZU}</span>` : ''}`;
+  }
+  const mark = state.g === 0 ? '●' : '▲';
+  return `<span style="color:${GCOL[state.g]}">${mark} ${esc(gr.name)}</span> ${esc(state.topic)}（${gr.items.length}${R('人', 'にん')}）${gr.sample ? ` <span class="sample-badge">${R('架空', 'かくう')}の ${KAZU}</span>` : ''}`;
+}
+
+// ---- 左：データ入力 ----
+function leftHTML() {
+  const tabs = state.groups.map((gr, i) => `
+    <button class="gtab g${i} ${i === state.g ? 'active' : ''}" data-act="group" data-v="${i}">${i ? '▲' : '●'} ${esc(gr.name)}<small>${gr.items.length}${R('人', 'にん')}</small></button>`).join('');
+  const gr = G();
+  const text = gr.draft !== null ? gr.draft : gr.items.filter((i) => !i.out).map((i) => fmtV(i.v)).join('\n');
+  const pad = state.mode === 'make' ? `
+    <div class="pad">
+      <div class="pad-disp" id="padDisp">${padDispHTML()}</div>
+      <div class="keys">
+        ${[7, 8, 9, 4, 5, 6, 1, 2, 3].map((d) => `<button class="key" data-act="key" data-v="${d}">${d}</button>`).join('')}
+        <button class="key" data-act="key" data-v="0">0</button>
+        <button class="key op" data-act="key" data-v=".">.</button>
+        <button class="key op" data-act="key" data-v="bs">⌫</button>
+        <button class="key ok" data-act="push">⬇ つむ</button>
+      </div>
+    </div>
+    <div class="btn-grid">
+      <button class="act-btn sm b-reset" data-act="undo" ${gr.items.length ? '' : 'disabled'}>↩ 1つ もどす</button>
+      <button class="act-btn sm" data-act="playSample">🧪 サンプルを 1つずつ</button>
+    </div>` : '';
+  const area = `
+    <textarea class="data" id="dataText" rows="8" spellcheck="false" aria-label="データ（数を 1行に 1つ）" placeholder="25\n31\n18\n…（1行に 1つ）">${esc(text)}</textarea>
+    <div class="btn-grid">
+      <button class="act-btn sm b-main wide" data-act="apply">✔ グラフに する</button>
+      <button class="act-btn sm" data-act="csvIn">📂 CSV</button>
+      <button class="act-btn sm" data-act="sample">🧪 サンプル</button>
+      <button class="act-btn sm" data-act="csvOut">💾 CSVで ほぞん</button>
+      <button class="act-btn sm b-reset" data-act="clear">🗑️ けす</button>
+    </div>`;
+  return `
+    <h3>📥 データを 入れる</h3>
+    <div class="gtabs">${tabs}</div>
+    <label class="field">グループの ${R('名前', 'なまえ')} <input class="short" id="gname" maxlength="6" value="${esc(gr.name)}"></label>
+    <label class="field">${R('調', 'しら')}べる こと <input id="topic" maxlength="20" value="${esc(state.topic)}"></label>
+    <label class="field">たんい <input class="short" id="unit" maxlength="4" value="${esc(state.unit)}"></label>
+    ${pad}
+    ${state.mode === 'make' ? `<details class="more"><summary>📋 まとめて 入れる・CSV</summary>${area}</details>` : area}
+    ${gr.sample ? `<div class="sample-badge">🧪 いま 入っているのは サンプルの ${R('架空', 'かくう')}の ${KAZU}です（${R('本当', 'ほんとう')}の ${R('記録', 'きろく')}では ありません）</div>` : ''}
+    <p class="privacy">🔒 ${R('名前', 'なまえ')}は 入れずに、${KAZU}だけを 入れよう。${R('数', 'かず')}は この ページを とじると ${R('消', 'き')}えます。</p>`;
+}
+function padDispHTML() {
+  return state.pad ? `${esc(state.pad)}<span class="ph"> ${esc(state.unit)}</span>` : `<span class="ph">${KAZU}を おして「つむ」</span>`;
+}
+
+// ---- ツールバー（中央の 上） ----
+function toolbarHTML() {
+  if (state.mode === 'freq') return freqToolbarHTML();
+  if (state.mode === 'two') return compareToolbarHTML();
+  if (state.mode === 'teacher') return teacherToolbarHTML();
+  if (state.mode === 'make') {
+    return `<button class="act-btn sm b-mean ${state.show.mean ? 'on' : ''}" data-act="show" data-v="mean">▲ ${HEIKIN}</button>
+      <button class="act-btn sm b-median ${state.show.median ? 'on' : ''}" data-act="show" data-v="median">┆ ${CHUOU}</button>
+      <button class="act-btn sm b-mode ${state.show.mode ? 'on' : ''}" data-act="show" data-v="mode">▮ ${SAIHIN}</button>`;
+  }
+  const has = G().items.length > 0;
+  const dis = has ? '' : 'disabled';
+  return `<button class="act-btn sm b-mean ${BAL.on ? 'on' : ''}" data-act="balance" ${dis}>⚖️ てんびんで ${HEIKIN}</button>
+    <button class="act-btn sm b-median ${SORT.phase !== 'idle' ? 'on' : ''}" data-act="sort" ${dis}>🔢 ${NARABE}て ${CHUOU}</button>
+    <button class="act-btn sm b-mode ${state.show.mode ? 'on' : ''}" data-act="show" data-v="mode" ${dis}>📊 いちばん ${OOI} ${ATAI}</button>
+    <span class="sep"></span>
+    ${OUT.on
+      ? `<button class="act-btn sm b-out on" data-act="outlier">↩ とびぬけた ${ATAI}を とる</button>`
+      : `<button class="act-btn sm b-out" data-act="outlier" ${dis}>🚀 とびぬけた ${ATAI}を 入れる</button>`}`;
+}
+
+// ---- 右：代表値の まとめ ----
+function repCard(kind, st, dec) {
+  const u = esc(state.unit), on = state.show[kind];
+  const n = st.n;
+  let nm, ic, val, how;
+  if (kind === 'mean') {
+    nm = HEIKIN; ic = '▲';
+    val = `${meanHTML(st.mean, dec)}${u}`;
+    how = `${GOUKEI} ${fmt(st.sum)} ÷ ${NINZUU} ${n}`;
+  } else if (kind === 'median') {
+    nm = CHUOU; ic = '┆';
+    val = `${fmtV(st.median.value)}${u}`;
+    const [i, j] = st.median.idx;
+    how = j === undefined
+      ? `${CHIISAI} ${JUN}に ${NARABE}て ${i + 1}${BANME}`
+      : `${MANNAKA}が 2つ：(${fmtV(st.median.sorted[i])}＋${fmtV(st.median.sorted[j])})÷2`;
+  } else {
+    nm = SAIHIN; ic = '▮';
+    if (st.modes.none) { val = 'なし'; how = `どの ${ATAI}も ${st.modes.count}${R('人', 'にん')}ずつ`; }
+    else { val = st.modes.values.map((v) => fmtV(v) + u).join('・'); how = `${st.modes.count}${R('人', 'にん')}で いちばん ${OOI}${st.modes.values.length > 1 ? `（${st.modes.values.length}つ ある）` : ''}`; }
+  }
+  return `<button class="rep ${kind} ${on ? '' : 'hide'}" data-act="show" data-v="${kind}">
+    <span class="ic">${ic}</span><span><span class="nm">${nm}</span>　<span class="val">${on ? val : '？'}</span></span>
+    <span class="how">${on ? how : 'タップすると 出るよ'}</span></button>`;
+}
+
+function rightHTML() {
+  if (state.mode === 'freq') return freqRightHTML();
+  if (state.mode === 'two') return compareRightHTML();
+  if (state.mode === 'teacher') return teacherRightHTML();
+  const vals = valuesOf(state.g), st = Stats.all(vals), dec = Stats.decimals(allValues());
+  const u = esc(state.unit);
+  if (!st.n) return `<h3>📋 ${DAIHYOU}</h3><p class="note">データを 入れると、ここに ${HEIKIN}・${CHUOU}・${SAIHIN}が 出ます。</p>`;
+  const facts = `<div class="facts">
+      <div>データの ${KAZU}<b>${st.n}${R('人', 'にん')}</b></div>
+      <div>いちばん ${CHIISAI}<b>${fmtV(st.min)}${u}</b></div>
+      <div>いちばん ${OOKII}<b>${fmtV(st.max)}${u}</b></div></div>`;
+  let extra = '';
+  if (state.mode === 'make') {
+    extra = `<div class="task">${TEN}が たくさん あつまって いるのは どこかな？<br>${CHIRA}の ようすは どうかな？</div>`;
+  } else {
+    if (BAL.on) extra += balanceHTML(st);
+    if (SORT.phase !== 'idle') extra += sortHTML(st);
+    if (OUT.on && OUT.before) extra += outlierHTML(st, dec);
+    if (!extra) extra = `<p class="note">${DAIHYOU}は、データの ${R('特', 'とく')}ちょうを 1つの ${KAZU}で ${R('表', 'あらわ')}した もの。カードを タップする ${R('前', 'まえ')}に、どこに なるか ${R('予想', 'よそう')}しよう。</p>`;
+  }
+  return `<h3>📋 ${DAIHYOU}</h3>
+    ${repCard('mean', st, dec)}${repCard('median', st, dec)}${repCard('mode', st, dec)}
+    ${facts}${extra}`;
+}
+
+// てんびん：ささえから 左右の 点までの きょりの 合計
+function balanceHTML(st) {
+  const vals = valuesOf(state.g);
+  let L = 0, Rr = 0;
+  for (const v of vals) { if (v < BAL.f) L += BAL.f - v; else Rr += v - BAL.f; }
+  const mx = Math.max(L, Rr, 1e-9);
+  const d = (x) => fmt(Math.round(x * 10) / 10);
+  return `<div class="concl" id="balBox" style="text-align:left">
+    <div style="text-align:center">⚖️ ささえから ${TEN}までの きょりの ${GOUKEI}</div>
+    <div class="balbars">
+      <span>${R('左', 'ひだり')}</span><div class="bar"><i id="balL" style="width:${(L / mx * 100).toFixed(1)}%"></i></div><span id="balLv">${d(L)}</span>
+      <span>${R('右', 'みぎ')}</span><div class="bar r"><i id="balR" style="width:${(Rr / mx * 100).toFixed(1)}%"></i></div><span id="balRv">${d(Rr)}</span>
+    </div>
+    <div id="balMsg" style="text-align:center">${BAL.done ? `<span class="big">つり${R('合', 'あ')}った！ ここが ${HEIKIN}</span>` : `${R('左右', 'さゆう')}が ${R('同', 'おな')}じに なる ところを さがそう`}</div></div>`;
+}
+function sortHTML(st) {
+  const [i, j] = st.median.idx, s = st.median.sorted, u = esc(state.unit);
+  if (SORT.phase !== 'done') return `<div class="task">${CHIISAI} ${JUN}に ${NARABE}て、${R('両', 'りょう')}はしから 1こずつ ${R('消', 'け')}して いくよ</div>`;
+  if (j === undefined) {
+    return `<div class="concl">データは ${st.n}こ（${R('奇数', 'きすう')}）<br>${MANNAKA}は ${i + 1}${BANME}の ${fmtV(s[i])}${u}<br><span class="big">${CHUOU} ＝ ${fmtV(s[i])}${u}</span></div>`;
+  }
+  return `<div class="concl">データは ${st.n}こ（${R('偶数', 'ぐうすう')}）→ ${MANNAKA}が 2つ<br>${i + 1}${BANME} ${fmtV(s[i])}${u} と ${j + 1}${BANME} ${fmtV(s[j])}${u}<br>
+    <span class="big">(${fmtV(s[i])}＋${fmtV(s[j])})÷2 ＝ ${fmtV(st.median.value)}${u}</span></div>`;
+}
+function outlierHTML(st, dec) {
+  const b = OUT.before, u = esc(state.unit);
+  // 平均値の 動いた 分は、表に 出した がい数どうしの ちがい（表と 合う ように）
+  const dm = Number(meanText(st.mean, dec).text) - Number(meanText(b.mean, dec).text), dd = st.median.value - b.median;
+  const sg = (x) => (x >= 0 ? '＋' : '－') + fmt(Math.round(Math.abs(x) * 100) / 100);
+  return `<table class="cmp"><tr><th></th><th>${R('入', 'い')}れる ${R('前', 'まえ')}</th><th>${R('入', 'い')}れた ${R('後', 'あと')}</th><th>${R('動', 'うご')}いた ${R('分', 'ぶん')}</th></tr>
+    <tr><td style="color:var(--mean)">${HEIKIN}</td><td>${meanHTML(b.mean, dec)}</td><td>${meanHTML(st.mean, dec)}</td><td class="d big-move">${sg(dm)}${u}</td></tr>
+    <tr><td style="color:var(--median)">${CHUOU}</td><td>${fmtV(b.median)}</td><td>${fmtV(st.median.value)}</td><td class="d small-move">${sg(dd)}${u}</td></tr></table>
+    <p class="note">${HEIKIN}は とびぬけた ${ATAI}に ${R('引', 'ひ')}っぱられて ${R('大', 'おお')}きく ${R('動', 'うご')}く。${CHUOU}は ${NARABE}た ${R('順番', 'じゅんばん')}で きまるので、あまり ${R('動', 'うご')}かない。</p>`;
+}
+
+// てんびんを 動かして いる あいだは、右の バーだけ 書きかえる
+function updateLive() {
+  if (!BAL.on || !$('#balL')) return;
+  const vals = valuesOf(state.g);
+  let L = 0, Rr = 0;
+  for (const v of vals) { if (v < BAL.f) L += BAL.f - v; else Rr += v - BAL.f; }
+  const mx = Math.max(L, Rr, 1e-9), d = (x) => fmt(Math.round(x * 10) / 10);
+  $('#balL').style.width = `${(L / mx * 100).toFixed(1)}%`;
+  $('#balR').style.width = `${(Rr / mx * 100).toFixed(1)}%`;
+  $('#balLv').textContent = d(L); $('#balRv').textContent = d(Rr);
+}
+
+/* =========================================================
+   10. てんびん（▲を ドラッグ）
+   ========================================================= */
+function balTarget(M) {
+  // 平均値より 左で ささえると 右が 下がる（＋の 角度）
+  const span = M.rng.hi - M.rng.lo;
+  return clamp((M.st.mean - BAL.f) / span * 60, -11, 11);
+}
+// かたむきは draw() の 中で 少しずつ 目標へ 近づける
+const settleBalance = () => requestDraw();
+function bindPlot() {
+  const svg = $('#plot');
+  const toV = (e) => {
+    const M = lastModel; if (!M) return null;
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    return { v: M.rng.lo + (p.x - M.mx) / (M.W - 2 * M.mx) * (M.rng.hi - M.rng.lo), y: p.y, M };
+  };
+  svg.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-cls]');
+    if (c && view() === 'freq' && state.mode === 'freq') ACTS.fqsel({ dataset: { v: c.dataset.cls } });
+  });
+  svg.addEventListener('pointerdown', (e) => {
+    if (!BAL.on) return;
+    const q = toV(e); if (!q || q.y < q.M.axisY - q.M.fs) return;   // うでより 下を さわったら ささえを 動かす
+    BAL.drag = true; svg.setPointerCapture(e.pointerId);
+    moveFulcrum(q);
+  });
+  svg.addEventListener('pointermove', (e) => { if (BAL.drag) { const q = toV(e); if (q) moveFulcrum(q); } });
+  const up = () => {
+    if (!BAL.drag) return;
+    BAL.drag = false;
+    const M = lastModel;
+    if (BAL.done) return;
+    say(BAL.f < M.st.mean ? `${R('右', 'みぎ')}が ${R('下', 'さ')}がったね。ささえを もう ${R('少', 'すこ')}し ${R('右', 'みぎ')}へ` : `${R('左', 'ひだり')}が ${R('下', 'さ')}がったね。ささえを もう ${R('少', 'すこ')}し ${R('左', 'ひだり')}へ`, 'warn');
+  };
+  svg.addEventListener('pointerup', up);
+  svg.addEventListener('pointercancel', up);
+}
+function moveFulcrum(q) {
+  const M = q.M;
+  let v = clamp(q.v, M.rng.lo, M.rng.hi);
+  const tol = (M.rng.hi - M.rng.lo) * 0.012;
+  const wasDone = BAL.done;
+  if (Math.abs(v - M.st.mean) < tol) { v = M.st.mean; BAL.done = true; }
+  else BAL.done = false;
+  BAL.f = v;
+  settleBalance();
+  if (BAL.done && !wasDone) {
+    sfx.correct();
+    say(`つり${R('合', 'あ')}った！ てんびんが つり${R('合', 'あ')}う ところが ${HEIKIN}（${meanHTML(M.st.mean, M.rng.dec)}${esc(state.unit)}）`, 'good');
+    state.show.mean = true;
+    refresh();
+    sparkle($('#plotWrap'));
+  } else if (!BAL.done && wasDone) refresh();
+  else updateLive();
+}
+
+/* =========================================================
+   11. ならべて 中央値
+   ========================================================= */
+async function runSort() {
+  const my = ++seq;
+  const n = G().items.length;
+  SORT.phase = 'fly'; SORT.p = 0; SORT.elim = 0;
+  state.show.median = false;
+  say(`${CHIISAI} ${JUN}に ${NARABE}るよ`);
+  refresh();
+  sfx.step();
+  await tween(SORT, 'p', 1, 1100);
+  if (my !== seq) return;
+  SORT.phase = 'elim';
+  say(`${R('両', 'りょう')}はしから 1こずつ ${R('消', 'け')}して いくよ`);
+  refresh();
+  const last = Math.floor((n - 1) / 2);        // 奇数なら 1こ、偶数なら 2こ のこる
+  for (let e = 1; e <= last; e++) {
+    await wait(clamp(3000 / last, 120, 420));
+    if (my !== seq) return;
+    SORT.elim = e; sfx.step(); draw();
+  }
+  await wait(400);
+  if (my !== seq) return;
+  SORT.phase = 'done';
+  state.show.median = true;
+  const st = Stats.all(valuesOf(state.g));
+  const [i, j] = st.median.idx, s = st.median.sorted, u = esc(state.unit);
+  if (j === undefined) say(`${MANNAKA}に のこった ${fmtV(s[i])}${u}が ${CHUOU}`, 'good');
+  else say(`${MANNAKA}が 2つ のこった！ ${fmtV(s[i])} と ${fmtV(s[j])} の ${R('平均', 'へいきん')}で ${CHUOU}は ${fmtV(st.median.value)}${u}`, 'good');
+  sfx.correct();
+  refresh();
+}
+
+/* =========================================================
+   12. 度数分布表と 柱状グラフ
+   ========================================================= */
+// FQ … 階級の はば w・区切りの ずらし shift・えらんだ 階級 sel・ぼうが のびる すすみ grow
+//      さかい目の 拡大：見ている さかい目の 番号 zi・答え zans・点が 入る すすみ zp
+const FQ = { w: 0, shift: 0, sel: -1, grow: 1, zi: 0, zans: null, zp: 0 };
+const IJOU = R('以上', 'いじょう'), MIMAN = R('未満', 'みまん'), KAIKYU = R('階級', 'かいきゅう'), DOSU = R('度数', 'どすう');
+
+// えらべる 階級の はば（階級が 2〜30こに なる もの）
+function widthChoices(values) {
+  if (!values.length) return [];
+  const unit = 10 ** -Stats.decimals(values);
+  const min = Math.min(...values), max = Math.max(...values);
+  const out = [];
+  for (const m of [1, 2, 3, 4, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000]) {
+    const w = Stats.key(m * unit);
+    const n = Math.floor(max / w + 1e-9) - Math.floor(min / w + 1e-9) + 1;
+    if (n >= 2 && n <= 30) out.push(w);
+  }
+  return out;
+}
+// いまの 階級（2つの グループで そろえる ため、ぜんぶの データから きめる）
+function classInfo() {
+  const vals = allValues();
+  const choices = widthChoices(vals);
+  if (!choices.length) return null;
+  const unit = 10 ** -Stats.decimals(vals);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const nOf = (w) => Math.floor(max / w + 1e-9) - Math.floor(min / w + 1e-9) + 1;
+  // はじめは 階級が 6こ くらいに なる はば
+  if (!choices.includes(FQ.w)) FQ.w = choices.reduce((b, w) => (Math.abs(nOf(w) - 6) <= Math.abs(nOf(b) - 6) ? w : b));
+  const w = FQ.w, steps = Math.max(1, Math.round(w / unit));
+  FQ.shift %= steps;
+  let start = Stats.key(Math.floor(min / w + 1e-9) * w - FQ.shift * unit);
+  if (start + w <= min + 1e-9) start = Stats.key(start + w);
+  const classes = Stats.freq(vals, w, start, max);
+  const lastLo = classes[classes.length - 1].lo;
+  return { w, unit, start, end: classes[classes.length - 1].hi, steps, choices, lastLo,
+    of: (g) => Stats.freq(valuesOf(g), w, start, lastLo) };
+}
+const clsName = (c) => `${fmtV(c.lo)}${IJOU} ${fmtV(c.hi)}${MIMAN}`;
+// さかい目に ある データ（階級の はじめの 数と 同じ 値。いちばん 左の はしは のぞく）
+function boundaryValues(C, g) {
+  const b = new Set(C.of(g).slice(1).map((c) => c.lo));
+  return [...new Set(valuesOf(g).filter((v) => b.has(v)))].sort((a, b2) => a - b2);
+}
+const niceStep = (m) => { for (const s2 of [1, 2, 5, 10, 20, 50, 100, 200, 500]) if (m / s2 <= 6) return s2; return 1000; };
+
+// 数直線（さかい目の 目もりと 数）。数が こみあう ときは とばして かく
+function axisSVG(X, y, ticks, fs, x1, x2) {
+  let s = `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#37474f" stroke-width="3"/>`;
+  const gap = ticks.length > 1 ? X(ticks[1]) - X(ticks[0]) : 999;
+  const every = Math.max(1, Math.ceil(fs * 2.4 / Math.max(gap, 1)));
+  ticks.forEach((v, i) => {
+    const x = X(v).toFixed(1);
+    s += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y + fs * 0.55}" stroke="#37474f" stroke-width="2.5"/>`;
+    if (i % every === 0) s += `<text x="${x}" y="${(y + fs * 1.55).toFixed(1)}" font-size="${fs}" font-weight="bold" fill="#37474f" text-anchor="middle">${fmtV(v)}</text>`;
+  });
+  return s;
+}
+// 点を つみあげる。ring … さかい目に ある 値（オレンジの わく）、glow … 光らせる 値
+function dotsSVG(items, g, X, axisY, r, top, opt = {}) {
+  const lvl = new Map();
+  let s = '';
+  for (const it of items) {
+    const k = Stats.key(it.v), L = lvl.get(k) || 0;
+    lvl.set(k, L + 1);
+    const ty = axisY - r - L * 2.08 * r, y0 = top - r * 3;
+    const y = it.drop >= 1 ? ty : y0 + (ty - y0) * bounce(clamp(it.drop, 0, 1));
+    const ring = opt.ring && opt.ring.has(k);
+    s += shape(g, X(it.v), y, r, `fill="${GCOL[g]}" stroke="${ring ? '#ef6c00' : '#fff'}" stroke-width="${ring ? 3.5 : 1.2}"${opt.glow === k ? ' class="glowdot"' : ''}`);
+  }
+  return s;
+}
+// 柱状グラフ（ぼうは すきまなく ならべる）。yx … たての じくの 位置
+function histSVG(classes, X, top, base, g, fs, maxCount, yx, sel = -1) {
+  const step = niceStep(maxCount), yMax = Math.max(step, Math.ceil(maxCount / step) * step);
+  const uh = (base - top) / yMax, x1 = X(classes[0].lo), x2 = X(classes[classes.length - 1].hi);
+  let s = '';
+  for (let y = 0; y <= yMax; y += step) {
+    const yy = (base - y * uh).toFixed(1);
+    s += `<line x1="${yx}" y1="${yy}" x2="${x2}" y2="${yy}" stroke="#e0e0e0" stroke-width="1.5"/>`;
+    s += `<text x="${yx - fs * 0.35}" y="${(base - y * uh + fs * 0.35).toFixed(1)}" font-size="${fs * 0.85}" font-weight="bold" fill="#546e7a" text-anchor="end">${y}</text>`;
+  }
+  s += `<line x1="${yx}" y1="${top - fs * 0.4}" x2="${yx}" y2="${base}" stroke="#78909c" stroke-width="2"/>`;
+  s += svgText(yx, top - fs * 0.9, ['(', ['人', 'にん'], ')'], fs * 0.8, '#546e7a');
+  classes.forEach((c, i) => {
+    const h = c.count * uh * FQ.grow;
+    const xa = X(c.lo), xb = X(c.hi);
+    s += `<rect data-cls="${i}" x="${xa.toFixed(1)}" y="${(base - h).toFixed(1)}" width="${(xb - xa).toFixed(1)}" height="${h.toFixed(1)}" fill="${GCOL[g]}" fill-opacity="${sel === i ? 0.95 : 0.7}" stroke="${sel === i ? '#f9a825' : '#fff'}" stroke-width="${sel === i ? 4 : 2}" style="cursor:pointer"/>`;
+    if (c.count && FQ.grow > 0.98) s += `<text x="${((xa + xb) / 2).toFixed(1)}" y="${(base - h - fs * 0.3).toFixed(1)}" font-size="${fs * 0.9}" font-weight="900" fill="#37474f" text-anchor="middle">${c.count}</text>`;
+  });
+  s += `<line x1="${x1}" y1="${base}" x2="${x2 + fs * 0.6}" y2="${base}" stroke="#37474f" stroke-width="3"/>`;
+  return s;
+}
+
+// ドットプロット（上）と 柱状グラフ（下）を 同じ 数直線で
+function buildFreq(W, H) {
+  const fs = clamp(Math.min(W, H * 1.4) / 34, 12, FSMAX());
+  const g = state.g, items = G().items;
+  const C = classInfo();
+  if (!C || !items.length) return svgText(W / 2, H / 2, ['データを 入れると ', ['柱状', 'ちゅうじょう'], 'グラフが かけるよ'], fs * 1.1, '#90a4ae');
+  const classes = C.of(g);
+  const mxL = fs * 3.4, mxR = fs * 2.8;
+  const X = (v) => mxL + (v - C.start) / (C.end - C.start) * (W - mxL - mxR);
+  const dotTop = fs * 1.6, dotAxis = Math.round(H * 0.42);
+  const histTop = dotAxis + fs * 3.6, histBase = H - fs * 2.6;
+  const ticks = [...classes.map((c) => c.lo), C.end];
+  let s = '';
+  // 階級ごとの 帯（上の ドットプロットから 下の 柱状グラフまで つづける）
+  classes.forEach((c, i) => {
+    s += `<rect data-cls="${i}" x="${X(c.lo).toFixed(1)}" y="${dotTop - fs}" width="${(X(c.hi) - X(c.lo)).toFixed(1)}" height="${histBase - dotTop + fs}" fill="${FQ.sel === i ? '#fff8c4' : i % 2 ? '#eef5f3' : '#ffffff'}" style="cursor:pointer"/>`;
+  });
+  for (const v of ticks) s += `<line x1="${X(v).toFixed(1)}" y1="${dotTop - fs}" x2="${X(v).toFixed(1)}" y2="${histBase}" stroke="#b0bec5" stroke-width="1.5" stroke-dasharray="5 5"/>`;
+  // 上：ドットプロット
+  const cnt = Stats.counts(valuesOf(g));
+  const maxC = Math.max(4, ...cnt.values());
+  const unitPx = X(C.start + C.unit) - X(C.start);
+  const r = clamp(Math.min(Math.max(unitPx * 0.47, fs * 0.45), (dotAxis - dotTop) / (2.08 * maxC + 0.4)), 2.5, fs);
+  const ring = new Set(boundaryValues(C, g));
+  const bv = boundaryValues(C, g);
+  s += axisSVG(X, dotAxis, ticks, fs, mxL - fs * 0.6, W - mxR + fs * 0.6);
+  s += dotsSVG(items, g, X, dotAxis, r, dotTop, { ring, glow: bv.length ? bv[FQ.zi % bv.length] : null });
+  s += `<text x="${W - mxR + fs * 0.8}" y="${dotAxis + fs * 0.4}" font-size="${fs * 0.85}" font-weight="bold" fill="#546e7a">(${esc(state.unit)})</text>`;
+  // 下：柱状グラフ
+  s += histSVG(classes, X, histTop, histBase, g, fs, Math.max(...classes.map((c) => c.count)), mxL - fs * 0.6, FQ.sel);
+  s += axisSVG(X, histBase, ticks, fs, mxL - fs * 0.6, W - mxR + fs * 0.6);
+  s += `<text x="${W - mxR + fs * 0.8}" y="${histBase + fs * 0.4}" font-size="${fs * 0.85}" font-weight="bold" fill="#546e7a">(${esc(state.unit)})</text>`;
+  s += svgText(mxL, fs * 0.95, ['ドットプロット'], fs * 0.8, '#78909c', 'start', 'bold');
+  s += svgText(W - mxR, histTop - fs * 1.1, [['柱状', 'ちゅうじょう'], 'グラフ（ヒストグラム）'], fs * 0.8, '#78909c', 'end', 'bold');
+  return s;
+}
+
+function freqToolbarHTML() {
+  const C = classInfo();
+  if (!C) return '';
+  const i = C.choices.indexOf(C.w);
+  return `<div class="wctl">${KAIKYU}の はば
+    <button class="act-btn sm" data-act="fqw" data-v="-1" ${i <= 0 ? 'disabled' : ''} aria-label="はばを せまく">－</button>
+    <input type="range" id="wslider" min="0" max="${C.choices.length - 1}" step="1" value="${i}" aria-label="${'階級の はば'}">
+    <button class="act-btn sm" data-act="fqw" data-v="1" ${i >= C.choices.length - 1 ? 'disabled' : ''} aria-label="はばを ひろく">＋</button>
+    <span class="wv" id="wv">${fmtV(C.w)}${esc(state.unit)}</span></div>
+    <button class="act-btn sm" data-act="fqshift" ${C.steps > 1 ? '' : 'disabled'}>↔ ${R('区切', 'くぎ')}りを ずらす</button>`;
+}
+// 階級の 数に よって ひとこと
+function widthComment(n) {
+  if (n >= 12) return `${KAIKYU}が ${R('多', 'おお')}すぎて でこぼこ。${R('全体', 'ぜんたい')}の ${R('形', 'かたち')}が つかみにくいね`;
+  if (n <= 3) return `${KAIKYU}が ${R('少', 'すく')}なすぎて、${CHIRA}の ようすが わからないね`;
+  return `${R('山', 'やま')}の ${R('形', 'かたち')}が ${R('見', 'み')}えるかな？ いちばん ${R('多', 'おお')}い ${KAIKYU}は どこ？`;
+}
+function freqRightHTML() {
+  const C = classInfo();
+  if (!C || !G().items.length) return `<h3>📶 ${R('度数分布表', 'どすうぶんぷひょう')}</h3><p class="note">データを 入れると ここに ${R('表', 'ひょう')}が できます。</p>`;
+  return `<h3>📶 ${R('度数分布表', 'どすうぶんぷひょう')}（<span style="color:${GCOL[state.g]}">${state.g ? '▲' : '●'} ${esc(G().name)}</span>）</h3><div id="fqBody">${freqBodyHTML(C)}</div>`;
+}
+function freqBodyHTML(C) {
+  const g = state.g, classes = C.of(g), u = esc(state.unit);
+  const mx = Math.max(...classes.map((c) => c.count));
+  const st = Stats.all(valuesOf(g));
+  const medCls = classes.findIndex((c) => st.median.value >= c.lo - 1e-9 && st.median.value < c.hi - 1e-9);
+  const rows = classes.map((c, i) => `<tr data-act="fqsel" data-v="${i}" class="${FQ.sel === i ? 'sel' : ''} ${c.count === mx ? 'mx' : ''}">
+    <td class="cls">${clsName(c)}</td><td>${c.count}</td></tr>`).join('');
+  const bv = boundaryValues(C, g);
+  let zoom = '';
+  if (bv.length) {
+    const b = bv[FQ.zi % bv.length];
+    const k = classes.findIndex((c) => near(c.lo, b));
+    const L = classes[k - 1], Rc = classes[k];
+    zoom = `<div class="zoom">
+      <div style="font-weight:900">🔍 さかい${R('目', 'め')}に ある データ（${bv.map((v) => fmtV(v) + u).join('・')}）</div>
+      <svg id="zoomSvg" viewBox="0 0 340 190" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div style="font-weight:900;text-align:center">${fmtV(b)}${u}の ${TEN}は、どちらの ${KAIKYU}に 入るかな？</div>
+      <div class="two-btn">
+        <button class="act-btn sm ${FQ.zans === 'L' ? 'on' : ''}" data-act="zans" data-v="L">◀ ${clsName(L)}</button>
+        <button class="act-btn sm ${FQ.zans === 'R' ? 'on' : ''}" data-act="zans" data-v="R">${clsName(Rc)} ▶</button>
+      </div>
+      ${FQ.zans === 'R' ? `<div class="concl">「${fmtV(b)}${IJOU}」は ${fmtV(b)}を ふくむ。<br>だから ${fmtV(b)}${u}は <b>${clsName(Rc)}</b>に 入る</div>` : ''}
+      ${FQ.zans === 'L' ? `<div class="concl" style="border-color:#ffab91;background:#fbe9e7">「${fmtV(b)}${MIMAN}」は ${fmtV(b)}を ふくまないよ。<br>${fmtV(b)}より ${R('小', 'ちい')}さい ${KAZU}だけ。もう ${R('一度', 'いちど')} ${R('考', 'かんが')}えよう</div>` : ''}
+      ${bv.length > 1 ? `<button class="act-btn sm b-reset" data-act="znext">つぎの さかい${R('目', 'め')} ▶</button>` : ''}
+    </div>`;
+  }
+  return `<div class="note" style="font-weight:bold">${widthComment(classes.length)}</div>
+    <table class="ftbl"><tr><th>${KAIKYU}（${u}）</th><th>${DOSU}（${R('人', 'にん')}）</th></tr>${rows}
+    <tr class="tot"><td>${GOUKEI}</td><td>${st.n}</td></tr></table>
+    <p class="note">いちばん ${DOSU}が ${R('多', 'おお')}い ${KAIKYU}は ${classes.filter((c) => c.count === mx).map((c) => `「${clsName(c)}」`).join('と')}。<br>${CHUOU}（${fmtV(st.median.value)}${u}）は「${medCls >= 0 ? clsName(classes[medCls]) : '―'}」の ${KAIKYU}に 入って いるよ。</p>
+    ${zoom}`;
+}
+// さかい目の 拡大図：左右の 階級の 箱と、さかい目の 点が 右の 箱に 入る ようす
+function drawZoom() {
+  const svg = $('#zoomSvg'); if (!svg) return;
+  const C = classInfo(); if (!C) return;
+  const g = state.g, classes = C.of(g), bv = boundaryValues(C, g);
+  if (!bv.length) return;
+  const b = bv[FQ.zi % bv.length], k = classes.findIndex((c) => near(c.lo, b));
+  const L = classes[k - 1], Rc = classes[k];
+  const fs = 13, xb = 170, half = 150, ly = 70;
+  const X = (v) => xb + (v - b) / C.w * half;
+  let s = `<rect x="${xb - half}" y="22" width="${half}" height="160" fill="#e3f2fd" rx="8"/><rect x="${xb}" y="22" width="${half}" height="160" fill="#fff3e0" rx="8"/>`;
+  s += svgText(xb - half / 2, 44, [fmtV(L.lo), ['以上', 'いじょう'], ' ', fmtV(L.hi), ['未満', 'みまん']], fs, '#1565c0');
+  s += svgText(xb + half / 2, 44, [fmtV(Rc.lo), ['以上', 'いじょう'], ' ', fmtV(Rc.hi), ['未満', 'みまん']], fs, '#e65100');
+  s += `<line x1="${xb - half}" y1="${ly}" x2="${xb + half}" y2="${ly}" stroke="#37474f" stroke-width="3"/>`;
+  for (let i = -4; i <= 4; i++) {
+    const v = b + C.w * i / 4, x = X(v);
+    s += `<line x1="${x}" y1="${ly}" x2="${x}" y2="${ly + (i % 4 ? 6 : 10)}" stroke="#37474f" stroke-width="${i % 4 ? 1.5 : 2.5}"/>`;
+    if (i % 4 === 0 || i === 0) s += `<text x="${x}" y="${ly + 26}" font-size="${i ? 13 : 17}" font-weight="900" fill="#37474f" text-anchor="middle">${fmtV(Stats.key(v))}</text>`;
+  }
+  // 「未満」は ○（ふくまない）、「以上」は ●（ふくむ）
+  s += `<circle cx="${xb - 8}" cy="${ly - 18}" r="6" fill="#fff" stroke="#1565c0" stroke-width="2.5"/><line x1="${xb - half + 6}" y1="${ly - 18}" x2="${xb - 14}" y2="${ly - 18}" stroke="#1565c0" stroke-width="3"/>`;
+  s += `<circle cx="${xb + 8}" cy="${ly - 18}" r="6" fill="#e65100"/><line x1="${xb + 14}" y1="${ly - 18}" x2="${xb + half - 6}" y2="${ly - 18}" stroke="#e65100" stroke-width="3"/>`;
+  // 箱（階級）と、さかい目の 点
+  s += `<rect x="${xb - half + 14}" y="${ly + 40}" width="${half - 28}" height="62" rx="10" fill="#fff" stroke="#1565c0" stroke-width="2.5"/>`;
+  s += `<rect x="${xb + 14}" y="${ly + 40}" width="${half - 28}" height="62" rx="10" fill="#fff" stroke="#e65100" stroke-width="2.5"/>`;
+  const p = ease(clamp(FQ.zp, 0, 1));
+  const px = xb + p * half / 2, py = ly + p * 72;
+  s += shape(g, px, py, 10, `fill="${GCOL[g]}" stroke="#fff" stroke-width="2"`);
+  if (FQ.zp >= 1) s += `<text x="${xb + half / 2}" y="${ly + 98}" font-size="13" font-weight="900" fill="#e65100" text-anchor="middle">ここに 入る！</text>`;
+  if (FQ.zans === 'L') s += `<text x="${xb - half / 2}" y="${ly + 82}" font-size="30" font-weight="900" fill="#d32f2f" text-anchor="middle">×</text>`;
+  svg.innerHTML = s;
+}
+
+/* =========================================================
+   13. 2つの グループを 比べる
+   ========================================================= */
+// view … 'dot'（ドットプロット）か 'hist'（柱状グラフ）、pick … えらんだ 組、reasons … 理由に した こと
+const CMP = { view: 'dot', q: '', pick: null, reasons: new Set(), text: '', review: false };
+const REASONS = [['mean', HEIKIN], ['median', CHUOU], ['mode', SAIHIN], ['spread', CHIRA], ['minmax', `いちばん ${OOKII}・${CHIISAI} ${ATAI}`], ['shape', `${R('柱状', 'ちゅうじょう')}グラフの ${R('形', 'かたち')}`]];
+// 問いの 文（入力らんに 入れるので ふりがなは つけない）
+const defaultQ = () => (/ソフトボール/.test(state.topic) ? 'どちらの組の ほうが、ボールを 遠くまで 投げたと 言えるかな？' : `どちらの グループの ほうが、${state.topic}が よいと 言えるかな？`);
+
+function buildCompare(W, H, opt = {}) {
+  const fs = opt.fs || clamp(Math.min(W, H * 1.4) / 36, 12, FSMAX());
+  if (!state.groups.every((gr) => gr.items.length)) return svgText(W / 2, H / 2, ['2つの グループに データを 入れよう'], fs * 1.1, '#90a4ae');
+  const hist = CMP.view === 'hist';
+  const all = allValues(), C = classInfo(), rng = plotRange(all, W, fs);
+  const lo = hist ? C.start : rng.lo, hi = hist ? C.end : rng.hi;
+  const mxL = fs * 3.4, mxR = fs * 2.8;
+  const X = (v) => mxL + (v - lo) / (hi - lo) * (W - mxL - mxR);
+  const laneH = H / 2;
+  const maxC = Math.max(4, ...state.groups.flatMap((gr) => [...Stats.counts(gr.items.map((i) => i.v)).values()]));
+  const unitPx = X(lo + rng.unit) - X(lo);
+  const r = clamp(Math.min(Math.max(unitPx * 0.47, fs * 0.45), (laneH - fs * 7) / (2.08 * maxC + 0.4)), 2.5, fs);
+  const histMax = Math.max(...[0, 1].flatMap((g) => C.of(g).map((c) => c.count)));
+  let ticks = [];
+  if (hist) ticks = [...C.of(0).map((c) => c.lo), C.end];
+  else for (let v = rng.lo; v <= rng.hi + 1e-9; v += rng.step) ticks.push(Stats.key(v));
+  let s = '';
+  state.groups.forEach((gr, g) => {
+    const y0 = g * laneH, top = y0 + fs * 2.4, axisY = y0 + laneH - fs * 4.4;
+    const vals = valuesOf(g), st = Stats.all(vals);
+    s += `<rect x="4" y="${y0 + 4}" width="${W - 8}" height="${laneH - 8}" rx="14" fill="${g ? '#fff6ee' : '#f1f7fe'}"/>`;
+    s += shape(g, fs * 1.2, y0 + fs * 1.3, fs * 0.6, `fill="${GCOL[g]}"`);
+    s += svgText(fs * 2.1, y0 + fs * 1.7, [`${gr.name}（${st.n}`, ['人', 'にん'], '）'], fs, GCOL[g], 'start');
+    if (hist) {
+      s += histSVG(C.of(g), X, top + fs * 1.9, axisY, g, fs, histMax, mxL - fs * 0.6);
+    } else {
+      if (state.show.mode && !st.modes.none) {
+        for (const v of st.modes.values) {
+          const h = st.modes.count * 2.08 * r;
+          s += `<rect x="${(X(v) - r * 1.5).toFixed(1)}" y="${(axisY - h - r * 0.5).toFixed(1)}" width="${(r * 3).toFixed(1)}" height="${(h + r * 0.5).toFixed(1)}" rx="${r}" fill="#fff59d" stroke="#f9a825" stroke-width="3"/>`;
+        }
+      }
+      s += dotsSVG(gr.items, g, X, axisY, r, top);
+    }
+    s += axisSVG(X, axisY, ticks, fs, mxL - fs * 0.6, W - mxR + fs * 0.6);
+    s += `<text x="${W - mxR + fs * 0.8}" y="${axisY + fs * 0.4}" font-size="${fs * 0.85}" font-weight="bold" fill="#546e7a">(${esc(state.unit)})</text>`;
+    if (state.show.median) {
+      const xm = X(st.median.value);
+      s += `<line x1="${xm.toFixed(1)}" y1="${top}" x2="${xm.toFixed(1)}" y2="${axisY}" stroke="#7b1fa2" stroke-width="3" stroke-dasharray="8 6"/>`;
+      s += svgText(xm + fs * 0.3, top + fs * 0.3, [['中央値', 'ちゅうおうち'], ` ${fmtV(st.median.value)}`], fs * 0.8, '#7b1fa2', 'start');
+    }
+    if (state.show.mean) {
+      const xf = X(st.mean), ty = axisY + fs * 1.85, th = fs * 1.4;
+      s += `<polygon points="${xf.toFixed(1)},${ty} ${(xf + th * 0.6).toFixed(1)},${(ty + th).toFixed(1)} ${(xf - th * 0.6).toFixed(1)},${(ty + th).toFixed(1)}" fill="#d32f2f" stroke="#fff" stroke-width="2"/>`;
+      s += svgText(xf + th * 0.8, ty + th * 0.95, [['平均値', 'へいきんち'], ` ${meanPlain(st.mean, rng.dec)}`], fs * 0.8, '#d32f2f', 'start');
+    }
+  });
+  return s;
+}
+
+function compareToolbarHTML() {
+  return `<button class="act-btn sm ${CMP.view === 'dot' ? 'on' : ''}" data-act="cview" data-v="dot">⚫ ドットプロット</button>
+    <button class="act-btn sm ${CMP.view === 'hist' ? 'on' : ''}" data-act="cview" data-v="hist">📶 ${R('柱状', 'ちゅうじょう')}グラフ</button>
+    <span class="sep"></span>
+    <button class="act-btn sm b-mean ${state.show.mean ? 'on' : ''}" data-act="show" data-v="mean">▲ ${HEIKIN}</button>
+    <button class="act-btn sm b-median ${state.show.median ? 'on' : ''}" data-act="show" data-v="median">┆ ${CHUOU}</button>
+    ${CMP.view === 'dot' ? `<button class="act-btn sm b-mode ${state.show.mode ? 'on' : ''}" data-act="show" data-v="mode">▮ ${SAIHIN}</button>` : ''}`;
+}
+// 2つの グループの 代表値の 表（PPDACノートでも つかう）
+function compareTableHTML() {
+  const S = [0, 1].map((g) => Stats.all(valuesOf(g)));
+  const dec = Stats.decimals(allValues()), u = esc(state.unit);
+  const row = (label, f) => `<tr><td style="font-size:0.8em">${label}</td>${S.map((st, g) => `<td class="g${g}">${st.n ? f(st) : '―'}</td>`).join('')}</tr>`;
+  return `<table class="cmp"><tr><th></th>${state.groups.map((gr, g) => `<th class="g${g}">${g ? '▲' : '●'} ${esc(gr.name)}</th>`).join('')}</tr>
+    ${row(`データの ${KAZU}`, (st) => `${st.n}${R('人', 'にん')}`)}
+    ${row(HEIKIN, (st) => meanHTML(st.mean, dec) + u)}
+    ${row(CHUOU, (st) => fmtV(st.median.value) + u)}
+    ${row(SAIHIN, (st) => (st.modes.none ? 'なし' : st.modes.values.map(fmtV).join('・') + u))}
+    ${row(`いちばん ${CHIISAI}`, (st) => fmtV(st.min) + u)}
+    ${row(`いちばん ${OOKII}`, (st) => fmtV(st.max) + u)}</table>`;
+}
+function compareRightHTML() {
+  if (!state.groups.every((gr) => gr.items.length)) return `<h3>👥 ${R('比', 'くら')}べよう</h3><p class="note">${esc(state.groups[0].name)}と ${esc(state.groups[1].name)}の ${R('両方', 'りょうほう')}に データを 入れよう（${R('左', 'ひだり')}の らんで グループを えらんで 入れる）。</p>`;
+  const names = state.groups.map((gr) => esc(gr.name));
+  return `<h3>👥 ${R('代表値', 'だいひょうち')}と ${CHIRA}で ${R('比', 'くら')}べよう</h3>
+    ${compareTableHTML()}
+    <div class="opin">
+      <label class="field">${R('問', 'と')}い <input id="cmpQ" maxlength="60" value="${esc(CMP.q || defaultQ())}"></label>
+      <div class="pick">
+        <button class="act-btn sm g0 ${CMP.pick === 0 ? 'on' : ''}" data-act="cpick" data-v="0">● ${names[0]}</button>
+        <button class="act-btn sm g1 ${CMP.pick === 1 ? 'on' : ''}" data-act="cpick" data-v="1">▲ ${names[1]}</button>
+        <button class="act-btn sm ${CMP.pick === 2 ? 'on' : ''}" data-act="cpick" data-v="2">どちらとも ${R('言', 'い')}えない</button>
+      </div>
+      <div style="font-weight:bold;font-size:0.9rem">${R('理由', 'りゆう')}に した こと（いくつでも）</div>
+      <div class="chips">${REASONS.map(([k, l]) => `<button class="chip ${CMP.reasons.has(k) ? 'active' : ''}" data-act="creason" data-v="${k}">${l}</button>`).join('')}</div>
+      <textarea id="cmpText" aria-label="${'自分の 意見'}" placeholder="${'〇組の ほうが よいと 言える。わけは、…'}">${esc(CMP.text)}</textarea>
+      <button class="act-btn sm b-main" data-act="review">🔍 ${R('意見', 'いけん')}を ${R('見直', 'みなお')}そう</button>
+      ${CMP.review ? reviewHTML() : ''}
+    </div>`;
+}
+// 結論を 見直す ための 問いかけ（データから つくる）
+function reviewHTML() {
+  const S = [0, 1].map((g) => Stats.all(valuesOf(g)));
+  const nm = state.groups.map((gr) => esc(gr.name)), u = esc(state.unit);
+  const dec = Stats.decimals(allValues());
+  const L = [];
+  const mw = near(S[0].mean, S[1].mean) ? -1 : S[0].mean > S[1].mean ? 0 : 1;
+  const dw = near(S[0].median.value, S[1].median.value) ? -1 : S[0].median.value > S[1].median.value ? 0 : 1;
+  if (mw >= 0 && dw >= 0 && mw !== dw) L.push(`${HEIKIN}で ${R('見', 'み')}ると ${nm[mw]}、${CHUOU}で ${R('見', 'み')}ると ${nm[dw]}の ほうが ${R('大', 'おお')}きい。どちらで ${R('比', 'くら')}べるのが よいかな？`);
+  else if (mw >= 0 && mw === dw) L.push(`${HEIKIN}も ${CHUOU}も ${nm[mw]}の ほうが ${R('大', 'おお')}きいね。${CHIRA}の ようすでも たしかめよう`);
+  const sp = S.map((st) => st.max - st.min);
+  if (!near(sp[0], sp[1])) {
+    const w = sp[0] > sp[1] ? 0 : 1;
+    L.push(`${nm[w]}は ${fmtV(S[w].min)}${u}〜${fmtV(S[w].max)}${u}と ${CHIRA}が ${R('大', 'おお')}きく、${nm[1 - w]}は ${fmtV(S[1 - w].min)}${u}〜${fmtV(S[1 - w].max)}${u}に まとまって いる`);
+  }
+  // とびぬけた 値：となりの 値から 大きく はなれて いる もの
+  S.forEach((st, g) => {
+    const s2 = st.median.sorted, n = s2.length, span = st.max - st.min;
+    if (n >= 4 && span > 0) {
+      if (s2[n - 1] - s2[n - 2] > span * 0.3) L.push(`${nm[g]}に とびぬけた ${ATAI}（${fmtV(s2[n - 1])}${u}）が ある。${HEIKIN}（${meanHTML(st.mean, dec)}${u}）は それに ${R('引', 'ひ')}っぱられて いないかな？`);
+      if (s2[1] - s2[0] > span * 0.3) L.push(`${nm[g]}に とびぬけた ${ATAI}（${fmtV(s2[0])}${u}）が ある。${HEIKIN}は それに ${R('引', 'ひ')}っぱられて いないかな？`);
+    }
+  });
+  if (S[0].n !== S[1].n) L.push(`${NINZUU}が ちがう（${S[0].n}${R('人', 'にん')}と ${S[1].n}${R('人', 'にん')}）。${GOUKEI}ではなく ${DAIHYOU}で ${R('比', 'くら')}べて いるかな？`);
+  if (CMP.pick === null) L.push(`まず、どちらと ${R('言', 'い')}えるか えらんでみよう`);
+  else if (CMP.reasons.size <= 1) L.push(`1つの ${R('見方', 'みかた')}だけで きめて いいかな？ ほかの ${DAIHYOU}や グラフの ${R('形', 'かたち')}でも たしかめよう`);
+  if (CMP.pick === 2) L.push(`どうして「どちらとも ${R('言', 'い')}えない」のか、${R('理由', 'りゆう')}が ${R('書', 'か')}けると いいね`);
+  L.push(`データの ${KAZU}は ${R('十分', 'じゅうぶん')}かな？ ${R('別', 'べつ')}の ${R('日', 'ひ')}に ${R('調', 'しら')}べても ${R('同', 'おな')}じ ${R('結論', 'けつろん')}に なるかな？`);
+  return `<div class="review"><b>🔍 ${R('見直', 'みなお')}そう</b><ul>${L.map((x) => `<li>${x}</li>`).join('')}</ul></div>`;
+}
+
+/* =========================================================
+   14. PPDACノート（問題 → 計画 → データ → 分析 → 結論）
+   ========================================================= */
+const PP = { p: '', plan: '', data: '', anal: '', concl: '', next: '', checks: {}, graph: '' };
+const PP_SEC = [
+  ['p', 'P', [R('問題', 'もんだい'), 'Problem'], [`${R('何', 'なに')}を ${R('知', 'し')}りたい？ どんな ${R('問', 'と')}いに する？`, `「〇〇なのは どちらか」のように、データで ${R('答', 'こた')}えられる ${R('問', 'と')}いに しよう`]],
+  ['plan', 'P', [R('計画', 'けいかく'), 'Plan'], [`どんな データを、だれに・いつ・どう やって ${R('集', 'あつ')}める？`, `${R('比', 'くら')}べる ${R('条件', 'じょうけん')}を そろえるには？（${R('回数', 'かいすう')}・${R('場所', 'ばしょ')}・はかり${R('方', 'かた')}）`]],
+  ['data', 'D', ['データ', 'Data'], [`${R('集', 'あつ')}めた データを ${R('整理', 'せいり')}しよう（${R('名前', 'なまえ')}は ${R('書', 'か')}かない）`, `${R('数', 'かず')}の ${R('入', 'い')}れまちがいや、${R('記録', 'きろく')}できなかった データは ない？`]],
+  ['anal', 'A', [R('分析', 'ぶんせき'), 'Analysis'], [`ドットプロット・${R('柱状', 'ちゅうじょう')}グラフで ${CHIRA}の ようすを ${R('見', 'み')}よう`, `${HEIKIN}・${CHUOU}・${SAIHIN}を ${R('比', 'くら')}べよう。どれが ${R('問', 'と')}いに あって いる？`]],
+  ['concl', 'C', [R('結論', 'けつろん')], [`${R('問', 'と')}いの ${R('答', 'こた')}えは？ その ${R('理由', 'りゆう')}は？（どの グラフ・${DAIHYOU}から ${R('言', 'い')}える？）`]],
+];
+const PP_CHECKS = [
+  `データの ${KAZU}は ${R('十分', 'じゅうぶん')}か`,
+  `とびぬけた ${ATAI}に ${R('引', 'ひ')}っぱられて いないか`,
+  `ほかの ${DAIHYOU}で ${R('比', 'くら')}べても ${R('同', 'おな')}じ ${R('結論', 'けつろん')}に なるか`,
+  `${R('集', 'あつ')}め${R('方', 'かた')}（${R('計画', 'けいかく')}）は ${R('公平', 'こうへい')}だったか`,
+  `${R('結論', 'けつろん')}は ${R('問', 'と')}いの ${R('答', 'こた')}えに なって いるか`,
+];
+// 「データ」の らんに 出す まとめ（いま 入っている 数から）
+function ppAutoData() {
+  const u = esc(state.unit);
+  const parts = state.groups.filter((gr) => gr.items.length).map((gr) => {
+    const v = gr.items.map((i) => i.v);
+    return `${esc(gr.name)} ${v.length}${R('人', 'にん')}（${fmtV(Math.min(...v))}${u}〜${fmtV(Math.max(...v))}${u}）`;
+  });
+  if (!parts.length) return `まだ データが ありません（${R('左', 'ひだり')}の らんか ほかの モードで ${R('入', 'い')}れよう）`;
+  return `${esc(state.topic)}：${parts.join('、')}${state.groups.some((gr) => gr.sample) ? `<br>※ サンプルの ${R('架空', 'かくう')}の ${KAZU}です` : ''}`;
+}
+function ppdacHTML() {
+  const sec = PP_SEC.map(([k, letter, title, hints]) => `
+    <section class="ps"><div class="ps-h"><span class="pl">${letter}</span>${title[0]} ${title[1] ? `<small>${title[1]}</small>` : '<small>Conclusion</small>'}</div>
+      <ul class="hint no-print">${hints.map((h) => `<li>${h}</li>`).join('')}</ul>
+      ${k === 'data' ? `<div class="auto-data">${ppAutoData()}</div>` : ''}
+      ${k === 'anal' ? `<div class="no-print toolbar" style="justify-content:flex-start"><button class="act-btn sm" data-act="ppgraph">📊 いまの グラフと ${DAIHYOU}を はる</button>${PP.graph ? `<button class="act-btn sm b-reset" data-act="ppgraphx">はがす</button>` : ''}</div>
+        <div class="pp-graph">${PP.graph}</div>` : ''}
+      ${k === 'concl' ? `<div class="no-print toolbar" style="justify-content:flex-start"><button class="act-btn sm" data-act="ppcopy">👥「2つを ${R('比', 'くら')}べる」の ${R('意見', 'いけん')}を うつす</button></div>` : ''}
+      <textarea data-pp="${k}" rows="3" aria-label="${k}">${esc(PP[k])}</textarea><div class="pt" data-ppt="${k}">${esc(PP[k])}</div>
+      ${k === 'concl' ? `<div class="ps-h" style="font-size:1rem">🔍 ${R('結論', 'けつろん')}を ${R('見直', 'みなお')}そう</div>
+        <div class="checks">${PP_CHECKS.map((c, i) => `<label><input type="checkbox" data-ppc="${i}" ${PP.checks[i] ? 'checked' : ''}>${c}</label>`).join('')}</div>
+        <div class="ps-h" style="font-size:1rem">➡ つぎに ${R('調', 'しら')}べたい こと（${R('新', 'あたら')}しい ${R('問題', 'もんだい')}）</div>
+        <textarea data-pp="next" rows="2" aria-label="next">${esc(PP.next)}</textarea><div class="pt" data-ppt="next">${esc(PP.next)}</div>` : ''}
+    </section>`).join('');
+  return `<div class="card sheet">
+    <div class="sheet-head"><h2>📝 PPDACノート <span class="print-only" style="font-size:1rem;color:#263238">　${R('名前', 'なまえ')}（　　　　　　　　　）</span></h2>
+      <div class="toolbar no-print">
+        <button class="act-btn sm" data-act="ppexample">📋 ${R('例', 'れい')}を ${R('入', 'い')}れる</button>
+        <button class="act-btn sm b-main" data-act="ppprint">🖨️ いんさつ</button>
+        <button class="act-btn sm b-reset" data-act="ppclear">🗑️ けす</button></div></div>
+    <div class="cycle"><span>${R('問題', 'もんだい')}</span><i>→</i><span>${R('計画', 'けいかく')}</span><i>→</i><span>データ</span><i>→</i><span>${R('分析', 'ぶんせき')}</span><i>→</i><span>${R('結論', 'けつろん')}</span><i>→ つぎの ${R('問題', 'もんだい')}へ</i></div>
+    ${sec}
+    <p class="note no-print">🔒 ${R('名前', 'なまえ')}は ${R('書', 'か')}かずに、${R('数', 'かず')}と ${R('考', 'かんが')}えだけを ${R('書', 'か')}こう。この ノートは ページを とじると ${R('消', 'き')}えるので、いんさつ（PDFに ほぞん）してね。</p>
+  </div>`;
+}
+// いまの グラフ（2つ そろって いれば 比べる グラフ）を、はりつけ用の SVGに する
+function snapshotSVG() {
+  const both = state.groups.every((gr) => gr.items.length);
+  const keep = { ...state.show };
+  state.show = { mean: true, median: true, mode: false };
+  let inner, W = 900, H;
+  if (both) { H = 480; inner = buildCompare(W, H, { fs: 16 }); }
+  else {
+    H = 340;
+    const mode = state.mode; state.mode = 'rep';
+    const M = plotModel(W, H); inner = buildPlot(M);
+    state.mode = mode;
+  }
+  state.show = keep;
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Hiragino Sans, Yu Gothic, Meiryo, sans-serif">${inner}</svg>`;
+}
+
+/* =========================================================
+   15. 先生モード（電子黒板で 1つずつ 見せる）
+   ========================================================= */
+const TC = { step: 0, input: false, auto: false, timer: 0 };
+const TSTEPS = [
+  `${R('数直線', 'すうちょくせん')}を ${R('用意', 'ようい')}する`,
+  `${TEN}を ならべる（ドットプロット）`,
+  `いちばん ${OOI} ${ATAI}（${SAIHIN}）`,
+  `${CHIISAI} ${JUN}に ${NARABE}る（${CHUOU}）`,
+  `てんびんで つり${R('合', 'あ')}う ${TEN}（${HEIKIN}）`,
+  `${R('柱状', 'ちゅうじょう')}グラフに する`,
+  `2つの グループを ${R('比', 'くら')}べる`,
+];
+const tcLast = () => (state.groups.every((gr) => gr.items.length) ? 6 : 5);
+function tcGo(step, anim = true) {
+  clearTimeout(TC.timer);
+  resetExperiments();
+  TC.step = clamp(step, 0, tcLast());
+  const s2 = TC.step, my = seq;
+  state.show = { mean: s2 >= 4, median: s2 >= 3, mode: s2 >= 2 };
+  G().items.forEach((it) => { it.drop = 1; });
+  if (s2 === 6) CMP.view = 'dot';
+  render();
+  const st = Stats.all(valuesOf(state.g)), u = esc(state.unit), dec = Stats.decimals(allValues());
+  const msg = [
+    `${esc(state.topic)}を ${R('調', 'しら')}べよう。どんな ${R('形', 'かたち')}に なると ${R('思', 'おも')}う？`,
+    `1${R('人', 'にん')}の ${R('記録', 'きろく')}が ${TEN} 1つ。${R('同', 'おな')}じ ${ATAI}は ${R('上', 'うえ')}に つむよ`,
+    st.modes.none ? `どの ${ATAI}も ${R('同', 'おな')}じ ${KAZU}なので、${SAIHIN}は きめられない` : `いちばん ${R('高', 'たか')}い ${R('列', 'れつ')}は ${st.modes.values.map((v) => fmtV(v) + u).join('・')}。これが ${SAIHIN}`,
+    '', '',
+    `${KAIKYU}に わけて ${R('数', 'かぞ')}えると ${R('柱状', 'ちゅうじょう')}グラフ。${R('山', 'やま')}の ${R('形', 'かたち')}は どうかな？`,
+    `${HEIKIN}・${CHUOU}と ${CHIRA}で 2つの グループを ${R('比', 'くら')}べよう`,
+  ][s2];
+  if (msg) say(msg);
+  if (s2 === 1 && anim) dropItems(G().items);
+  if (s2 === 3) {
+    if (anim) runSort();
+    else say(`${CHUOU}は ${fmtV(st.median.value)}${u}（${CHIISAI} ${JUN}に ${NARABE}た ${MANNAKA}）`);
+  }
+  if (s2 === 4) {
+    if (anim && !calm()) {
+      // ささえが 左はしから 平均値まで すべって いき、つり合う
+      BAL.on = true; BAL.done = false; BAL.f = st.min; BAL.ang = 0;
+      state.show.mean = false;
+      say(`てんびんの ささえを ${R('動', 'うご')}かして、つり${R('合', 'あ')}う ところを さがすよ`);
+      refresh();
+      setTimeout(() => {
+        if (my !== seq) return;
+        tween(BAL, 'f', st.mean, 2600).then(() => {
+          if (my !== seq) return;
+          BAL.done = true; state.show.mean = true; sfx.correct();
+          say(`つり${R('合', 'あ')}った！ ${HEIKIN}は ${meanHTML(st.mean, dec)}${u}（${GOUKEI} ${fmt(st.sum)} ÷ ${st.n}${R('人', 'にん')}）`, 'good');
+          refresh();
+        });
+      }, 900);
+    } else say(`${HEIKIN}は ${meanHTML(st.mean, dec)}${u}（${GOUKEI} ${fmt(st.sum)} ÷ ${st.n}${R('人', 'にん')}）`);
+  }
+  if (s2 === 5 && anim) { FQ.grow = 0; tween(FQ, 'grow', 1, 900); }
+  if (TC.auto && s2 < tcLast()) TC.timer = setTimeout(() => { if (my === seq) tcGo(TC.step + 1); }, [3500, 4500, 4000, 7500, 6000, 5000][s2] || 4000);
+  else if (TC.auto) { TC.auto = false; refresh(); }
+}
+function teacherToolbarHTML() {
+  return `<button class="act-btn sm" data-act="tcgo" data-v="-1" ${TC.step <= 0 ? 'disabled' : ''}>◀ もどる</button>
+    <button class="act-btn b-main ${TC.step < tcLast() && !TC.auto ? 'pulse' : ''}" data-act="tcgo" data-v="1" ${TC.step >= tcLast() ? 'disabled' : ''}>すすむ ▶</button>
+    <button class="act-btn sm b-reset" data-act="tcgo" data-v="first">⟲ はじめ</button>
+    <button class="act-btn sm ${TC.auto ? 'on' : ''}" data-act="tcauto">${TC.auto ? '⏸ とめる' : '▶▶ じどう'}</button>
+    <span class="sep"></span>
+    <button class="act-btn sm ${TC.input ? 'on' : ''}" data-act="tcinput">📥 データ</button>`;
+}
+function teacherRightHTML() {
+  const st = Stats.all(valuesOf(state.g)), u = esc(state.unit), dec = Stats.decimals(allValues());
+  const tabs = state.groups.map((gr, i) => `<button class="gtab g${i} ${i === state.g ? 'active' : ''}" data-act="group" data-v="${i}">${i ? '▲' : '●'} ${esc(gr.name)}<small>${gr.items.length}${R('人', 'にん')}</small></button>`).join('');
+  const steps = TSTEPS.slice(0, tcLast() + 1).map((t, i) => `<li class="${i < TC.step ? 'done' : i === TC.step ? 'cur' : ''}" data-act="tcjump" data-v="${i}">${i + 1}. ${t}</li>`).join('');
+  const big = st.n ? `<div class="bigval">
+      ${TC.step >= 2 ? `<span style="color:#8d6e00">▮ ${SAIHIN}</span><b style="color:#8d6e00">${st.modes.none ? 'なし' : st.modes.values.map(fmtV).join('・') + u}</b>` : ''}
+      ${TC.step >= 3 ? `<span style="color:var(--median)">┆ ${CHUOU}</span><b style="color:var(--median)">${fmtV(st.median.value)}${u}</b>` : ''}
+      ${TC.step >= 4 && state.show.mean ? `<span style="color:var(--mean)">▲ ${HEIKIN}</span><b style="color:var(--mean)">${meanHTML(st.mean, dec)}${u}</b>` : ''}
+    </div>` : '';
+  return `<h3>🧑‍🏫 すすめ${R('方', 'かた')}</h3>
+    <div class="gtabs">${tabs}</div>
+    <ol class="steps">${steps}</ol>
+    ${big}
+    ${TC.step === 3 && SORT.phase === 'done' ? sortHTML(st) : ''}
+    <p class="note">→キー・スペースで すすむ、←キーで もどる。</p>`;
+}
+
+/* =========================================================
+   16. ボタンの はたらき
+   ========================================================= */
+const ACTS = {};
+function setMode(m) {
+  resetExperiments();
+  state.mode = m;
+  if (m === 'make') {
+    state.show = { mean: false, median: false, mode: false };
+    say(`${KAZU}を 1つずつ 入れて、${TEN}を つみあげよう`);
+  } else if (m === 'rep') {
+    state.show = { mean: false, median: false, mode: false };
+    if (!allValues().length) loadSample(false);
+    say(`${HEIKIN}・${CHUOU}・${SAIHIN}は どこに なるかな？ ${R('予想', 'よそう')}してから たしかめよう`);
+  } else if (m === 'freq') {
+    if (!allValues().length) loadSample(false);
+    FQ.sel = -1; FQ.zans = null; FQ.zp = 0; FQ.grow = 1;
+    say(`${KAIKYU}の はばを ${R('変', 'か')}えて、${R('特', 'とく')}ちょうが いちばん わかる はばを さがそう`);
+  } else if (m === 'two') {
+    if (!allValues().length) loadSample(false);
+    state.show = { mean: false, median: false, mode: false };
+    say(state.groups.every((gr) => gr.items.length)
+      ? `${DAIHYOU}と ${CHIRA}の ${R('両方', 'りょうほう')}から ${R('比', 'くら')}べて、${R('自分', 'じぶん')}の ${R('意見', 'いけん')}を ${R('書', 'か')}こう`
+      : `2つの グループの ${R('両方', 'りょうほう')}に データを 入れよう`, state.groups.every((gr) => gr.items.length) ? '' : 'warn');
+  } else if (m === 'ppdac') {
+    say(`${R('問題', 'もんだい')} → ${R('計画', 'けいかく')} → データ → ${R('分析', 'ぶんせき')} → ${R('結論', 'けつろん')}の ${R('順', 'じゅん')}に ${R('書', 'か')}こう`);
+  } else if (m === 'teacher') {
+    if (!allValues().length) loadSample(false);
+    TC.auto = false; TC.input = false;
+    tcGo(0, false);
+    return;
+  }
+  render();
+}
+ACTS.group = (b) => {
+  const g = Number(b.dataset.v);
+  if (g === state.g) return;
+  resetExperiments();
+  state.g = g; sfx.tap();
+  FQ.zi = 0; FQ.zans = null; FQ.zp = 0; FQ.sel = -1;
+  if (state.mode === 'teacher') { tcGo(Math.min(TC.step, 5), false); return; }
+  say(`${esc(G().name)}の データを ${R('見', 'み')}て いるよ`);
+  render();
+};
+// キーパッド
+ACTS.key = (b) => {
+  const k = b.dataset.v;
+  if (k === 'bs') state.pad = state.pad.slice(0, -1);
+  else if (k === '.') { if (!state.pad.includes('.')) state.pad = (state.pad || '0') + '.'; }
+  else if (state.pad.replace('.', '').length < 5) state.pad = state.pad === '0' ? k : state.pad + k;
+  sfx.tap();
+  const d = $('#padDisp'); if (d) d.innerHTML = padDispHTML();
+};
+function pushValue(v) {
+  const it = mkItem(Stats.key(v), { drop: 0 });
+  G().items.push(it); G().draft = null; G().sample = G().sample && false;
+  const same = G().items.filter((i) => Stats.key(i.v) === it.v).length;
+  refreshLeft(); refresh();
+  tween(it, 'drop', 1, 700, true).then(() => sfx.plop(Math.min(same / 8, 1)));
+  say(`${fmtV(it.v)}${esc(state.unit)}を つんだよ。${fmtV(it.v)}${esc(state.unit)}は ${same}${R('人', 'にん')}${same > 1 ? `。${R('高', 'たか')}く なって きたね` : ''}`);
+}
+ACTS.push = () => {
+  if (!state.pad || state.pad === '.') { say(`${KAZU}を おしてから「つむ」を おそう`, 'warn'); return; }
+  const v = Number(state.pad);
+  state.pad = '';
+  pushValue(v);
+};
+ACTS.undo = () => {
+  const gr = G(); if (!gr.items.length) return;
+  const it = gr.items.pop(); gr.draft = null;
+  sfx.take(); say(`${fmtV(it.v)}${esc(state.unit)}を とったよ`);
+  refreshLeft(); refresh();
+};
+ACTS.playSample = async () => {
+  resetExperiments();
+  const gr = G();
+  gr.items = []; gr.draft = null; gr.sample = true;
+  const my = seq;
+  refreshLeft(); refresh();
+  say(`サンプル（${R('架空', 'かくう')}の ${R('記録', 'きろく')}）を 1つずつ 入れるよ`);
+  for (const v of SAMPLE[state.g] || SAMPLE[0]) {
+    if (my !== seq) return;
+    const it = mkItem(v, { drop: 0 });
+    gr.items.push(it);
+    refresh(); refreshLeft();
+    tween(it, 'drop', 1, 650, true).then(() => sfx.plop(0.5));
+    await wait(450);
+  }
+  say(`${gr.items.length}${R('人', 'にん')}ぶん 入ったよ。${TEN}が たくさん あつまって いるのは どこかな？`, 'good');
+};
+// まとめて 入れる
+ACTS.apply = () => {
+  const ta = $('#dataText'); if (!ta) return;
+  const { values, bad } = Stats.parse(ta.value, state.unit);
+  resetExperiments();
+  const gr = G();
+  gr.items = values.map((v) => mkItem(v)); gr.draft = null; gr.sample = false;
+  refreshLeft(); refresh();
+  dropItems(gr.items);
+  if (!values.length) say(`${KAZU}が 見つからなかったよ。1${R('行', 'ぎょう')}に 1つずつ ${KAZU}を 入れよう`, 'warn');
+  else say(`${values.length}こ の ${KAZU}を グラフに したよ${bad ? `（${KAZU}で ない もの ${bad}こ は ${R('読', 'よ')}まなかったよ）` : ''}`, bad ? 'warn' : '');
+};
+function loadSample(drop = true) {
+  resetExperiments();
+  state.groups.forEach((gr, i) => { gr.items = SAMPLE[i].map((v) => mkItem(v)); gr.draft = null; gr.sample = true; });
+  state.topic = 'ソフトボール投げの 記録'; state.unit = 'm';
+  state.groups[0].name = '1組'; state.groups[1].name = '2組';
+  CMP.q = '';
+  if (drop) dropItems(G().items);
+}
+ACTS.sample = () => {
+  loadSample(true);
+  sfx.tap();
+  say(`サンプル：${R('架空', 'かくう')}の ソフトボール${R('投', 'な')}げの ${R('記録', 'きろく')}を 1組・2組に 入れたよ`);
+  render();
+};
+ACTS.clear = () => {
+  if (!G().items.length && !G().draft) return;
+  if (!confirm(`${G().name}の データを ぜんぶ けしますか？`)) return;
+  resetExperiments();
+  Object.assign(G(), { items: [], draft: null, sample: false });
+  sfx.take(); say('データを けしたよ');
+  render();
+};
+ACTS.show = (b) => {
+  const k = b.dataset.v;
+  if (!G().items.length) return;
+  state.show[k] = !state.show[k];
+  sfx.tap();
+  const st = Stats.all(valuesOf(state.g)), u = esc(state.unit);
+  if (state.show[k]) {
+    if (k === 'mean') say(`${HEIKIN}は ${GOUKEI}÷${NINZUU}。${R('下', 'した')}の ▲が ${HEIKIN}の ${R('場所', 'ばしょ')}`);
+    if (k === 'median') say(`${CHUOU}は ${CHIISAI} ${JUN}に ${NARABE}た ときの ${MANNAKA}の ${ATAI}。むらさきの ${R('線', 'せん')}`);
+    if (k === 'mode') say(st.modes.none ? `どの ${ATAI}も ${R('同', 'おな')}じ ${KAZU}なので、${SAIHIN}は きめられないね` : `いちばん ${R('高', 'たか')}い ${R('列', 'れつ')}の ${ATAI}が ${SAIHIN}（${st.modes.values.map((v) => fmtV(v) + u).join('・')}）`);
+  }
+  refresh();
+};
+// てんびん
+ACTS.balance = () => {
+  if (BAL.on) { BAL.on = false; BAL.ang = 0; sfx.tap(); say(`てんびんを しまったよ`); refresh(); return; }
+  const M = lastModel; if (!M) return;
+  seq++;
+  BAL.on = true; BAL.done = false;
+  // はじめは データの 左はしで ささえる（右に かたむく）
+  BAL.f = M.st.min; BAL.ang = 0;
+  sfx.tap();
+  say(`${R('数直線', 'すうちょくせん')}を てんびんの うでに しよう。${R('下', 'した')}の ▲（ささえ）を ドラッグして、つり${R('合', 'あ')}う ところを さがそう`);
+  refresh();
+  settleBalance();
+};
+ACTS.sort = () => {
+  if (SORT.phase !== 'idle' && SORT.phase !== 'done') return;
+  if (SORT.phase === 'done') { seq++; SORT.phase = 'idle'; SORT.p = 0; SORT.elim = 0; sfx.tap(); say(`${NARABE}た ${R('列', 'れつ')}を しまったよ`); refresh(); return; }
+  runSort();
+};
+ACTS.outlier = () => {
+  const gr = G();
+  if (OUT.on) {
+    gr.items = gr.items.filter((i) => !i.out);
+    OUT.on = false; OUT.before = null;
+    SORT.phase = 'idle'; SORT.p = 0; SORT.elim = 0;
+    sfx.take(); say(`とびぬけた ${ATAI}を とったよ`);
+    refreshLeft(); refresh();
+    return;
+  }
+  const vals = valuesOf(state.g), st = Stats.all(vals);
+  if (!st.n) return;
+  seq++;
+  SORT.phase = 'idle'; SORT.p = 0; SORT.elim = 0;
+  if (BAL.on) { BAL.on = false; BAL.ang = 0; }
+  OUT.before = { mean: st.mean, median: st.median.value };
+  const step = 10 ** -st.dec;
+  const ov = Stats.key(Math.round((st.max + Math.max(st.max - st.min, step * 10)) / step) * step);
+  const it = mkItem(ov, { drop: 0, out: true });
+  gr.items.push(it);
+  OUT.on = true; OUT.id = it.id;
+  state.show.mean = true; state.show.median = true;
+  sfx.big();
+  refreshLeft(); refresh();
+  tween(it, 'drop', 1, 800, true).then(() => {
+    const now = Stats.all(valuesOf(state.g));
+    say(`${fmtV(ov)}${esc(state.unit)}の とびぬけた ${ATAI}を 1つ 入れたら… ${HEIKIN}は ${R('大', 'おお')}きく ${R('動', 'うご')}いたけど、${CHUOU}は あまり ${R('動', 'うご')}かないね${now.n % 2 === 0 ? `（データが ${R('偶数', 'ぐうすう')}こに なったので、${CHUOU}は ${MANNAKA} 2つの ${R('平均', 'へいきん')}）` : ''}`, 'good');
+  });
+};
+
+// ---- 度数分布表 ----
+function setWidth(w) {
+  FQ.w = w; FQ.sel = -1; FQ.zi = 0; FQ.zans = null; FQ.zp = 0;
+  FQ.grow = 0; tween(FQ, 'grow', 1, 350);
+  const C = classInfo();
+  const b = $('#fqBody'); if (b) b.innerHTML = freqBodyHTML(C);
+  const wv = $('#wv'); if (wv) wv.textContent = `${fmtV(C.w)}${state.unit}`;
+  draw();
+}
+ACTS.fqw = (b) => {
+  const C = classInfo(); if (!C) return;
+  const i = clamp(C.choices.indexOf(C.w) + Number(b.dataset.v), 0, C.choices.length - 1);
+  sfx.tap(); setWidth(C.choices[i]);
+  say(`${KAIKYU}の はばを ${fmtV(C.choices[i])}${esc(state.unit)}に したよ。${widthComment(classInfo().of(state.g).length)}`);
+  refresh();
+};
+ACTS.fqshift = () => {
+  FQ.shift++; sfx.tap();
+  const C = classInfo();
+  FQ.grow = 0; tween(FQ, 'grow', 1, 350);
+  FQ.sel = -1; FQ.zi = 0; FQ.zans = null; FQ.zp = 0;
+  say(`${R('区切', 'くぎ')}りを ずらして、${fmtV(C.start)}${esc(state.unit)}から はじめたよ。${R('同', 'おな')}じ はばでも グラフの ${R('形', 'かたち')}が ${R('変', 'か')}わるかな？`);
+  refresh();
+};
+ACTS.fqsel = (b) => {
+  const i = Number(b.dataset.v);
+  FQ.sel = FQ.sel === i ? -1 : i; sfx.tap();
+  const C = classInfo(); const c = C.of(state.g)[i];
+  if (FQ.sel >= 0) say(`「${clsName(c)}」の ${KAIKYU}には ${c.count}${R('人', 'にん')}`);
+  refresh();
+};
+ACTS.zans = (b) => {
+  FQ.zans = b.dataset.v;
+  const C = classInfo(), bv = boundaryValues(C, state.g), v = bv[FQ.zi % bv.length], u = esc(state.unit);
+  if (FQ.zans === 'R') {
+    sfx.correct(); FQ.zp = 0; tween(FQ, 'zp', 1, 900).then(() => drawZoom());
+    say(`せいかい！ ${fmtV(v)}${u}は「${fmtV(v)}${IJOU}」の ${KAIKYU}に 入る。「${MIMAN}」は その ${KAZU}を ふくまないよ`, 'good');
+  } else {
+    sfx.soft(); FQ.zp = 0;
+    say(`「${fmtV(v)}${MIMAN}」は ${fmtV(v)}より ${R('小', 'ちい')}さい ${KAZU}だけ。${fmtV(v)}${u}は ${R('入', 'はい')}らないよ`, 'warn');
+  }
+  refresh();
+};
+ACTS.znext = () => { FQ.zi++; FQ.zans = null; FQ.zp = 0; sfx.tap(); refresh(); };
+// ---- 2つを 比べる ----
+ACTS.cview = (b) => { CMP.view = b.dataset.v; sfx.tap(); if (CMP.view === 'hist') { FQ.grow = 0; tween(FQ, 'grow', 1, 500); } refresh(); };
+ACTS.cpick = (b) => { const v = Number(b.dataset.v); CMP.pick = CMP.pick === v ? null : v; sfx.tap(); refresh(); };
+ACTS.creason = (b) => { const k = b.dataset.v; if (CMP.reasons.has(k)) CMP.reasons.delete(k); else CMP.reasons.add(k); sfx.tap(); refresh(); };
+ACTS.review = () => { CMP.review = true; sfx.step(); say(`${R('自分', 'じぶん')}の ${R('意見', 'いけん')}を、${R('別', 'べつ')}の ${R('見方', 'みかた')}からも ${R('見直', 'みなお')}してみよう`); refresh(); };
+// ---- PPDACノート ----
+ACTS.ppgraph = () => {
+  PP.graph = snapshotSVG() + (state.groups.every((gr) => gr.items.length) ? compareTableHTML() : '');
+  sfx.tap(); say('いまの グラフと 表を はったよ'); render();
+};
+ACTS.ppgraphx = () => { PP.graph = ''; sfx.take(); render(); };
+ACTS.ppcopy = () => {
+  const nm = state.groups.map((gr) => gr.name);
+  const pick = CMP.pick === null ? '' : CMP.pick === 2 ? 'どちらとも言えない' : `${nm[CMP.pick]}のほうが よいと言える`;
+  const rs = [...CMP.reasons].map((k) => ({ mean: '平均値', median: '中央値', mode: '最頻値', spread: '散らばり', minmax: 'いちばん大きい・小さい値', shape: '柱状グラフの形' }[k]));
+  const t = [CMP.q || defaultQ(), pick && `→ ${pick}`, rs.length ? `（見たこと：${rs.join('・')}）` : '', CMP.text].filter(Boolean).join('\n');
+  if (!CMP.text && CMP.pick === null) { say(`「2つを ${R('比', 'くら')}べる」で ${R('意見', 'いけん')}を ${R('書', 'か')}いてから おそう`, 'warn'); return; }
+  PP.concl = PP.concl ? `${PP.concl}\n${t}` : t;
+  sfx.tap(); render();
+};
+ACTS.ppexample = () => {
+  if (Object.keys(PP).some((k) => typeof PP[k] === 'string' && PP[k] && k !== 'graph') && !confirm('書いてある ことを、例で 書きかえますか？')) return;
+  Object.assign(PP, {
+    p: '1組と2組では、どちらのほうがソフトボールを遠くまで投げたと言えるだろうか。',
+    plan: '体力テストのソフトボール投げの記録（m）を使う。どちらの組も同じ日・同じ場所で、1人2回投げたうちのよいほうの記録にする。',
+    data: '1組21人、2組20人の記録を集めた（名前は書かずに数だけ）。',
+    anal: 'ドットプロットにすると、1組は15m〜42mに散らばっていて、2組は18m〜33mにまとまっている。\n平均値は1組が約25.8m、2組が25.6mで1組が少し大きい。\n中央値は1組が23m、2組が25.5mで2組が大きい。',
+    concl: '平均値では1組だが、1組は遠くまで投げた何人かに平均値が引っぱられている。半分より多くの人が25m以上投げているのは2組なので、2組のほうがよく投げたと言えそう。',
+    next: '投げ方を練習したら、記録はのびるだろうか。',
+  });
+  sfx.tap(); say(`${R('例', 'れい')}（サンプルの ${R('架空', 'かくう')}の ${R('記録', 'きろく')}を つかった もの）を 入れたよ`); render();
+};
+ACTS.ppprint = () => { sfx.tap(); window.print(); };
+ACTS.ppclear = () => {
+  if (!confirm('PPDACノートに 書いた ことを ぜんぶ けしますか？')) return;
+  Object.assign(PP, { p: '', plan: '', data: '', anal: '', concl: '', next: '', checks: {}, graph: '' });
+  sfx.take(); render();
+};
+// ---- 先生モード ----
+ACTS.tcgo = (b) => { TC.auto = false; const v = b.dataset.v; sfx.tap(); tcGo(v === 'first' ? 0 : TC.step + Number(v), Number(v) > 0); };
+ACTS.tcjump = (b) => { TC.auto = false; const v = Number(b.dataset.v); sfx.tap(); tcGo(v, v === TC.step + 1); };
+ACTS.tcauto = () => {
+  TC.auto = !TC.auto; sfx.tap();
+  if (TC.auto) tcGo(TC.step >= tcLast() ? 0 : TC.step + 1);
+  else { clearTimeout(TC.timer); refresh(); }
+};
+ACTS.tcinput = () => { TC.input = !TC.input; sfx.tap(); render(); };
+// CSV
+ACTS.csvIn = () => { $('#fileCsv').value = ''; $('#fileCsv').click(); };
+$('#fileCsv').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const buf = await file.arrayBuffer();
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (err) { text = new TextDecoder('shift_jis').decode(buf); }   // Excelの 日本語CSV
+  importCsv(text);
+});
+// CSVを 列に わけて、数の 列だけを とりこむ。名前の 列・番号の 列は 読まない
+function importCsv(text) {
+  const rows = text.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim()).map((l) => l.split(/[,\t]/).map((c) => c.trim().replace(/^"|"$/g, '')));
+  if (!rows.length) { say('CSVが からっぽ だったよ', 'warn'); return; }
+  const ncol = Math.max(...rows.map((r) => r.length));
+  const isNum = (c) => /^-?\d+(\.\d+)?$/.test(c.replace(/[０-９．]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)));
+  const header = rows[0].some((c) => c && !isNum(c)) ? rows[0] : null;
+  const body = header ? rows.slice(1) : rows;
+  const cols = [];
+  let skipped = 0;
+  for (let c = 0; c < ncol; c++) {
+    const cells = body.map((r) => r[c] || '').filter(Boolean);
+    const nums = cells.filter(isNum).map((x) => Stats.parse(x).values[0]);
+    const name = header ? (header[c] || '') : '';
+    if (!cells.length || nums.length < cells.length * 0.6) { if (cells.length) skipped++; continue; }
+    const seqCol = nums.length > 2 && nums.every((v, i) => v === i + 1);   // 1, 2, 3, … の 番号の 列
+    if (seqCol || /番号|ばんごう|出席|^no\.?$|^#$/i.test(name)) { skipped++; continue; }
+    cols.push({ name, nums });
+  }
+  if (!cols.length) { say(`CSVの ${R('中', 'なか')}に ${KAZU}の ${R('列', 'れつ')}が 見つからなかったよ`, 'warn'); return; }
+  resetExperiments();
+  const okName = (s) => s && s.length <= 6 && !isNum(s);
+  if (cols.length === 1) {
+    Object.assign(G(), { items: cols[0].nums.map((v) => mkItem(v)), draft: null, sample: false });
+    if (okName(cols[0].name)) G().name = cols[0].name;
+  } else {
+    cols.slice(0, 2).forEach((c, i) => {
+      Object.assign(state.groups[i], { items: c.nums.map((v) => mkItem(v)), draft: null, sample: false });
+      if (okName(c.name)) state.groups[i].name = c.name;
+    });
+  }
+  render();
+  dropItems(G().items);
+  say(`CSVを ${R('読', 'よ')}みこんだよ${cols.length > 1 ? `（${KAZU}の ${R('列', 'れつ')}が ${cols.length}つ → 1つ${R('目', 'め')}を ${esc(state.groups[0].name)}、2つ${R('目', 'め')}を ${esc(state.groups[1].name)}に）` : ''}${skipped ? `。${KAZU}で ない ${R('列', 'れつ')}・${R('番号', 'ばんごう')}の ${R('列', 'れつ')}は ${R('読', 'よ')}まなかったよ` : ''}`);
+}
+ACTS.csvOut = () => {
+  const lists = state.groups.map((gr) => gr.items.filter((i) => !i.out).map((i) => fmtV(i.v)));
+  const n = Math.max(...lists.map((l) => l.length));
+  if (!n) { say('ほぞんする データが ないよ', 'warn'); return; }
+  const lines = [`番号,${state.groups.map((gr) => gr.name.replace(/,/g, ' ')).join(',')}`];
+  for (let i = 0; i < n; i++) lines.push(`${i + 1},${lists.map((l) => l[i] ?? '').join(',')}`);
+  download(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' }), `データ_${state.topic.replace(/[\\/:*?"<>|\s]/g, '')}.csv`);
+  sfx.tap(); say('CSVで ほぞんしたよ（ダウンロードフォルダ）');
+};
+// グラフを PNGで ほぞん
+ACTS.png = () => {
+  const svg = $('#plot'); if (!svg) return;
+  const [, , W, H] = svg.getAttribute('viewBox').split(' ').map(Number);
+  const head = 34;
+  const clone = svg.cloneNode(true);
+  clone.setAttribute('width', W); clone.setAttribute('height', H + head);
+  clone.setAttribute('viewBox', `0 ${-head} ${W} ${H + head}`);
+  clone.setAttribute('font-family', 'Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, sans-serif');
+  const gr = G();
+  clone.insertAdjacentHTML('afterbegin', `<rect x="0" y="${-head}" width="${W}" height="${H + head}" fill="#fff"/>
+    <text x="12" y="${-10}" font-size="18" font-weight="900" fill="${GCOL[state.g]}">${view() === 'two' ? state.groups.map((x, i) => `${i ? '▲' : '●'} ${esc(x.name)}（${x.items.length}人）`).join(' と ') : `${state.g ? '▲' : '●'} ${esc(gr.name)}（${gr.items.length}人）`} ${esc(state.topic)}${state.groups.some((x) => x.sample) ? ' ※架空の数' : ''}</text>`);
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }));
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = W * 2; c.height = (H + head) * 2;
+    const ctx = c.getContext('2d'); ctx.scale(2, 2); ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    c.toBlob((b) => { download(b, `${{ dot: 'ドットプロット', freq: '柱状グラフ', two: 'くらべ' }[view()]}_${view() === 'two' ? state.groups.map((x) => x.name).join('と') : gr.name}.png`); sfx.tap(); say('グラフを PNGで ほぞんしたよ（ダウンロードフォルダ）'); });
+  };
+  img.src = url;
+};
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const fn = ACTS[b.dataset.act];
+  if (fn) fn(b, e);
+});
+// 入力らん（文字を うって いる あいだは 画面を 作りなおさない）
+document.addEventListener('input', (e) => {
+  const id = e.target.id;
+  if (id === 'dataText') G().draft = e.target.value;
+  if (id === 'topic') { state.topic = e.target.value; const h = $('#plotTitle'); if (h) h.innerHTML = plotTitleHTML(); }
+  if (id === 'gname') { G().name = e.target.value || `${state.g + 1}組`; const h = $('#plotTitle'); if (h) h.innerHTML = plotTitleHTML(); }
+  if (id === 'unit') { state.unit = e.target.value; draw(); }
+  if (id === 'cmpQ') CMP.q = e.target.value;
+  if (id === 'cmpText') CMP.text = e.target.value;
+  if (e.target.dataset.pp) {
+    PP[e.target.dataset.pp] = e.target.value;
+    const pt = $(`[data-ppt="${e.target.dataset.pp}"]`); if (pt) pt.textContent = e.target.value;   // いんさつ用
+  }
+  if (e.target.dataset.ppc) PP.checks[e.target.dataset.ppc] = e.target.checked;
+  // 階級の はばの スライダー（動かして いる あいだは スライダーを 作りなおさない）
+  if (id === 'wslider') {
+    const C = classInfo(); if (!C) return;
+    const w = C.choices[Number(e.target.value)];
+    if (w !== FQ.w) { setWidth(w); sfx.tap(); }
+  }
+});
+document.addEventListener('change', (e) => {
+  if (['gname', 'unit', 'topic'].includes(e.target.id)) { refreshLeft(); refresh(); }
+  if (e.target.id === 'wslider') { say(`${KAIKYU}の はばは ${fmtV(FQ.w)}${esc(state.unit)}。${widthComment(classInfo().of(state.g).length)}`); refresh(); }
+});
+// 書いた ことや 入れた データが ある ときは、まちがって とじない ように 確かめる
+addEventListener('beforeunload', (e) => {
+  const typed = ['p', 'plan', 'data', 'anal', 'concl', 'next'].some((k) => PP[k]) || CMP.text || state.groups.some((gr) => gr.items.length && !gr.sample);
+  if (typed) { e.preventDefault(); e.returnValue = ''; }
+});
+// キーボードでも 1つずつ 入れられる（数字・小数点・Backspace・Enter）
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeModals(); return; }
+  // 先生モード：→・スペースで すすむ、←で もどる
+  if (state.mode === 'teacher' && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName) && !$('.modal.open')) {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); if (TC.step < tcLast()) ACTS.tcgo({ dataset: { v: '1' } }); return; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); if (TC.step > 0) ACTS.tcgo({ dataset: { v: '-1' } }); return; }
+  }
+  if (state.mode !== 'make' || /INPUT|TEXTAREA/.test(document.activeElement?.tagName) || $('.modal.open')) return;
+  if (/^[0-9.]$/.test(e.key)) { ACTS.key({ dataset: { v: e.key } }); e.preventDefault(); }
+  else if (e.key === 'Backspace') { ACTS.key({ dataset: { v: 'bs' } }); e.preventDefault(); }
+  else if (e.key === 'Enter') { ACTS.push(); e.preventDefault(); }
+});
+$$('.mode-btn').forEach((b) => { b.onclick = () => { sfx.tap(); setMode(b.dataset.mode); }; });
+new ResizeObserver(() => draw()).observe(document.body);
+
+/* =========================================================
+   17. まど・せってい
+   ========================================================= */
+function sparkle(el, num = 14) {
+  if (calm() || !el) return;
+  const r = el.getBoundingClientRect();
+  for (let i = 0; i < num; i++) {
+    const s = document.createElement('div');
+    s.className = 'spark'; s.textContent = '✦';
+    s.style.left = `${r.left + Math.random() * r.width}px`;
+    s.style.top = `${r.top + Math.random() * Math.min(r.height, innerHeight)}px`;
+    s.style.animationDelay = `${Math.random() * 0.3}s`;
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 1500);
+  }
+}
+function openModal(id) { $(id).classList.add('open'); }
+function closeModals() { $$('.modal').forEach((m) => m.classList.remove('open')); }
+$$('.modal').forEach((m) => m.addEventListener('click', (e) => {
+  if (e.target === m || e.target.closest('[data-close]')) closeModals();
+}));
+function renderSettings() {
+  $$('[data-set]').forEach((b) => b.classList.toggle('active', String(settings[b.dataset.set]) === b.dataset.val));
+}
+$('#btnSettings').onclick = () => { renderSettings(); openModal('#modalSettings'); };
+$('#btnHowto').onclick = () => openModal('#modalHowto');
+$('#btnFull').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+};
+$$('[data-set]').forEach((b) => {
+  b.onclick = () => {
+    const raw = b.dataset.val, key = b.dataset.set;
+    settings[key] = raw === 'true' ? true : raw === 'false' ? false : raw;
+    saveSettings(); renderSettings();
+    document.body.classList.toggle('no-ruby', !settings.ruby);
+    document.body.classList.toggle('calm', calm());
+    refresh();
+  };
+});
+reduceMQ.addEventListener?.('change', () => render());
+setMode('make');
+</script>
+</body>
+</html>
