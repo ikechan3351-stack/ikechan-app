@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>変化の割合実験機</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --dx: #1e88e5;   /* x の増加量 = 青 */
+    --dy: #e53935;   /* y の増加量 = 赤 */
+    --line: #5e35b1; /* 直線 */
+    --ink: #263238;
+  }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #ede7f6 0%, #e3f2fd 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #5e35b1; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #4527a0; text-align: center; }
+  .subtitle { margin: 0 0 12px; font-size: 0.9rem; color: #5e35b1; text-align: center; line-height: 1.8; }
+
+  .main {
+    width: 100%; max-width: 1180px;
+    display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; align-items: start;
+  }
+  @media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+  .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 12px 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+  .card h2 { font-size: 1rem; margin: 0 0 8px; color: #4527a0; }
+
+  #graph { width: 100%; height: auto; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .pt { cursor: grab; }
+  .pt.drag { cursor: grabbing; }
+
+  /* スイッチ */
+  .toggles { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .switch { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: bold; font-size: 0.95rem; user-select: none; }
+  .switch input { display: none; }
+  .switch .track {
+    width: 46px; height: 26px; border-radius: 13px; background: #cfd8dc; position: relative; transition: background 0.2s; flex-shrink: 0;
+  }
+  .switch .track::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: left 0.2s;
+  }
+  .switch input:checked + .track { background: #5e35b1; }
+  .switch input:checked + .track::after { left: 23px; }
+
+  .fixed-box {
+    margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #f3e5f5;
+    display: none; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+  }
+  .fixed-box.on { display: flex; }
+  .fixed-box label { font-weight: bold; display: flex; align-items: center; gap: 6px; }
+  .fixed-box select {
+    font-size: 1rem; padding: 5px 8px; border-radius: 8px; border: 1.5px solid #b39ddb; font-weight: bold; font-family: inherit;
+  }
+  .btn {
+    border: none; border-radius: 10px; padding: 7px 14px; font-size: 0.9rem; font-weight: bold;
+    cursor: pointer; touch-action: manipulation; font-family: inherit; background: #ede7f6; color: #4527a0;
+  }
+
+  /* 式・座標 */
+  .eq { font-size: 1.35rem; font-weight: bold; color: var(--line); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .coords { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .coord {
+    flex: 1; min-width: 130px; border-radius: 12px; background: #eceff1; padding: 6px 10px;
+    font-size: 1.3rem; font-weight: bold; text-align: center; font-variant-numeric: tabular-nums;
+  }
+  .coord .nm { display: inline-block; width: 28px; height: 28px; line-height: 28px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 1rem; margin-right: 6px; }
+  .xv { color: var(--dx); }
+  .yv { color: var(--dy); }
+
+  /* 分数 */
+  .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 2px; }
+  .frac > span { padding: 0 6px; line-height: 1.25; white-space: nowrap; }
+  .frac > span:first-child { border-bottom: 3px solid #455a64; }
+  .formula { display: flex; flex-direction: column; gap: 10px; }
+  .frow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 1.5rem; font-weight: bold; font-variant-numeric: tabular-nums; }
+  .frow .lead { font-size: 1.1rem; color: #4527a0; }
+  .frow.words { font-size: 1.15rem; }
+  .frow.final .frac > span:first-child { border-bottom-width: 4px; }
+  .frow.final { font-size: 2rem; }
+  .final-box { background: #f3e5f5; border-radius: 12px; padding: 4px 12px; color: var(--line); display: inline-flex; align-items: center; }
+  .note { font-size: 0.85rem; color: #666; font-weight: normal; }
+  .warn { background: #fff3e0; color: #e65100; border-radius: 12px; padding: 10px 12px; font-weight: bold; line-height: 1.6; }
+
+  /* 意味 */
+  .meaning { font-size: 1.25rem; font-weight: bold; line-height: 1.8; }
+  .meaning .big { font-size: 1.5rem; }
+  .meaning .sub { font-size: 0.95rem; color: #555; font-weight: normal; }
+  .tbl-wrap { overflow-x: auto; margin-top: 10px; }
+  .seq {
+    display: grid; grid-auto-flow: column; grid-template-rows: auto auto; gap: 4px;
+    justify-content: center; align-items: center; font-weight: bold; font-size: 1.1rem; font-variant-numeric: tabular-nums;
+  }
+  .sq-h { background: #eceff1; border-radius: 8px; padding: 6px 10px; text-align: center; font-style: italic; }
+  .sq-v { border: 1.5px solid #cfd8dc; border-radius: 8px; padding: 6px 8px; text-align: center; min-width: 46px; min-height: 40px; display: flex; align-items: center; justify-content: center; }
+  .sq-a { font-size: 0.85rem; text-align: center; white-space: nowrap; }
+  .sq-a .frac > span { padding: 0 2px; }
+  .sq-a .frac > span:first-child { border-bottom-width: 2px; }
+
+  .help {
+    width: 100%; max-width: 1180px; margin-top: 12px;
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #4527a0; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>📐 <ruby>変化<rt>へんか</rt></ruby>の<ruby>割合<rt>わりあい</rt></ruby>実験機</h1>
+<p class="subtitle">
+  グラフの上の点A・点Bを動かして、<span class="xv" style="font-weight:bold">x の<ruby>増加量<rt>ぞうかりょう</rt></ruby></span>と
+  <span class="yv" style="font-weight:bold">y の増加量</span>をくらべよう。
+</p>
+
+<div class="main">
+  <!-- ===== 左：グラフ ===== -->
+  <div class="col">
+    <div class="card">
+      <svg id="graph" viewBox="0 0 520 520" aria-label="1次関数のグラフ">
+        <defs>
+          <clipPath id="plotClip"><rect x="10" y="10" width="500" height="500"/></clipPath>
+          <marker id="arrX" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#1e88e5"/>
+          </marker>
+          <marker id="arrY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#e53935"/>
+          </marker>
+        </defs>
+        <g id="gGrid"></g>
+        <g id="gAxis"></g>
+        <g clip-path="url(#plotClip)">
+          <line id="mainLine" stroke="#5e35b1" stroke-width="3.5" stroke-linecap="round"/>
+          <g id="stairs"></g>
+          <line id="dxLine" stroke="#1e88e5" stroke-width="4" stroke-dasharray="9 6" marker-end="url(#arrX)"/>
+          <line id="dyLine" stroke="#e53935" stroke-width="4" stroke-dasharray="9 6" marker-end="url(#arrY)"/>
+        </g>
+        <g id="dxLabel">
+          <rect rx="7" fill="#e3f2fd" stroke="#1e88e5" stroke-width="1.5"/>
+          <text font-size="15" font-weight="bold" fill="#1565c0" text-anchor="middle" dominant-baseline="central"></text>
+        </g>
+        <g id="dyLabel">
+          <rect rx="7" fill="#ffebee" stroke="#e53935" stroke-width="1.5"/>
+          <text font-size="15" font-weight="bold" fill="#c62828" text-anchor="middle" dominant-baseline="central"></text>
+        </g>
+        <g id="ptA" class="pt">
+          <circle r="24" fill="transparent"/>
+          <circle r="13" fill="#263238" stroke="#fff" stroke-width="3"/>
+          <text font-size="14" font-weight="bold" fill="#fff" text-anchor="middle" dominant-baseline="central">A</text>
+        </g>
+        <g id="ptB" class="pt">
+          <circle r="24" fill="transparent"/>
+          <circle r="13" fill="#263238" stroke="#fff" stroke-width="3"/>
+          <text font-size="14" font-weight="bold" fill="#fff" text-anchor="middle" dominant-baseline="central">B</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="card">
+      <div class="toggles">
+        <label class="switch"><input type="checkbox" id="fixedSw"><span class="track"></span>直線固定モード</label>
+        <label class="switch"><input type="checkbox" id="gridSw" checked><span class="track"></span>目盛り</label>
+        <label class="switch"><input type="checkbox" id="stairSw"><span class="track"></span>1ずつの階段</label>
+        <button class="btn" id="resetBtn">↺ 最初の位置</button>
+      </div>
+      <div class="fixed-box" id="fixedBox">
+        <label>傾き a <select id="aSel"></select></label>
+        <label>切片 b <select id="bSel"></select></label>
+        <span class="note">点A・Bは直線の上だけを動きます</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 右：計算・解説 ===== -->
+  <div class="col">
+    <div class="card">
+      <h2>📍 点の座標と直線の式</h2>
+      <div class="eq" id="eq"></div>
+      <div class="coords">
+        <div class="coord"><span class="nm">A</span>(<span class="xv" id="ax"></span>, <span class="yv" id="ay"></span>)</div>
+        <div class="coord"><span class="nm">B</span>(<span class="xv" id="bx"></span>, <span class="yv" id="by"></span>)</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🧮 変化の割合を計算しよう</h2>
+      <div class="formula" id="formula"></div>
+    </div>
+
+    <div class="card">
+      <h2>💡 変化の割合の意味</h2>
+      <div id="meaning"></div>
+    </div>
+  </div>
+</div>
+
+<div class="help">
+  <h2>📝 使いかた</h2>
+  <ul>
+    <li>点A・点Bをドラッグ（タップして動かす）と、座標は整数のところに吸いつきます。</li>
+    <li><span class="xv"><b>青</b></span>は x の増加量（横の動き）、<span class="yv"><b>赤</b></span>は y の増加量（たての動き）です。グラフも式も同じ色です。</li>
+    <li>「直線固定モード」をオンにすると、決めた式 y ＝ ax ＋ b の直線の上だけを動きます。どこに点をとっても変化の割合が同じになることを確かめよう。</li>
+    <li>「1ずつの階段」をオンにすると、x が 1 増えるごとの y の増え方が階段で見えます。</li>
+  </ul>
+</div>
+
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const $ = id => document.getElementById(id);
+  const R = 10;                 // 座標の範囲 −10〜10
+  const U = 24, O = 260;        // 1目盛りのピクセル数、原点の位置
+  const sx = x => O + U * x;
+  const sy = y => O - U * y;
+
+  // ---- 分数の道具 ----
+  const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; };
+  function reduce(n, d) {
+    if (d < 0) { n = -n; d = -d; }
+    const g = gcd(n, d);
+    return [n / g, d / g];
+  }
+  const M = '−';
+  const num = v => (v < 0 ? M + Math.abs(v) : String(v));
+  const paren = v => (v < 0 ? `(${M}${Math.abs(v)})` : String(v));
+  const fracHTML = (top, bottom, cls = '') => `<span class="frac ${cls}"><span>${top}</span><span>${bottom}</span></span>`;
+  // 約分済みの [n, d] を表示（マイナスは前に出す）
+  function valHTML([n, d], color) {
+    const st = color ? ` style="color:${color}"` : '';
+    if (d === 1) return `<span${st}>${num(n)}</span>`;
+    return `<span${st}>${n < 0 ? M : ''}${fracHTML(Math.abs(n), d)}</span>`;
+  }
+  // 係数として表示（1 や −1 は省略）
+  function coefHTML([n, d]) {
+    if (d === 1) return n === 1 ? '' : n === -1 ? M : num(n);
+    return (n < 0 ? M : '') + fracHTML(Math.abs(n), d);
+  }
+  function eqHTML(a, b) {
+    let s = 'y ＝ ';
+    if (a[0] === 0) return s + valHTML(b);
+    s += coefHTML(a) + '<i>x</i>';
+    if (b[0] !== 0) s += (b[0] > 0 ? ' ＋ ' : ` ${M} `) + valHTML([Math.abs(b[0]), b[1]]);
+    return s;
+  }
+
+  // ---- 方眼と軸 ----
+  const grid = $('gGrid'), axis = $('gAxis');
+  function mk(tag, attrs, parent, text) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text !== undefined) e.textContent = text;
+    parent.appendChild(e);
+    return e;
+  }
+  for (let i = -R; i <= R; i++) {
+    const c = i % 5 === 0 ? '#cfd8dc' : '#eceff1';
+    mk('line', { x1: sx(i), y1: sy(R), x2: sx(i), y2: sy(-R), stroke: c, 'stroke-width': 1 }, grid);
+    mk('line', { x1: sx(-R), y1: sy(i), x2: sx(R), y2: sy(i), stroke: c, 'stroke-width': 1 }, grid);
+    if (i !== 0) {
+      mk('text', { x: sx(i), y: O + 16, 'font-size': 11, 'text-anchor': 'middle', fill: '#78909c' }, grid, num(i));
+      mk('text', { x: O - 6, y: sy(i), 'font-size': 11, 'text-anchor': 'end', 'dominant-baseline': 'central', fill: '#78909c' }, grid, num(i));
+    }
+  }
+  mk('line', { x1: sx(-R) - 4, y1: O, x2: sx(R) + 4, y2: O, stroke: '#37474f', 'stroke-width': 2 }, axis);
+  mk('line', { x1: O, y1: sy(-R) + 4, x2: O, y2: sy(R) - 4, stroke: '#37474f', 'stroke-width': 2 }, axis);
+  mk('text', { x: sx(R) - 2, y: O - 8, 'font-size': 18, 'font-weight': 'bold', 'font-style': 'italic', fill: '#37474f', 'text-anchor': 'end' }, axis, 'x');
+  mk('text', { x: O + 8, y: sy(R) + 14, 'font-size': 18, 'font-weight': 'bold', 'font-style': 'italic', fill: '#37474f' }, axis, 'y');
+  mk('text', { x: O - 6, y: O + 16, 'font-size': 12, 'font-style': 'italic', 'text-anchor': 'end', fill: '#546e7a' }, axis, 'O');
+
+  // ---- 状態 ----
+  const A_LIST = [[-5,1],[-4,1],[-3,1],[-2,1],[-3,2],[-1,1],[-2,3],[-1,2],[-1,3],[0,1],[1,3],[1,2],[2,3],[1,1],[3,2],[2,1],[3,1],[4,1],[5,1]];
+  const aSel = $('aSel'), bSel = $('bSel');
+  const addOpt = (sel, value, text) => sel.add(new Option(text, value));
+  A_LIST.forEach(([n, d], i) => addOpt(aSel, i, d === 1 ? num(n) : `${n < 0 ? M : ''}${Math.abs(n)}/${d}`));
+  for (let b = -5; b <= 5; b++) addOpt(bSel, b, num(b));
+  aSel.value = A_LIST.findIndex(([n, d]) => n === 2 && d === 1);
+  bSel.value = -1;
+
+  let A = { x: -2, y: -1 }, B = { x: 3, y: 2 };
+  let fixed = false;
+  const curA = () => A_LIST[+aSel.value];
+  const curB = () => +bSel.value;
+
+  // 直線上で x も y も整数になる点の一覧
+  function linePoints() {
+    const [n, d] = curA(), b = curB(), pts = [];
+    for (let x = -R; x <= R; x++) {
+      if ((n * x) % d !== 0) continue;
+      const y = (n * x) / d + b;
+      if (y >= -R && y <= R) pts.push({ x, y });
+    }
+    return pts;
+  }
+  function nearest(p, list, other) {
+    let best = null, bd = Infinity;
+    for (const q of list) {
+      if (other && q.x === other.x) continue;
+      const dd = (q.x - p.x) ** 2 + (q.y - p.y) ** 2;
+      if (dd < bd) { bd = dd; best = q; }
+    }
+    return best;
+  }
+  function projectToLine() {
+    const list = linePoints();
+    A = { ...nearest(A, list, null) };
+    B = { ...nearest(B, list, A) };
+  }
+
+  // ---- 描画 ----
+  const ptA = $('ptA'), ptB = $('ptB');
+  function setLabel(g, x, y, str) {
+    const t = g.querySelector('text'), r = g.querySelector('rect');
+    t.textContent = str;
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    const w = str.length * 9 + 18;
+    r.setAttribute('x', x - w / 2); r.setAttribute('y', y - 13);
+    r.setAttribute('width', w); r.setAttribute('height', 26);
+  }
+  const signed = v => (v > 0 ? '＋' + v : v < 0 ? M + Math.abs(v) : '0');
+
+  function render() {
+    const dx = B.x - A.x, dy = B.y - A.y;
+    ptA.setAttribute('transform', `translate(${sx(A.x)},${sy(A.y)})`);
+    ptB.setAttribute('transform', `translate(${sx(B.x)},${sy(B.y)})`);
+
+    // 直線（A と B を通る）
+    const ml = $('mainLine');
+    if (dx === 0) {
+      ml.setAttribute('x1', sx(A.x)); ml.setAttribute('x2', sx(A.x));
+      ml.setAttribute('y1', sy(R + 1)); ml.setAttribute('y2', sy(-R - 1));
+    } else {
+      const k = dy / dx, f = x => A.y + k * (x - A.x);
+      ml.setAttribute('x1', sx(-R - 1)); ml.setAttribute('y1', sy(f(-R - 1)));
+      ml.setAttribute('x2', sx(R + 1)); ml.setAttribute('y2', sy(f(R + 1)));
+    }
+
+    // 増加量の直角三角形（A → 横 → たて → B）
+    const C = { x: B.x, y: A.y };
+    const dxL = $('dxLine'), dyL = $('dyLine');
+    dxL.style.display = dx ? '' : 'none';
+    dyL.style.display = dy ? '' : 'none';
+    dxL.setAttribute('x1', sx(A.x)); dxL.setAttribute('y1', sy(A.y));
+    dxL.setAttribute('x2', sx(C.x) - Math.sign(dx) * 2); dxL.setAttribute('y2', sy(C.y));
+    dyL.setAttribute('x1', sx(C.x)); dyL.setAttribute('y1', sy(C.y));
+    dyL.setAttribute('x2', sx(B.x)); dyL.setAttribute('y2', sy(B.y) + Math.sign(dy) * 2);
+    // ラベル：三角形の外側に置く
+    const lineAboveC = dy * dx > 0; // 角Cが直線の下側にあるか
+    $('dxLabel').style.display = dx ? '' : 'none';
+    $('dyLabel').style.display = dy ? '' : 'none';
+    setLabel($('dxLabel'), sx((A.x + C.x) / 2), sy(A.y) + (dy > 0 ? 22 : -22), `x ${signed(dx)}`);
+    setLabel($('dyLabel'), sx(C.x) + (dx > 0 ? 44 : -44), sy((C.y + B.y) / 2), `y ${signed(dy)}`);
+
+    // 1ずつの階段
+    const st = $('stairs');
+    st.innerHTML = '';
+    if ($('stairSw').checked && dx !== 0) {
+      const s = Math.sign(dx), k = dy / dx;
+      for (let i = 0; i < Math.abs(dx); i++) {
+        const x0 = A.x + s * i, y0 = A.y + k * s * i;
+        mk('line', { x1: sx(x0), y1: sy(y0), x2: sx(x0 + s), y2: sy(y0), stroke: '#64b5f6', 'stroke-width': 2.5 }, st);
+        mk('line', { x1: sx(x0 + s), y1: sy(y0), x2: sx(x0 + s), y2: sy(y0 + k * s), stroke: '#ef9a9a', 'stroke-width': 2.5 }, st);
+      }
+    }
+
+    // 座標
+    $('ax').textContent = num(A.x); $('ay').textContent = num(A.y);
+    $('bx').textContent = num(B.x); $('by').textContent = num(B.y);
+
+    // 直線の式
+    const eq = $('eq');
+    if (dx === 0) {
+      eq.innerHTML = `<span>x ＝ ${num(A.x)}</span><span class="note">（たての直線は1次関数ではありません）</span>`;
+    } else {
+      const a = reduce(dy, dx);
+      const b = reduce(A.y * dx - dy * A.x, dx);
+      eq.innerHTML = `<span>${fixed ? '決めた式' : 'AとBを通る直線'}：</span><span>${eqHTML(a, b)}</span>`;
+    }
+
+    renderFormula(dx, dy);
+    renderMeaning(dx, dy);
+  }
+
+  function renderFormula(dx, dy) {
+    const el = $('formula');
+    const X = s => `<span class="xv">${s}</span>`, Y = s => `<span class="yv">${s}</span>`;
+    let h = `<div class="frow words"><span class="lead">変化の割合 ＝</span>${fracHTML(Y('y の増加量'), X('x の増加量'))}</div>`;
+    h += `<div class="frow"><span class="lead">＝</span>${fracHTML(Y(`${num(B.y)} ${M} ${paren(A.y)}`), X(`${num(B.x)} ${M} ${paren(A.x)}`))}
+          <span class="note">（Bの値 − Aの値）</span></div>`;
+    if (dx === 0) {
+      h += `<div class="frow"><span class="lead">＝</span>${fracHTML(Y(num(dy)), X('0'))}</div>`;
+      h += `<div class="warn">⚠️ x の増加量が 0 です。0 でわることはできないので、変化の割合は求められません。点を左右にずらしてみよう。</div>`;
+      el.innerHTML = h;
+      return;
+    }
+    h += `<div class="frow"><span class="lead">＝</span>${fracHTML(Y(num(dy)), X(num(dx)))}</div>`;
+    const [n, d] = reduce(dy, dx);
+    const same = n === dy && d === dx;
+    let why = '';
+    if (dy === 0) why = '（y が変わらないので 0）';
+    else if (d === 1) why = '（わり切れて整数になる）';
+    else if (same) why = '（これ以上約分できない）';
+    else if (dx < 0 && gcd(dy, dx) === 1) why = '（分母のマイナスを前に出す）';
+    else why = `（${gcd(dy, dx)} で約分）`;
+    h += `<div class="frow final"><span class="lead">＝</span><span class="final-box">${valHTML([n, d])}</span><span class="note">${why}</span></div>`;
+    el.innerHTML = h;
+  }
+
+  function renderMeaning(dx, dy) {
+    const el = $('meaning');
+    if (dx === 0) { el.innerHTML = '<div class="warn">x の増加量が 0 のときは、意味を考えられません。</div>'; return; }
+    const [n, d] = reduce(dy, dx);
+    const abs = [Math.abs(n), d];
+    let main;
+    if (n === 0) main = `x が <span class="xv big">1</span> 増えると、y は <span class="yv big">変わらない</span>。`;
+    else main = `x が <span class="xv big">1</span> 増えると、y は <span class="yv big">${valHTML(abs)}</span> ${n > 0 ? '増える' : '減る'}。`;
+    let sub = '';
+    if (d !== 1 && n !== 0) {
+      sub = `<div class="sub">分数でわかりにくいときは… x が <b class="xv">${d}</b> 増えると、y は <b class="yv">${Math.abs(n)}</b> ${n > 0 ? '増える' : '減る'}。</div>`;
+    }
+    sub += `<div class="sub">1次関数では、どの2点をとっても変化の割合は同じ。それがグラフの<b>傾き a</b> です。</div>`;
+
+    // 表：A から x を 1 ずつ増やす（値の列と矢印の列を交互にならべる）
+    const cols = 4;
+    const stepY = `${n >= 0 ? '＋' : M}${d === 1 ? Math.abs(n) : fracHTML(Math.abs(n), d)}`;
+    let cells = '<div class="sq-h xv">x</div><div class="sq-h yv">y</div>';
+    for (let i = 0; i <= cols; i++) {
+      if (i > 0) cells += `<div class="sq-a xv">＋1→</div><div class="sq-a yv">${stepY}→</div>`;
+      cells += `<div class="sq-v">${num(A.x + i)}</div><div class="sq-v">${valHTML(reduce(A.y * d + n * i, d))}</div>`;
+    }
+    const table = `<div class="tbl-wrap"><div class="seq">${cells}</div></div>`;
+    el.innerHTML = `<div class="meaning">${main}</div>${sub}${table}`;
+  }
+
+  // ---- ドラッグ ----
+  const svg = $('graph');
+  let dragging = null;
+  function toCoord(e) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    return { x: (p.x - O) / U, y: (O - p.y) / U };
+  }
+  function moveTo(which, e) {
+    const c = toCoord(e);
+    const other = which === 'A' ? B : A;
+    let np;
+    if (fixed) {
+      np = nearest(c, linePoints(), other);
+      if (!np) return;
+    } else {
+      np = { x: Math.max(-R, Math.min(R, Math.round(c.x))), y: Math.max(-R, Math.min(R, Math.round(c.y))) };
+      if (np.x === other.x && np.y === other.y) return; // 同じ点には重ねない
+    }
+    if (which === 'A') A = { ...np }; else B = { ...np };
+    render();
+  }
+  [['A', ptA], ['B', ptB]].forEach(([w, g]) => {
+    g.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      dragging = w; g.classList.add('drag');
+      svg.setPointerCapture(e.pointerId);
+    });
+  });
+  svg.addEventListener('pointermove', e => { if (dragging) moveTo(dragging, e); });
+  const end = () => { if (dragging) { ptA.classList.remove('drag'); ptB.classList.remove('drag'); dragging = null; } };
+  svg.addEventListener('pointerup', end);
+  svg.addEventListener('pointercancel', end);
+
+  // ---- スイッチ ----
+  $('fixedSw').addEventListener('change', e => {
+    fixed = e.target.checked;
+    $('fixedBox').classList.toggle('on', fixed);
+    if (fixed) projectToLine();
+    render();
+  });
+  [aSel, bSel].forEach(s => s.addEventListener('change', () => { projectToLine(); render(); }));
+  $('gridSw').addEventListener('change', e => { grid.style.display = e.target.checked ? '' : 'none'; });
+  $('stairSw').addEventListener('change', render);
+  $('resetBtn').addEventListener('click', () => {
+    A = { x: -2, y: -1 }; B = { x: 3, y: 2 };
+    if (fixed) { A = { x: 1, y: 0 }; B = { x: 3, y: 0 }; projectToLine(); }
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

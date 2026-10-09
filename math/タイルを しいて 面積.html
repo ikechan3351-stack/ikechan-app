@@ -1,0 +1,2140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タイルを しいて 面積</title>
+<style>
+  :root {
+    --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb;
+    --warn: #bf360c; --warn-bg: #fff3e0; --good: #e65100; --good-bg: #fffde7;
+    --tile: #4fc3f7; --tile-line: #0277bd; --tile2: #aed581; --tile2-line: #33691e;
+    --peri: #e65100;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3faf8 0%, #d7efe9 100%);
+    min-height: 100vh;
+    padding: 10px 16px 24px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  button, input { font-family: inherit; color: inherit; }
+  .no-ruby rt { display: none; }
+  [hidden] { display: none !important; }
+  .wrap { width: 100%; max-width: 1500px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ===== 上の段 ===== */
+  .topbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .back-link { font-size: 0.85rem; color: var(--accent-dark); text-decoration: none; }
+  .title-box { flex: 1; text-align: center; min-width: 220px; }
+  h1 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.8rem); color: var(--accent-dark); }
+  .subtitle { margin: 0; font-size: 0.8rem; color: #546e7a; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tool-btn {
+    min-height: 48px; min-width: 48px; padding: 4px 12px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 0.95rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    min-height: 52px; padding: 6px 14px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: clamp(0.9rem, 2vmin, 1.1rem); font-weight: bold; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .chip {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.active::before { content: "✔ "; }
+  .setup {
+    background: #fff; border-radius: 18px; padding: 6px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; gap: 8px 14px; align-items: center; justify-content: center; flex-wrap: wrap;
+  }
+  .setup:empty { display: none; }
+  .sgrp { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .slabel { font-weight: 900; color: var(--accent-dark); }
+
+  /* ===== ひとこと ===== */
+  .say {
+    font-size: clamp(1.05rem, 2.4vmin, 1.4rem); line-height: 1.9; font-weight: bold; text-align: center;
+    background: #fff; border-radius: 14px; padding: 4px 16px; min-height: 2.2em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .say::before { content: "🟦 "; }
+  .say.warn { background: var(--warn-bg); color: var(--warn); }
+  .say.warn::before { content: "🤔 "; }
+  .say.good { background: var(--good-bg); color: var(--good); }
+  .say.good::before { content: "⭐ "; }
+
+  /* ===== ボタン ===== */
+  .act-btn {
+    min-height: 52px; min-width: 52px; padding: 4px 12px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: clamp(1rem, 2.2vmin, 1.2rem); font-weight: 900; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12); line-height: 1.25;
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+  .b-reset { background: #f5f5f5; border-color: #cfd8dc; }
+  .b-main { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 150px; }
+  .b-hint { background: #f3e5f5; border-color: #ce93d8; }
+  .b-peri { background: #fff3e0; border-color: #ffb74d; }
+  .b-area { background: #e1f5fe; border-color: #4fc3f7; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+  /* ===== ならび ===== */
+  .stage { display: grid; gap: 10px; align-items: start; grid-template-columns: minmax(0, 2.2fr) minmax(300px, 1fr); }
+  .card {
+    background: #fff; border-radius: 18px; padding: 6px 12px 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; flex-direction: column; gap: 8px; min-width: 0; user-select: none; -webkit-user-select: none;
+  }
+  .card h3 { margin: 0; font-size: clamp(0.95rem, 2vmin, 1.15rem); color: var(--accent-dark); }
+  .note { margin: 0; font-size: 0.95rem; font-weight: bold; text-align: center; line-height: 1.7; min-height: 1.4em; }
+
+  /* ===== 方眼と 図形（SVG） ===== */
+  .fig { display: block; width: 100%; height: auto; max-height: 68vh; touch-action: none; font-family: inherit; }
+  .fig text { font-family: inherit; pointer-events: none; }
+  .paper { fill: #fff; }
+  .gridline { stroke: #b0bec5; stroke-width: 1.2; }
+  .gridline5 { stroke: #90a4ae; stroke-width: 2; }
+  .shape-fill { fill: #ffecb3; fill-opacity: 0.55; }
+  .shape-line { fill: none; stroke: #37474f; stroke-width: 6; stroke-linejoin: round; }
+  .tile { stroke-width: 3; }
+  .tile.t0 { fill: var(--tile); stroke: var(--tile-line); }
+  .tile.t1 { fill: var(--tile2); stroke: var(--tile2-line); }
+  .tile-n { font-size: 24px; font-weight: 900; fill: #0d2b3e; }
+  .tile.t1 + .tile-n { fill: #1b3409; }
+  .line-lab tspan { font-size: 16px; }
+  .line-lab { font-size: 22px; font-weight: 900; fill: var(--accent-dark); }
+  .dim { stroke: #546e7a; stroke-width: 3; }
+  .dim-t { font-size: 28px; font-weight: 900; fill: #37474f; paint-order: stroke; stroke: #fff; stroke-width: 6px; stroke-linejoin: round; }
+  .knob { fill: #fdd835; stroke: #f57f17; stroke-width: 4; cursor: grab; }
+  .knob-hit { fill: rgba(0,0,0,0); cursor: grab; }
+  .knob-t { font-size: 28px; font-weight: 900; fill: #5d4037; }
+  .cellhit { fill: rgba(0,0,0,0); cursor: pointer; }
+  .peri-seg { stroke: var(--peri); stroke-width: 12; stroke-linecap: round; }
+  .peri-n { font-size: 22px; font-weight: 900; fill: var(--peri); paint-order: stroke; stroke: #fff; stroke-width: 6px; stroke-linejoin: round; }
+  .ant { font-size: 34px; }
+  .fill-tile { fill: #4fc3f7; fill-opacity: 0.75; stroke: #0277bd; stroke-width: 3; stroke-dasharray: 8 5; }
+  .fill-n { font-size: 24px; font-weight: 900; fill: #01579b; }
+  .glow { animation: glow 0.8s ease-in-out infinite alternate; }
+  @keyframes glow { from { opacity: 0.35; } to { opacity: 1; } }
+  .calm .glow { animation: none; opacity: 1; }
+
+  /* ===== 右の パネル ===== */
+  .unit-row { display: flex; align-items: center; gap: 10px; justify-content: center; font-weight: bold; line-height: 1.6; }
+  .unit-row svg { width: 54px; height: 54px; flex: none; }
+  .meas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .meas > div { border-radius: 14px; padding: 4px 6px; text-align: center; font-weight: 900; }
+  .meas .m-area { background: #e1f5fe; border: 3px solid #4fc3f7; }
+  .meas .m-peri { background: #fff3e0; border: 3px dashed #ffb74d; }
+  .meas .lab { font-size: 0.95rem; display: block; }
+  .meas .val { font-size: clamp(1.8rem, 5vmin, 2.6rem); line-height: 1.2; }
+  .meas .m-area .val { color: #01579b; }
+  .meas .m-peri .val { color: var(--warn); }
+  .meas .unit { font-size: 0.55em; }
+  .sizer { display: grid; grid-template-columns: auto 1fr auto auto; gap: 6px; align-items: center; font-weight: 900; font-size: 1.1rem; }
+  .sizer .num { font-size: 1.6rem; text-align: center; }
+  .count-big { text-align: center; font-weight: 900; font-size: clamp(1.15rem, 3vmin, 1.5rem); color: var(--accent-dark); margin: 0; }
+  .count-big b { font-size: 1.4em; color: #01579b; }
+  .rowlog { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-weight: bold; font-size: 1.05rem; line-height: 1.5; }
+  .rowlog li { border-radius: 10px; padding: 1px 10px; background: #f1f8e9; border: 2px solid #dcedc8; }
+  .rowlog li b { color: #01579b; }
+  .formula { border: 4px solid #fdd835; background: #fffde7; border-radius: 16px; padding: 6px 10px; text-align: center; font-weight: 900; line-height: 1.8; }
+  .formula .big { font-size: clamp(1.4rem, 4vmin, 2rem); color: #e65100; }
+  .formula .rule { display: inline-block; margin-top: 2px; padding: 0 10px; border-radius: 10px; background: #fff; border: 2px solid #f9a825; }
+  .formula .sub { font-size: 0.9rem; color: #546e7a; }
+  .ansrow { display: flex; align-items: flex-end; justify-content: center; gap: 6px; font-size: clamp(1.8rem, 5vmin, 2.6rem); font-weight: 900; }
+  .abox { min-width: 2.8em; min-height: 1.5em; padding: 0 0.2em; border: 4px solid var(--accent); border-radius: 12px; background: #fffde7; text-align: right; line-height: 1.4; }
+  .abox.empty { color: #bdbdbd; }
+  .keypad { display: grid; grid-template-columns: repeat(5, minmax(48px, 1fr)); gap: 6px; }
+  .kp { min-height: 52px; border-radius: 12px; border: 2px solid var(--soft); background: #fff; font-size: 1.5rem; font-weight: 900; cursor: pointer; touch-action: manipulation; color: var(--accent-dark); }
+  .kp-w { grid-column: span 2; font-size: 1.1rem; }
+  .kp-ok { grid-column: span 3; font-size: 1.15rem; background: var(--accent); border-color: var(--accent); color: #fff; }
+  .qtext { font-size: clamp(1.1rem, 2.6vmin, 1.4rem); font-weight: 900; line-height: 1.9; text-align: center; margin: 0; }
+  .box-note { border: 3px solid #fdd835; background: #fffde7; border-radius: 14px; padding: 6px 10px; font-weight: bold; line-height: 1.8; text-align: center; margin: 0; }
+  .progress { font-weight: 900; font-size: 1.15rem; color: var(--accent-dark); }
+
+  .spark { position: fixed; z-index: 91; pointer-events: none; font-size: clamp(18px, 3vmin, 34px); color: #ffd600; text-shadow: 0 0 6px #fff; animation: spark 1.1s ease-out forwards; }
+  @keyframes spark { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 30% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; } 100% { transform: translate(-50%, -160%) scale(0.6); opacity: 0; } }
+  .cheer {
+    position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 95; pointer-events: none;
+    background: #fff; border: 5px solid #fdd835; border-radius: 24px; padding: 14px 34px;
+    font-size: clamp(1.5rem, 7vw, 4.5rem); font-weight: 900; color: #e65100; white-space: nowrap;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: cheer 1.4s ease-out forwards;
+  }
+  @keyframes cheer {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+    15% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+    25%, 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  }
+
+
+  /* ===== モード2〜6 ===== */
+  .rope { fill: none; stroke: var(--peri); stroke-width: 8; stroke-dasharray: 18 8; stroke-linejoin: round; }
+  .edge-t { font-size: 26px; font-weight: 900; fill: #37474f; paint-order: stroke; stroke: #fff; stroke-width: 6px; stroke-linejoin: round; }
+  .part-line { fill: none; stroke: #455a64; stroke-width: 2.5; }
+  .part-lab { font-size: 34px; font-weight: 900; fill: #263238; paint-order: stroke; stroke: #fff; stroke-width: 6px; stroke-linejoin: round; }
+  .part-dim { font-size: 24px; font-weight: 900; fill: #37474f; paint-order: stroke; stroke: #fff; stroke-width: 5px; stroke-linejoin: round; }
+  .cut-line { stroke: #6a1b9a; stroke-width: 8; stroke-linecap: round; stroke-dasharray: 16 8; }
+  .cut-prev { stroke: #8e24aa; stroke-width: 6; stroke-linecap: round; stroke-opacity: 0.6; }
+  .cut-dot { fill: #8e24aa; }
+  .scissors { font-size: 34px; }
+  .hatch-t { font-size: 24px; font-weight: 900; fill: #bf360c; paint-order: stroke; stroke: #fff; stroke-width: 6px; stroke-linejoin: round; }
+  .minus-x { stroke: #bf360c; stroke-width: 5; stroke-linecap: round; }
+  .bbox-line { fill: none; stroke: #ef6c00; stroke-width: 5; stroke-dasharray: 14 8; }
+  .bbox-line.done { stroke: #2e7d32; stroke-width: 7; stroke-dasharray: none; }
+  .open-line { stroke: #78909c; stroke-width: 5; stroke-dasharray: 12 10; }
+  .ptable, .ladder { width: 100%; border-collapse: collapse; font-weight: bold; font-size: 1rem; }
+  .ptable th, .ptable td, .ladder th, .ladder td { border: 2px solid #e0e0e0; padding: 2px 6px; text-align: center; }
+  .ptable th, .ladder th { background: #e0f2f1; color: var(--accent-dark); font-size: 0.9rem; }
+  .ptable tr.cur td, .ladder tr.cur td { background: #fffde7; }
+  .ptable tr.cur td:first-child, .ladder tr.cur td:first-child { box-shadow: inset 5px 0 0 #f9a825; }
+  .bar-td { position: relative; text-align: left !important; min-width: 7em; }
+  .bar { position: absolute; left: 0; top: 3px; bottom: 3px; background: #4fc3f7; opacity: 0.45; border-radius: 0 6px 6px 0; }
+  .bar-td b, .bar-td small { position: relative; }
+  .bar-td small { margin-left: 4px; color: #00695c; }
+  .ask { border: 3px dashed #ef6c00; background: var(--warn-bg); border-radius: 14px; padding: 6px 10px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .ask p { margin: 0; font-weight: bold; text-align: center; line-height: 1.7; }
+  .choices { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .choice { min-height: 52px; min-width: 76px; padding: 4px 12px; border-radius: 16px; border: 4px solid var(--soft); background: #fff; font-size: 1.1rem; font-weight: 900; cursor: pointer; box-shadow: 0 4px 0 rgba(0,0,0,0.12); touch-action: manipulation; }
+  .checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-weight: bold; line-height: 1.6; }
+  .checklist li { border-radius: 10px; padding: 2px 8px; border: 2px solid #eceff1; }
+  .checklist li.ok { color: #2e7d32; border-color: #a5d6a7; background: #f1f8e9; }
+  .checklist li.ok::before { content: "✔ "; }
+  .checklist li.ng { color: #607d8b; }
+  .checklist li.ng::before { content: "・ "; }
+  .z-grid { stroke: #78909c; stroke-width: 3; }
+  .z-fine { stroke: #90a4ae; stroke-width: 0.6; }
+  .z-cell { fill: #fff176; stroke: #f57f17; stroke-width: 4; }
+  .z-cellt { font-size: 18px; font-weight: 900; fill: #5d4037; }
+  .z-big { font-size: 220px; font-weight: 900; fill: #0d2b3e; }
+  .z-side { font-size: 48px; font-weight: 900; fill: #37474f; }
+  .z-note { font-size: 40px; font-weight: 900; fill: #5d4037; }
+  .z-obj { fill: #c8e6c9; fill-opacity: 0.6; stroke: #2e7d32; stroke-width: 6; stroke-dasharray: 20 10; }
+  .z-objt { font-size: 48px; font-weight: 900; fill: #1b5e20; paint-order: stroke; stroke: #fff; stroke-width: 8px; }
+  .z-why { font-size: 44px; font-weight: 900; fill: #bf360c; paint-order: stroke; stroke: #fff; stroke-width: 8px; }
+
+  /* ===== まど ===== */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+  .modal.open { display: flex; }
+  .modal-card { background: #fff; border-radius: 20px; padding: 16px 20px; max-width: 760px; width: 100%; max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .modal-card h2 { margin: 0; color: var(--accent-dark); font-size: 1.4rem; }
+  .modal-card h3 { margin: 6px 0 0; color: var(--accent-dark); font-size: 1.05rem; }
+  .modal-card p, .modal-card li { line-height: 1.7; }
+  .modal-card ul { margin: 4px 0; padding-left: 1.4em; }
+  .set-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .set-label { font-weight: bold; min-width: 9em; }
+  .res-big { font-size: 1.6rem; font-weight: 900; color: #e65100; text-align: center; margin: 0; }
+  .ed-note { font-size: 0.85rem; color: #546e7a; margin: 0; line-height: 1.6; }
+
+  /* 「うごきを へらす」 */
+  .calm .spark, .calm .cheer { animation: none; }
+
+  @media (max-width: 900px) {
+    body { padding: 8px 10px 20px; }
+    .stage { grid-template-columns: 1fr; }
+  }
+  @media (min-width: 900px) and (orientation: landscape) and (max-height: 820px) {
+    body { padding-top: 6px; }
+    .wrap { gap: 6px; }
+    .subtitle { display: none; }
+    h1 { font-size: 1.3rem; }
+    .mode-btn { min-height: 48px; padding: 4px 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+    <div class="title-box">
+      <h1>🟦 タイルを しいて <ruby>面積<rt>めんせき</rt></ruby></h1>
+      <p class="subtitle">1cm²の タイルが いくつ<ruby>分<rt>ぶん</rt></ruby>？（<ruby>面積<rt>めんせき</rt></ruby>・4<ruby>年<rt>ねん</rt></ruby>）</p>
+    </div>
+    <div class="tools">
+      <button class="tool-btn" id="btnHowto">❓ <ruby>先生<rt>せんせい</rt></ruby>へ</button>
+      <button class="tool-btn" id="btnFull">⛶ ぜんがめん</button>
+      <button class="tool-btn" id="btnSettings">⚙️ せってい</button>
+    </div>
+  </div>
+
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn" data-mode="count">🟦 しいて かぞえよう</button>
+    <button class="mode-btn" data-mode="peri">🧵 まわりは <ruby>同<rt>おな</rt></ruby>じでも？</button>
+    <button class="mode-btn" data-mode="complex">🧩 ふくざつな <ruby>形<rt>かたち</rt></ruby></button>
+    <button class="mode-btn" data-mode="big">🏫 <ruby>大<rt>おお</rt></ruby>きな <ruby>面積<rt>めんせき</rt></ruby></button>
+    <button class="mode-btn" data-mode="reverse">📏 <ruby>面積<rt>めんせき</rt></ruby>から <ruby>長<rt>なが</rt></ruby>さを</button>
+    <button class="mode-btn" data-mode="teacher">🧑‍🏫 <ruby>先生<rt>せんせい</rt></ruby>モード</button>
+  </div>
+
+  <div class="setup" id="setupBar"></div>
+  <div class="say" id="say" aria-live="polite"></div>
+  <section class="stage" id="stage"></section>
+</div>
+
+<!-- せってい -->
+<div class="modal" id="modalSettings" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>⚙️ せってい</h2>
+    <div class="set-line"><span class="set-label"><ruby>方眼<rt>ほうがん</rt></ruby>の マス</span>
+      <button class="chip" data-set="grid" data-val="big">大きい（10×7）</button>
+      <button class="chip" data-set="grid" data-val="mid">ふつう（14×9）</button>
+      <button class="chip" data-set="grid" data-val="small">小さい（18×12）</button></div>
+    <div class="set-line"><span class="set-label"><ruby>問題<rt>もんだい</rt></ruby>の <ruby>数<rt>かず</rt></ruby></span>
+      <button class="chip" data-set="count" data-val="3">3</button>
+      <button class="chip" data-set="count" data-val="5">5</button>
+      <button class="chip" data-set="count" data-val="10">10</button></div>
+    <div class="set-line"><span class="set-label">ふりがな</span>
+      <button class="chip" data-set="ruby" data-val="true">つける</button>
+      <button class="chip" data-set="ruby" data-val="false">つけない</button></div>
+    <div class="set-line"><span class="set-label">こうかおん</span>
+      <button class="chip" data-set="sound" data-val="true">ON</button>
+      <button class="chip" data-set="sound" data-val="false">OFF</button></div>
+    <div class="set-line"><span class="set-label">うごき</span>
+      <button class="chip" data-set="motion" data-val="auto">じどう</button>
+      <button class="chip" data-set="motion" data-val="less">へらす</button>
+      <button class="chip" data-set="motion" data-val="normal">ふつう</button></div>
+    <p class="ed-note">「<ruby>方眼<rt>ほうがん</rt></ruby>の マス」は、<ruby>画面<rt>がめん</rt></ruby>に <ruby>出<rt>で</rt></ruby>る マスの <ruby>数<rt>かず</rt></ruby>です。マスが <ruby>少<rt>すく</rt></ruby>ないほど 1マスが <ruby>大<rt>おお</rt></ruby>きく <ruby>見<rt>み</rt></ruby>えます（<ruby>電子黒板<rt>でんしこくばん</rt></ruby>なら「大きい」が おすすめ）。1マスは 1cm として あつかいます。「じどう」は パソコンの「<ruby>視差効果<rt>しさこうか</rt></ruby>を <ruby>減<rt>へ</rt></ruby>らす」などに あわせます。</p>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- 先生へ -->
+<div class="modal" id="modalHowto" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>❓ 先生へ（つかい方）</h2>
+    <p>4年「面積」の教材です。広さを「1cm²の正方形がいくつ分」で表し、タイルをしきつめながら「たての列 × よこの列」で数えられることに気づかせ、長方形・正方形の面積の公式につなげます。まわりの長さとのちがい、L字形などの求め方、大きな面積の単位（m²・a・ha・km²）までを6つのモードであつかいます。方眼の1マスは1cmとしてあつかいます。</p>
+    <h3>🟦 しいて かぞえよう</h3>
+    <ul>
+      <li>右下の黄色い ⤡ をドラッグすると、長方形のたて・よこが1cmずつ変わります（右のパネルの −／＋ でも変えられます）。たてとよこが同じになると「正方形」と知らせます。</li>
+      <li>上の段の「しき方」で、タイルの置き方を選びます。<b>1まいずつ</b>…マスをタップ（なぞると続けて置けます。置いたタイルをタップするとはずれます）。<b>1れつずつ</b>…マスをタップするか「1れつ しく」で1列まとめて置きます。<b>ぜんぶ</b>…一度にしきつめます。</li>
+      <li>「1れつずつ」では「4こが 1れつ、4こが 2れつ…」と記録され、しきつめると「4こ × 3れつ ＝ 12こ」から「長方形の面積 ＝ たて × よこ」の式に進みます。「ならべる むき」で、よこに1列（行）か、たてに1列（列）かを選べます。教科書の言い方に合わせてください。</li>
+      <li>列ごとにタイルの色を交互に変え、右側（またはした）に「1れつめ」などの文字も出すので、色が見分けにくい子にも区別できます。</li>
+      <li>「ひょうじ」で、面積・まわりの長さの表示を切りかえられます（「かくす」にすると、数えてから答え合わせができます）。</li>
+      <li>「🐜 まわりを たどる」は、ふちの線を1cmずつたどって数えるアニメ、「🟦 中を うめる」は、中にタイルを1まいずつうめて数えるアニメです。面積とまわりの長さの混同を、この2つで区別します。</li>
+      <li>「✏️ もんだい」では、長方形・正方形の面積を答えます。まわりの長さを答えたときは「まわりを たどる」アニメを見せて区別させ、たて＋よこ を答えたときは列の数え方にもどします。ヒントでタイルを1列ずつしけます。</li>
+    </ul>
+    <h3>🧵 まわりは 同じでも？</h3>
+    <ul>
+      <li>まわりの長さ（12・16・20・24cm）を選ぶと、たて＋よこ＝まわり÷2 のまま、⇔ のドラッグ（または −／＋）でよこを変えられます。たては自動で変わります。オレンジの点線が「ひも」です。</li>
+      <li>はじめに「面積はみんな同じ？」と予想させます。「表に かく」で記録し、「全部 ためす」で全部の組み合わせを順に表にします。面積の棒の長さでくらべられ、いちばん大きい行に ⭐、正方形の行に「正方形」と出ます。</li>
+      <li>正方形をふくめて3つ以上記録すると、「正方形のとき面積がいちばん大きい」とまとめが出ます。</li>
+    </ul>
+    <h3>🧩 ふくざつな 形</h3>
+    <ul>
+      <li>◀ ▶ で形（L字形・凹形など）を選び、3つの方法で面積を求めます。方法を変えても形はそのままなので、同じ形をいろいろな方法で求められます。</li>
+      <li><b>✂️ 分ける</b>：子どもがマスの線の上をドラッグすると、線がマスの線にすいつき、図形のはしまで自動でのびます（だいたいで大丈夫）。分かれた部分に「あ・い・う」と色・名前がつき、長方形なら たて×よこ と面積、たし算の式が出ます。何本でも引けて、「1本けす」でもどせます。見つけた分け方は記録されるので、たての線・よこの線の両方を比べられます。</li>
+      <li><b>➕ 補う</b>：①で欠けた部分を斜線で補って大きな長方形にし、②で補った部分をひいて、ひき算の式を出します。</li>
+      <li><b>↪️ 切って 移す</b>：✂️ のところで切った「い」をドラッグして「あ」にくっつけ、1つの長方形にします（マス目にすいつきます）。「やって みせる」で自動で動かせます。1か所切って移しても長方形にならない形では、「移せる形にかえる」ボタンが出ます。</li>
+      <li>2つ以上の方法でできると「どの方法でも答えは同じ」と出ます。切って移すとまわりの長さは変わるので、このモードでは面積だけを表示しています。</li>
+    </ul>
+    <h3>🏫 大きな 面積</h3>
+    <ul>
+      <li>「ズームアウト ▶」で、1cm² → 100cm² → 1m² → 1a → 1ha → 1km² と広げます。前の広さが左上の黄色い1マスに入り、それが 10×10＝100こ分 になることをズームで見せます。教室（1a）・校庭（1ha）・学校の敷地（1km²の中の1マス）と結びつけています（大きさは目安です）。</li>
+      <li>1m²の画面で「1m²は 100cm²じゃ ないの？」を押すと、1cm²をよこに100こならべても まだ1れつ（100cm²）だけで、たてにも100れつあることを、れつが増えていくアニメで見せます（100×100＝10000）。</li>
+      <li>「問題」では cm²・m²・a・ha・km² の換算と、たて×よこ からの単位がえを出します。1m²＝100cm² としたまちがいには、上のアニメで答え直させます。</li>
+    </ul>
+    <h3>📏 面積から 長さを</h3>
+    <ul>
+      <li>「面積24cm²、たて4cm。よこは？」のような問題です（たてを求める問題もまぜています）。分かっている長さの分だけタイルを1れつずつしき、面積の数になるまでれつを増やして確かめます。答えたあとに「4×□＝24 → □＝24÷4」の式を出します。</li>
+      <li>面積−たて（ひき算）を答えたときや、かけ算で面積にならない数を答えたときは、それぞれに合わせて声をかけます。</li>
+    </ul>
+    <h3>🧑‍🏫 先生モード</h3>
+    <ul>
+      <li>長方形・L字形（大きさと切りとるかどを指定）・じゆうにかく（マスをタップ・なぞって好きな形）から図形を出せます。</li>
+      <li>「答え：かくす」のときは面積とまわりの長さが「？」になり、「答えを見る」で表示します。長さの書きこみも出す・出さないを選べます。「タイルを しく」で番号つきのタイルを表示します。</li>
+    </ul>
+    <h3>そのほか</h3>
+    <ul>
+      <li>終わりの画面に正解数とヒントの回数が出ます（記録は保存しません）。保存されるのは「せってい」だけです。</li>
+      <li>授業での使い方の例は README（タイルを しいて 面積_README.md）にあります。</li>
+    </ul>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- けっか -->
+<div class="modal" id="modalResult" role="dialog" aria-modal="true">
+  <div class="modal-card" id="resultCard"></div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================
+   1. 小さな 道具
+   ========================================================= */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const R = (kanji, kana) => `<ruby>${kanji}<rt>${kana}</rt></ruby>`;   // ルビつきの 漢字
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+const rnd = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = rnd(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const stripRuby = (html) => html.replace(/<rt>.*?<\/rt>|<\/?ruby>/g, '');   // ルビを とった 文字（SVG・おいわい用）
+
+// よく つかう ことば（4年生までの 漢字＋ふりがな）
+const MENSEKI = R('面積', 'めんせき'), MAWARI = 'まわり', NAGA = R('長', 'なが'), CHOUHOUKEI = R('長方形', 'ちょうほうけい');
+const SEIHOUKEI = R('正方形', 'せいほうけい'), IPPEN = `1${R('辺', 'ぺん')}`, HEIHOU = R('平方', 'へいほう'), SHIKI = R('式', 'しき');
+const NAKA = R('中', 'なか'), SEN = R('線', 'せん'), KAZO = R('数', 'かぞ'), KAZU = R('数', 'かず'), MI = R('見', 'み');
+const MON = R('問題', 'もんだい'), KOTA = R('答', 'こた'), SEIKAI = R('正解', 'せいかい'), NAN = R('何', 'なん'), ONA = R('同', 'おな');
+const HIRO = R('広', 'ひろ'), TSUKA = R('使', 'つか'), ZEN = R('全', 'ぜん'), OO = R('大', 'おお'), CHII = R('小', 'ちい');
+
+/* =========================================================
+   2. せってい（この ブラウザに ほぞん。ほぞん できなくても うごく）
+      ※ 正解数などの けっかは ほぞん しない
+   ========================================================= */
+const SETTINGS_KEY = 'menseki-settings';
+const DEFAULTS = { sound: true, ruby: true, motion: 'auto', grid: 'mid', count: 5 };
+const settings = (() => {
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch (e) { return { ...DEFAULTS }; }
+})();
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ほぞん できなくても よい */ }
+}
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const calm = () => settings.motion === 'less' || (settings.motion === 'auto' && reduceMQ.matches);
+
+/* =========================================================
+   3. 音（ブラウザで 音を つくる。ファイルは つかわない）
+   ========================================================= */
+let actx = null;
+function play(notes) {
+  if (!settings.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const now = actx.currentTime;
+    for (const [f, t, dur, type = 'sine', vol = 0.14] of notes) {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, now + t);
+      g.gain.exponentialRampToValueAtTime(vol, now + t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + t + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(now + t); o.stop(now + t + dur + 0.05);
+    }
+  } catch (e) { /* 音が 出せなくても うごく */ }
+}
+const sfx = {
+  tap:     () => play([[880, 0, 0.05, 'sine', 0.08]]),
+  tick:    () => play([[700, 0, 0.03, 'triangle', 0.05]]),
+  tile:    () => play([[1046, 0, 0.04, 'triangle', 0.07]]),
+  step:    () => play([[620, 0, 0.04, 'square', 0.03]]),
+  line:    () => play([[784, 0, 0.06, 'triangle', 0.1], [988, 0.05, 0.08, 'triangle', 0.1]]),
+  mile:    () => play([[523, 0, 0.1], [659, 0.08, 0.1], [784, 0.16, 0.22]]),
+  correct: () => play([[784, 0, 0.12], [988, 0.1, 0.12], [1175, 0.2, 0.12], [1568, 0.3, 0.35]]),
+  soft:    () => play([[392, 0, 0.15, 'triangle', 0.1], [440, 0.15, 0.2, 'triangle', 0.1]]),
+  done:    () => play([[523, 0, 0.1], [659, 0.08, 0.1], [784, 0.16, 0.18], [1047, 0.26, 0.3]]),
+};
+
+/* =========================================================
+   4. 図形は「マスの あつまり」で もつ（★ここが きほん）
+      1マス ＝ 1cm × 1cm ＝ 1cm²。
+      図形は マスの 番地 [x, y] の 配列。面積も まわりの 長さも ここから 計算する。
+      こうして おくと、長方形でも L字形でも 同じ 計算で 正しく 出る。
+   ========================================================= */
+const key = (x, y) => `${x},${y}`;
+// 長方形の マス（左上 (x0,y0)、よこ w・たて h）
+function rectCells(x0, y0, w, h) {
+  const a = [];
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) a.push([x, y]);
+  return a;
+}
+// 面積 ＝ マスの 数
+const areaOf = (cells) => cells.length;
+// まわりの 辺（となりに マスが ない 辺）。時計回りの 向きで [x1,y1,x2,y2] を かえす
+function boundaryEdges(cells) {
+  const set = new Set(cells.map(([x, y]) => key(x, y))), has = (x, y) => set.has(key(x, y));
+  const e = [];
+  for (const [x, y] of cells) {
+    if (!has(x, y - 1)) e.push([x, y, x + 1, y]);             // 上
+    if (!has(x + 1, y)) e.push([x + 1, y, x + 1, y + 1]);     // 右
+    if (!has(x, y + 1)) e.push([x + 1, y + 1, x, y + 1]);     // 下
+    if (!has(x - 1, y)) e.push([x, y + 1, x, y]);             // 左
+  }
+  return e;
+}
+// まわりの 長さ ＝ まわりの 辺の 数（1辺 ＝ 1cm）
+const periOf = (cells) => boundaryEdges(cells).length;
+// まわりを ひとふでで たどる 点の ならび（いちばん 上・左の かどから 時計回り）
+//   はなれた 形や 穴が ある ときは、わ が いくつか できるので 配列の 配列で かえす
+function boundaryLoops(cells) {
+  const edges = boundaryEdges(cells);
+  const from = new Map();
+  for (const ed of edges) {
+    const k = key(ed[0], ed[1]);
+    if (!from.has(k)) from.set(k, []);
+    from.get(k).push(ed);
+  }
+  const used = new Set(), loops = [];
+  const eKey = (ed) => ed.join(',');
+  // 出発点： のこって いる 辺の うち、いちばん 上の 行の、いちばん 左の 上の 辺
+  const order = edges.filter((ed) => ed[1] === ed[3] && ed[2] > ed[0]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).concat(edges);
+  for (const start of order) {
+    if (used.has(eKey(start))) continue;
+    const pts = [[start[0], start[1]]];
+    let cur = start;
+    while (cur && !used.has(eKey(cur))) {
+      used.add(eKey(cur));
+      pts.push([cur[2], cur[3]]);
+      if (cur[2] === start[0] && cur[3] === start[1]) break;
+      cur = (from.get(key(cur[2], cur[3])) || []).find((ed) => !used.has(eKey(ed)));
+    }
+    loops.push(pts);
+  }
+  return loops;
+}
+const boundaryLoop = (cells) => boundaryLoops(cells)[0] || [];
+
+/* =========================================================
+   5. 方眼の 大きさ と かく ための 道具
+   ========================================================= */
+const S = 60, PAD = 96;                                      // 1マスの 大きさ・左と上の よはく（SVG の 単位）
+const GRIDS = { big: [10, 7], mid: [14, 9], small: [18, 12] };   // よこの マス・たての マス
+const gx = (x) => PAD + x * S, gy = (y) => PAD + y * S;
+function gridDim() {
+  const [c, r] = GRIDS[settings.grid] || GRIDS.mid;
+  return { c, r, w: PAD + c * S + 40, h: PAD + r * S + 40 };
+}
+// 方眼（5マスごとに 少し こい 線）
+function gridSVG() {
+  const { c, r } = gridDim();
+  let s = `<rect class="paper" x="${gx(0)}" y="${gy(0)}" width="${c * S}" height="${r * S}"/>`;
+  for (let i = 0; i <= c; i++) s += `<line class="${i % 5 ? 'gridline' : 'gridline5'}" x1="${gx(i)}" y1="${gy(0)}" x2="${gx(i)}" y2="${gy(r)}"/>`;
+  for (let j = 0; j <= r; j++) s += `<line class="${j % 5 ? 'gridline' : 'gridline5'}" x1="${gx(0)}" y1="${gy(j)}" x2="${gx(c)}" y2="${gy(j)}"/>`;
+  return s;
+}
+// 図形（うすい 色の 中身 ＋ ふちの 太い 線）
+function shapeSVG(cells, cls = 'shape-line') {
+  let s = cells.map(([x, y]) => `<rect class="shape-fill" x="${gx(x)}" y="${gy(y)}" width="${S}" height="${S}"/>`).join('');
+  const d = boundaryLoops(cells).map((pts) => `M${pts.map(([x, y]) => `${gx(x)} ${gy(y)}`).join(' L')} Z`).join(' ');
+  if (d) s += `<path class="${cls}" d="${d}"/>`;
+  return s;
+}
+// タイル 1まい（n＝番号、t＝色の 組 0/1）
+const tileSVG = (x, y, n, t = 0) => `<rect class="tile t${t}" x="${gx(x) + 4}" y="${gy(y) + 4}" width="${S - 8}" height="${S - 8}" rx="6"/>`
+  + (n ? `<text class="tile-n" x="${gx(x) + S / 2}" y="${gy(y) + S / 2 + 8}" text-anchor="middle">${n}</text>` : '');
+// 長さの 書きこみ（長方形の 上に よこ、左に たて）
+function dimsSVG(x0, y0, w, h, hide = '') {
+  const top = gy(y0) - 50, left = gx(x0) - 50;   // まわりの 数字と 重ならない ように 少し はなす
+  let s = `<line class="dim" x1="${gx(x0)}" y1="${top}" x2="${gx(x0 + w)}" y2="${top}"/>`
+    + `<line class="dim" x1="${gx(x0)}" y1="${top - 10}" x2="${gx(x0)}" y2="${top + 10}"/><line class="dim" x1="${gx(x0 + w)}" y1="${top - 10}" x2="${gx(x0 + w)}" y2="${top + 10}"/>`
+    + `<text class="dim-t" x="${(gx(x0) + gx(x0 + w)) / 2}" y="${top - 12}" text-anchor="middle">よこ ${hide === 'w' ? '？' : w}cm</text>`;
+  s += `<line class="dim" x1="${left}" y1="${gy(y0)}" x2="${left}" y2="${gy(y0 + h)}"/>`
+    + `<line class="dim" x1="${left - 10}" y1="${gy(y0)}" x2="${left + 10}" y2="${gy(y0)}"/><line class="dim" x1="${left - 10}" y1="${gy(y0 + h)}" x2="${left + 10}" y2="${gy(y0 + h)}"/>`;
+  const my = (gy(y0) + gy(y0 + h)) / 2;
+  s += `<text class="dim-t" x="${left - 14}" y="${my - 6}" text-anchor="end">たて</text><text class="dim-t" x="${left - 14}" y="${my + 26}" text-anchor="end">${hide === 'h' ? '？' : h}cm</text>`;
+  return s;
+}
+// 1cm² の タイルの 見本（右の パネル）
+const unitTileSVG = () => `<svg viewBox="0 0 54 54" aria-hidden="true"><rect x="4" y="4" width="46" height="46" rx="5" fill="#4fc3f7" stroke="#0277bd" stroke-width="3"/><text x="27" y="33" text-anchor="middle" font-size="14" font-weight="900" fill="#0d2b3e">1cm²</text></svg>`;
+
+/* =========================================================
+   6. ドラッグ・タップ（指・マウス・ペン を 同じ しくみで あつかう）
+      data-drag="なまえ" の ついた ものを つかむと、DRAGS[なまえ] が よばれる。
+   ========================================================= */
+function svgPt(svg, e) {
+  const m = svg.getScreenCTM();
+  if (!m) return [0, 0];
+  const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+  return [p.x, p.y];
+}
+const ptCell = (pt) => [Math.floor((pt[0] - PAD) / S), Math.floor((pt[1] - PAD) / S)];   // 点 → マスの 番地
+let drag = null;
+const DRAGS = {};
+document.addEventListener('pointerdown', (e) => {
+  const t = e.target.closest?.('[data-drag]');
+  if (!t) return;
+  const h = DRAGS[t.dataset.drag], svg = t.closest('svg');
+  if (!h || !svg) return;
+  e.preventDefault();
+  drag = { h, svg, id: e.pointerId };
+  try { svg.setPointerCapture(e.pointerId); } catch (err) { /* なくても うごく */ }
+  h.down?.(svgPt(svg, e));
+});
+window.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  e.preventDefault();
+  drag.h.move?.(svgPt(drag.svg, e));
+});
+const dragEnd = (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const h = drag.h; drag = null;
+  h.up?.();
+};
+window.addEventListener('pointerup', dragEnd);
+window.addEventListener('pointercancel', dragEnd);
+
+/* =========================================================
+   7. アニメ（「まわりを たどる」「中を うめる」など）
+      「うごきを へらす」なら、とちゅうを とばして さいごの すがただけ 出す。
+   ========================================================= */
+let animId = 0;
+let animRunning = false;
+function animStop() {
+  animId++; animRunning = false;
+  const a = $('#animL'); if (a) a.innerHTML = '';
+}
+// n回 step(i) を ms ごとに よぶ。おわったら done()
+function runSteps(n, ms, step, done) {
+  const id = ++animId;
+  animRunning = true;
+  const fin = () => { if (id === animId) { animRunning = false; done?.(); } };
+  if (calm() || n === 0) { for (let i = 0; i < n; i++) step(i, true); fin(); return; }
+  let i = 0;
+  const tick = () => {
+    if (id !== animId) return;
+    step(i++, false);
+    if (i < n) setTimeout(tick, ms); else setTimeout(fin, 250);
+  };
+  tick();
+}
+// 🐜 まわりを たどる： ふちを 1cm ずつ たどって 数える
+function animPerimeter(cells, done) {
+  const layer = $('#animL');
+  if (!layer) return;
+  layer.innerHTML = '';
+  // わ が いくつか あっても、つなげて じゅんに たどる
+  const segs0 = boundaryLoops(cells).flatMap((pts) => pts.slice(1).map((p, i) => [pts[i], p]));
+  const n = segs0.length;
+  const ms = clamp(Math.round(5200 / n), 120, 320);
+  let segs = '', nums = '';
+  runSteps(n, ms, (i, quiet) => {
+    const [[x1, y1], [x2, y2]] = segs0[i];
+    // 外がわに 数字（時計回りなので、外向きは (dy, −dx)）
+    const nx = y2 - y1, ny = -(x2 - x1);
+    const mx = (gx(x1) + gx(x2)) / 2 + nx * 22, my = (gy(y1) + gy(y2)) / 2 + ny * 22;
+    segs += `<line class="peri-seg" x1="${gx(x1)}" y1="${gy(y1)}" x2="${gx(x2)}" y2="${gy(y2)}"/>`;
+    nums += `<text class="peri-n" x="${mx}" y="${my + 8}" text-anchor="middle">${i + 1}</text>`;
+    if (!quiet || i === n - 1) {
+      layer.innerHTML = segs + nums + `<text class="ant" x="${gx(x2)}" y="${gy(y2) + 12}" text-anchor="middle">🐜</text>`;
+      if (!quiet) sfx.step();
+    }
+  }, done);
+}
+// 🟦 中を うめる： タイルを 1まいずつ うめて 数える
+function animFill(cells, done) {
+  const layer = $('#animL');
+  if (!layer) return;
+  layer.innerHTML = '';
+  const order = [...cells].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  const ms = clamp(Math.round(4200 / order.length), 40, 260);
+  let s = '';
+  runSteps(order.length, ms, (i, quiet) => {
+    const [x, y] = order[i];
+    s += `<rect class="fill-tile" x="${gx(x) + 4}" y="${gy(y) + 4}" width="${S - 8}" height="${S - 8}" rx="6"/><text class="fill-n" x="${gx(x) + S / 2}" y="${gy(y) + S / 2 + 8}" text-anchor="middle">${i + 1}</text>`;
+    if (!quiet || i === order.length - 1) { layer.innerHTML = s; if (!quiet) sfx.tile(); }
+  }, done);
+}
+
+/* =========================================================
+   8. 画面の きほん（モード・上の段・ひとこと）
+   ========================================================= */
+const state = {
+  mode: 'count',
+  say: { html: '', kind: '' },
+  // しいて かぞえよう
+  m1: {
+    sub: 'free',            // 'free'＝しいて みる ／ 'quiz'＝もんだい
+    w: 4, h: 3,             // 長方形の よこ・たて（cm）
+    place: 'row',           // しき方 'one'＝1まいずつ ／ 'row'＝1れつずつ ／ 'all'＝ぜんぶ
+    dir: 'row',             // ならべる むき 'row'＝よこに 1れつ ／ 'col'＝たてに 1れつ
+    show: 'both',           // ひょうじ 'area' ／ 'peri' ／ 'both' ／ 'none'
+    tiles: [],              // しいた タイル（しいた じゅんの マスの 番地）
+    doneShown: false,       // しきつめた おいわいを もう 出したか
+    q: null,                // もんだいの ようす
+  },
+};
+const stage = $('#stage');
+function say(html, kind = '') { state.say = { html, kind }; renderSay(); }
+function renderSay() {
+  const el = $('#say');
+  el.className = `say ${state.say.kind}`;
+  if (el.innerHTML !== state.say.html) el.innerHTML = state.say.html;
+}
+const chip = (act, val, label, on) => `<button class="chip${on ? ' active' : ''}" data-act="${act}" data-v="${val}">${label}</button>`;
+const figSVG = (inner, label) => { const d = gridDim(); return `<svg class="fig" id="fig" viewBox="0 0 ${d.w} ${d.h}" role="img" aria-label="${label}">${inner}</svg>`; };
+
+const VIEWS = {};
+const curView = () => VIEWS[state.mode];
+function setMode(mode) {
+  animStop(); tweenStop();
+  state.mode = mode;
+  curView().enter?.();
+  render(true);
+}
+function render(full = false) {
+  document.body.classList.toggle('no-ruby', !settings.ruby);
+  document.body.classList.toggle('calm', calm());
+  $$('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === state.mode));
+  if (full) { renderSetup(); curView().build(); }
+  curView().update?.();
+  renderSay();
+}
+const renderSetup = () => { $('#setupBar').innerHTML = curView().setup?.() || ''; };
+
+/* =========================================================
+   9. 🟦 しいて かぞえよう
+      長方形は いつも マス (1,1) から はじまる。右下の ⤡ で 大きさを かえる。
+   ========================================================= */
+const O1 = [1, 1];                                   // 長方形の 左上の マス
+const m1Max = () => { const d = gridDim(); return [d.c - 2, d.r - 2]; };   // よこ・たての いちばん 大きい 数
+const m1Cells = () => rectCells(O1[0], O1[1], state.m1.w, state.m1.h);
+// 1れつ（ならべる むきに そった マスの ならび）。i 番目の れつ
+function m1Lines() {
+  const M = state.m1, [x0, y0] = O1, L = [];
+  if (M.dir === 'row') for (let j = 0; j < M.h; j++) L.push(rectCells(x0, y0 + j, M.w, 1));
+  else for (let i = 0; i < M.w; i++) L.push(rectCells(x0 + i, y0, 1, M.h));
+  return L;
+}
+const m1PerLine = () => (state.m1.dir === 'row' ? state.m1.w : state.m1.h);   // 1れつの こ数
+const m1Has = (x, y) => state.m1.tiles.some(([a, b]) => a === x && b === y);
+const lineFull = (line) => line.every(([x, y]) => m1Has(x, y));
+const m1Full = () => state.m1.tiles.length === state.m1.w * state.m1.h;
+const isSquare = () => state.m1.w === state.m1.h;
+const shapeName = () => (isSquare() ? SEIHOUKEI : CHOUHOUKEI);
+
+VIEWS.count = {
+  enter() {
+    const M = state.m1;
+    if (M.sub === 'quiz') { qStart(); return; }
+    const [mw, mh] = m1Max();
+    M.w = Math.min(M.w, mw); M.h = Math.min(M.h, mh);
+    M.tiles = []; M.doneShown = false;
+    say(`1${R('辺', 'ぺん')}が 1cmの ${SEIHOUKEI}（1cm²）の タイルを しいて、${HIRO}さを ${KAZO}えよう`);
+  },
+  setup() {
+    const M = state.m1;
+    let s = `<div class="sgrp">${chip('m1sub', 'free', '🟦 しいて みる', M.sub === 'free')}${chip('m1sub', 'quiz', `✏️ ${MON}`, M.sub === 'quiz')}</div>`;
+    if (M.sub === 'free') {
+      s += `<div class="sgrp"><span class="slabel">しき${R('方', 'かた')}</span>${chip('m1place', 'one', '1まいずつ', M.place === 'one')}${chip('m1place', 'row', '1れつずつ', M.place === 'row')}${chip('m1place', 'all', 'ぜんぶ', M.place === 'all')}</div>`;
+      s += `<div class="sgrp"><span class="slabel">ならべる むき</span>${chip('m1dir', 'row', 'よこに 1れつ ➡', M.dir === 'row')}${chip('m1dir', 'col', 'たてに 1れつ ⬇', M.dir === 'col')}</div>`;
+      s += `<div class="sgrp"><span class="slabel">ひょうじ</span>${chip('m1show', 'both', 'りょうほう', M.show === 'both')}${chip('m1show', 'area', MENSEKI, M.show === 'area')}${chip('m1show', 'peri', `${MAWARI}の ${NAGA}さ`, M.show === 'peri')}${chip('m1show', 'none', 'かくす', M.show === 'none')}</div>`;
+    }
+    return s;
+  },
+  build() {
+    const M = state.m1;
+    if (M.sub === 'quiz') { qBuild(); return; }
+    stage.innerHTML = `<div class="card">${figSVG('<g id="gridL"></g><g id="shapeL"></g><g id="tileL"></g><g id="animL"></g><g id="hitL"></g><g id="knobL"></g>', '方眼と 長方形')}</div>
+      <div class="card" id="m1panel"></div>`;
+    $('#gridL').innerHTML = gridSVG();
+    this.update();
+  },
+  update() {
+    if (state.m1.sub === 'quiz') { qDraw(); return; }
+    drawM1(); m1Panel();
+  },
+  cells: () => (state.m1.sub === 'quiz' ? qCells() : m1Cells()),
+  beforeFill() { const M = state.m1; if (M.sub === 'free') { M.tiles = []; M.doneShown = false; drawM1(); m1Panel(); } },
+  get key() { return state.m1.sub === 'quiz' ? qKey : null; },
+};
+
+// 図を かく
+function drawM1() {
+  const M = state.m1, [x0, y0] = O1, cells = m1Cells();
+  if (!$('#shapeL')) return;
+  $('#shapeL').innerHTML = shapeSVG(cells) + dimsSVG(x0, y0, M.w, M.h);
+  // タイル（1れつずつ の ときは、れつごとに 色を かえて「〇れつめ」を 書く）
+  const lines = m1Lines(), lineOf = new Map();
+  lines.forEach((ln, i) => ln.forEach(([x, y]) => lineOf.set(key(x, y), i)));
+  let t = '';
+  M.tiles.forEach(([x, y], i) => { t += tileSVG(x, y, i + 1, M.place === 'one' ? 0 : lineOf.get(key(x, y)) % 2); });
+  if (M.place !== 'one') {
+    lines.forEach((ln, i) => {
+      if (!lineFull(ln)) return;
+      const [lx, ly] = ln[ln.length - 1];
+      t += M.dir === 'row'
+        ? `<text class="line-lab" x="${gx(lx + 1) + 46}" y="${gy(ly) + S / 2 + 8}">${i + 1}れつめ</text>`
+        : `<text class="line-lab" x="${gx(lx) + S / 2}" y="${gy(ly + 1) + 58}" text-anchor="middle">${i + 1}<tspan x="${gx(lx) + S / 2}" dy="24">れつめ</tspan></text>`;
+    });
+  }
+  $('#tileL').innerHTML = t;
+  // タップする ところ（長方形の 上） と 大きさを かえる つまみ
+  $('#hitL').innerHTML = `<rect class="cellhit" data-drag="cells" x="${gx(x0)}" y="${gy(y0)}" width="${M.w * S}" height="${M.h * S}"/>`;
+  const kx = gx(x0 + M.w), ky = gy(y0 + M.h);
+  $('#knobL').innerHTML = `<g data-drag="corner" aria-label="大きさを かえる"><circle class="knob-hit" cx="${kx}" cy="${ky}" r="44"/><circle class="knob" cx="${kx}" cy="${ky}" r="26"/><text class="knob-t" x="${kx}" y="${ky + 10}" text-anchor="middle">⤡</text></g>`;
+}
+
+// 右の パネル
+function m1Panel() {
+  const M = state.m1, el = $('#m1panel');
+  if (!el) return;
+  const cells = m1Cells(), area = areaOf(cells), peri = periOf(cells), n = M.tiles.length, [mw, mh] = m1Max();
+  let s = `<div class="unit-row">${unitTileSVG()}<span>1${R('辺', 'ぺん')}が 1cmの ${SEIHOUKEI}の ${HIRO}さ<br>＝ 1cm²（1${HEIHOU}センチメートル）</span></div>`;
+  // 面積と まわりの 長さ（■＝中を うめる／▭＝ふちを たどる。色だけで なく 記号と わくの 形でも 区別）
+  const showA = M.show === 'both' || M.show === 'area', showP = M.show === 'both' || M.show === 'peri';
+  s += `<div class="meas">
+      <div class="m-area"><span class="lab">■ ${MENSEKI}（${NAKA}）</span><span class="val">${showA ? `${area}<span class="unit">cm²</span>` : '？'}</span></div>
+      <div class="m-peri"><span class="lab">▭ ${MAWARI}の ${NAGA}さ</span><span class="val">${showP ? `${peri}<span class="unit">cm</span>` : '？'}</span></div>
+    </div>`;
+  s += `<div class="btn-row"><button class="act-btn b-peri" data-act="animPeri">🐜 ${MAWARI}を たどる</button><button class="act-btn b-area" data-act="animFill">🟦 ${NAKA}を うめる</button></div>`;
+  s += `<p class="count-big">しいた タイル <b>${n}</b> まい</p>`;
+  // しき方ごとの ボタン
+  const btns = [];
+  if (M.place === 'row') btns.push(`<button class="act-btn b-main" data-act="m1line" ${m1Full() ? 'disabled' : ''}>1れつ しく</button>`);
+  if (M.place !== 'one') btns.push(`<button class="act-btn${M.place === 'all' ? ' b-main' : ''}" data-act="m1all" ${m1Full() ? 'disabled' : ''}>${ZEN}${R('部', 'ぶ')} しく</button>`);
+  btns.push(`<button class="act-btn b-reset" data-act="m1clear" ${n ? '' : 'disabled'}>タイルを とる</button>`);
+  s += `<div class="btn-row">${btns.join('')}</div>`;
+  if (M.place === 'one' && !m1Full()) s += `<p class="note">マスを タップして 1まいずつ しこう（なぞると つづけて おけるよ）</p>`;
+  // 1れつずつ の きろく
+  if (M.place === 'row') {
+    const per = m1PerLine(), lines = m1Lines(), full = lines.filter(lineFull).length;
+    if (full) {
+      s += `<ul class="rowlog">${lines.map((ln, i) => (i < full ? `<li>${per}こが <b>${i + 1}れつ</b> → ${per}×${i + 1}＝<b>${per * (i + 1)}</b>こ</li>` : '')).join('')}</ul>`;
+    }
+  }
+  if (m1Full()) s += formulaHTML(M.w, M.h, M.dir);
+  s += `<div class="sizer">
+      <span>たて</span><span class="num">${M.h}cm</span>
+      <button class="act-btn" data-act="m1size" data-k="h" data-v="-1" aria-label="たてを へらす" ${M.h <= 1 ? 'disabled' : ''}>−</button>
+      <button class="act-btn" data-act="m1size" data-k="h" data-v="1" aria-label="たてを ふやす" ${M.h >= mh ? 'disabled' : ''}>＋</button>
+      <span>よこ</span><span class="num">${M.w}cm</span>
+      <button class="act-btn" data-act="m1size" data-k="w" data-v="-1" aria-label="よこを へらす" ${M.w <= 1 ? 'disabled' : ''}>−</button>
+      <button class="act-btn" data-act="m1size" data-k="w" data-v="1" aria-label="よこを ふやす" ${M.w >= mw ? 'disabled' : ''}>＋</button>
+    </div>`;
+  el.innerHTML = s;
+}
+// しきつめた ときの 式（「〇こ × 〇れつ」→「たて × よこ」）
+function formulaHTML(w, h, dir) {
+  const per = dir === 'row' ? w : h, nl = dir === 'row' ? h : w;
+  const perIs = dir === 'row' ? `よこの ${NAGA}さ ${w}cm` : `たての ${NAGA}さ ${h}cm`;
+  const nlIs = dir === 'row' ? `たての ${NAGA}さ ${h}cm` : `よこの ${NAGA}さ ${w}cm`;
+  const sq = w === h;
+  return `<div class="formula">
+      <div>1れつの ${KAZU} ${per}こ ＝ ${perIs}</div>
+      <div>れつの ${KAZU} ${nl}れつ ＝ ${nlIs}</div>
+      <div class="big">${per} × ${nl} ＝ ${w * h}（cm²）</div>
+      <div class="rule">${sq ? `${SEIHOUKEI}の ${MENSEKI} ＝ ${IPPEN} × ${IPPEN}` : `${CHOUHOUKEI}の ${MENSEKI} ＝ たて × よこ`}</div>
+      <div class="sub">${sq ? `${w} × ${w} ＝ ${w * w}`
+        : dir === 'row' ? `${h} × ${w} ＝ ${w * h}。${per} × ${nl} と かける じゅんじょが ちがっても ${KOTA}えは ${ONA}じ`
+        : `${h} × ${w} の ${h} は たての ${NAGA}さ、${w} は よこの ${NAGA}さ`}</div>
+    </div>`;
+}
+
+// タイルを おく・とる
+function m1Put(x, y) {
+  const M = state.m1;
+  if (m1Has(x, y)) return false;
+  M.tiles.push([x, y]);
+  return true;
+}
+function m1AfterChange() {
+  const M = state.m1;
+  animStop();
+  drawM1(); m1Panel();
+  if (m1Full() && !M.doneShown) {
+    M.doneShown = true;
+    sfx.done();
+    cheer('ぴったり！');
+    const sq = isSquare();
+    say(`しきつめたね！ 1cm²が ${M.w * M.h}こ ${R('分', 'ぶん')}で ${M.w * M.h}cm²。${sq ? `${SEIHOUKEI}は ${IPPEN}×${IPPEN}` : 'たて×よこ'}の ${SHIKI}でも もとめられるよ`, 'good');
+    sparkle($('#fig'), 14);
+  } else if (!m1Full()) {
+    M.doneShown = false;
+  }
+}
+// 1れつ しく（まだ うまって いない いちばん はじめの れつ）
+function m1FillLine(line) {
+  const M = state.m1;
+  const before = M.tiles.length;
+  line.forEach(([x, y]) => m1Put(x, y));
+  if (M.tiles.length === before) return;
+  sfx.line();
+  const per = m1PerLine(), full = m1Lines().filter(lineFull).length;
+  m1AfterChange();
+  if (!m1Full()) say(`${per}こが ${full}れつ。${per}×${full}＝${per * full}こ。あと ${M.w * M.h - M.tiles.length}こ`);
+}
+// 大きさを かえる（はみだした タイルは はずす）
+function m1Resize(w, h) {
+  const M = state.m1, [mw, mh] = m1Max();
+  w = clamp(w, 1, mw); h = clamp(h, 1, mh);
+  if (w === M.w && h === M.h) return;
+  M.w = w; M.h = h;
+  M.tiles = M.tiles.filter(([x, y]) => x < O1[0] + w && y < O1[1] + h);
+  sfx.tick();
+  animStop();
+  drawM1(); m1Panel();
+  if (m1Full() && M.tiles.length) m1AfterChange();
+  else {
+    M.doneShown = false;
+    say(isSquare()
+      ? `たて ${h}cm、よこ ${w}cm。たてと よこが ${ONA}じ ${NAGA}さだから ${SEIHOUKEI}だね`
+      : `たて ${h}cm、よこ ${w}cm の ${CHOUHOUKEI}`);
+  }
+}
+DRAGS.corner = {
+  move(pt) {
+    const w = Math.round((pt[0] - gx(O1[0])) / S), h = Math.round((pt[1] - gy(O1[1])) / S);
+    m1Resize(w, h);
+  },
+};
+// マスを タップ・なぞる
+let paint = null;   // なぞって いる あいだ： 'add'＝おく ／ 'del'＝とる
+DRAGS.cells = {
+  down(pt) {
+    const M = state.m1, [x, y] = ptCell(pt);
+    if (M.place === 'all') { m1FillLine(m1Cells()); return; }
+    if (M.place === 'row') {
+      const line = m1Lines().find((ln) => ln.some(([a, b]) => a === x && b === y));
+      if (line && !lineFull(line)) m1FillLine(line);
+      else if (line) { sfx.soft(); say(`その れつは もう しいて あるよ`); }
+      return;
+    }
+    // 1まいずつ
+    if (m1Has(x, y)) { M.tiles = M.tiles.filter(([a, b]) => !(a === x && b === y)); paint = 'del'; sfx.tick(); }
+    else { m1Put(x, y); paint = 'add'; sfx.tile(); }
+    m1AfterChange();
+    if (!m1Full()) say(`${M.tiles.length}まい`);
+  },
+  move(pt) {
+    const M = state.m1;
+    if (M.place !== 'one' || !paint) return;
+    const [x, y] = ptCell(pt);
+    if (x < O1[0] || y < O1[1] || x >= O1[0] + M.w || y >= O1[1] + M.h) return;
+    if (paint === 'add' && m1Put(x, y)) { sfx.tile(); m1AfterChange(); if (!m1Full()) say(`${M.tiles.length}まい`); }
+    if (paint === 'del' && m1Has(x, y)) { M.tiles = M.tiles.filter(([a, b]) => !(a === x && b === y)); sfx.tick(); m1AfterChange(); }
+  },
+  up() { paint = null; },
+};
+
+/* ---------- 「まわりを たどる」「中を うめる」の 説明 ---------- */
+function explainPeri(cells, after) {
+  const p = periOf(cells);
+  say(`${MAWARI}の ${NAGA}さは、ふちの ${SEN}を たどって ${KAZO}える`);
+  animPerimeter(cells, () => {
+    say(`ぐるっと 1しゅう ${p}cm。${MAWARI}の ${NAGA}さは ${SEN}の ${NAGA}さ（cm）だよ`, 'good');
+    after?.();
+  });
+}
+function explainFill(cells, after) {
+  const a = areaOf(cells);
+  say(`${MENSEKI}は、${NAKA}を タイルで うめて ${KAZO}える`);
+  animFill(cells, () => {
+    say(`${NAKA}を うめると 1cm²が ${a}こ。${MENSEKI}は ${a}cm²（${HIRO}さ）だよ`, 'good');
+    after?.();
+  });
+}
+
+/* =========================================================
+   10. ✏️ もんだい（長方形・正方形の 面積を こたえる）
+   ========================================================= */
+function qMake(n) {
+  const [mw, mh] = m1Max(), seen = new Set(), qs = [];
+  const W = Math.min(mw, 9), H = Math.min(mh, 7);
+  // 1もんは 正方形を まぜる
+  const sq = rnd(2, Math.min(W, H));
+  qs.push({ w: sq, h: sq }); seen.add(key(sq, sq));
+  let guard = 0;
+  while (qs.length < n && guard++ < 500) {
+    const w = rnd(2, W), h = rnd(2, H);
+    if (seen.has(key(w, h))) continue;
+    seen.add(key(w, h)); qs.push({ w, h });
+  }
+  return shuffle(qs);
+}
+function qStart() {
+  state.m1.q = { qs: qMake(settings.count), i: 0, score: 0, hints: 0 };
+  qLoad();
+}
+function qLoad() {
+  const Q = state.m1.q;
+  Object.assign(Q, { input: '', tries: 0, solved: false, gaveUp: false, tiles: 0 });
+  say(`この ${Q.qs[Q.i].w === Q.qs[Q.i].h ? SEIHOUKEI : CHOUHOUKEI}の ${MENSEKI}は ${NAN}cm²かな？`);
+}
+const qCells = () => { const q = state.m1.q.qs[state.m1.q.i]; return rectCells(O1[0], O1[1], q.w, q.h); };
+function qBuild() {
+  stage.innerHTML = `<div class="card">${figSVG('<g id="gridL"></g><g id="shapeL"></g><g id="tileL"></g><g id="animL"></g>', '方眼と 長方形')}</div>
+    <div class="card" id="qpanel"></div>`;
+  $('#gridL').innerHTML = gridSVG();
+  qDraw();
+}
+function qDraw() {
+  const Q = state.m1.q, q = Q.qs[Q.i];
+  if (!$('#shapeL')) return;
+  $('#shapeL').innerHTML = shapeSVG(qCells()) + dimsSVG(O1[0], O1[1], q.w, q.h);
+  // ヒントで しいた れつ（よこに 1れつずつ）
+  let t = '';
+  for (let j = 0; j < Q.tiles; j++) for (let i = 0; i < q.w; i++) t += tileSVG(O1[0] + i, O1[1] + j, j * q.w + i + 1, j % 2);
+  $('#tileL').innerHTML = t;
+  qPanel();
+}
+function qPanel() {
+  const Q = state.m1.q, q = Q.qs[Q.i], el = $('#qpanel');
+  if (!el) return;
+  const ended = Q.solved || Q.gaveUp, name = q.w === q.h ? SEIHOUKEI : CHOUHOUKEI;
+  let s = `<div class="progress">${MON} ${Q.i + 1} / ${Q.qs.length}　<small>${SEIKAI} ${Q.score}</small></div>`;
+  s += `<p class="qtext">たて ${q.h}cm、よこ ${q.w}cm の ${name}。<br>${MENSEKI}は ${NAN}cm²？</p>`;
+  s += `<div class="ansrow"><span class="abox${Q.input ? '' : ' empty'}">${Q.input || (ended ? q.w * q.h : '？')}</span>cm²</div>`;
+  if (ended) {
+    s += formulaHTML(q.w, q.h, 'row');
+    s += `<div class="btn-row"><button class="act-btn b-main" data-act="qnext">${Q.i + 1 < Q.qs.length ? `つぎの ${MON} ▶` : 'おわる ▶'}</button></div>`;
+  } else {
+    s += keypadHTML('qkey');
+    s += `<div class="btn-row"><button class="act-btn b-hint" data-act="qhint" ${Q.tiles >= q.h ? 'disabled' : ''}>💡 1れつ しく</button>${Q.tries >= 2 ? `<button class="act-btn b-reset" data-act="qgive">${KOTA}えを ${MI}る</button>` : ''}</div>`;
+    s += `<div class="btn-row"><button class="act-btn b-peri" data-act="animPeri">🐜 ${MAWARI}を たどる</button><button class="act-btn b-area" data-act="animFill">🟦 ${NAKA}を うめる</button></div>`;
+  }
+  el.innerHTML = s;
+}
+function qKey(k) {
+  const Q = state.m1.q;
+  if (Q.solved || Q.gaveUp) return;
+  if (k === 'ok') { qAnswer(); return; }
+  Q.input = typeKey(Q.input, k);
+  sfx.tap();
+  qPanel();
+}
+function qAnswer() {
+  const Q = state.m1.q, q = Q.qs[Q.i], v = Number(Q.input);
+  if (!Q.input) return;
+  const area = q.w * q.h, peri = 2 * (q.w + q.h);
+  if (v === area) {
+    Q.solved = true; Q.score++;
+    sfx.correct(); cheer(`${area}cm²`);
+    say(`${SEIKAI}！ ${q.w === q.h ? `${IPPEN}×${IPPEN}＝${q.w}×${q.w}` : `たて×よこ＝${q.h}×${q.w}`}＝${area}。${MENSEKI}は ${area}cm²`, 'good');
+    Q.tiles = q.h;
+    animStop(); qDraw();
+    sparkle($('#fig'), 14);
+    return;
+  }
+  Q.tries++; sfx.soft();
+  Q.input = '';
+  qPanel();
+  if (v === peri) {
+    // まわりの 長さと まちがえた → 「線を たどる」アニメで 区別
+    explainPeri(qCells(), () => say(`${v}cm は ${MAWARI}の ${NAGA}さ（${SEN}）だね。${MENSEKI}は ${NAKA}を うめる ${HIRO}さ。1cm²の タイルは ${NAN}まい？`, 'warn'));
+  } else if (v === q.w + q.h) {
+    say(`たてと よこを たしたね。1れつに ${q.w}こ ならんだ タイルが、${q.h}れつ あるよ。「💡 1れつ しく」で たしかめよう`, 'warn');
+  } else {
+    say(`おしい！ 1cm²の タイルが ${NAN}まい しけるかな？ 「💡 1れつ しく」で たしかめよう`, 'warn');
+  }
+}
+function qHint() {
+  const Q = state.m1.q, q = Q.qs[Q.i];
+  if (Q.tiles >= q.h) return;
+  Q.tiles++; Q.hints++;
+  sfx.line(); animStop();
+  qDraw();
+  say(Q.tiles < q.h
+    ? `${q.w}こが ${Q.tiles}れつ。${q.w}×${Q.tiles}＝${q.w * Q.tiles}こ。${q.h}れつ しくと ${NAN}こ かな？`
+    : `${q.w}こが ${q.h}れつ しけたよ。${q.w}×${q.h}＝？`);
+}
+function qGive() {
+  const Q = state.m1.q, q = Q.qs[Q.i];
+  Q.gaveUp = true; Q.hints++; Q.tiles = q.h;
+  animStop(); qDraw();
+  say(`${KOTA}えは ${q.w * q.h}cm²。たて×よこ＝${q.h}×${q.w}＝${q.w * q.h}`);
+}
+function qNext() {
+  const Q = state.m1.q;
+  animStop();
+  if (Q.i + 1 < Q.qs.length) { Q.i++; qLoad(); qDraw(); return; }
+  showResult(Q.score, Q.qs.length, Q.hints, 'qagain');
+}
+
+/* =========================================================
+   11. 共通の 部品（キーパッド・けっか）
+   ========================================================= */
+const KP = ['7', '8', '9', 'del', '4', '5', '6', '0', '1', '2', '3'];
+function keypadHTML(act, okLabel = 'こたえる') {
+  return `<div class="keypad">${KP.map((k) => (k === 'del'
+    ? `<button class="kp kp-w" data-act="${act}" data-k="del">けす</button>`
+    : `<button class="kp" data-act="${act}" data-k="${k}">${k}</button>`)).join('')}<button class="kp kp-ok" data-act="${act}" data-k="ok">${okLabel}</button></div>`;
+}
+// 数字を 1つ 入れる（ふつうは 5けたまで。先頭の 0 は けす）
+const typeKey = (cur, k, max = 5) => (k === 'del' ? cur.slice(0, -1) : cur.length >= max ? cur : (cur + k).replace(/^0+(?=\d)/, ''));
+// おわりの 画面（正解数・ヒントの 回数。ほぞん しない）
+function showResult(score, total, hints, againAct) {
+  sfx.done();
+  $('#resultCard').innerHTML = `<h2>🎉 おわり！</h2>
+    <p class="res-big">${SEIKAI} ${score} / ${total}</p>
+    ${hints == null ? '' : `<p style="text-align:center;font-weight:bold">ヒントを ${TSUKA}った ${R('回数', 'かいすう')}： ${hints} ${R('回', 'かい')}</p>`}
+    <p class="ed-note" style="text-align:center">（この けっかは ほぞん しません）</p>
+    <div class="btn-row"><button class="act-btn b-main" data-act="${againAct}">もう一度</button><button class="act-btn b-reset" data-close>とじる</button></div>`;
+  openModal('#modalResult');
+  sparkle($('#resultCard'), 20);
+}
+
+/* =========================================================
+   12. ボタンの はたらき（data-act="なまえ" → ACTS[なまえ]）
+   ========================================================= */
+// いま 図に 出て いる 図形の マス（アニメで つかう）。モードごとの cells() を よぶ
+const curCells = () => curView().cells?.() || [];
+const ACTS = {
+  m1sub: (b) => { state.m1.sub = b.dataset.v; setMode('count'); },
+  m1place: (b) => { state.m1.place = b.dataset.v; sfx.tap(); renderSetup(); animStop(); drawM1(); m1Panel(); },
+  m1dir: (b) => {
+    const M = state.m1;
+    if (M.dir === b.dataset.v) return;
+    M.dir = b.dataset.v; M.tiles = []; M.doneShown = false;
+    sfx.tap(); renderSetup(); animStop(); drawM1(); m1Panel();
+    say(M.dir === 'row' ? `よこに 1れつ ならべるよ。1れつに ${M.w}こ` : `たてに 1れつ ならべるよ。1れつに ${M.h}こ`);
+  },
+  m1show: (b) => { state.m1.show = b.dataset.v; sfx.tap(); renderSetup(); m1Panel(); },
+  m1size: (b) => { const M = state.m1, d = +b.dataset.v; b.dataset.k === 'w' ? m1Resize(M.w + d, M.h) : m1Resize(M.w, M.h + d); },
+  m1line: () => { const ln = m1Lines().find((l) => !lineFull(l)); if (ln) m1FillLine(ln); },
+  m1all: () => {
+    // ぜんぶ しく： れつごとに じゅんに しいて いく
+    const M = state.m1, todo = m1Lines().filter((l) => !lineFull(l));
+    if (!todo.length) return;
+    runSteps(todo.length, 260, (i) => { todo[i].forEach(([x, y]) => m1Put(x, y)); drawM1(); sfx.tile(); },
+      () => { m1AfterChange(); });
+  },
+  m1clear: () => { const M = state.m1; M.tiles = []; M.doneShown = false; sfx.tap(); animStop(); drawM1(); m1Panel(); say(`タイルを とったよ`); },
+  animPeri: () => explainPeri(curCells()),
+  animFill: () => { curView().beforeFill?.(); explainFill(curCells()); },
+  qkey: (b) => qKey(b.dataset.k),
+  qhint: () => qHint(),
+  qgive: () => qGive(),
+  qnext: () => qNext(),
+  qagain: () => { closeModals(); qStart(); render(true); },
+};
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const fn = ACTS[b.dataset.act];
+  if (fn) fn(b, e);
+});
+$$('.mode-btn').forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
+
+document.addEventListener('keydown', (e) => {
+  if ($('.modal.open')) return;
+  if (e.target.matches && e.target.matches('input')) return;
+  const v = curView();
+  if (v.key) {
+    if (/^[0-9]$/.test(e.key)) v.key(e.key);
+    if (e.key === 'Backspace') v.key('del');
+    if (e.key === 'Enter') { e.preventDefault(); v.key('ok'); }
+  }
+});
+
+/* =========================================================
+   14. 共通の 道具（モード2〜6で つかう）
+   ========================================================= */
+const ZUKEI = R('図形', 'ずけい'), BUN = R('分', 'わ'), OGINA = R('補', 'おぎな'), UTSU = R('移', 'うつ'), HOUHOU = R('方法', 'ほうほう');
+const KI_ = R('切', 'き'), KATACHI = R('形', 'かたち'), HYOU = R('表', 'ひょう'), KAWA = R('変', 'か'), SAI = R('最', 'さい');
+const setOf = (cells) => new Set(cells.map(([x, y]) => key(x, y)));
+// マスの あつまりを かこむ 長方形（x1・y1 は ふくまない）
+function bbox(cells) {
+  const xs = cells.map((c) => c[0]), ys = cells.map((c) => c[1]);
+  const x0 = Math.min(...xs), y0 = Math.min(...ys), x1 = Math.max(...xs) + 1, y1 = Math.max(...ys) + 1;
+  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
+}
+const isRect = (cells) => { const b = bbox(cells); return cells.length > 0 && b.w * b.h === cells.length; };
+// 長方形から 切りとった 形（L字形・凹形など）。cuts は 長方形の 左上からの 位置
+function cutCells(x0, y0, W, H, cuts) {
+  return rectCells(x0, y0, W, H).filter(([x, y]) => !cuts.some((c) => x >= x0 + c.x && x < x0 + c.x + c.w && y >= y0 + c.y && y < y0 + c.y + c.h));
+}
+// L字形： W×H の 長方形の かど（'tr' 右上・'tl' 左上・'br' 右下・'bl' 左下）から cw×ch を 切りとる
+const Lsh = (W, H, cw, ch, corner) => ({ W, H, cuts: [{ x: corner[1] === 'r' ? W - cw : 0, y: corner[0] === 'b' ? H - ch : 0, w: cw, h: ch }] });
+// ふちの 線（ぬりなし）
+function outlineSVG(cells, cls) {
+  const d = boundaryLoops(cells).map((pts) => `M${pts.map(([x, y]) => `${gx(x)} ${gy(y)}`).join(' L')} Z`).join(' ');
+  return d ? `<path class="${cls}" d="${d}"/>` : '';
+}
+// ふちの まっすぐな ところ ごとに 長さを 書く（L字形など）
+function edgeLabelsSVG(cells) {
+  let s = '';
+  for (const pts of boundaryLoops(cells)) {
+    const n = pts.length - 1, c = [];
+    for (let i = 0; i < n; i++) {   // まがる ところ（かど）だけ のこす
+      const p = pts[i], a = pts[(i - 1 + n) % n], b = pts[i + 1];
+      if ((p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0]) !== 0) c.push(p);
+    }
+    for (let i = 0; i < c.length; i++) {
+      const p = c[i], q = c[(i + 1) % c.length];
+      const len = Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]);
+      const dx = Math.sign(q[0] - p[0]), dy = Math.sign(q[1] - p[1]), off = dx === 0 ? 46 : 24;
+      const mx = (gx(p[0]) + gx(q[0])) / 2 + dy * off, my = (gy(p[1]) + gy(q[1])) / 2 - dx * off;
+      s += `<text class="edge-t" x="${mx}" y="${my + 9}" text-anchor="middle">${len}cm</text>`;
+    }
+  }
+  return s;
+}
+// なめらかに かわる うごき（「うごきを へらす」なら すぐ おわる）
+let tweenId = 0;
+const tweenStop = () => { tweenId++; };
+function tween(ms, step, done) {
+  const id = ++tweenId;
+  if (calm() || ms <= 0) { step(1); done?.(); return; }
+  const t0 = performance.now();
+  const f = (now) => {
+    if (id !== tweenId) return;
+    const k = Math.min(1, (now - t0) / ms);
+    step(k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
+    if (k < 1) requestAnimationFrame(f); else done?.();
+  };
+  requestAnimationFrame(f);
+}
+// 面積と まわりの 長さの はこ（hideA・hideP で「？」。peri が null なら 面積だけ）
+const measHTML = (area, peri, hideA, hideP, lockP) => `<div class="meas"${peri === null ? ' style="grid-template-columns:1fr"' : ''}>
+    <div class="m-area"><span class="lab">■ ${MENSEKI}（${NAKA}）</span><span class="val">${hideA ? '？' : `${area}<span class="unit">cm²</span>`}</span></div>
+    ${peri === null ? '' : `<div class="m-peri"><span class="lab">${lockP ? '🔒' : '▭'} ${MAWARI}の ${NAGA}さ</span><span class="val">${hideP ? '？' : `${peri}<span class="unit">cm</span>`}</span></div>`}
+  </div>`;
+const animBtnsHTML = () => `<div class="btn-row"><button class="act-btn b-peri" data-act="animPeri">🐜 ${MAWARI}を たどる</button><button class="act-btn b-area" data-act="animFill">🟦 ${NAKA}を うめる</button></div>`;
+const ansBoxHTML = (input, shown, unit, pre = '') => `<div class="ansrow">${pre}<span class="abox${input ? '' : ' empty'}">${input || shown}</span>${unit}</div>`;
+const nextBtnHTML = (act, last) => `<div class="btn-row"><button class="act-btn b-main" data-act="${act}">${last ? 'おわる ▶' : `つぎの ${MON} ▶`}</button></div>`;
+const progressHTML = (Q) => `<div class="progress">${MON} ${Q.i + 1} / ${Q.qs.length}　<small>${SEIKAI} ${Q.score}</small></div>`;
+const PART_NAMES = ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く'];
+const PART_COLORS = ['#bbdefb', '#ffe0b2', '#c8e6c9', '#f8bbd0', '#d1c4e9', '#fff59d', '#b2ebf2', '#ffccbc'];
+// 分けた 形 1つ（色＋「あ」などの 名前。長方形なら たて×よこ も 書く）
+function partSVG(cells, i, withDims = true) {
+  const b = bbox(cells), rect = isRect(cells);
+  let s = cells.map(([x, y]) => `<rect x="${gx(x)}" y="${gy(y)}" width="${S}" height="${S}" fill="${PART_COLORS[i % 8]}" fill-opacity="0.85"/>`).join('');
+  s += outlineSVG(cells, 'part-line');
+  const [cx, cy] = rect ? [(gx(b.x0) + gx(b.x1)) / 2, (gy(b.y0) + gy(b.y1)) / 2] : [gx(cells[0][0]) + S / 2, gy(cells[0][1]) + S / 2];
+  s += `<text class="part-lab" x="${cx}" y="${cy + (rect && withDims ? 2 : 14)}" text-anchor="middle">${PART_NAMES[i % 8]}</text>`;
+  if (rect && withDims && b.w * b.h > 1) s += `<text class="part-dim" x="${cx}" y="${cy + 30}" text-anchor="middle">${b.h}×${b.w}</text>`;
+  return s;
+}
+const hatchDefs = () => `<defs><pattern id="hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="14" height="14" fill="#fff3e0"/><line x1="0" y1="0" x2="0" y2="14" stroke="#ef6c00" stroke-width="5"/></pattern></defs>`;
+
+/* =========================================================
+   15. 🧵 まわりは 同じでも？
+      まわりの 長さを きめて、よこを かえると たても かわる（たて＋よこ＝まわり÷2）。
+   ========================================================= */
+const PERIS = [12, 16, 20, 24];
+const m2Peris = () => { const [mw, mh] = m1Max(); return PERIS.filter((p) => p / 4 <= Math.min(mw, mh)); };
+function m2Range(per) { const [mw, mh] = m1Max(), half = per / 2; return [Math.max(1, half - mh), Math.min(mw, half - 1)]; }
+const m2H = () => state.m2.per / 2 - state.m2.w;
+const m2Cells = () => rectCells(O1[0], O1[1], state.m2.w, m2H());
+state.m2 = { per: 16, w: 6, rows: [], guess: null, told: false };
+VIEWS.peri = {
+  enter() {
+    const M = state.m2, list = m2Peris();
+    if (!list.includes(M.per)) M.per = list[Math.min(1, list.length - 1)];
+    const [lo, hi] = m2Range(M.per);
+    M.w = clamp(M.w, lo, hi); M.rows = []; M.guess = null; M.told = false;
+    say(`${MAWARI}の ${NAGA}さが ${M.per}cmの ひもで ${CHOUHOUKEI}を つくるよ。${MENSEKI}は どれも ${ONA}じかな？`);
+  },
+  setup() {
+    const M = state.m2;
+    return `<div class="sgrp"><span class="slabel">${MAWARI}の ${NAGA}さ</span>${m2Peris().map((p) => chip('m2per', p, `${p}cm`, M.per === p)).join('')}</div>`;
+  },
+  build() {
+    stage.innerHTML = `<div class="card">${figSVG('<g id="gridL"></g><g id="shapeL"></g><g id="animL"></g><g id="knobL"></g>', 'まわりの 長さが 同じ 長方形')}</div>
+      <div class="card" id="m2panel"></div>`;
+    $('#gridL').innerHTML = gridSVG();
+    this.update();
+  },
+  update() { drawM2(); m2Panel(); },
+  cells: m2Cells,
+};
+function drawM2() {
+  const M = state.m2, h = m2H(), cells = m2Cells();
+  if (!$('#shapeL')) return;
+  $('#shapeL').innerHTML = cells.map(([x, y]) => tileSVG(x, y, 0, (y - O1[1]) % 2)).join('') + outlineSVG(cells, 'rope') + dimsSVG(O1[0], O1[1], M.w, h);
+  const kx = gx(O1[0] + M.w), ky = gy(O1[1] + h);
+  $('#knobL').innerHTML = `<g data-drag="m2corner" aria-label="よこの 長さを かえる"><circle class="knob-hit" cx="${kx}" cy="${ky}" r="44"/><circle class="knob" cx="${kx}" cy="${ky}" r="26"/><text class="knob-t" x="${kx}" y="${ky + 10}" text-anchor="middle">⇔</text></g>`;
+}
+function m2Panel() {
+  const M = state.m2, h = m2H(), el = $('#m2panel'), [lo, hi] = m2Range(M.per);
+  if (!el) return;
+  let s = '';
+  if (!M.guess) {
+    s += `<div class="ask"><p>よそう： ${MAWARI}の ${NAGA}さが ${ONA}じなら、${MENSEKI}も ${ONA}じ？</p>
+      <div class="choices"><button class="choice" data-act="m2guess" data-v="same">みんな ${ONA}じ</button><button class="choice" data-act="m2guess" data-v="diff">ちがう</button></div></div>`;
+  }
+  s += measHTML(M.w * h, M.per, false, false, true);
+  s += `<div class="sizer">
+      <span>よこ</span><span class="num">${M.w}cm</span>
+      <button class="act-btn" data-act="m2w" data-v="-1" aria-label="よこを みじかく" ${M.w <= lo ? 'disabled' : ''}>−</button>
+      <button class="act-btn" data-act="m2w" data-v="1" aria-label="よこを ながく" ${M.w >= hi ? 'disabled' : ''}>＋</button>
+      <span>たて</span><span class="num">${h}cm</span><span></span><span></span>
+    </div>`;
+  s += `<p class="note">よこを のばすと、たては ちぢむ（たて＋よこ＝${M.per / 2}cm）</p>`;
+  s += `<div class="btn-row"><button class="act-btn b-main" data-act="m2rec">📋 ${HYOU}に かく</button><button class="act-btn" data-act="m2all">${ZEN}${R('部', 'ぶ')} ためす</button><button class="act-btn b-reset" data-act="m2clr" ${M.rows.length ? '' : 'disabled'}>けす</button></div>`;
+  if (M.rows.length) {
+    const rows = [...M.rows].sort((a, b) => a - b), max = Math.max(...rows.map((w) => w * (M.per / 2 - w)));
+    const top = Math.max(...Array.from({ length: hi - lo + 1 }, (_, i) => (lo + i) * (M.per / 2 - lo - i)));
+    s += `<table class="ptable"><thead><tr><th>たて</th><th>よこ</th><th>${MAWARI}</th><th>${MENSEKI}</th></tr></thead><tbody>`;
+    for (const w of rows) {
+      const hh = M.per / 2 - w, a = w * hh;
+      s += `<tr class="${w === M.w ? 'cur' : ''}"><td>${hh}cm</td><td>${w}cm</td><td>${M.per}cm</td>
+        <td class="bar-td"><span class="bar" style="width:${Math.round(a / top * 100)}%"></span><b>${a}cm²</b>${a === max ? ' ⭐' : ''}${w === hh ? `<small>${SEIHOUKEI}</small>` : ''}</td></tr>`;
+    }
+    s += '</tbody></table>';
+    const sq = M.per / 4;
+    if (M.rows.includes(sq) && M.rows.length >= 3) {
+      s += `<p class="box-note">${MAWARI}の ${NAGA}さが ${ONA}じでも、${MENSEKI}は ちがう！<br>${SEIHOUKEI}（たて＝よこ）の とき いちばん ${OO}きく、<br>ほそながく なるほど ${CHII}さく なる。</p>`;
+      if (!M.told) {
+        M.told = true;
+        sfx.done(); cheer(`${SEIHOUKEI}が いちばん！`);
+        say(`${M.guess === 'same' ? `よそうと ちがったね。` : M.guess === 'diff' ? 'よそうの とおり！ ' : ''}${MAWARI}が ${M.per}cmでも、${MENSEKI}は ${SEIHOUKEI}の とき ${sq * sq}cm²で いちばん ${OO}きい`, 'good');
+      }
+    }
+  }
+  s += animBtnsHTML();
+  el.innerHTML = s;
+}
+function m2SetW(w, quiet) {
+  const M = state.m2, [lo, hi] = m2Range(M.per);
+  w = clamp(w, lo, hi);
+  if (w === M.w) return;
+  M.w = w; animStop();
+  if (!quiet) sfx.tick();
+  drawM2(); m2Panel();
+  const h = m2H();
+  if (!quiet) say(`たて ${h}cm、よこ ${w}cm。${MAWARI}は ${M.per}cmの まま、${MENSEKI}は ${w * h}cm²${w === h ? `（${SEIHOUKEI}）` : ''}`);
+}
+function m2Record(quiet) {
+  const M = state.m2;
+  if (M.rows.includes(M.w)) { if (!quiet) say(`その ${KATACHI}は もう ${HYOU}に かいて あるよ。よこを かえて みよう`); return; }
+  M.rows.push(M.w);
+  if (!quiet) sfx.line();
+  m2Panel();
+}
+DRAGS.m2corner = { move(pt) { m2SetW(Math.round((pt[0] - gx(O1[0])) / S)); } };
+
+/* =========================================================
+   16. 🧩 ふくざつな 形（L字形など）
+      ✂️ わける … 線を ひいて 長方形に 分けて たす
+      ➕ おぎなう … 大きい 長方形に して、たした ところを ひく
+      ↪️ うつす … 切って うつして、1つの 長方形に する
+   ========================================================= */
+const O3 = [1, 1];
+const SHAPES3 = [
+  Lsh(7, 5, 3, 2, 'tr'), Lsh(6, 6, 3, 3, 'tr'), { W: 7, H: 5, cuts: [{ x: 2, y: 0, w: 3, h: 2 }] }, Lsh(7, 4, 3, 2, 'tl'),
+  Lsh(8, 6, 4, 3, 'br'), Lsh(6, 5, 2, 3, 'bl'), Lsh(4, 4, 2, 2, 'tr'), Lsh(5, 4, 2, 2, 'tl'),
+];
+const shapes3 = () => { const [mw, mh] = m1Max(); return SHAPES3.filter((s) => s.W <= mw && s.H <= mh); };
+const sh3 = () => { const L = shapes3(); return L[state.m3.idx % L.length]; };
+const cells3 = () => { const s = sh3(); return cutCells(O3[0], O3[1], s.W, s.H, s.cuts); };
+state.m3 = { idx: 0, method: 'split', lines: [], found: [], fillStep: 0, off: [0, 0], moved: false, done: {}, cheered: {} };
+function m3Reset() {
+  Object.assign(state.m3, { lines: [], found: [], fillStep: 0, off: [0, 0], moved: false, done: {}, cheered: {} });
+}
+const METHOD_NAMES = { split: `✂️ ${BUN}ける`, fill: `➕ ${OGINA}う`, move: `↪️ ${KI_}って ${UTSU}す` };
+VIEWS.complex = {
+  enter() {
+    const M = state.m3;
+    M.idx %= shapes3().length;
+    m3Reset();
+    m3Intro();
+  },
+  setup() {
+    const M = state.m3;
+    return `<div class="sgrp"><span class="slabel">${KATACHI}</span><button class="chip" data-act="m3shape" data-v="-1" aria-label="まえの 形">◀</button><span class="slabel">${M.idx % shapes3().length + 1} / ${shapes3().length}</span><button class="chip" data-act="m3shape" data-v="1" aria-label="つぎの 形">▶</button></div>
+      <div class="sgrp"><span class="slabel">${HOUHOU}</span>${['split', 'fill', 'move'].map((m) => chip('m3method', m, `${M.done[m] ? '✅' : ''}${METHOD_NAMES[m]}`, M.method === m)).join('')}</div>`;
+  },
+  build() {
+    stage.innerHTML = `<div class="card">${figSVG(`${hatchDefs()}<g id="gridL"></g><g id="shapeL"></g><g id="cutL"></g><g id="animL"></g><g id="prevL"></g><g id="hitL"></g>`, 'ふくざつな 形')}</div>
+      <div class="card" id="m3panel"></div>`;
+    $('#gridL').innerHTML = gridSVG();
+    this.update();
+  },
+  update() { drawM3(); m3Panel(); },
+  cells: cells3,
+};
+function m3Intro() {
+  const M = state.m3;
+  say(M.method === 'split' ? `マスの ${SEN}の 上を なぞって ${SEN}を ひき、${CHOUHOUKEI}に ${BUN}けよう`
+    : M.method === 'fill' ? `たりない ところを ${OGINA}って、${OO}きな ${CHOUHOUKEI}に して みよう`
+    : `${KI_}った ${KATACHI}を ドラッグで ${UTSU}して、1つの ${CHOUHOUKEI}に しよう`);
+}
+
+/* ---------- ✂️ わける ---------- */
+// となりあう 2マスの あいだに ひいた 線が あるか
+function isCut(x1, y1, x2, y2) {
+  return state.m3.lines.some((L) => (x1 !== x2
+    ? L.ax === 'v' && L.k === Math.max(x1, x2) && y1 >= L.a && y1 < L.b
+    : L.ax === 'h' && L.k === Math.max(y1, y2) && x1 >= L.a && x1 < L.b));
+}
+// 線で 分けられた かたまり（左上から じゅんに あ・い・う…）
+function parts3() {
+  const cells = cells3(), set = setOf(cells), seen = new Set(), parts = [];
+  for (const [sx, sy] of cells) {
+    if (seen.has(key(sx, sy))) continue;
+    const part = [], st = [[sx, sy]];
+    seen.add(key(sx, sy));
+    while (st.length) {
+      const [x, y] = st.pop();
+      part.push([x, y]);
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        const k = key(nx, ny);
+        if (set.has(k) && !seen.has(k) && !isCut(x, y, nx, ny)) { seen.add(k); st.push([nx, ny]); }
+      }
+    }
+    part.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    parts.push(part);
+  }
+  return parts;
+}
+const ptVertex = (pt) => [Math.round((pt[0] - PAD) / S), Math.round((pt[1] - PAD) / S)];   // 点 → いちばん 近い マスの かど
+// ドラッグの はじめと おわりから、よこの 線か たての 線かを きめる
+function cutAxis(s, e) {
+  const dx = e[0] - s[0], dy = e[1] - s[1];
+  if (!dx && !dy) return null;
+  return Math.abs(dx) >= Math.abs(dy)
+    ? { ax: 'h', k: s[1], lo: Math.min(s[0], e[0]), hi: Math.max(s[0], e[0]) }
+    : { ax: 'v', k: s[0], lo: Math.min(s[1], e[1]), hi: Math.max(s[1], e[1]) };
+}
+// その 1マス分の 線が 図形の 中を 通って いるか（線の 両がわが 図形）
+const interior = (ax, k, i, set) => (ax === 'h' ? set.has(key(i, k - 1)) && set.has(key(i, k)) : set.has(key(k - 1, i)) && set.has(key(k, i)));
+let cutDrag = null;
+DRAGS.cut = {
+  down(pt) { cutDrag = { s: ptVertex(pt), e: ptVertex(pt) }; drawCutPreview(); },
+  move(pt) { if (cutDrag) { cutDrag.e = ptVertex(pt); drawCutPreview(); } },
+  up() { const d = cutDrag; cutDrag = null; $('#prevL').innerHTML = ''; if (d) m3AddLine(d.s, d.e); },
+};
+function drawCutPreview() {
+  const { s: a, e } = cutDrag, c = cutAxis(a, e);
+  let s = `<circle class="cut-dot" cx="${gx(a[0])}" cy="${gy(a[1])}" r="10"/>`;
+  if (c) {
+    const [x1, y1, x2, y2] = c.ax === 'h' ? [c.lo, c.k, c.hi, c.k] : [c.k, c.lo, c.k, c.hi];
+    s += `<line class="cut-prev" x1="${gx(x1)}" y1="${gy(y1)}" x2="${gx(x2)}" y2="${gy(y2)}"/>`;
+  }
+  $('#prevL').innerHTML = s;
+}
+function m3AddLine(s, e) {
+  const M = state.m3, c = cutAxis(s, e);
+  if (!c) { say(`マスの ${SEN}の 上を ドラッグして ${SEN}を ひこう`, 'warn'); return; }
+  const set = setOf(cells3()), mid = (c.lo + c.hi) / 2;
+  // ひいた ところの うち、図形の 中を 通る 1マス分を さがし、そこから 図形の はしまで のばす
+  let best = null;
+  for (let i = c.lo; i < c.hi; i++) if (interior(c.ax, c.k, i, set) && (best === null || Math.abs(i + 0.5 - mid) < Math.abs(best + 0.5 - mid))) best = i;
+  if (best === null) { sfx.soft(); say(`${ZUKEI}の ${NAKA}を ${R('通', 'とお')}る ように、マスの ${SEN}の 上に ひこう`, 'warn'); return; }
+  let a = best, b = best + 1;
+  while (interior(c.ax, c.k, a - 1, set)) a--;
+  while (interior(c.ax, c.k, b, set)) b++;
+  if (M.lines.some((l) => l.ax === c.ax && l.k === c.k && l.a <= a && l.b >= b)) { say(`その ${SEN}は もう ひいて あるよ`); return; }
+  M.lines.push({ ax: c.ax, k: c.k, a, b });
+  sfx.line();
+  animStop();
+  m3SplitCheck();
+  drawM3(); m3Panel();
+}
+function m3SplitCheck() {
+  const M = state.m3, parts = parts3();
+  if (parts.length < 2) { say(`${SEN}で 2つ いじょうに ${BUN}けよう`); return; }
+  const bad = parts.findIndex((p) => !isRect(p));
+  if (bad >= 0) { say(`まだ ${CHOUHOUKEI}に なって いない ところ（${PART_NAMES[bad]}）が あるよ。もう 1本 ひこう`, 'warn'); return; }
+  const fk = parts.map((p) => { const b = bbox(p); return `${b.h}×${b.w}`; }).join('＋');
+  if (!M.found.includes(fk)) M.found.push(fk);
+  M.done.split = true;
+  if (!M.cheered.split) { M.cheered.split = true; sfx.done(); cheer(`${parts.length}つの ${CHOUHOUKEI}！`); sparkle($('#fig'), 12); }
+  else sfx.correct();
+  say(`${parts.length}つの ${CHOUHOUKEI}に ${BUN}けられた！ それぞれの ${MENSEKI}を たそう。${M.found.length >= 2 ? '' : `ちがう ${BUN}け${R('方', 'かた')}も ある かな？`}`, 'good');
+}
+
+/* ---------- ↪️ うつす： どこで 切れば うつせるか しらべる ---------- */
+function moveInfo() {
+  const cells = cells3(), sh = sh3(), d = gridDim(), out = [];
+  const tries = [];
+  for (let k = 1; k < sh.H; k++) tries.push(['h', O3[1] + k]);
+  for (let k = 1; k < sh.W; k++) tries.push(['v', O3[0] + k]);
+  for (const [ax, k] of tries) {
+    const A = cells.filter(([x, y]) => (ax === 'h' ? y < k : x < k)), B = cells.filter(([x, y]) => (ax === 'h' ? y >= k : x >= k));
+    if (!A.length || !B.length || !isRect(A) || !isRect(B)) continue;
+    const [piece, rest] = A.length <= B.length ? [A, B] : [B, A];
+    const pb = bbox(piece), rb = bbox(rest);
+    let to = null;
+    if (pb.h === rb.h) to = [rb.x1 - pb.x0, rb.y0 - pb.y0];           // 右に ならべる
+    else if (pb.w === rb.w) to = [rb.x0 - pb.x0, rb.y1 - pb.y0];      // 下に ならべる
+    if (!to) continue;
+    if (pb.x1 + to[0] > d.c || pb.y1 + to[1] > d.r) continue;           // 方眼から はみだす
+    out.push({ ax, k, piece, rest, to });
+  }
+  return out[0] || null;
+}
+// うつした あと 1つの 長方形に なったか
+function moveDone(mv, off) {
+  const rest = setOf(mv.rest), moved = mv.piece.map(([x, y]) => [x + off[0], y + off[1]]), d = gridDim();
+  if (moved.some(([x, y]) => rest.has(key(x, y)) || x < 0 || y < 0 || x >= d.c || y >= d.r)) return null;
+  const all = mv.rest.concat(moved);
+  return isRect(all) ? bbox(all) : null;
+}
+let pieceDrag = null;
+DRAGS.piece = {
+  down(pt) { tweenStop(); pieceDrag = { p0: pt, off0: [...state.m3.off] }; },
+  move(pt) {
+    if (!pieceDrag) return;
+    state.m3.off = [pieceDrag.off0[0] + (pt[0] - pieceDrag.p0[0]) / S, pieceDrag.off0[1] + (pt[1] - pieceDrag.p0[1]) / S];
+    const g = $('#pieceG');
+    if (g) g.setAttribute('transform', `translate(${state.m3.off[0] * S} ${state.m3.off[1] * S})`);
+  },
+  up() {
+    pieceDrag = null;
+    const M = state.m3;
+    M.off = M.off.map(Math.round);
+    M.moved = M.off[0] !== 0 || M.off[1] !== 0;
+    sfx.tick();
+    m3MoveCheck();
+  },
+};
+function m3MoveCheck() {
+  const M = state.m3, mv = moveInfo();
+  drawM3(); m3Panel();
+  if (!mv) return;
+  const b = moveDone(mv, M.off);
+  if (b) {
+    M.done.move = true;
+    if (!M.cheered.move) { M.cheered.move = true; sfx.done(); cheer(`${CHOUHOUKEI}に なった！`); sparkle($('#fig'), 12); }
+    say(`1つの ${CHOUHOUKEI}に なった！ たて ${b.h}cm、よこ ${b.w}cm だから ${b.h}×${b.w}＝${b.w * b.h}cm²`, 'good');
+    drawM3(); m3Panel(); renderSetup();
+  } else if (M.moved) {
+    say(`「い」を うごかして、すきまや かさなりの ない ${CHOUHOUKEI}に しよう`);
+  }
+}
+
+/* ---------- かく ---------- */
+function drawM3() {
+  const M = state.m3, cells = cells3(), sh = sh3();
+  if (!$('#shapeL')) return;
+  let s = '', cut = '', hit = '';
+  if (M.method === 'split') {
+    const parts = parts3();
+    s += parts.length > 1 ? parts.map((p, i) => partSVG(p, i)).join('') : shapeSVG(cells);
+    s += outlineSVG(cells, 'shape-line') + edgeLabelsSVG(cells);
+    cut = M.lines.map((L) => {
+      const [x1, y1, x2, y2] = L.ax === 'h' ? [L.a, L.k, L.b, L.k] : [L.k, L.a, L.k, L.b];
+      return `<line class="cut-line" x1="${gx(x1)}" y1="${gy(y1)}" x2="${gx(x2)}" y2="${gy(y2)}"/>`;
+    }).join('');
+    const b = bbox(cells);
+    hit = `<rect class="cellhit" data-drag="cut" x="${gx(b.x0) - 30}" y="${gy(b.y0) - 30}" width="${b.w * S + 60}" height="${b.h * S + 60}"/>`;
+  } else if (M.method === 'fill') {
+    s += shapeSVG(cells) + edgeLabelsSVG(cells);
+    if (M.fillStep >= 1) {
+      const b = bbox(cells);
+      for (const c of sh.cuts) {
+        const x = gx(O3[0] + c.x), y = gy(O3[1] + c.y);
+        s += `<rect x="${x}" y="${y}" width="${c.w * S}" height="${c.h * S}" fill="url(#hatch)" fill-opacity="${M.fillStep >= 2 ? 0.45 : 0.9}"/>`;
+        s += `<text class="hatch-t" x="${x + c.w * S / 2}" y="${y + c.h * S / 2 + 10}" text-anchor="middle">${M.fillStep >= 2 ? `ひく ${c.h}×${c.w}` : 'たした'}</text>`;
+        if (M.fillStep >= 2) s += `<line class="minus-x" x1="${x + 8}" y1="${y + 8}" x2="${x + c.w * S - 8}" y2="${y + c.h * S - 8}"/><line class="minus-x" x1="${x + c.w * S - 8}" y1="${y + 8}" x2="${x + 8}" y2="${y + c.h * S - 8}"/>`;
+      }
+      s += `<rect class="bbox-line" x="${gx(b.x0)}" y="${gy(b.y0)}" width="${b.w * S}" height="${b.h * S}"/>`;
+    }
+  } else {
+    const mv = moveInfo();
+    if (!mv) s += shapeSVG(cells) + edgeLabelsSVG(cells);
+    else {
+      s += partSVG(mv.rest, 0) + outlineSVG(mv.rest, 'part-line');
+      if (!M.moved) {
+        const pb = bbox(mv.piece);
+        const [x1, y1, x2, y2] = mv.ax === 'h' ? [pb.x0, mv.k, pb.x1, mv.k] : [mv.k, pb.y0, mv.k, pb.y1];
+        cut = `<line class="cut-line" x1="${gx(x1)}" y1="${gy(y1)}" x2="${gx(x2)}" y2="${gy(y2)}"/><text class="scissors" x="${gx(x1) - 14}" y="${gy(y1) + 12}" text-anchor="end">✂️</text>`;
+      }
+      // うごかせる「い」（ドラッグ）
+      hit = `<g id="pieceG" data-drag="piece" transform="translate(${M.off[0] * S} ${M.off[1] * S})" style="cursor:grab">${partSVG(mv.piece, 1)}<rect class="cellhit" x="${gx(bbox(mv.piece).x0)}" y="${gy(bbox(mv.piece).y0)}" width="${bbox(mv.piece).w * S}" height="${bbox(mv.piece).h * S}"/></g>`;
+      const b = moveDone(mv, M.off);
+      if (b) cut += `<rect class="bbox-line done" x="${gx(b.x0)}" y="${gy(b.y0)}" width="${b.w * S}" height="${b.h * S}"/>`;
+      else if (!M.moved) cut += outlineSVG(cells, 'shape-line') + edgeLabelsSVG(cells);
+    }
+  }
+  $('#shapeL').innerHTML = s;
+  $('#cutL').innerHTML = cut;
+  $('#hitL').innerHTML = hit;
+}
+function m3Panel() {
+  const M = state.m3, el = $('#m3panel'), cells = cells3(), sh = sh3(), area = areaOf(cells);
+  if (!el) return;
+  const anyDone = M.done.split || M.done.fill || M.done.move;
+  let s = measHTML(area, null, !anyDone, false);   // 切って うつすと まわりの 長さは かわるので、ここでは 面積だけ
+  if (M.method === 'split') {
+    const parts = parts3();
+    s += `<p class="note">${SEN}は マスの ${SEN}に すいつき、${ZUKEI}の はしまで のびるよ</p>`;
+    if (parts.length > 1) {
+      s += `<ul class="rowlog">${parts.map((p, i) => {
+        const b = bbox(p);
+        return isRect(p) ? `<li><b>${PART_NAMES[i]}</b>： たて ${b.h} × よこ ${b.w} ＝ <b>${p.length}</b>cm²</li>` : `<li><b>${PART_NAMES[i]}</b>： まだ ${CHOUHOUKEI}で ない</li>`;
+      }).join('')}</ul>`;
+      if (parts.every(isRect)) s += `<div class="formula"><div class="big">${parts.map((p) => p.length).join(' ＋ ')} ＝ ${area}（cm²）</div><div class="sub">${parts.map((p) => { const b = bbox(p); return `${b.h}×${b.w}`; }).join(' ＋ ')}</div></div>`;
+    }
+    s += `<div class="btn-row"><button class="act-btn" data-act="m3undo" ${M.lines.length ? '' : 'disabled'}>1${R('本', 'ぽん')} けす</button><button class="act-btn b-reset" data-act="m3clear" ${M.lines.length ? '' : 'disabled'}>${ZEN}${R('部', 'ぶ')} けす</button></div>`;
+    if (M.found.length) s += `<p class="note">みつけた ${BUN}け${R('方', 'かた')}： ${M.found.map((f, i) => `${'①②③④⑤⑥⑦⑧'[i] || '・'} ${f}`).join('　')}</p>`;
+  } else if (M.method === 'fill') {
+    const b = bbox(cells), big = b.w * b.h;
+    if (M.fillStep === 0) s += `<div class="btn-row"><button class="act-btn b-main" data-act="m3fill">① ${OGINA}って ${OO}きな ${CHOUHOUKEI}に</button></div>`;
+    if (M.fillStep >= 1) s += `<ul class="rowlog"><li>${OO}きな ${CHOUHOUKEI}： たて ${b.h} × よこ ${b.w} ＝ <b>${big}</b>cm²</li>${sh.cuts.map((c) => `<li>たした ところ： たて ${c.h} × よこ ${c.w} ＝ <b>${c.w * c.h}</b>cm²</li>`).join('')}</ul>`;
+    if (M.fillStep === 1) s += `<div class="btn-row"><button class="act-btn b-main" data-act="m3fill">② たした ところを ひく</button></div>`;
+    if (M.fillStep >= 2) s += `<div class="formula"><div class="big">${big}${sh.cuts.map((c) => ` − ${c.w * c.h}`).join('')} ＝ ${area}（cm²）</div><div class="sub">${b.h}×${b.w}${sh.cuts.map((c) => ` − ${c.h}×${c.w}`).join('')}</div></div>
+      <div class="btn-row"><button class="act-btn b-reset" data-act="m3fillReset">もう一度</button></div>`;
+  } else {
+    const mv = moveInfo();
+    if (!mv) {
+      s += `<p class="box-note">この ${KATACHI}は、1か${R('所', 'しょ')} ${KI_}って ${UTSU}しても ${CHOUHOUKEI}に なりにくいよ。</p>
+        <div class="btn-row"><button class="act-btn b-main" data-act="m3movable">${UTSU}せる ${KATACHI}に かえる</button></div>`;
+    } else {
+      const b = moveDone(mv, M.off);
+      s += `<p class="note">✂️の ところで ${KI_}ったよ。「い」を ドラッグして 「あ」に くっつけよう</p>`;
+      if (b) s += `<div class="formula"><div>たて ${b.h}cm、よこ ${b.w}cm の ${CHOUHOUKEI}に なった</div><div class="big">${b.h} × ${b.w} ＝ ${area}（cm²）</div></div>`;
+      s += `<div class="btn-row"><button class="act-btn" data-act="m3show" ${b ? 'disabled' : ''}>やって みせる</button><button class="act-btn b-reset" data-act="m3back" ${M.moved ? '' : 'disabled'}>もとに もどす</button></div>`;
+    }
+  }
+  // どの 方法で やったか
+  s += `<ul class="checklist">${['split', 'fill', 'move'].map((m) => `<li class="${M.done[m] ? 'ok' : 'ng'}">${METHOD_NAMES[m]}${M.done[m] ? ` → ${area}cm²` : ''}</li>`).join('')}</ul>`;
+  const nDone = ['split', 'fill', 'move'].filter((m) => M.done[m]).length;
+  if (nDone >= 2) s += `<p class="box-note">どの ${HOUHOU}でも ${KOTA}えは ${area}cm²！<br>${KATACHI}を ${KAWA}えても ${HIRO}さは ${KAWA}わらないね</p>`;
+  s += animBtnsHTML();
+  el.innerHTML = s;
+}
+
+/* =========================================================
+   17. 🏫 大きな 面積（1m²＝10000cm²、a・ha・km²）
+      1辺が 10倍 → 面積は 10×10＝100倍。ズームで 1つ 前の 広さが 左上の 1マスに 入る。
+   ========================================================= */
+const ZSTEPS = [
+  { name: '1cm²', side: '1cm', cellName: '', eq: `1${R('辺', 'ぺん')}が 1cmの ${R('正方形', 'せいほうけい')}の ${R('広', 'ひろ')}さ`, n: 1 },
+  { name: '100cm²', side: '10cm', cellName: '1cm²', eq: `10 × 10 ＝ 100　→　100cm²`, n: 100 },
+  { name: '1m²', side: '1m＝100cm', cellName: '100cm²', eq: `1m² ＝ 10000cm²`, n: 100, sub: `100cm²が 100こ → 100 × 100 ＝ 10000（cm²）` },
+  { name: '1a', side: '10m', cellName: '1m²', eq: `1a（1アール）＝ 100m²`, n: 100, sub: `${R('教室', 'きょうしつ')}の ゆか（やく 8m×8m＝64m²）が 1こ 入る くらい` },
+  { name: '1ha', side: '100m', cellName: '1a', eq: `1ha（1ヘクタール）＝ 100a ＝ 10000m²`, n: 100, sub: `${R('校庭', 'こうてい')}（れい：100m×70m＝7000m²＝70a）が 入る くらい` },
+  { name: '1km²', side: '1km＝1000m', cellName: '1ha', eq: `1km² ＝ 100ha ＝ 1000000m²`, n: 100, sub: `1haは ${R('学校', 'がっこう')}の しき${R('地', 'ち')} くらい。それが 100こ ${R('分', 'ぶん')}で ${R('町', 'まち')}の 一部 くらい` },
+];
+const ZFULL = [-130, -110, 1260, 1240], ZCORNER = [-8, -8, 116, 116];
+state.m4 = { sub: 'zoom', step: 2, why: false, whyN: 0, q: null };
+VIEWS.big = {
+  enter() {
+    const M = state.m4;
+    M.why = false; M.whyN = 0;
+    if (M.sub === 'quiz') { m4qStart(); return; }
+    say(`1${R('辺', 'ぺん')}が 10${R('倍', 'ばい')}に なると、${MENSEKI}は ${R('何', 'なん')}${R('倍', 'ばい')}？ ▶で ズームアウト して みよう`);
+  },
+  setup() {
+    const M = state.m4;
+    let s = `<div class="sgrp">${chip('m4sub', 'zoom', '🔍 ズームで みる', M.sub === 'zoom')}${chip('m4sub', 'quiz', `✏️ ${MON}`, M.sub === 'quiz')}</div>`;
+    if (M.sub === 'zoom') s += `<div class="sgrp">${ZSTEPS.map((z, i) => chip('m4step', i, z.name, M.step === i && !M.why)).join('')}</div>`;
+    return s;
+  },
+  build() {
+    stage.innerHTML = `<div class="card"><svg class="fig" id="fig" viewBox="${ZFULL.join(' ')}" role="img" aria-label="大きな 面積"><g id="zoomL"></g></svg></div>
+      <div class="card" id="m4panel"></div>`;
+    this.update();
+  },
+  update() {
+    const M = state.m4;
+    if (M.sub === 'quiz') { m4qDraw(); return; }
+    drawZoom(M.why ? -1 : M.step); m4Panel();
+  },
+  get key() { return state.m4.sub === 'quiz' ? m4qKey : null; },
+};
+// ズームの 絵（step＝−1 は「100倍じゃないの？」の 図）
+function drawZoom(step) {
+  const el = $('#zoomL');
+  if (!el) return;
+  if (step < 0) { el.innerHTML = whySVG(state.m4.whyN); return; }
+  const z = ZSTEPS[step];
+  let s = `<rect x="0" y="0" width="1000" height="1000" fill="#fff" stroke="#37474f" stroke-width="6"/>`;
+  if (step === 0) {
+    s = `<rect x="0" y="0" width="1000" height="1000" fill="#4fc3f7" stroke="#0277bd" stroke-width="12" rx="20"/><text class="z-big" x="500" y="560" text-anchor="middle">1cm²</text>`;
+  } else {
+    // もの（教室・校庭・学校）
+    if (step === 3) s += `<rect class="z-obj" x="100" y="100" width="800" height="800"/><text class="z-objt" x="500" y="520" text-anchor="middle">きょうしつ（8m×8m）</text>`;
+    if (step === 4) s += `<rect class="z-obj" x="0" y="300" width="1000" height="700"/><text class="z-objt" x="500" y="680" text-anchor="middle">こうてい の れい（100m×70m）</text>`;
+    if (step === 5) s += [[350, 260], [620, 420], [240, 650], [760, 760], [480, 860], [860, 230]].map(([x, y]) => `<text x="${x}" y="${y}" font-size="70" text-anchor="middle">🏠</text>`).join('') + `<text x="50" y="80" font-size="70" text-anchor="middle">🏫</text>`;
+    // 10×10 の マス
+    for (let i = 1; i < 10; i++) s += `<line class="z-grid" x1="${i * 100}" y1="0" x2="${i * 100}" y2="1000"/><line class="z-grid" x1="0" y1="${i * 100}" x2="1000" y2="${i * 100}"/>`;
+    // 左上の 1マス ＝ 1つ 前の 広さ（その 中も 10×10 に 分けて おく。ズームすると 見える）
+    s += `<rect class="z-cell glow" x="0" y="0" width="100" height="100"/>`;
+    for (let i = 1; i < 10; i++) s += `<line class="z-fine" x1="${i * 10}" y1="0" x2="${i * 10}" y2="100"/><line class="z-fine" x1="0" y1="${i * 10}" x2="100" y2="${i * 10}"/>`;
+    s += `<text class="z-cellt" x="50" y="58" text-anchor="middle">${z.cellName}</text>`;
+    s += `<rect x="0" y="0" width="1000" height="1000" fill="none" stroke="#37474f" stroke-width="6"/>`;
+    s += `<text class="z-note" x="500" y="1075" text-anchor="middle">黄色い 1マス ＝ ${z.cellName}　が　10×10＝100こ</text>`;
+  }
+  // 1辺の 長さ
+  s += `<line class="dim" x1="0" y1="-40" x2="1000" y2="-40"/><line class="dim" x1="0" y1="-56" x2="0" y2="-24"/><line class="dim" x1="1000" y1="-56" x2="1000" y2="-24"/>`;
+  s += `<text class="z-side" x="500" y="-58" text-anchor="middle">1ぺん ${z.side}</text>`;
+  s += `<text class="z-side" x="-30" y="510" text-anchor="end" transform="rotate(-90 -30 500)">${z.side}</text>`;
+  el.innerHTML = s;
+}
+// 「100倍じゃないの？」： 1cm²を よこに 100こ ならべても まだ 1れつ。たても 100れつ ある
+function whySVG(n) {
+  let s = `<rect x="0" y="0" width="1000" height="1000" fill="#fff" stroke="#37474f" stroke-width="6"/>`;
+  s += `<rect x="0" y="0" width="1000" height="${n * 10}" fill="#4fc3f7" fill-opacity="0.8"/>`;
+  for (let i = 1; i < 100; i++) s += `<line x1="${i * 10}" y1="0" x2="${i * 10}" y2="10" stroke="#0277bd" stroke-width="1.5"/>`;   // 1れつめの 100こ
+  if (n > 1) for (let j = 10; j < n; j += 10) s += `<line x1="0" y1="${j * 10}" x2="1000" y2="${j * 10}" stroke="#0277bd" stroke-width="1" stroke-opacity="0.5"/>`;
+  s += `<rect class="glow" x="0" y="0" width="1000" height="10" fill="none" stroke="#e65100" stroke-width="5"/>`;
+  s += `<text class="z-side" x="500" y="-58" text-anchor="middle">よこ 1cm→100cm（100ばい）</text>`;
+  s += `<line class="dim" x1="0" y1="-40" x2="1000" y2="-40"/><line class="dim" x1="-40" y1="0" x2="-40" y2="1000"/>`;
+  s += `<text class="z-side" x="-58" y="500" text-anchor="middle" transform="rotate(-90 -58 500)">たて 1cm→100cm（100ばい）</text>`;
+  s += `<text class="z-why" x="500" y="${n <= 1 ? 130 : Math.min(960, n * 10 + 80)}" text-anchor="middle">${n <= 1 ? '↑ よこに 100こ。でも まだ 1れつ だけ！' : `100こ × ${n}れつ ＝ ${100 * n}こ`}</text>`;
+  return s;
+}
+function m4Panel() {
+  const M = state.m4, el = $('#m4panel');
+  if (!el) return;
+  let s = '';
+  if (M.why) {
+    s += `<h3>1m²は 100cm²？</h3><p class="qtext">1cm²を よこに 100こ ならべても、<br>まだ 1れつ（100cm²）だけ。<br>たても 100れつ ある！</p>`;
+    s += `<p class="count-big"><b>100</b>こ × <b>${M.whyN}</b>れつ ＝ <b>${100 * M.whyN}</b>こ</p>`;
+    if (M.whyN >= 100) s += `<div class="formula"><div>よこ 100${R('倍', 'ばい')} × たて 100${R('倍', 'ばい')}</div><div class="big">100 × 100 ＝ 10000</div><div class="rule">1m² ＝ 10000cm²</div></div>`;
+    s += `<div class="btn-row"><button class="act-btn b-main" data-act="m4whyGo" ${M.whyN >= 100 ? 'disabled' : ''}>つづけて しく</button><button class="act-btn b-reset" data-act="m4whyEnd">もどる</button></div>`;
+    el.innerHTML = s;
+    return;
+  }
+  const z = ZSTEPS[M.step];
+  s += `<div class="formula"><div class="big">${z.eq}</div>${z.sub ? `<div class="sub">${z.sub}</div>` : ''}</div>`;
+  s += `<div class="btn-row"><button class="act-btn" data-act="m4go" data-v="-1" ${M.step <= 0 ? 'disabled' : ''}>◀ ズームイン</button><button class="act-btn b-main" data-act="m4go" data-v="1" ${M.step >= ZSTEPS.length - 1 ? 'disabled' : ''}>ズームアウト ▶</button></div>`;
+  if (M.step === 2) s += `<div class="btn-row"><button class="act-btn b-hint" data-act="m4why">🤔 1m²は 100cm²じゃ ないの？</button></div>`;
+  s += ladderHTML(M.step);
+  el.innerHTML = s;
+}
+// 面積の たんいの はしご（1辺が 10倍 → 面積は 100倍）
+function ladderHTML(cur) {
+  const rows = [
+    [0, '1cm²', '1cm', ''], [2, '1m²', '1m（100cm）', '× 10000'], [3, '1a', '10m', '× 100'], [4, '1ha', '100m', '× 100'], [5, '1km²', '1km（1000m）', '× 100'],
+  ];
+  return `<table class="ladder"><thead><tr><th>${R('面積', 'めんせき')}</th><th>${R('正方形', 'せいほうけい')}の 1${R('辺', 'ぺん')}</th><th>1つ ${R('上', 'うえ')}の ${R('何倍', 'なんばい')}</th></tr></thead><tbody>
+    ${rows.map(([i, n, side, x]) => `<tr class="${i === cur ? 'cur' : ''}"><td><b>${n}</b></td><td>${side}</td><td>${x}</td></tr>`).join('')}
+    </tbody></table><p class="note">1${R('辺', 'ぺん')}が 10${R('倍', 'ばい')} → ${MENSEKI}は 10×10＝100${R('倍', 'ばい')}</p>`;
+}
+// ズーム： 新しい 絵の 左上の マスから ぜんたいへ（アウト）、ぜんたいから 左上の マスへ（イン）
+function m4Go(d) {
+  const M = state.m4, to = clamp(M.step + d, 0, ZSTEPS.length - 1);
+  if (to === M.step) return;
+  const svg = $('#fig'), lerp = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+  const setVB = (vb) => svg.setAttribute('viewBox', vb.map((v) => v.toFixed(1)).join(' '));
+  sfx.tap();
+  if (d > 0) {
+    M.step = to; renderSetup(); drawZoom(to); m4Panel();
+    tween(1400, (k) => setVB(lerp(ZCORNER, ZFULL, k)), () => { setVB(ZFULL); say(`${ZSTEPS[to - 1].name}が 100こで ${ZSTEPS[to].name}${to === 2 ? '。100cm²が 100こ だから 10000cm²' : ''}`); });
+  } else {
+    tween(1400, (k) => setVB(lerp(ZFULL, ZCORNER, k)), () => {
+      M.step = to; renderSetup(); drawZoom(to); m4Panel(); setVB(ZFULL);
+      say(`${ZSTEPS[to].name}${to ? `（1${R('辺', 'ぺん')} ${ZSTEPS[to].side}）` : ''}`);
+    });
+  }
+}
+function m4WhyGo() {
+  const M = state.m4, from = Math.max(1, M.whyN);
+  const steps = 100 - from;
+  runSteps(steps, 30, (i) => { M.whyN = from + i + 1; drawZoom(-1); if (i % 10 === 9) sfx.tick(); }, () => {
+    M.whyN = 100; drawZoom(-1); m4Panel();
+    sfx.done(); cheer('10000こ！');
+    say(`100こが 100れつ で 10000こ。1m² ＝ 10000cm²（100${R('倍', 'ばい')}では ないよ）`, 'good');
+  });
+}
+
+/* ---------- 大きな 面積の 問題 ---------- */
+const M4Q = [
+  { t: '1m² ＝ □cm²', a: 10000, u: 'cm²', step: 2, cm: true },
+  { t: '3m² ＝ □cm²', a: 30000, u: 'cm²', step: 2, cm: true },
+  { t: '50000cm² ＝ □m²', a: 5, u: 'm²', step: 2, cm: true },
+  { t: '1a ＝ □m²', a: 100, u: 'm²', step: 3 },
+  { t: '1ha ＝ □a', a: 100, u: 'a', step: 4 },
+  { t: '1ha ＝ □m²', a: 10000, u: 'm²', step: 4 },
+  { t: '1km² ＝ □ha', a: 100, u: 'ha', step: 5 },
+  { t: `たて 8m、よこ 9mの ${R('教室', 'きょうしつ')}は □m²`, a: 72, u: 'm²', step: 3 },
+  { t: `たて 20m、よこ 30mの ${R('畑', 'はたけ')}は □a`, a: 6, u: 'a', step: 3, hint: `20×30＝600m²。100m²で 1a` },
+  { t: `たて 200m、よこ 500mの ${R('土地', 'とち')}は □ha`, a: 10, u: 'ha', step: 4, hint: `200×500＝100000m²。10000m²で 1ha` },
+];
+function m4qStart() {
+  state.m4.q = { qs: shuffle(M4Q).slice(0, Math.min(settings.count, M4Q.length)), i: 0, score: 0, hints: 0 };
+  m4qLoad();
+}
+function m4qLoad() {
+  const Q = state.m4.q;
+  Object.assign(Q, { input: '', tries: 0, solved: false, gaveUp: false });
+  state.m4.why = false; state.m4.whyN = 0;
+  say(`□に 入る ${KAZU}は？`);
+}
+function m4qDraw() {
+  const M = state.m4, Q = M.q, q = Q.qs[Q.i];
+  const svg = $('#fig');
+  if (svg) svg.setAttribute('viewBox', ZFULL.join(' '));
+  drawZoom(M.why ? -1 : q.step);
+  const el = $('#m4panel');
+  if (!el) return;
+  const ended = Q.solved || Q.gaveUp;
+  let s = progressHTML(Q);
+  s += `<p class="qtext">${q.t.replace('□', `<span class="abox${Q.input ? '' : ' empty'}" style="display:inline-block;font-size:1.3em">${Q.input || (ended ? q.a : '？')}</span>`)}</p>`;
+  if (M.why) s += `<p class="note">${MI}て みよう： 100こ × ${M.whyN}れつ ＝ ${100 * M.whyN}こ</p><div class="btn-row"><button class="act-btn" data-act="m4whyGo" ${M.whyN >= 100 ? 'disabled' : ''}>つづけて しく</button></div>`;
+  if (ended) s += nextBtnHTML('m4qnext', Q.i + 1 >= Q.qs.length);
+  else {
+    s += keypadHTML('m4qkey');
+    s += `<div class="btn-row"><button class="act-btn b-hint" data-act="m4qhint">💡 ヒント</button>${Q.tries >= 2 ? `<button class="act-btn b-reset" data-act="m4qgive">${KOTA}えを ${MI}る</button>` : ''}</div>`;
+  }
+  s += ladderHTML(q.step);
+  el.innerHTML = s;
+}
+function m4qKey(k) {
+  const Q = state.m4.q;
+  if (Q.solved || Q.gaveUp) return;
+  if (k === 'ok') { m4qAnswer(); return; }
+  Q.input = typeKey(Q.input, k, 8);
+  sfx.tap(); m4qDraw();
+}
+function m4qAnswer() {
+  const M = state.m4, Q = M.q, q = Q.qs[Q.i], v = Number(Q.input);
+  if (!Q.input) return;
+  if (v === q.a) {
+    Q.solved = true; Q.score++; M.why = false;
+    sfx.correct(); cheer(`${q.a}`);
+    say(`${SEIKAI}！ ${stripRuby(q.t).replace('□', q.a)}`, 'good');
+    m4qDraw(); sparkle($('#fig'), 12);
+    return;
+  }
+  Q.tries++; Q.input = ''; sfx.soft();
+  if (q.cm && (v * 100 === q.a || v === q.a * 100)) {
+    // 1m²＝100cm² と した まちがい → 「たても よこも 100倍」の 図
+    M.why = true; M.whyN = 1;
+    say(`1m²を 100cm²と したかな？ 1cm²を よこに 100こ ならべても、まだ 1れつ だけ。たては ${R('何', 'なん')}れつ？`, 'warn');
+  } else if (v * 100 === q.a || v === q.a * 100) {
+    say(`100${R('倍', 'ばい')} ずれて いるよ。下の はしごで、たんいが 1つ ちがうと 100${R('倍', 'ばい')} だね`, 'warn');
+  } else {
+    say(`おしい！ ${q.hint || '下の はしごを 見て みよう'}`, 'warn');
+  }
+  m4qDraw();
+}
+function m4qHint() {
+  const Q = state.m4.q, q = Q.qs[Q.i];
+  Q.hints++; sfx.tap();
+  say(q.hint || (q.cm ? `1m² は 1${R('辺', 'ぺん')} 100cmの ${SEIHOUKEI}。100 × 100 ＝ ？` : `1${R('辺', 'ぺん')}が 10${R('倍', 'ばい')}で、${MENSEKI}は 100${R('倍', 'ばい')}`));
+}
+function m4qGive() {
+  const Q = state.m4.q, q = Q.qs[Q.i];
+  Q.gaveUp = true; Q.hints++;
+  say(`${KOTA}えは ${q.a}。${stripRuby(q.t).replace('□', q.a)}`);
+  m4qDraw();
+}
+function m4qNext() {
+  const Q = state.m4.q;
+  if (Q.i + 1 < Q.qs.length) { Q.i++; m4qLoad(); m4qDraw(); return; }
+  showResult(Q.score, Q.qs.length, Q.hints, 'm4qagain');
+}
+
+/* =========================================================
+   18. 📏 面積から 長さを（面積と たて → よこ）
+      わかって いる 長さの ぶんだけ タイルを 1れつに ならべ、面積に なるまで れつを ふやす。
+   ========================================================= */
+state.m5 = { q: null };
+function m5Make(n) {
+  const [mw, mh] = m1Max(), seen = new Set(), qs = [];
+  let guard = 0;
+  while (qs.length < n && guard++ < 500) {
+    const w = rnd(2, Math.min(mw, 9)), h = rnd(2, Math.min(mh, 7));
+    if (w === h || seen.has(key(w, h))) continue;
+    seen.add(key(w, h));
+    qs.push({ w, h, ask: qs.length % 2 ? 'h' : 'w' });
+  }
+  return shuffle(qs);
+}
+VIEWS.reverse = {
+  enter() { state.m5.q = { qs: m5Make(settings.count), i: 0, score: 0, hints: 0 }; m5Load(); },
+  build() {
+    stage.innerHTML = `<div class="card">${figSVG('<g id="gridL"></g><g id="shapeL"></g><g id="tileL"></g><g id="animL"></g>', '面積から 長さを もとめる')}</div>
+      <div class="card" id="m5panel"></div>`;
+    $('#gridL').innerHTML = gridSVG();
+    this.update();
+  },
+  update() { drawM5(); m5Panel(); },
+  cells: () => { const Q = state.m5.q, q = Q.qs[Q.i]; return rectCells(O1[0], O1[1], q.w, q.h); },
+  key: (k) => m5Key(k),
+};
+const m5Q = () => state.m5.q.qs[state.m5.q.i];
+const m5Known = (q) => (q.ask === 'w' ? q.h : q.w);       // わかって いる 長さ（1れつの こ数）
+const m5Unknown = (q) => (q.ask === 'w' ? q.w : q.h);     // もとめる 長さ（れつの 数）
+function m5Load() {
+  const Q = state.m5.q, q = m5Q();
+  Object.assign(Q, { input: '', tries: 0, solved: false, gaveUp: false, n: 0 });
+  say(`${MENSEKI}が ${q.w * q.h}cm²、${q.ask === 'w' ? `たてが ${q.h}cm` : `よこが ${q.w}cm`}の ${CHOUHOUKEI}。${q.ask === 'w' ? 'よこ' : 'たて'}は ${NAN}cm？`);
+}
+function drawM5() {
+  const Q = state.m5.q, q = m5Q(), d = gridDim(), [x0, y0] = O1;
+  if (!$('#shapeL')) return;
+  const ended = Q.solved || Q.gaveUp, full = ended || Q.n >= m5Unknown(q);
+  let s = '', t = '';
+  // しいた タイル（れつごとに 色を かえる）
+  for (let j = 0; j < Q.n; j++) {
+    const line = q.ask === 'w' ? rectCells(x0 + j, y0, 1, q.h) : rectCells(x0, y0 + j, q.w, 1);
+    line.forEach(([x, y], i) => { t += tileSVG(x, y, j * line.length + i + 1, j % 2); });
+  }
+  if (full) s += shapeSVG(rectCells(x0, y0, q.w, q.h)) + dimsSVG(x0, y0, q.w, q.h, ended ? '' : q.ask);
+  else if (q.ask === 'w') {
+    // たての 辺だけ わかって いる。よこは どこまで？（点線）
+    const yb = gy(y0 + q.h), xe = gx(d.c) - 10;
+    s += `<line class="shape-line" x1="${gx(x0)}" y1="${gy(y0)}" x2="${gx(x0)}" y2="${yb}"/>`
+      + `<line class="open-line" x1="${gx(x0)}" y1="${gy(y0)}" x2="${xe}" y2="${gy(y0)}"/><line class="open-line" x1="${gx(x0)}" y1="${yb}" x2="${xe}" y2="${yb}"/>`
+      + `<line class="dim" x1="${gx(x0) - 50}" y1="${gy(y0)}" x2="${gx(x0) - 50}" y2="${yb}"/>`
+      + `<text class="dim-t" x="${gx(x0) - 64}" y="${(gy(y0) + yb) / 2 - 6}" text-anchor="end">たて</text><text class="dim-t" x="${gx(x0) - 64}" y="${(gy(y0) + yb) / 2 + 26}" text-anchor="end">${q.h}cm</text>`
+      + `<text class="dim-t" x="${(gx(x0) + xe) / 2}" y="${gy(y0) - 30}" text-anchor="middle">よこ ？cm</text>`;
+  } else {
+    const xr = gx(x0 + q.w), ye = gy(d.r) - 10;
+    s += `<line class="shape-line" x1="${gx(x0)}" y1="${gy(y0)}" x2="${xr}" y2="${gy(y0)}"/>`
+      + `<line class="open-line" x1="${gx(x0)}" y1="${gy(y0)}" x2="${gx(x0)}" y2="${ye}"/><line class="open-line" x1="${xr}" y1="${gy(y0)}" x2="${xr}" y2="${ye}"/>`
+      + `<text class="dim-t" x="${(gx(x0) + xr) / 2}" y="${gy(y0) - 30}" text-anchor="middle">よこ ${q.w}cm</text>`
+      + `<text class="dim-t" x="${gx(x0) - 40}" y="${(gy(y0) + ye) / 2}" text-anchor="end">たて</text><text class="dim-t" x="${gx(x0) - 40}" y="${(gy(y0) + ye) / 2 + 32}" text-anchor="end">？cm</text>`;
+  }
+  $('#shapeL').innerHTML = s;
+  $('#tileL').innerHTML = t;
+}
+function m5Panel() {
+  const Q = state.m5.q, q = m5Q(), el = $('#m5panel');
+  if (!el) return;
+  const A = q.w * q.h, kn = m5Known(q), un = m5Unknown(q), ended = Q.solved || Q.gaveUp;
+  const askName = q.ask === 'w' ? 'よこ' : 'たて', knName = q.ask === 'w' ? 'たて' : 'よこ';
+  let s = progressHTML(Q);
+  s += `<p class="qtext">${MENSEKI} ${A}cm²、${knName} ${kn}cm の ${CHOUHOUKEI}。<br>${askName}は ${NAN}cm？</p>`;
+  s += `<p class="count-big">しいた タイル <b>${Q.n * kn}</b>こ <small>／ ${A}こ</small></p>`;
+  if (Q.n) s += `<p class="note">${kn}こが ${Q.n}れつ → ${kn}×${Q.n}＝${kn * Q.n}${Q.n * kn < A ? `（あと ${A - Q.n * kn}こ）` : ''}</p>`;
+  if (!ended) s += `<div class="btn-row"><button class="act-btn b-main" data-act="m5line" ${Q.n >= un ? 'disabled' : ''}>${q.ask === 'w' ? 'たて' : 'よこ'}に 1れつ しく（${kn}こ）</button><button class="act-btn b-reset" data-act="m5clr" ${Q.n ? '' : 'disabled'}>とる</button></div>`;
+  s += ansBoxHTML(Q.input, ended ? un : '？', 'cm', `${askName} `);
+  if (ended) {
+    s += `<div class="formula"><div>${q.ask === 'w' ? `たて × よこ ＝ ${MENSEKI}` : `たて × よこ ＝ ${MENSEKI}`}</div>
+      <div class="big">${q.ask === 'w' ? `${kn} × □ ＝ ${A}` : `□ × ${kn} ＝ ${A}`}</div>
+      <div class="rule">□ ＝ ${A} ÷ ${kn} ＝ ${un}</div></div>`;
+    s += nextBtnHTML('m5next', Q.i + 1 >= Q.qs.length);
+  } else {
+    s += keypadHTML('m5key');
+    if (Q.tries >= 2) s += `<div class="btn-row"><button class="act-btn b-reset" data-act="m5give">${KOTA}えを ${MI}る</button></div>`;
+  }
+  el.innerHTML = s;
+}
+function m5Key(k) {
+  const Q = state.m5.q;
+  if (Q.solved || Q.gaveUp) return;
+  if (k === 'ok') { m5Answer(); return; }
+  Q.input = typeKey(Q.input, k);
+  sfx.tap(); m5Panel();
+}
+function m5Answer() {
+  const Q = state.m5.q, q = m5Q(), v = Number(Q.input), A = q.w * q.h, kn = m5Known(q), un = m5Unknown(q);
+  if (!Q.input) return;
+  if (v === un) {
+    Q.solved = true; Q.score++; Q.n = un;
+    sfx.correct(); cheer(`${un}cm`);
+    say(`${SEIKAI}！ ${kn}こずつ ${un}れつ で ${A}こ。${A}÷${kn}＝${un}`, 'good');
+    drawM5(); m5Panel(); sparkle($('#fig'), 12);
+    return;
+  }
+  Q.tries++; Q.input = ''; sfx.soft();
+  if (v === A - kn) say(`ひき${R('算', 'ざん')}では ないよ。${kn}こずつ ならべて、${A}こに なるのは ${R('何', 'なん')}れつ？`, 'warn');
+  else if (v * kn !== A) say(`${kn} × ${v} ＝ ${kn * v}。${A}に なるかな？ タイルを しいて たしかめよう`, 'warn');
+  m5Panel();
+}
+
+/* =========================================================
+   19. 🧑‍🏫 先生モード（図形を きめて 見せる・答えを かくす）
+   ========================================================= */
+state.m6 = { type: 'rect', w: 6, h: 4, L: { W: 7, H: 5, cw: 3, ch: 2, corner: 'tr' }, free: [], showLen: true, hideAns: true, open: false, tiles: false };
+const m6Cells = () => {
+  const M = state.m6;
+  if (M.type === 'rect') return rectCells(O1[0], O1[1], M.w, M.h);
+  if (M.type === 'L') { const L = M.L, s = Lsh(L.W, L.H, L.cw, L.ch, L.corner); return cutCells(O1[0], O1[1], s.W, s.H, s.cuts); }
+  return M.free.map((k) => k.split(',').map(Number)).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+};
+VIEWS.teacher = {
+  enter() {
+    const M = state.m6, [mw, mh] = m1Max();
+    M.w = Math.min(M.w, mw); M.h = Math.min(M.h, mh);
+    M.L.W = Math.min(M.L.W, mw); M.L.H = Math.min(M.L.H, mh);
+    M.L.cw = Math.min(M.L.cw, M.L.W - 1); M.L.ch = Math.min(M.L.ch, M.L.H - 1);
+    M.open = false;
+    say(`${ZUKEI}を きめて ${MI}せましょう。${KOTA}えは「${KOTA}えを ${MI}る」まで かくれます`);
+  },
+  setup() {
+    const M = state.m6;
+    return `<div class="sgrp"><span class="slabel">${KATACHI}</span>${chip('m6type', 'rect', CHOUHOUKEI, M.type === 'rect')}${chip('m6type', 'L', 'L字形', M.type === 'L')}${chip('m6type', 'free', 'じゆうに かく', M.type === 'free')}</div>
+      <div class="sgrp"><span class="slabel">${NAGA}さ</span>${chip('m6len', '1', 'かく', M.showLen)}${chip('m6len', '0', 'かかない', !M.showLen)}</div>
+      <div class="sgrp"><span class="slabel">${KOTA}え</span>${chip('m6hide', '1', 'かくす', M.hideAns)}${chip('m6hide', '0', `${MI}せる`, !M.hideAns)}</div>`;
+  },
+  build() {
+    stage.innerHTML = `<div class="card">${figSVG('<g id="gridL"></g><g id="shapeL"></g><g id="tileL"></g><g id="animL"></g><g id="hitL"></g>', '先生モードの 図形')}</div>
+      <div class="card" id="m6panel"></div>`;
+    $('#gridL').innerHTML = gridSVG();
+    this.update();
+  },
+  update() { drawM6(); m6Panel(); },
+  cells: m6Cells,
+};
+function drawM6() {
+  const M = state.m6, cells = m6Cells(), d = gridDim();
+  if (!$('#shapeL')) return;
+  let s = cells.length ? shapeSVG(cells) : '';
+  if (M.showLen && cells.length) s += M.type === 'rect' ? dimsSVG(O1[0], O1[1], M.w, M.h) : edgeLabelsSVG(cells);
+  $('#shapeL').innerHTML = s;
+  $('#tileL').innerHTML = M.tiles ? cells.map(([x, y], i) => tileSVG(x, y, i + 1, (y % 2))).join('') : '';
+  $('#hitL').innerHTML = M.type === 'free' ? `<rect class="cellhit" data-drag="m6paint" x="${gx(0)}" y="${gy(0)}" width="${d.c * S}" height="${d.r * S}"/>` : '';
+}
+function m6Panel() {
+  const M = state.m6, el = $('#m6panel'), cells = m6Cells(), [mw, mh] = m1Max();
+  if (!el) return;
+  const hide = M.hideAns && !M.open;
+  const pm = (k, label, v, lo, hi) => `<span>${label}</span><span class="num">${v}cm</span>
+    <button class="act-btn" data-act="m6num" data-k="${k}" data-v="-1" aria-label="${label}を へらす" ${v <= lo ? 'disabled' : ''}>−</button>
+    <button class="act-btn" data-act="m6num" data-k="${k}" data-v="1" aria-label="${label}を ふやす" ${v >= hi ? 'disabled' : ''}>＋</button>`;
+  let s = '';
+  if (M.type === 'rect') s += `<div class="sizer">${pm('h', 'たて', M.h, 1, mh)}${pm('w', 'よこ', M.w, 1, mw)}</div>`;
+  else if (M.type === 'L') {
+    const L = M.L;
+    s += `<div class="sizer">${pm('H', 'たて', L.H, 2, mh)}${pm('W', 'よこ', L.W, 2, mw)}${pm('ch', '切る たて', L.ch, 1, L.H - 1)}${pm('cw', '切る よこ', L.cw, 1, L.W - 1)}</div>`;
+    s += `<div class="btn-row">${[['tl', '↖'], ['tr', '↗'], ['bl', '↙'], ['br', '↘']].map(([c, a]) => chip('m6corner', c, `${a} ${R('切', 'き')}る`, L.corner === c)).join('')}</div>`;
+  } else {
+    s += `<p class="note">マスを タップ・なぞって ${KATACHI}を つくろう（もう一度 タップで けす）</p><div class="btn-row"><button class="act-btn b-reset" data-act="m6freeClr" ${M.free.length ? '' : 'disabled'}>${ZEN}${R('部', 'ぶ')} けす</button></div>`;
+  }
+  s += measHTML(areaOf(cells), periOf(cells), hide, hide);
+  s += `<div class="btn-row">${M.hideAns ? `<button class="act-btn b-main" data-act="m6open">${M.open ? `${KOTA}えを かくす` : `${KOTA}えを ${MI}る`}</button>` : ''}<button class="act-btn" data-act="m6tiles">${M.tiles ? 'タイルを とる' : 'タイルを しく'}</button></div>`;
+  s += animBtnsHTML();
+  el.innerHTML = s;
+}
+let m6PaintMode = null;
+DRAGS.m6paint = {
+  down(pt) {
+    const M = state.m6, [x, y] = ptCell(pt), k = key(x, y), d = gridDim();
+    if (x < 0 || y < 0 || x >= d.c || y >= d.r) return;
+    m6PaintMode = M.free.includes(k) ? 'del' : 'add';
+    m6Paint(x, y);
+  },
+  move(pt) { if (m6PaintMode) m6Paint(...ptCell(pt)); },
+  up() { m6PaintMode = null; },
+};
+function m6Paint(x, y) {
+  const M = state.m6, k = key(x, y), d = gridDim(), has = M.free.includes(k);
+  if (x < 0 || y < 0 || x >= d.c || y >= d.r) return;
+  if (m6PaintMode === 'add' && !has) { M.free.push(k); sfx.tile(); }
+  else if (m6PaintMode === 'del' && has) { M.free = M.free.filter((c) => c !== k); sfx.tick(); }
+  else return;
+  animStop(); drawM6(); m6Panel();
+}
+
+/* =========================================================
+   20. ボタンの はたらき（モード2〜6）
+   ========================================================= */
+Object.assign(ACTS, {
+  // まわりは 同じでも？
+  m2per: (b) => { const M = state.m2; M.per = +b.dataset.v; const [lo, hi] = m2Range(M.per); M.w = clamp(M.w, lo, hi); M.rows = []; M.told = false; sfx.tap(); animStop(); renderSetup(); drawM2(); m2Panel(); say(`${MAWARI}が ${M.per}cmの ${CHOUHOUKEI}。たて＋よこ＝${M.per / 2}cm`); },
+  m2w: (b) => m2SetW(state.m2.w + +b.dataset.v),
+  m2guess: (b) => { state.m2.guess = b.dataset.v; sfx.tap(); m2Panel(); say(`たしかめて みよう！ よこを ${KAWA}えて、${HYOU}に かいて いこう`); },
+  m2rec: () => m2Record(),
+  m2all: () => {
+    const M = state.m2, [lo, hi] = m2Range(M.per);
+    runSteps(hi - lo + 1, 450, (i) => { M.w = lo + i; drawM2(); m2Record(true); sfx.line(); }, () => { drawM2(); m2Panel(); });
+  },
+  m2clr: () => { const M = state.m2; M.rows = []; M.told = false; sfx.tap(); m2Panel(); },
+  // ふくざつな 形
+  m3shape: (b) => { const M = state.m3, n = shapes3().length; M.idx = (M.idx + +b.dataset.v + n) % n; m3Reset(); sfx.tap(); animStop(); renderSetup(); drawM3(); m3Panel(); m3Intro(); },
+  m3method: (b) => { const M = state.m3; M.method = b.dataset.v; tweenStop(); animStop(); sfx.tap(); renderSetup(); drawM3(); m3Panel(); m3Intro(); },
+  m3undo: () => { state.m3.lines.pop(); sfx.tick(); animStop(); drawM3(); m3Panel(); if (state.m3.lines.length) m3SplitCheck(); else m3Intro(); },
+  m3clear: () => { state.m3.lines = []; sfx.tap(); animStop(); drawM3(); m3Panel(); m3Intro(); },
+  m3fill: () => {
+    const M = state.m3, cells = cells3(), b = bbox(cells);
+    M.fillStep++; sfx.line(); animStop();
+    if (M.fillStep === 1) say(`かけた ところを ${OGINA}うと、たて ${b.h}cm、よこ ${b.w}cmの ${OO}きな ${CHOUHOUKEI}。${b.h}×${b.w}＝${b.w * b.h}cm²`);
+    else {
+      M.done.fill = true;
+      if (!M.cheered.fill) { M.cheered.fill = true; sfx.done(); cheer(`${areaOf(cells)}cm²`); }
+      say(`${OO}きな ${CHOUHOUKEI}から、たした ところを ひくと ${areaOf(cells)}cm²`, 'good');
+      renderSetup();
+    }
+    drawM3(); m3Panel();
+  },
+  m3fillReset: () => { state.m3.fillStep = 0; sfx.tap(); drawM3(); m3Panel(); m3Intro(); },
+  m3movable: () => {
+    const M = state.m3, L = shapes3();
+    for (let i = 1; i <= L.length; i++) { M.idx = (M.idx + 1) % L.length; if (moveInfo()) break; }
+    m3Reset(); sfx.tap(); renderSetup(); drawM3(); m3Panel(); m3Intro();
+  },
+  m3show: () => {
+    const M = state.m3, mv = moveInfo();
+    if (!mv) return;
+    const from = [...M.off];
+    M.moved = true;
+    tween(1200, (k) => {
+      M.off = [from[0] + (mv.to[0] - from[0]) * k, from[1] + (mv.to[1] - from[1]) * k];
+      const g = $('#pieceG'); if (g) g.setAttribute('transform', `translate(${M.off[0] * S} ${M.off[1] * S})`);
+    }, () => { M.off = [...mv.to]; m3MoveCheck(); });
+    drawM3();
+  },
+  m3back: () => { const M = state.m3; tweenStop(); M.off = [0, 0]; M.moved = false; sfx.tap(); drawM3(); m3Panel(); m3Intro(); },
+  // 大きな 面積
+  m4sub: (b) => { state.m4.sub = b.dataset.v; tweenStop(); setMode('big'); },
+  m4step: (b) => { const M = state.m4; tweenStop(); animStop(); M.why = false; const to = +b.dataset.v; if (to === M.step + 1 || to === M.step - 1) { renderSetup(); m4Go(to - M.step); } else { M.step = to; $('#fig').setAttribute('viewBox', ZFULL.join(' ')); render(true); } },
+  m4go: (b) => m4Go(+b.dataset.v),
+  m4why: () => { const M = state.m4; M.why = true; M.whyN = 1; sfx.tap(); renderSetup(); drawZoom(-1); m4Panel(); say(`1cm²を よこに 100こ ならべると 100cm²。でも これは まだ 1れつ だけ！`, 'warn'); },
+  m4whyGo: () => m4WhyGo(),
+  m4whyEnd: () => { const M = state.m4; animStop(); M.why = false; sfx.tap(); renderSetup(); drawZoom(M.step); m4Panel(); },
+  m4qkey: (b) => m4qKey(b.dataset.k),
+  m4qhint: () => m4qHint(),
+  m4qgive: () => m4qGive(),
+  m4qnext: () => m4qNext(),
+  m4qagain: () => { closeModals(); m4qStart(); render(true); },
+  // 面積から 長さを
+  m5line: () => { const Q = state.m5.q, q = m5Q(); if (Q.n >= m5Unknown(q)) return; Q.n++; Q.hints++; sfx.line(); animStop(); drawM5(); m5Panel();
+    const kn = m5Known(q), A = q.w * q.h;
+    say(Q.n * kn >= A ? `${A}こに なった！ れつは いくつ？` : `${kn}こが ${Q.n}れつ で ${kn * Q.n}こ。${A}こまで あと ${A - kn * Q.n}こ`); },
+  m5clr: () => { state.m5.q.n = 0; sfx.tap(); drawM5(); m5Panel(); },
+  m5key: (b) => m5Key(b.dataset.k),
+  m5give: () => { const Q = state.m5.q, q = m5Q(); Q.gaveUp = true; Q.hints++; Q.n = m5Unknown(q); say(`${KOTA}えは ${m5Unknown(q)}cm。${q.w * q.h}÷${m5Known(q)}＝${m5Unknown(q)}`); drawM5(); m5Panel(); },
+  m5next: () => { const Q = state.m5.q; animStop(); if (Q.i + 1 < Q.qs.length) { Q.i++; m5Load(); drawM5(); m5Panel(); } else showResult(Q.score, Q.qs.length, null, 'm5again'); },
+  m5again: () => { closeModals(); setMode('reverse'); },
+  // 先生モード
+  m6type: (b) => { state.m6.type = b.dataset.v; state.m6.open = false; sfx.tap(); animStop(); renderSetup(); drawM6(); m6Panel(); },
+  m6len: (b) => { state.m6.showLen = b.dataset.v === '1'; sfx.tap(); renderSetup(); drawM6(); },
+  m6hide: (b) => { state.m6.hideAns = b.dataset.v === '1'; state.m6.open = false; sfx.tap(); renderSetup(); m6Panel(); },
+  m6open: () => { state.m6.open = !state.m6.open; sfx.tap(); m6Panel(); },
+  m6tiles: () => { state.m6.tiles = !state.m6.tiles; sfx.tap(); animStop(); drawM6(); m6Panel(); },
+  m6num: (b) => {
+    const M = state.m6, k = b.dataset.k, d = +b.dataset.v, [mw, mh] = m1Max(), L = M.L;
+    if (k === 'w') M.w = clamp(M.w + d, 1, mw);
+    else if (k === 'h') M.h = clamp(M.h + d, 1, mh);
+    else if (k === 'W') { L.W = clamp(L.W + d, 2, mw); L.cw = Math.min(L.cw, L.W - 1); }
+    else if (k === 'H') { L.H = clamp(L.H + d, 2, mh); L.ch = Math.min(L.ch, L.H - 1); }
+    else if (k === 'cw') L.cw = clamp(L.cw + d, 1, L.W - 1);
+    else if (k === 'ch') L.ch = clamp(L.ch + d, 1, L.H - 1);
+    M.open = false; sfx.tick(); animStop(); drawM6(); m6Panel();
+  },
+  m6corner: (b) => { state.m6.L.corner = b.dataset.v; state.m6.open = false; sfx.tap(); animStop(); drawM6(); m6Panel(); },
+  m6freeClr: () => { state.m6.free = []; state.m6.open = false; sfx.tap(); animStop(); drawM6(); m6Panel(); },
+});
+
+function sparkle(el, num = 12) {
+  if (calm() || !el) return;
+  const r = el.getBoundingClientRect();
+  for (let i = 0; i < num; i++) {
+    const s = document.createElement('div');
+    s.className = 'spark'; s.textContent = '✦';
+    s.style.left = `${r.left + Math.random() * r.width}px`;
+    s.style.top = `${r.top + Math.random() * Math.min(r.height, innerHeight)}px`;
+    s.style.animationDelay = `${Math.random() * 0.3}s`;
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 1500);
+  }
+}
+function cheer(text) {
+  const c = document.createElement('div');
+  c.className = 'cheer'; c.textContent = stripRuby(text);
+  document.body.appendChild(c);
+  setTimeout(() => c.remove(), calm() ? 900 : 1500);
+}
+
+/* =========================================================
+   13. まど（せってい・先生へ・けっか）
+   ========================================================= */
+function openModal(id) { $(id).classList.add('open'); }
+function closeModals() { $$('.modal').forEach((m) => m.classList.remove('open')); }
+$$('.modal').forEach((m) => m.addEventListener('click', (e) => {
+  if (e.target === m || e.target.closest('[data-close]')) closeModals();
+}));
+function renderSettings() {
+  $$('[data-set]').forEach((b) => b.classList.toggle('active', String(settings[b.dataset.set]) === b.dataset.val));
+}
+$('#btnSettings').onclick = () => { renderSettings(); openModal('#modalSettings'); };
+$('#btnHowto').onclick = () => openModal('#modalHowto');
+$('#btnFull').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+};
+$$('[data-set]').forEach((b) => {
+  b.onclick = () => {
+    const raw = b.dataset.val, k = b.dataset.set;
+    settings[k] = raw === 'true' ? true : raw === 'false' ? false : /^\d+$/.test(raw) ? +raw : raw;
+    saveSettings(); renderSettings();
+    // 方眼の 大きさ・問題の 数を かえたら、いまの モードを さいしょから
+    if (k === 'grid' || k === 'count') setMode(state.mode);
+    else render();
+  };
+});
+
+reduceMQ.addEventListener?.('change', () => render());
+setMode('count');
+</script>
+</body>
+</html>

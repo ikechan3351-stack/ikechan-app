@@ -1,0 +1,1782 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>しらべて ぼうグラフ</title>
+<style>
+  :root {
+    --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb;
+    --warn: #bf360c; --warn-bg: #fff3e0; --good: #e65100; --good-bg: #fffde7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f4fbfa 0%, #dcefeb 100%);
+    min-height: 100vh;
+    padding: 10px 16px 24px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  button, input { font-family: inherit; color: inherit; }
+  .no-ruby rt { display: none; }
+  [hidden] { display: none !important; }
+  .wrap { width: 100%; max-width: 1500px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ===== 上の段 ===== */
+  .topbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .back-link { font-size: 0.85rem; color: var(--accent-dark); text-decoration: none; }
+  .title-box { flex: 1; text-align: center; min-width: 220px; }
+  h1 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.8rem); color: var(--accent-dark); }
+  .subtitle { margin: 0; font-size: 0.8rem; color: #546e7a; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tool-btn {
+    min-height: 48px; min-width: 48px; padding: 4px 12px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 0.95rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    min-height: 52px; padding: 6px 14px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: clamp(0.9rem, 2vmin, 1.1rem); font-weight: bold; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .chip {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.active::before { content: "✔ "; }
+  .setup {
+    background: #fff; border-radius: 18px; padding: 6px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; gap: 8px 14px; align-items: center; justify-content: center; flex-wrap: wrap;
+  }
+  .setup:empty { display: none; }
+  .sgrp { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .slabel { font-weight: 900; color: var(--accent-dark); }
+  .progress { font-weight: 900; font-size: 1.15rem; color: var(--accent-dark); }
+
+  /* ===== ひとこと ===== */
+  .say {
+    font-size: clamp(1.05rem, 2.4vmin, 1.4rem); line-height: 1.9; font-weight: bold; text-align: center;
+    background: #fff; border-radius: 14px; padding: 4px 16px; min-height: 2.2em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .say::before { content: "📊 "; }
+  .say.warn { background: var(--warn-bg); color: var(--warn); }
+  .say.warn::before { content: "🤔 "; }
+  .say.good { background: var(--good-bg); color: var(--good); }
+  .say.good::before { content: "⭐ "; }
+
+  /* ===== ボタン ===== */
+  .act-btn {
+    min-height: 52px; min-width: 52px; padding: 4px 12px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: clamp(1rem, 2.2vmin, 1.2rem); font-weight: 900; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12); line-height: 1.25;
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+  .b-reset { background: #f5f5f5; border-color: #cfd8dc; }
+  .b-reset.arm { background: #ffebee; border-color: #e57373; color: #c62828; }
+  .b-main { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 150px; }
+  .b-hint { background: #f3e5f5; border-color: #ce93d8; }
+  .mini-btn {
+    min-height: 48px; padding: 2px 10px; border-radius: 12px; border: 2px solid var(--soft); background: #fff;
+    font-size: 0.9rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+  /* ===== ならび ===== */
+  .stage { display: grid; gap: 10px; align-items: start; }
+  .stage.cols3 { grid-template-columns: minmax(250px, 1fr) minmax(210px, 0.8fr) minmax(340px, 1.7fr); }
+  .stage.cols2 { grid-template-columns: minmax(340px, 1.7fr) minmax(280px, 1fr); }
+  .stage.cols3eq { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stage .wide { grid-column: 1 / -1; }
+  .card {
+    background: #fff; border-radius: 18px; padding: 6px 12px 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; flex-direction: column; gap: 6px; min-width: 0; user-select: none; -webkit-user-select: none;
+  }
+  .card h3 { margin: 0; font-size: clamp(0.95rem, 2vmin, 1.15rem); color: var(--accent-dark); display: flex; align-items: center; justify-content: space-between; gap: 4px 10px; flex-wrap: wrap; }
+  .card input[type="text"], .card input[type="number"] {
+    min-height: 48px; font-size: 1.1rem; font-weight: bold; border: 2px solid var(--soft); border-radius: 10px; padding: 4px 8px; user-select: text; -webkit-user-select: text;
+  }
+  .gnote { margin: 0; font-size: 0.95rem; font-weight: bold; text-align: center; color: var(--warn); min-height: 1.4em; line-height: 1.6; }
+
+  /* ===== グラフ ===== */
+  .graph { display: block; width: 100%; height: auto; max-height: 66vh; font-family: inherit; }
+  .graph.drag { touch-action: none; cursor: pointer; }
+  .graph text { font-family: inherit; }
+  .graph [data-blank] { cursor: pointer; }
+  .glowbg { animation: glow 0.8s ease-in-out infinite alternate; }
+  @keyframes glow { from { opacity: 0.25; } to { opacity: 1; } }
+  .calm .glowbg { animation: none; opacity: 1; }
+
+  /* ===== アンケート（正の字） ===== */
+  .qtitle { margin: 0; font-weight: 900; font-size: 1.1rem; text-align: center; }
+  .vote-rows { display: flex; flex-direction: column; gap: 6px; }
+  .vote-row { display: grid; grid-template-columns: minmax(130px, 0.9fr) 1fr; gap: 8px; align-items: center; border-bottom: 2px dotted #e0e0e0; padding-bottom: 4px; }
+  .vote-btn {
+    min-height: 56px; display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+    border: 3px solid var(--soft); border-radius: 14px; background: #fff; cursor: pointer; touch-action: manipulation;
+    font-size: clamp(1rem, 2.2vmin, 1.25rem); font-weight: 900; text-align: left; box-shadow: 0 3px 0 rgba(0,0,0,0.12);
+  }
+  .vote-btn:active { transform: translateY(2px); box-shadow: none; background: #e0f2f1; }
+  .vote-btn .vname { flex: 1; overflow-wrap: anywhere; }
+  .vote-btn kbd { font-size: 0.7rem; color: #90a4ae; font-family: inherit; }
+  .sw { width: 30px; height: 30px; flex: none; }
+  .tally { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; min-height: 40px; }
+  .tally0 { color: #b0bec5; font-weight: bold; }
+  .sei { width: clamp(30px, 4vmin, 40px); height: clamp(30px, 4vmin, 40px); }
+  .sei line { stroke: #37474f; stroke-width: 4; stroke-linecap: round; }
+  .sei line.draw { stroke: #e65100; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.45s ease-out forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .calm .sei line.draw { animation: none; stroke-dashoffset: 0; }
+
+  /* ===== 表 ===== */
+  .tbl { width: 100%; border-collapse: collapse; font-weight: bold; }
+  .tbl caption { font-weight: 900; font-size: 1.05rem; padding-bottom: 4px; }
+  .tbl th, .tbl td { border: 2px solid #90a4ae; padding: 4px 6px; text-align: center; font-size: clamp(1rem, 2.2vmin, 1.25rem); }
+  .tbl thead th { background: #e0f2f1; font-size: 0.95rem; }
+  .tbl td.n { font-size: clamp(1.3rem, 3vmin, 1.7rem); font-weight: 900; color: var(--accent-dark); }
+  .tbl tr.sum th, .tbl tr.sum td { background: #fafafa; border-top: 4px double #90a4ae; }
+  .tbl tr.pick { cursor: pointer; }
+  .tbl tr.pick:hover td, .tbl tr.pick:hover th { background: #f1f8e9; }
+  .tbl tr.done th, .tbl tr.done td { color: #9e9e9e; background: #f5f5f5; }
+  .tbl tr.bad th, .tbl tr.bad td { background: var(--warn-bg); }
+  .tbl .nm { display: flex; align-items: center; gap: 6px; justify-content: flex-start; text-align: left; }
+  .tbl .nm .sw { width: 22px; height: 22px; }
+
+  /* ===== 二次元表 ===== */
+  .tbl2 { border-collapse: collapse; font-weight: bold; margin: 0 auto; }
+  .tbl2 th, .tbl2 td { border: 2px solid #90a4ae; padding: 4px 8px; text-align: center; font-size: clamp(1rem, 2.4vmin, 1.35rem); min-width: 3.4em; height: 2.5em; }
+  .tbl2 thead th { background: #e0f2f1; }
+  .tbl2 th.diag { position: relative; min-width: 7.5em; background: linear-gradient(to top right, #e0f2f1 calc(50% - 1.5px), #90a4ae calc(50% - 1px), #90a4ae calc(50% + 1px), #e0f2f1 calc(50% + 1.5px)); }
+  .tbl2 th.diag .dtop { position: absolute; right: 6px; top: 2px; font-size: 0.8em; }
+  .tbl2 th.diag .dbot { position: absolute; left: 6px; bottom: 2px; font-size: 0.8em; }
+  .tbl2 .tot { background: #fff8e1; }
+  .tbl2 tr.sum > * { border-top: 4px double #90a4ae; }
+  .tbl2 td.totc, .tbl2 th.totc { border-left: 4px double #90a4ae; }
+  .tbl2 td.empty { background: #fafafa; color: #cfd8dc; }
+  .tbl2 td.hole { cursor: pointer; background: #fff; }
+  .tbl2 td.hole span { display: inline-block; min-width: 2em; border: 3px dashed #bdbdbd; border-radius: 8px; color: #bdbdbd; }
+  .tbl2 td.hole.focus span { border-style: solid; border-color: var(--accent); background: #fffde7; color: var(--ink); }
+  .tbl2 td.ok { color: var(--good); background: var(--good-bg); }
+  .tbl2 td.hl, .tbl2 th.hl { background: #fff59d; box-shadow: inset 0 0 0 3px #fbc02d; }
+  .smalls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .small-t {
+    border: 3px solid var(--soft); border-radius: 14px; background: #fff; padding: 4px 8px; cursor: pointer;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12); touch-action: manipulation; font: inherit;
+  }
+  .small-t.moved { opacity: 0.45; cursor: default; box-shadow: none; }
+  .small-t .tbl th, .small-t .tbl td { font-size: 1rem; padding: 2px 6px; }
+  .small-t .go { font-weight: 900; color: var(--accent-dark); }
+
+  /* ===== こたえる ところ ===== */
+  .qtext { font-size: clamp(1.1rem, 2.8vmin, 1.5rem); font-weight: 900; line-height: 1.9; text-align: center; margin: 0; }
+  .ansrow { display: flex; align-items: flex-end; justify-content: center; gap: 6px; font-size: clamp(1.6rem, 5vmin, 2.4rem); font-weight: 900; }
+  .abox { min-width: 2.8em; min-height: 1.5em; padding: 0 0.2em; border: 4px solid var(--accent); border-radius: 12px; background: #fffde7; text-align: right; line-height: 1.4; }
+  .abox.empty { color: #bdbdbd; }
+  .keypad { display: grid; grid-template-columns: repeat(5, minmax(48px, 64px)); gap: 6px; justify-content: center; }
+  .kp { min-height: 52px; border-radius: 12px; border: 2px solid var(--soft); background: #fff; font-size: 1.5rem; font-weight: 900; cursor: pointer; touch-action: manipulation; color: var(--accent-dark); }
+  .kp-w { grid-column: span 2; font-size: 1.1rem; }
+  .kp-ok { grid-column: span 3; font-size: 1.15rem; background: var(--accent); border-color: var(--accent); color: #fff; }
+  .choices { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .choice {
+    min-height: 56px; min-width: 76px; padding: 4px 12px; border-radius: 16px; border: 4px solid var(--soft); background: #fff;
+    font-size: clamp(1.1rem, 3vmin, 1.5rem); font-weight: 900; cursor: pointer; box-shadow: 0 4px 0 rgba(0,0,0,0.12); touch-action: manipulation;
+  }
+  .choice.bad { border-style: dashed; border-color: var(--warn); color: var(--warn); background: var(--warn-bg); text-decoration: line-through; }
+  .choice.right { border-color: #f9a825; background: #fffde7; }
+  .choice.right::before { content: "⭕ "; font-size: 0.6em; }
+  .ask { border: 3px dashed #ef6c00; background: var(--warn-bg); border-radius: 14px; padding: 6px 10px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .ask p { margin: 0; font-weight: bold; text-align: center; line-height: 1.7; }
+  .box-note { border: 3px solid #fdd835; background: #fffde7; border-radius: 14px; padding: 6px 10px; font-weight: bold; line-height: 1.8; text-align: center; margin: 0; }
+  .shiki { font-size: clamp(1.3rem, 3.6vmin, 1.8rem); font-weight: 900; text-align: center; margin: 0; }
+  .checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: center; font-weight: bold; }
+  .checklist li.ok { color: #2e7d32; }
+  .checklist li.ng { color: #9e9e9e; }
+  .adj { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; font-weight: 900; }
+
+  /* ===== 目もりを かえると ===== */
+  .cmt { margin: 0; border-radius: 12px; padding: 4px 10px; font-weight: bold; line-height: 1.7; text-align: center; border: 3px solid transparent; }
+  .cmt.over { background: #ffebee; color: #c62828; border-color: #ef9a9a; }
+  .cmt.short { background: #eceff1; color: #455a64; border-color: #b0bec5; }
+  .cmt.good { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+  .cap { text-align: center; font-weight: 900; font-size: 1.15rem; margin: 0; }
+  .card.best { box-shadow: 0 0 0 5px #fdd835, 0 4px 12px rgba(0,0,0,0.1); }
+  .big-chips .chip { min-width: 64px; font-size: 1.25rem; }
+
+  /* ===== 先生モード ===== */
+  .ed-row { display: grid; grid-template-columns: 30px 1fr 48px 4.2em 48px 48px; gap: 4px; align-items: center; }
+  .ed-row input[type="text"] { width: 100%; min-width: 0; }
+  .ed-row input[type="number"] { width: 100%; text-align: center; padding: 4px 2px; }
+  .ed-line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .ed-line input[type="text"] { flex: 1; min-width: 8em; }
+  .ed-note { font-size: 0.85rem; color: #546e7a; margin: 0; line-height: 1.6; }
+
+  .pop { display: inline-block; animation: pop 0.45s ease-out; }
+  @keyframes pop { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); } }
+  .spark { position: fixed; z-index: 91; pointer-events: none; font-size: clamp(18px, 3vmin, 34px); color: #ffd600; text-shadow: 0 0 6px #fff; animation: spark 1.1s ease-out forwards; }
+  @keyframes spark { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 30% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; } 100% { transform: translate(-50%, -160%) scale(0.6); opacity: 0; } }
+  .cheer {
+    position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 95; pointer-events: none;
+    background: #fff; border: 5px solid #fdd835; border-radius: 24px; padding: 14px 34px;
+    font-size: clamp(1.5rem, 7vw, 4.5rem); font-weight: 900; color: #e65100; white-space: nowrap;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: cheer 1.4s ease-out forwards;
+  }
+  @keyframes cheer {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+    15% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+    25%, 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  }
+
+  /* ===== まど ===== */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+  .modal.open { display: flex; }
+  .modal-card { background: #fff; border-radius: 20px; padding: 16px 20px; max-width: 760px; width: 100%; max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .modal-card h2 { margin: 0; color: var(--accent-dark); font-size: 1.4rem; }
+  .modal-card h3 { margin: 6px 0 0; color: var(--accent-dark); font-size: 1.05rem; }
+  .modal-card p, .modal-card li { line-height: 1.7; }
+  .modal-card ul { margin: 4px 0; padding-left: 1.4em; }
+  .set-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .set-label { font-weight: bold; min-width: 9em; }
+  .res-big { font-size: 1.6rem; font-weight: 900; color: #e65100; text-align: center; }
+  /* 正の字の かきかた */
+  .demo-big { width: min(60vw, 240px); height: auto; display: block; margin: 0 auto; }
+  .demo-big line { stroke: #37474f; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.6s ease-out forwards; }
+  .demo-big text { font-weight: 900; fill: #e65100; opacity: 0; animation: fadein 0.2s forwards; }
+  @keyframes fadein { to { opacity: 1; } }
+  .calm .demo-big line { animation: none; stroke-dashoffset: 0; }
+  .calm .demo-big text { animation: none; opacity: 1; }
+  .demo-row { display: flex; justify-content: center; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .demo-row figure { margin: 0; text-align: center; font-weight: 900; font-size: 1.3rem; color: #e65100; }
+  .demo-row .sei { width: 56px; height: 56px; display: block; }
+
+  /* 「うごきを へらす」 */
+  .calm .pop, .calm .spark, .calm .cheer { animation: none; }
+
+  @media (max-width: 1100px) {
+    .stage.cols3 { grid-template-columns: 1fr 1fr; }
+    .stage.cols3 > .card:nth-child(3) { grid-column: 1 / -1; }
+  }
+  @media (max-width: 860px) {
+    body { padding: 8px 10px 20px; }
+    .stage.cols3, .stage.cols2, .stage.cols3eq { grid-template-columns: 1fr; }
+    .keypad { grid-template-columns: repeat(5, minmax(40px, 1fr)); width: 100%; }
+  }
+  @media (min-width: 900px) and (orientation: landscape) and (max-height: 820px) {
+    body { padding-top: 6px; }
+    .wrap { gap: 6px; }
+    .subtitle { display: none; }
+    h1 { font-size: 1.3rem; }
+    .mode-btn { min-height: 48px; padding: 4px 10px; }
+  }
+</style>
+</head>
+<body>
+<!-- 模様（もよう）の もと。画面の グラフと ボタンは ここを 見る。display:none に すると 模様が 出ない ブラウザが あるので、大きさ 0 で おく -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="globalDefs"></defs></svg>
+
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+    <div class="title-box">
+      <h1>📊 <ruby>調<rt>しら</rt></ruby>べて ぼうグラフ</h1>
+      <p class="subtitle"><ruby>正<rt>せい</rt></ruby>の<ruby>字<rt>じ</rt></ruby>で <ruby>数<rt>かぞ</rt></ruby>えて、<ruby>表<rt>ひょう</rt></ruby>に まとめて、ぼうグラフに しよう（<ruby>表<rt>ひょう</rt></ruby>とグラフ）</p>
+    </div>
+    <div class="tools">
+      <button class="tool-btn" id="btnHowto">❓ <ruby>先生<rt>せんせい</rt></ruby>へ</button>
+      <button class="tool-btn" id="btnFull">⛶ ぜんがめん</button>
+      <button class="tool-btn" id="btnSettings">⚙️ せってい</button>
+    </div>
+  </div>
+
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn" data-mode="survey">🗳️ <ruby>調<rt>しら</rt></ruby>べて つくろう</button>
+    <button class="mode-btn" data-mode="draw">✏️ グラフを かこう</button>
+    <button class="mode-btn" data-mode="read">👀 グラフを <ruby>読<rt>よ</rt></ruby>もう</button>
+    <button class="mode-btn" data-mode="scale">📏 <ruby>目<rt>め</rt></ruby>もりを かえると？</button>
+    <button class="mode-btn" data-mode="merge">🧮 <ruby>表<rt>ひょう</rt></ruby>を まとめよう</button>
+    <button class="mode-btn" data-mode="teacher">🧑‍🏫 <ruby>先生<rt>せんせい</rt></ruby>モード</button>
+  </div>
+
+  <div class="setup" id="setupBar"></div>
+  <div class="say" id="say" aria-live="polite"></div>
+  <section class="stage" id="stage"></section>
+</div>
+
+<!-- せってい -->
+<div class="modal" id="modalSettings" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>⚙️ せってい</h2>
+    <div class="set-line"><span class="set-label">ふりがな</span>
+      <button class="chip" data-set="ruby" data-val="true">つける</button>
+      <button class="chip" data-set="ruby" data-val="false">つけない</button></div>
+    <div class="set-line"><span class="set-label">こうかおん</span>
+      <button class="chip" data-set="sound" data-val="true">ON</button>
+      <button class="chip" data-set="sound" data-val="false">OFF</button></div>
+    <div class="set-line"><span class="set-label">うごき</span>
+      <button class="chip" data-set="motion" data-val="auto">じどう</button>
+      <button class="chip" data-set="motion" data-val="less">へらす</button>
+      <button class="chip" data-set="motion" data-val="normal">ふつう</button></div>
+    <p class="ed-note">「じどう」は、パソコンの「<ruby>視差効果<rt>しさこうか</rt></ruby>を<ruby>減<rt>へ</rt></ruby>らす」などの せっていに あわせます。「へらす」に すると、ぼうが のびる アニメや <ruby>正<rt>せい</rt></ruby>の<ruby>字<rt>じ</rt></ruby>を かく アニメを しないで、すぐに さいごの すがたを 出します。</p>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- 先生へ -->
+<div class="modal" id="modalHowto" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>❓ 先生へ（つかい方）</h2>
+    <p>3年「表とグラフ」の教材です。調べたことを正の字で数え、表に整理し、棒グラフに表す流れを体験します。児童の名前は入力しません（項目名と人数だけを扱います）。</p>
+    <h3>🗳️ 調べて つくろう</h3>
+    <ul>
+      <li>左のボタンをタップするたびに「正」の字が1画ずつ書き順どおりに増え、表とグラフがその場で更新されます。キーボードの 1〜8 でも押せます。</li>
+      <li>「正の字の かきかた」で、書き順と「正1つで5」の数え方をアニメで見せられます。</li>
+      <li>上の段で 1目もり（1・2・5・10）・たて／よこ・ならべ方（入れた順／多い順）を切りかえられます。「その他」はどちらでもいちばん最後になります。</li>
+      <li>結果はこのブラウザに保存されます。項目名や表題は「先生モード」で変えられます。</li>
+    </ul>
+    <h3>✏️ グラフを かこう</h3>
+    <ul>
+      <li>①表を見て、グラフにかく順（多い順・その他は最後）に項目をタップ　②棒をドラッグでのばす（＋−ボタンでも調整可）　③表題・たんい・目もりの数字を空らんから選ぶ　→「できた！」で書き忘れと棒の長さをチェックします。</li>
+      <li>1目もり1人と2人の問題が交互に出ます。2人の問題では、奇数は目もりの間（半分）になります。</li>
+    </ul>
+    <h3>👀 グラフを 読もう</h3>
+    <ul>
+      <li>1目もりが 1・2・5・10 のグラフで「いくつ」「1目もりは？」「いちばん多いのは？」「ちがいは？」を6問。</li>
+      <li>1目もりが1でないグラフで読み間違えると、目もりの数字が光り「1目もりは何人？」と聞き返します。わかったら各目もりに数が出ます。</li>
+    </ul>
+    <h3>📏 目もりを かえると？</h3>
+    <ul>
+      <li>同じデータ・同じ大きさの紙（20目もり）で、1目もりを変えたときの見え方をくらべます。はみ出す・短すぎて違いが見えにくい・ちょうどよい、を言葉で示します。</li>
+      <li>「クラスの データ」は「調べて つくろう」で集めた結果を使います。</li>
+    </ul>
+    <h3>🧮 表を まとめよう</h3>
+    <ul>
+      <li>学年・組・月ごとの3つの表をタップで1つの表（二次元表）にうつし、合計のらんを穴うめで計算します。まちがえると、たすところが光り、式が出ます。最後に表を読む問題が2問あります。</li>
+    </ul>
+    <h3>🧑‍🏫 先生モード</h3>
+    <ul>
+      <li>表題・たんい・項目名・数を直接入力できます（最大8項目）。ここで入れたデータは「調べて つくろう」と「目もりを かえると？（クラスの データ）」で使われます。</li>
+    </ul>
+    <h3>そのほか</h3>
+    <ul>
+      <li>棒は色だけでなく模様でも区別しています（その他は灰色・模様なし）。</li>
+      <li>「🖼️ 画像で ほぞん」でグラフをPNG画像として保存できます（学習プリント・掲示用）。</li>
+      <li>授業での使い方の例は README（しらべて ぼうグラフ_README.md）にあります。</li>
+    </ul>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- 正の字の かきかた -->
+<div class="modal" id="modalSei" role="dialog" aria-modal="true">
+  <div class="modal-card" id="seiCard"></div>
+</div>
+
+<!-- けっか -->
+<div class="modal" id="modalResult" role="dialog" aria-modal="true">
+  <div class="modal-card" id="resultCard"></div>
+</div>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const R = (kanji, kana) => `<ruby>${kanji}<rt>${kana}</rt></ruby>`;   // ルビつきの 漢字
+const range = (n, f) => Array.from({ length: n }, (_, i) => f(i));
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+const rnd = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = rnd(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const sum = (arr) => arr.reduce((s, x) => s + x, 0);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// よく つかう ことば（3年生までの 漢字＋ふりがな）
+const HYOU = R('表', 'ひょう'), HYOUDAI = R('表題', 'ひょうだい'), NINZUU = R('人数', 'にんずう'), KAZU = R('数', 'かず'), SUU = R('数', 'すう');
+const OO = R('多', 'おお'), SUKU = R('少', 'すく'), ME = R('目', 'め'), NAN = R('何', 'なん'), YO = R('読', 'よ'), KA = R('書', 'か');
+const SHIRA = R('調', 'しら'), GOUKEI = R('合計', 'ごうけい'), SEI = R('正', 'せい'), JI = R('字', 'じ'), MI = R('見', 'み'), NAGA = R('長', 'なが');
+const KAMI = R('紙', 'かみ'), HAI = R('入', 'はい'), IRE = R('入', 'い'), KOTA = R('答', 'こた'), ONA = R('同', 'おな'), KAZO = R('数', 'かぞ');
+const SHIKI = R('式', 'しき'), MON = R('問', 'もん'), WA = R('分', 'わ'), SENSEI = R('先生', 'せんせい'), TA = R('他', 'た'), KAKU = R('画', 'かく');
+const SONOTA = `その${TA}`;
+const LAB_TXT = `${ME}もりの ${SUU}${JI}`;   // 目もりの 数字
+// たんいを ふりがなつきで（人→にん、台→だい）
+const uH = (u) => (u === '人' ? R('人', 'にん') : u === '台' ? R('台', 'だい') : esc(u));
+const isOther = (name) => /^\s*(その他|そのた)\s*$/.test(name);
+
+/* =========================================================
+   1. データの もと
+   ========================================================= */
+// アンケートの ひながた（先生モードで えらべる。「グラフを かこう」でも つかう）
+const PRESETS = [
+  { key: 'fruit', label: 'くだもの', title: 'すきな くだものと 人数', unit: '人', names: ['りんご', 'みかん', 'バナナ', 'いちご', 'ぶどう', 'その他'] },
+  { key: 'play', label: 'あそび', title: 'すきな あそびと 人数', unit: '人', names: ['おにごっこ', 'ドッジボール', 'なわとび', 'かくれんぼ', 'その他'] },
+  { key: 'animal', label: 'どうぶつ', title: 'すきな どうぶつと 人数', unit: '人', names: ['犬', 'ねこ', 'うさぎ', 'パンダ', 'ライオン', 'その他'] },
+  { key: 'lunch', label: 'きゅうしょく', title: 'すきな きゅうしょくと 人数', unit: '人', names: ['カレー', 'あげパン', 'ハンバーグ', 'ラーメン', 'その他'] },
+  { key: 'color', label: '色', title: 'すきな 色と 人数', unit: '人', names: ['赤', '青', '黄', '緑', 'ピンク', 'その他'] },
+];
+// 大きい 数に なる もの（1目もり 5・10 の グラフで つかう）
+const BIG_SETS = [
+  { title: '学校の 前を 通った 車の 台数', unit: '台', names: ['じょうよう車', 'トラック', 'バス', 'オートバイ', 'その他'] },
+  { title: '図書室で かりた 本の 数', unit: 'さつ', names: ['ものがたり', '図かん', 'でんき', 'しの 本', 'その他'] },
+];
+// 「目もりを かえると？」の れい（同じ データを ずっと つかう ので、数は きめて おく）
+const SCALE_SETS = {
+  big: { title: '学校の 前を 通った 車の 台数', unit: '台', rows: [['じょうよう車', 34], ['トラック', 18], ['オートバイ', 11], ['バス', 7], ['その他', 4]] },
+  small: { title: 'すきな 色と 人数', unit: '人', rows: [['赤', 9], ['青', 7], ['黄', 6], ['緑', 4], ['その他', 3]] },
+};
+// 「表を まとめよう」の もんだい
+const MERGE_SETS = [
+  { title: '学年ごとの すきな あそび', colHead: '学年', cols: ['1年', '2年', '3年'], rows: ['おにごっこ', 'ドッジボール', 'なわとび', 'その他'] },
+  { title: '組ごとの すきな きゅうしょく', colHead: '組', cols: ['1組', '2組', '3組'], rows: ['カレー', 'あげパン', 'ハンバーグ', 'その他'] },
+  { title: '月ごとの けがの しゅるい', colHead: '月', cols: ['4月', '5月', '6月'], rows: ['すりきず', 'きりきず', 'つき指', 'その他'] },
+];
+
+/* =========================================================
+   2. せってい と アンケートの データ（この ブラウザに ほぞん。ほぞん できなくても うごく）
+      アンケートの データ（表題・たんい・しゅるいと 数）は settings.survey の 1か所で もつ。
+      正の字・表・グラフは ぜんぶ ここから かく。
+   ========================================================= */
+const SETTINGS_KEY = 'bougraph-settings';
+function presetSurvey(p) {
+  return { title: p.title, unit: p.unit, items: p.names.map((name, i) => ({ name, n: 0, pat: i })) };
+}
+const DEFAULTS = { sound: true, ruby: true, motion: 'auto', graph: { step: 1, dir: 'v', order: 'input' }, survey: null };
+const settings = (() => {
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch (e) { return { ...DEFAULTS }; }
+})();
+if (!settings.survey || !Array.isArray(settings.survey.items) || !settings.survey.items.length) settings.survey = presetSurvey(PRESETS[0]);
+settings.graph = { ...DEFAULTS.graph, ...settings.graph };
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ほぞん できなくても よい */ }
+}
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const calm = () => settings.motion === 'less' || (settings.motion === 'auto' && reduceMQ.matches);
+
+// グラフに かく じゅん（'input'＝入れた じゅん／'desc'＝多い じゅん）。どちらでも その他は さいご
+function ordered(items, order) {
+  const list = items.map((it, i) => ({ ...it, i }));
+  if (order === 'desc') list.sort((a, b) => b.n - a.n || a.i - b.i);
+  return [...list.filter((it) => !isOther(it.name)), ...list.filter((it) => isOther(it.name))];
+}
+
+/* =========================================================
+   3. 音（ブラウザで 音を つくる。ファイルは つかわない）
+   ========================================================= */
+let actx = null;
+function play(notes) {
+  if (!settings.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const now = actx.currentTime;
+    for (const [f, t, dur, type = 'sine', vol = 0.14] of notes) {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, now + t);
+      g.gain.exponentialRampToValueAtTime(vol, now + t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + t + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(now + t); o.stop(now + t + dur + 0.05);
+    }
+  } catch (e) { /* 音が 出せなくても うごく */ }
+}
+const sfx = {
+  stroke:  (k) => play([[440 + k * 70, 0, 0.09, 'triangle', 0.12]]),
+  five:    () => play([[523, 0, 0.1], [659, 0.08, 0.1], [784, 0.16, 0.18]]),
+  tap:     () => play([[880, 0, 0.05, 'sine', 0.08]]),
+  tick:    () => play([[700, 0, 0.04, 'triangle', 0.06]]),
+  undo:    () => play([[392, 0, 0.1, 'triangle', 0.1]]),
+  correct: () => play([[784, 0, 0.12], [988, 0.1, 0.12], [1175, 0.2, 0.12], [1568, 0.3, 0.35]]),
+  soft:    () => play([[392, 0, 0.15, 'triangle', 0.1], [440, 0.15, 0.2, 'triangle', 0.1]]),
+  done:    () => play([[523, 0, 0.1], [659, 0.08, 0.1], [784, 0.16, 0.18], [1047, 0.26, 0.3]]),
+};
+
+/* =========================================================
+   4. 模様（色だけで なく 模様でも くべつ）と 正の字
+   ========================================================= */
+// c＝地の 色、d＝模様と ふちの 色、k＝模様の しゅるい
+const PAT = [
+  { c: '#ef9a9a', d: '#c62828', k: 'slash' },   // 赤・ななめ線
+  { c: '#90caf9', d: '#1565c0', k: 'dots' },    // 青・水玉
+  { c: '#fff176', d: '#f57f17', k: 'hline' },   // 黄・よこ線
+  { c: '#a5d6a7', d: '#2e7d32', k: 'grid' },    // 緑・こうし
+  { c: '#ce93d8', d: '#6a1b9a', k: 'vline' },   // むらさき・たて線
+  { c: '#ffcc80', d: '#e65100', k: 'cross' },   // オレンジ・あみ目
+  { c: '#80deea', d: '#00838f', k: 'back' },    // 水色・ぎゃくななめ
+  { c: '#f8bbd0', d: '#ad1457', k: 'ring' },    // ピンク・わっか
+];
+const PAT_OTHER = { c: '#e0e0e0', d: '#757575', k: 'plain' };   // その他：灰色・模様なし
+const patOf = (it) => (isOther(it.name) ? PAT_OTHER : PAT[(it.pat ?? 0) % PAT.length]);
+const fillOf = (it) => (isOther(it.name) ? 'url(#patO)' : `url(#pat${(it.pat ?? 0) % PAT.length})`);
+function patternMarkup(id, p) {
+  const L = (d) => `<path d="${d}" stroke="${p.d}" stroke-width="2" fill="none"/>`;
+  const body = {
+    slash: L('M-3,3 L3,-3 M0,12 L12,0 M9,15 L15,9'),
+    back: L('M-3,9 L3,15 M0,0 L12,12 M9,-3 L15,3'),
+    cross: L('M-3,3 L3,-3 M0,12 L12,0 M9,15 L15,9 M-3,9 L3,15 M0,0 L12,12 M9,-3 L15,3'),
+    dots: `<circle cx="3" cy="3" r="2" fill="${p.d}"/><circle cx="9" cy="9" r="2" fill="${p.d}"/>`,
+    ring: `<circle cx="6" cy="6" r="3.2" fill="none" stroke="${p.d}" stroke-width="1.6"/>`,
+    hline: L('M0,6 H12'),
+    vline: L('M6,0 V12'),
+    grid: L('M0,6 H12 M6,0 V12'),
+    plain: '',
+  }[p.k];
+  return `<pattern id="${id}" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="${p.c}"/>${body}</pattern>`;
+}
+const patDefs = () => PAT.map((p, i) => patternMarkup(`pat${i}`, p)).join('') + patternMarkup('patO', PAT_OTHER);
+$('#globalDefs').innerHTML = patDefs();
+const swatch = (it, cls = 'sw') => {
+  const p = patOf(it);
+  return `<svg class="${cls}" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="5" fill="${fillOf(it)}" stroke="${p.d}" stroke-width="2.5"/></svg>`;
+};
+
+// 正の字の 5画（書きじゅん）。40×40 の ます の 中の 線
+const SEI_STROKES = [
+  [6, 6, 34, 6],     // 1 上の よこ
+  [20, 6, 20, 34],   // 2 まん中の たて
+  [20, 20, 31, 20],  // 3 右の みじかい よこ
+  [10, 19, 10, 34],  // 4 左の たて
+  [3, 34, 37, 34],   // 5 下の よこ
+];
+const seiLine = ([x1, y1, x2, y2], cls = '', style = '') =>
+  `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" pathLength="1"${cls ? ` class="${cls}"` : ''}${style ? ` style="${style}"` : ''}/>`;
+// n 画ぶんの 正の字。anim＝さいごの 1画を 書く アニメに する
+function tallyHTML(n, anim = false) {
+  if (n <= 0) return '<span class="tally0">―</span>';
+  const groups = Math.ceil(n / 5);
+  return range(groups, (k) => {
+    const m = Math.min(5, n - k * 5);
+    return `<svg class="sei" viewBox="0 0 40 40" aria-hidden="true">${SEI_STROKES.slice(0, m)
+      .map((s, j) => seiLine(s, anim && k === groups - 1 && j === m - 1 ? 'draw' : '')).join('')}</svg>`;
+  }).join('');
+}
+
+/* =========================================================
+   5. ぼうグラフを かく（SVG）
+      o = { items:[{key,name,n,pat}], vals?, title, unit, step, cells, dir:'v'|'h',
+            blank?, glow?, tickNums?, guides?, marks?, showNums?, drag? }
+      ・1目もりの 大きさ step と、目もりの 数 cells で じくの 長さ（step×cells）が きまる
+      ・目もりの 数字は 5目もり（または 2目もり）ごとに 書く
+   ========================================================= */
+const LABEL_EVERY = { 1: 5, 2: 10, 5: 10, 10: 50 };   // 数字を 書く 目もり
+const GW = 560, GH = 440;
+const GEO = {};   // svg の id → さいごに かいた ときの いち（ドラッグで つかう）
+function graphGeo(o) {
+  const V = o.dir !== 'h';
+  const g = V ? { x0: 76, x1: 546, y0: 72, y1: 368 } : { x0: 126, x1: 500, y0: 62, y1: 358 };
+  const n = Math.max(1, o.items.length), axisMax = o.step * o.cells;
+  const len = V ? g.y1 - g.y0 : g.x1 - g.x0;
+  Object.assign(g, { V, n, axisMax, len, step: o.step, cells: o.cells });
+  g.slot = (V ? g.x1 - g.x0 : g.y1 - g.y0) / n;
+  g.thick = Math.min(g.slot * 0.62, V ? 66 : 42);
+  g.at = (v) => (V ? g.y1 - (v / axisMax) * len : g.x0 + (v / axisMax) * len);       // 数 v の じく上の いち
+  g.mid = (i) => (V ? g.x0 + (i + 0.5) * g.slot : g.y0 + (i + 0.5) * g.slot);        // i ばんめの ぼうの まん中
+  g.valOf = (x, y) => ((V ? g.y1 - y : x - g.x0) / len) * axisMax;                  // 点の いち → 数
+  g.slotOf = (x, y) => Math.floor(((V ? x - g.x0 : y - g.y0) / (V ? g.x1 - g.x0 : g.y1 - g.y0)) * n);
+  return g;
+}
+const T = (x, y, s, size, attrs = '') => `<text x="${x}" y="${y}" font-size="${size}" font-weight="bold" fill="#263238" ${attrs}>${s}</text>`;
+// 名前を わくに 入る 大きさで（長い ときは 2行に）
+function nameText(name, cx, cy, avail, V) {
+  const len = [...name].length;
+  let fs = clamp(avail / Math.max(1, len), 10, 18);
+  if (fs < 13 && len > 3) {
+    const chars = [...name], h = Math.ceil(len / 2);
+    const a = chars.slice(0, h).join(''), b = chars.slice(h).join('');
+    fs = clamp(avail / h, 10, 17);
+    const dy = fs * 0.6;
+    const anchor = V ? 'middle' : 'end';
+    return T(cx, cy - dy + fs * 0.35, esc(a), fs, `text-anchor="${anchor}"`) + T(cx, cy + dy + fs * 0.35, esc(b), fs, `text-anchor="${anchor}"`);
+  }
+  return T(cx, cy + fs * 0.35, esc(name), fs, `text-anchor="${V ? 'middle' : 'end'}"`);
+}
+// クリックできる 空らん（まだ 書いて いない 表題・たんい・数字）
+function blankBox(kind, x, y, w, h, stateK, text) {
+  const active = stateK === 'active';
+  return `<g data-blank="${kind}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${active ? '#fff59d' : '#fafafa'}" stroke="${active ? '#f9a825' : '#9e9e9e'}" stroke-width="2.5" stroke-dasharray="${active ? '' : '6 4'}"/>${T(x + w / 2, y + h / 2 + 6, text, 16, 'text-anchor="middle" fill="#9e9e9e"')}</g>`;
+}
+function graphInner(o) {
+  const g = graphGeo(o), V = g.V, out = [];
+  const lab = LABEL_EVERY[o.step] || o.step * 5;
+  const bl = o.blank || {};
+  const vals = o.vals || o.items.map((it) => it.n);
+  out.push(`<rect x="0" y="0" width="${GW}" height="${GH}" fill="#fff"/>`);
+  // 表題
+  const tx = GW / 2;
+  if (bl.title && bl.title !== 'filled') out.push(blankBox('title', tx - 150, 8, 300, 36, bl.title, '？ ひょうだい'));
+  else out.push(T(tx, 34, esc(o.title || ''), clamp(440 / Math.max(1, [...(o.title || '')].length), 14, 22), 'text-anchor="middle"'));
+  // 目もりの 線（グラフ用紙）
+  for (let k = 0; k <= g.cells; k++) {
+    const val = k * o.step, p = g.at(val), major = val % lab === 0;
+    if (k > 0) out.push(V
+      ? `<line x1="${g.x0}" y1="${p}" x2="${g.x1}" y2="${p}" stroke="${major ? '#90a4ae' : '#dde4e7'}" stroke-width="${major ? 1.6 : 1}"/>`
+      : `<line x1="${p}" y1="${g.y0}" x2="${p}" y2="${g.y1}" stroke="${major ? '#90a4ae' : '#dde4e7'}" stroke-width="${major ? 1.6 : 1}"/>`);
+    // じくの 外の 小さな 目もり
+    const tl = major ? 9 : 5;
+    out.push(V ? `<line x1="${g.x0 - tl}" y1="${p}" x2="${g.x0}" y2="${p}" stroke="#455a64" stroke-width="1.6"/>`
+      : `<line x1="${p}" y1="${g.y1}" x2="${p}" y2="${g.y1 + tl}" stroke="#455a64" stroke-width="1.6"/>`);
+    const [lx, ly, anchor] = V ? [g.x0 - 12, p + 6, 'end'] : [p, g.y1 + 28, 'middle'];
+    if (major) {
+      const st = bl.labels && val > 0 ? bl.labels[val] : 'filled';
+      if (st && st !== 'filled') {
+        out.push(V ? blankBox(`lab:${val}`, 4, p - 15, 58, 30, st, '？') : blankBox(`lab:${val}`, p - 24, g.y1 + 10, 48, 28, st, '？'));
+      } else {
+        if (o.glow) out.push(V ? `<rect class="glowbg" x="${g.x0 - 50}" y="${p - 14}" width="44" height="26" rx="6" fill="#ffeb3b"/>`
+          : `<rect class="glowbg" x="${p - 22}" y="${g.y1 + 9}" width="44" height="26" rx="6" fill="#ffeb3b"/>`);
+        out.push(T(lx, ly, val, 18, `text-anchor="${anchor}"${o.glow ? ' fill="#bf360c"' : ''}`));
+      }
+    } else if (o.tickNums === 'value' && k > 0) {
+      out.push(V ? T(g.x0 - 12, p + 4, val, 11, 'text-anchor="end" fill="#e65100"') : T(p, g.y1 + 22, val, 11, 'text-anchor="middle" fill="#e65100"'));
+    }
+    // 0 から 1つめの 数字までの 目もりに ①②… を つける（1目もりを 考える ヒント）
+    if (o.tickNums === 'index' && k > 0 && val <= lab) {
+      const [cx, cy] = V ? [g.x0 + 14, p] : [p, g.y1 - 14];
+      out.push(`<circle cx="${cx}" cy="${cy}" r="9" fill="#ff7043"/>` + T(cx, cy + 4.5, k, 12, 'text-anchor="middle" fill="#fff"'));
+    }
+  }
+  // たんい
+  if (bl.unit && bl.unit !== 'filled') out.push(V ? blankBox('unit', 8, g.y0 - 58, 62, 30, bl.unit, '？') : blankBox('unit', GW - 62, g.y1 + 42, 58, 30, bl.unit, '？'));
+  else out.push(V ? T(g.x0 - 8, g.y0 - 24, `（${esc(o.unit || '')}）`, 16, 'text-anchor="end"') : T(GW - 6, g.y1 + 62, `（${esc(o.unit || '')}）`, 16, 'text-anchor="end"'));
+  // ぼう
+  o.items.forEach((it, i) => {
+    const v = Math.max(0, vals[i] || 0), m = g.mid(i), th = g.thick, p = patOf(it);
+    const over = v > g.axisMax + 1e-6, shown = Math.min(v, g.axisMax), e = g.at(shown);
+    const mark = o.marks && o.marks[i];
+    if (it.name != null && v > 0.0001) {
+      out.push(V ? `<rect x="${m - th / 2}" y="${e}" width="${th}" height="${g.y1 - e}" fill="${fillOf(it)}" stroke="${p.d}" stroke-width="2.5"/>`
+        : `<rect x="${g.x0}" y="${m - th / 2}" width="${e - g.x0}" height="${th}" fill="${fillOf(it)}" stroke="${p.d}" stroke-width="2.5"/>`);
+    }
+    if (over) {   // 紙から はみ出す しるし（ぎざぎざ＋ことば）
+      const zig = V ? `M${m - th / 2 - 4},${g.y0 + 4} l${th / 4 + 2},-8 l${th / 4},8 l${th / 4},-8 l${th / 4 + 2},8`
+        : `M${g.x1 - 4},${m - th / 2 - 4} l-8,${th / 4 + 2} l8,${th / 4} l-8,${th / 4} l8,${th / 4 + 2}`;
+      out.push(`<path d="${zig}" fill="none" stroke="#c62828" stroke-width="3"/>`);
+      out.push(V ? T(m, g.y0 - 8, 'はみ出す！', 13, 'text-anchor="middle" fill="#c62828"') : T(g.x1 + 4, m - th / 2 - 6, 'はみ出す！', 12, 'text-anchor="end" fill="#c62828"'));
+    }
+    if (mark === 'bad' || mark === 'sel') {
+      const col = mark === 'bad' ? '#d84315' : '#fbc02d';
+      const pad = 5;
+      out.push(V ? `<rect x="${m - g.slot / 2 + 3}" y="${g.y0 - pad}" width="${g.slot - 6}" height="${g.y1 - g.y0 + pad * 2}" rx="8" fill="none" stroke="${col}" stroke-width="3.5" stroke-dasharray="${mark === 'bad' ? '8 5' : ''}"/>`
+        : `<rect x="${g.x0 - pad}" y="${m - g.slot / 2 + 3}" width="${g.x1 - g.x0 + pad * 2}" height="${g.slot - 6}" rx="8" fill="none" stroke="${col}" stroke-width="3.5" stroke-dasharray="${mark === 'bad' ? '8 5' : ''}"/>`);
+    }
+    if (o.guides && o.guides.includes(i) && v > 0) {   // ぼうの はしから じくまでの 点線
+      out.push(V ? `<line x1="${m - th / 2}" y1="${e}" x2="${g.x0}" y2="${e}" stroke="#e65100" stroke-width="2.5" stroke-dasharray="6 4"/>`
+        : `<line x1="${e}" y1="${m + th / 2}" x2="${e}" y2="${g.y1}" stroke="#e65100" stroke-width="2.5" stroke-dasharray="6 4"/>`);
+    }
+    if (o.showNums && it.name != null) {
+      const val = Math.round(vals[i]);
+      out.push(V ? T(m, e - 8, val, 16, 'text-anchor="middle" fill="#00695c"') : T(e + 8, m + 6, val, 16, 'fill="#00695c"'));
+    }
+    // しゅるいの 名前（まだ きまって いない ときは 番ごうの 空らん）
+    if (it.name == null) {
+      out.push(V ? `<rect x="${m - g.slot * 0.4}" y="${g.y1 + 8}" width="${g.slot * 0.8}" height="34" rx="6" fill="#fafafa" stroke="#9e9e9e" stroke-width="2" stroke-dasharray="6 4"/>` + T(m, g.y1 + 31, i + 1, 16, 'text-anchor="middle" fill="#9e9e9e"')
+        : `<rect x="8" y="${m - 15}" width="${g.x0 - 18}" height="30" rx="6" fill="#fafafa" stroke="#9e9e9e" stroke-width="2" stroke-dasharray="6 4"/>` + T((g.x0 - 10) / 2 + 4, m + 6, i + 1, 16, 'text-anchor="middle" fill="#9e9e9e"'));
+    } else {
+      out.push(V ? nameText(it.name, m, g.y1 + 24, g.slot * 0.94, true) : nameText(it.name, g.x0 - 10, m, g.x0 - 18, false));
+    }
+  });
+  // じく
+  out.push(`<line x1="${g.x0}" y1="${g.y0 - 6}" x2="${g.x0}" y2="${g.y1}" stroke="#37474f" stroke-width="2.5"/>`);
+  out.push(`<line x1="${g.x0}" y1="${g.y1}" x2="${V ? g.x1 : g.x1 + 6}" y2="${g.y1}" stroke="#37474f" stroke-width="2.5"/>`);
+  // ドラッグで ぼうを のばす ための 見えない わく
+  if (o.drag) o.items.forEach((it, i) => {
+    const m = g.mid(i);
+    out.push(V ? `<rect data-slot="${i}" x="${m - g.slot / 2}" y="${g.y0 - 30}" width="${g.slot}" height="${g.y1 - g.y0 + 40}" fill="transparent"/>`
+      : `<rect data-slot="${i}" x="${g.x0 - 10}" y="${m - g.slot / 2}" width="${g.x1 - g.x0 + 30}" height="${g.slot}" fill="transparent"/>`);
+  });
+  return { html: out.join(''), g };
+}
+function drawGraph(svg, o) {
+  if (!svg) return;
+  const { html, g } = graphInner(o);
+  svg.setAttribute('viewBox', `0 0 ${GW} ${GH}`);
+  svg.innerHTML = html;
+  GEO[svg.id] = g;
+}
+// ぼうが のびる アニメ。じくの 長さに たいする わりあい で うごかすので、1目もりを かえた ときも なめらかに のび ちぢみ する
+const ANIM = {};
+function animGraph(id, o) {
+  const a = ANIM[id] || (ANIM[id] = { cur: {}, raf: 0 });
+  a.o = o;
+  const frame = () => {
+    const svg = document.getElementById(id);
+    if (!svg) { a.raf = 0; return; }
+    const ax = a.o.step * a.o.cells;
+    let moving = false;
+    const vals = a.o.items.map((it) => {
+      const t = it.n / ax;
+      let c = a.cur[it.key] ?? 0;
+      if (calm() || Math.abs(t - c) < 0.002) c = t; else { c += (t - c) * 0.2; moving = true; }
+      a.cur[it.key] = c;
+      return c * ax;
+    });
+    drawGraph(svg, { ...a.o, vals });
+    a.raf = moving ? requestAnimationFrame(frame) : 0;
+  };
+  if (!a.raf) frame();
+}
+// アニメを とちゅうで おわらせて、さいごの すがたを かく（画像に ほぞんする とき）
+function finishAnim(id) {
+  const a = ANIM[id], svg = document.getElementById(id);
+  if (!a || !svg) return;
+  cancelAnimationFrame(a.raf); a.raf = 0;
+  const ax = a.o.step * a.o.cells;
+  a.o.items.forEach((it) => { a.cur[it.key] = it.n / ax; });
+  drawGraph(svg, { ...a.o, vals: a.o.items.map((it) => it.n) });
+}
+const resetAnim = (...ids) => ids.forEach((id) => { if (ANIM[id]) { cancelAnimationFrame(ANIM[id].raf); delete ANIM[id]; } });
+
+// グラフを PNG 画像に して ほぞん（ネットは つかわない）
+function savePNG(svg, name) {
+  if (!svg) return;
+  finishAnim(svg.id);
+  const clone = svg.cloneNode(true);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('width', GW * 2); clone.setAttribute('height', GH * 2);
+  clone.setAttribute('font-family', getComputedStyle(document.body).fontFamily);
+  clone.querySelectorAll('[data-slot], .glowbg').forEach((e) => e.remove());
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  defs.innerHTML = patDefs();
+  clone.insertBefore(defs, clone.firstChild);
+  const xml = new XMLSerializer().serializeToString(clone);
+  const img = new Image();
+  img.onload = () => {
+    const cv = document.createElement('canvas');
+    cv.width = GW * 2; cv.height = GH * 2;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    cv.toBlob((b) => {
+      if (!b) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = `${(name || 'ぼうグラフ').replace(/[\\/:*?"<>|]/g, '')}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    }, 'image/png');
+  };
+  img.onerror = () => say(`がぞうを つくれませんでした`, 'warn');
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+}
+
+/* =========================================================
+   6. 画面の きほん（モード・上の段・ひとこと）
+   ========================================================= */
+const state = {
+  mode: 'survey',
+  say: { html: '', kind: '' },
+  last: -1,          // さいごに タップした しゅるい（正の字の 1画を アニメに する）
+  hist: [],          // 「ひとつ もどす」ための きろく
+  resetArm: false,   // 「ぜんぶ 0に」を 1回 おした ところ
+  m2: null, m3: null, m5: null,
+  m4: { src: 'big', view: 'one', step: 1, pick: null, timer: 0 },
+};
+const stage = $('#stage');
+function say(html, kind = '') { state.say = { html, kind }; renderSay(); }
+function renderSay() {
+  const el = $('#say');
+  el.className = `say ${state.say.kind}`;
+  if (el.innerHTML !== state.say.html) el.innerHTML = state.say.html;
+}
+const chip = (act, val, label, on, extra = '') => `<button class="chip${on ? ' active' : ''}" data-act="${act}" data-v="${val}" ${extra}>${label}</button>`;
+// グラフの せってい（1目もり・むき・ならべ方）
+function graphSetupHTML() {
+  const G = settings.graph;
+  return `<div class="sgrp"><span class="slabel">1${ME}もり</span>${[1, 2, 5, 10].map((s) => chip('gstep', s, s, G.step === s)).join('')}</div>
+    <div class="sgrp"><span class="slabel">むき</span>${chip('gdir', 'v', 'たて', G.dir === 'v')}${chip('gdir', 'h', 'よこ', G.dir === 'h')}</div>
+    <div class="sgrp"><span class="slabel">ならべ方</span>${chip('gorder', 'input', `${IRE}れた じゅん`, G.order === 'input')}${chip('gorder', 'desc', `${OO}い じゅん`, G.order === 'desc')}</div>`;
+}
+
+const VIEWS = {};
+function setMode(mode) {
+  clearTimeout(state.m4.timer); state.m4.timer = 0;
+  state.mode = mode;
+  state.resetArm = false;
+  VIEWS[mode].enter?.();
+  render(true);
+}
+function render(full = false) {
+  document.body.classList.toggle('no-ruby', !settings.ruby);
+  document.body.classList.toggle('calm', calm());
+  $$('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === state.mode));
+  if (full) { $('#setupBar').innerHTML = VIEWS[state.mode].setup?.() || ''; VIEWS[state.mode].build(); }
+  VIEWS[state.mode].update();
+  renderSay();
+}
+const renderSetup = () => { $('#setupBar').innerHTML = VIEWS[state.mode].setup?.() || ''; };
+
+/* =========================================================
+   7. 🗳️ 調べて つくろう（正の字 → 表 → ぼうグラフ）
+   ========================================================= */
+function surveyGraphOpt() {
+  const G = settings.graph, d = settings.survey;
+  const items = ordered(d.items, G.order).map((it) => ({ key: `p${it.pat}`, name: it.name, n: it.n, pat: it.pat }));
+  const max = Math.max(0, ...items.map((it) => it.n));
+  const lab = LABEL_EVERY[G.step];
+  const axisMax = Math.max(G.step * 10, Math.ceil(max / lab) * lab);
+  return { items, title: d.title, unit: d.unit, step: G.step, cells: axisMax / G.step, dir: G.dir, max };
+}
+function surveyNote(o) {
+  if (o.cells > 30) return `${ME}もりが こまかすぎて ${YO}みにくいね。1${ME}もりを ${R('大', 'おお')}きく して みよう`;
+  if (o.max > 0 && o.step > 1 && o.max <= o.step * o.cells * 0.2) return `ぼうが みじかいね。1${ME}もりを ${R('小', 'ちい')}さく して みよう`;
+  return '';
+}
+function surveyTableHTML(popI = -1) {
+  const d = settings.survey, rows = ordered(d.items, settings.graph.order);
+  const head = d.unit === '人' ? `${NINZUU}（${uH('人')}）` : `${KAZU}（${uH(d.unit)}）`;
+  return `<table class="tbl"><caption>${esc(d.title)}</caption>
+    <thead><tr><th>しゅるい</th><th>${head}</th></tr></thead><tbody>
+    ${rows.map((it) => `<tr><th><span class="nm">${swatch(it)}${esc(it.name)}</span></th><td class="n">${it.i === popI ? `<span class="pop">${it.n}</span>` : it.n}</td></tr>`).join('')}
+    <tr class="sum"><th>${GOUKEI}</th><td class="n">${sum(d.items.map((it) => it.n))}</td></tr></tbody></table>`;
+}
+function surveyGraphCard(id) {
+  return `<div class="card" id="graphCard"><h3><span>📊 ぼうグラフ</span><button class="mini-btn" data-act="png" data-svg="${id}">🖼️ ${R('画', 'が')}ぞうで ほぞん</button></h3>
+    <svg id="${id}" class="graph" viewBox="0 0 ${GW} ${GH}" role="img" aria-label="ぼうグラフ"></svg><p class="gnote" id="gNote"></p></div>`;
+}
+function updateSurveyGraph(id) {
+  const o = surveyGraphOpt();
+  animGraph(id, o);
+  const note = $('#gNote');
+  if (note) note.innerHTML = surveyNote(o);
+}
+VIEWS.survey = {
+  enter() { say(`ボタンを タップすると、${SEI}の${JI}が 1${KAKU}ずつ ふえるよ。${HYOU}と グラフも いっしょに かわるよ`); },
+  setup: () => graphSetupHTML() + `<button class="mini-btn" data-act="toTeacher">✏️ ${HYOUDAI}・しゅるいを かえる</button>`,
+  build() {
+    stage.className = 'stage cols3';
+    stage.innerHTML = `
+      <div class="card" id="voteCard">
+        <h3><span>🗳️ ${SHIRA}べよう</span><button class="mini-btn" data-act="seiDemo">✍️ ${SEI}の${JI}の かきかた</button></h3>
+        <p class="qtitle" id="voteTitle"></p>
+        <div class="vote-rows" id="voteRows"></div>
+        <div class="btn-row">
+          <button class="act-btn" data-act="undo">↩️ ひとつ もどす</button>
+          <button class="act-btn b-reset" data-act="reset0" id="bReset">🗑️ ぜんぶ 0に</button>
+        </div>
+      </div>
+      <div class="card" id="tableCard"><h3><span>📋 ${HYOU}</span></h3><div id="tblBox"></div></div>
+      ${surveyGraphCard('gMain')}`;
+    resetAnim('gMain');
+  },
+  update() {
+    const d = settings.survey;
+    $('#voteTitle').textContent = d.title;
+    $('#voteRows').innerHTML = d.items.map((it, i) => `<div class="vote-row">
+        <button class="vote-btn" data-act="vote" data-i="${i}">${swatch(it)}<span class="vname">${esc(it.name)}</span><kbd>${i + 1}</kbd></button>
+        <div class="tally" aria-label="${it.n}">${tallyHTML(it.n, i === state.last)}</div></div>`).join('');
+    $('#tblBox').innerHTML = surveyTableHTML(state.last);
+    const rb = $('#bReset');
+    rb.classList.toggle('arm', state.resetArm);
+    rb.innerHTML = state.resetArm ? `もう いちど おすと 0に なるよ` : '🗑️ ぜんぶ 0に';
+    updateSurveyGraph('gMain');
+  },
+};
+function vote(i) {
+  const it = settings.survey.items[i];
+  if (!it || it.n >= 999) return;
+  it.n++;
+  state.hist.push(i);
+  state.last = i;
+  state.resetArm = false;
+  saveSettings();
+  const k = (it.n - 1) % 5;
+  if (k === 4) {
+    sfx.five();
+    say(`${esc(it.name)}：${SEI}が ${it.n / 5}こ できた！ ${SEI} 1こで 5。${KAZO}えると ${it.n}${uH(settings.survey.unit)}`, 'good');
+  } else {
+    sfx.stroke(k);
+    say(`${esc(it.name)}に 1${KAKU} ${KA}いたよ → ${it.n}${uH(settings.survey.unit)}`);
+  }
+  render();
+}
+function undo() {
+  const i = state.hist.pop();
+  state.resetArm = false;
+  if (i == null || !settings.survey.items[i] || settings.survey.items[i].n <= 0) { say(`もどす ものが ないよ`); render(); return; }
+  settings.survey.items[i].n--;
+  state.last = -1;
+  saveSettings(); sfx.undo();
+  say(`${esc(settings.survey.items[i].name)}を 1つ もどしたよ`);
+  render();
+}
+function resetZero() {
+  if (!state.resetArm) { state.resetArm = true; render(); return; }
+  settings.survey.items.forEach((it) => { it.n = 0; });
+  state.hist = []; state.last = -1; state.resetArm = false;
+  saveSettings();
+  say(`ぜんぶ 0に したよ。${SHIRA}べて みよう`);
+  render();
+}
+
+// 正の字の かきかた（書きじゅんの アニメと 5の まとまり）
+function openSeiDemo() {
+  const numPos = [[-1, 8], [24, 13], [35, 24], [5, 27], [-2, 38]];
+  const big = `<svg class="demo-big" viewBox="-6 -4 52 46" aria-label="正の字の 書きじゅん">
+    ${SEI_STROKES.map((s, j) => seiLine(s, '', `animation-delay:${j * 0.7}s`)).join('')}
+    ${numPos.map(([x, y], j) => `<text x="${x}" y="${y}" font-size="6" style="animation-delay:${j * 0.7}s">${j + 1}</text>`).join('')}</svg>`;
+  const ex = 12, groups = Math.ceil(ex / 5);
+  const row = range(groups, (k) => {
+    const m = Math.min(5, ex - k * 5);
+    return `<figure><svg class="sei" viewBox="0 0 40 40">${SEI_STROKES.slice(0, m).map((s) => seiLine(s, '', 'stroke-dashoffset:0')).join('')}</svg>${k * 5 + m}</figure>`;
+  }).join('');
+  $('#seiCard').innerHTML = `<h2>✍️ ${SEI}の${JI}の かきかた</h2>
+    ${big}
+    <p class="box-note">1つ ${KAZO}えるたびに 1${KAKU}。5${KAKU}で「${SEI}」が 1こ できる。<br>${SEI} 1こで 5 だよ。</p>
+    <div class="demo-row">${row}</div>
+    <p class="box-note">12 は ${SEI}${SEI}と 2${KAKU}。5、10、11、12 と ${KAZO}えると はやいね。</p>
+    <div class="btn-row"><button class="act-btn b-main" data-act="seiDemo">▶ もう いちど</button><button class="act-btn b-reset" data-close>とじる</button></div>`;
+  openModal('#modalSei');
+}
+
+/* =========================================================
+   8. ✏️ グラフを かこう（ぼうを ドラッグで のばす）
+   ========================================================= */
+const M2_CELLS = 15;
+function m2New() {
+  const no = (state.m2?.no || 0) + 1;
+  const step = no % 2 === 1 ? 1 : 2;   // 1目もり 1 と 2 を かわりばんこに
+  const set = pick(PRESETS);
+  const others = shuffle(set.names.filter((n) => !isOther(n))).slice(0, rnd(3, 4));
+  const top = step === 1 ? rnd(10, 15) : rnd(20, 30);
+  const pool = shuffle(range(top - 1, (i) => i + 1).filter((v) => v >= step)).slice(0, others.length - 1);
+  const vals = shuffle([top, ...pool]);
+  const rows = [...others.map((name, i) => ({ name, n: vals[i], pat: set.names.indexOf(name) })),
+    { name: 'その他', n: rnd(1, step === 1 ? 4 : 6), pat: 0 }];
+  const lab = LABEL_EVERY[step], labels = {};
+  for (let v = lab; v <= step * M2_CELLS; v += lab) labels[v] = 'empty';
+  state.m2 = {
+    no, step, title: set.title, unit: set.unit, rows, order: [], phase: 'order',
+    bars: rows.map(() => 0), blank: { title: 'empty', unit: 'empty', labels },
+    pickFor: null, bad: [], sel: -1, marks: {}, showNums: false, dir: state.m2?.dir || 'v', drag: false,
+  };
+  say(`まず、グラフに ${KA}く じゅんに しゅるいを タップしよう（${OO}い じゅん、${SONOTA}は さいご）`);
+}
+const m2Lab = () => LABEL_EVERY[state.m2.step];
+function m2Opt() {
+  const M = state.m2;
+  const slots = M.rows.map((_, s) => (s < M.order.length ? M.rows[M.order[s]] : null));
+  const blank = { ...M.blank, labels: { ...M.blank.labels } };
+  if (M.pickFor === 'title' || M.pickFor === 'unit') blank[M.pickFor] = 'active';
+  if (M.pickFor?.startsWith('lab:')) blank.labels[+M.pickFor.slice(4)] = 'active';
+  const marks = { ...M.marks };
+  if (M.sel >= 0 && !marks[M.sel]) marks[M.sel] = 'sel';
+  return {
+    items: slots.map((it, s) => (it ? { key: it.name, name: it.name, n: M.bars[s], pat: it.pat } : { key: `s${s}`, name: null, n: 0 })),
+    title: M.title, unit: M.unit, step: M.step, cells: M2_CELLS, dir: M.dir,
+    blank, marks, showNums: M.showNums, drag: M.phase === 'draw',
+  };
+}
+// 空らんの こたえの こうほ（同じ 空らんの あいだは ならびを かえない）
+function m2Choices() {
+  const M = state.m2, f = M.pickFor;
+  if (!f) return null;
+  if (M.choiceFor !== f) { M.choiceFor = f; M.choice = m2MakeChoices(f); }
+  return M.choice;
+}
+function m2MakeChoices(f) {
+  const M = state.m2;
+  if (f === 'title') return { q: `${HYOUDAI}は どれ？`, right: M.title, list: shuffle([M.title, ...shuffle(PRESETS.map((p) => p.title).filter((t) => t !== M.title)).slice(0, 2)]) };
+  if (f === 'unit') return { q: `たんいは どれ？`, right: M.unit, list: ['人', '台', 'さつ', 'こ'] };
+  const v = +f.slice(4), k = v / M.step, lab = m2Lab();
+  const wrong = [k, v + lab, v * 2, v - lab, v + 1, v - 1].filter((x) => x > 0 && x !== v);
+  return { q: `ここに ${HAI}る ${SUU}${JI}は？（0から ${ME}もり ${k}こ${R('分', 'ぶん')}）`, right: v, list: shuffle([v, ...[...new Set(wrong)].slice(0, 2)]) };
+}
+VIEWS.draw = {
+  enter() { if (!state.m2) m2New(); else say(state.say.html); },
+  setup() {
+    const M = state.m2;
+    return `<span class="progress">${M.no}${MON}め</span>
+      <div class="sgrp"><span class="slabel">むき</span>${chip('m2dir', 'v', 'たて', M.dir === 'v')}${chip('m2dir', 'h', 'よこ', M.dir === 'h')}</div>
+      ${chip('m2nums', 1, `${KAZU}を ${MI}る`, M.showNums)}
+      <button class="mini-btn" data-act="m2new">🔄 つぎの ${MON}だい</button>`;
+  },
+  build() {
+    stage.className = 'stage cols2';
+    stage.innerHTML = `<div class="card"><h3><span>✏️ グラフ（1${ME}もり＝<span id="m2Step"></span>）</span></h3>
+        <svg id="gDraw" class="graph drag" viewBox="0 0 ${GW} ${GH}" role="img" aria-label="かく グラフ"></svg></div>
+      <div class="card" id="m2Side"></div>`;
+    const svg = $('#gDraw');
+    svg.addEventListener('pointerdown', m2Down);
+    svg.addEventListener('pointermove', m2Move);
+    svg.addEventListener('pointerup', m2Up);
+    svg.addEventListener('pointercancel', m2Up);
+  },
+  update() {
+    const M = state.m2;
+    $('#m2Step').innerHTML = `${M.step}${uH(M.unit)}`;
+    drawGraph($('#gDraw'), m2Opt());
+    const unitH = uH(M.unit);
+    let side = `<h3><span>📋 ${HYOU}を ${MI}て かこう</span></h3>
+      <table class="tbl"><caption>${esc(M.title)}</caption><thead><tr><th>しゅるい</th><th>${M.unit === '人' ? NINZUU : KAZU}（${unitH}）</th></tr></thead><tbody>
+      ${M.rows.map((it, r) => {
+        const placed = M.order.indexOf(r);
+        const cls = M.phase === 'order' ? (placed >= 0 ? 'done' : 'pick') : '';
+        return `<tr class="${cls}${M.bad.includes(r) ? ' bad' : ''}" ${M.phase === 'order' && placed < 0 ? `data-act="m2row" data-r="${r}"` : ''}>
+          <th><span class="nm">${swatch(it)}${esc(it.name)}${placed >= 0 && M.phase === 'order' ? ` ✔${placed + 1}` : ''}</span></th><td class="n">${it.n}</td></tr>`;
+      }).join('')}</tbody></table>`;
+    if (M.phase === 'draw') {
+      const c = m2Choices();
+      if (c) {
+        side += `<div class="ask"><p>${c.q}</p><div class="choices">${c.list.map((v) => `<button class="choice${M.wrongPick?.includes(String(v)) ? ' bad' : ''}" data-act="m2pick" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div></div>`;
+      }
+      if (M.sel >= 0) {
+        const it = M.rows[M.order[M.sel]];
+        side += `<div class="adj">${esc(it.name)}の ぼう <button class="act-btn" data-act="m2adj" data-v="-1" aria-label="みじかく">－</button><button class="act-btn" data-act="m2adj" data-v="1" aria-label="ながく">＋</button></div>`;
+      }
+      const labs = Object.values(M.blank.labels);
+      const drawn = M.bars.filter((b) => b > 0).length;
+      side += `<ul class="checklist">
+        <li class="${M.blank.title === 'filled' ? 'ok' : 'ng'}">${M.blank.title === 'filled' ? '☑' : '☐'} ${HYOUDAI}</li>
+        <li class="${M.blank.unit === 'filled' ? 'ok' : 'ng'}">${M.blank.unit === 'filled' ? '☑' : '☐'} たんい</li>
+        <li class="${labs.every((s) => s === 'filled') ? 'ok' : 'ng'}">${labs.every((s) => s === 'filled') ? '☑' : '☐'} ${LAB_TXT}</li>
+        <li class="${drawn === M.bars.length ? 'ok' : 'ng'}">${drawn === M.bars.length ? '☑' : '☐'} ぼう（${drawn}/${M.bars.length}）</li></ul>
+        <div class="btn-row"><button class="act-btn b-main" data-act="m2check">✅ できた！</button></div>`;
+    } else if (M.phase === 'done') {
+      side += `<p class="box-note">${HYOUDAI}・たんい・${LAB_TXT}・ぼう、ぜんぶ ばっちり！</p>
+        <div class="btn-row"><button class="act-btn b-main" data-act="m2new">つぎの ${MON}だい ▶</button><button class="mini-btn" data-act="png" data-svg="gDraw">🖼️ ${R('画', 'が')}ぞうで ほぞん</button></div>`;
+    } else {
+      side += `<p class="box-note">${OO}い じゅんに タップ。${SONOTA}は いちばん さいごに ${KA}くよ。</p>`;
+    }
+    $('#m2Side').innerHTML = side;
+  },
+};
+function m2Row(r) {
+  const M = state.m2, it = M.rows[r];
+  const rest = M.rows.map((x, i) => i).filter((i) => !M.order.includes(i));
+  const restNon = rest.filter((i) => !isOther(M.rows[i].name));
+  if (isOther(it.name) && restNon.length) {
+    sfx.soft(); M.bad = [r];
+    say(`${SONOTA}は、${KAZU}が ${OO}くても いちばん さいごに ${KA}くよ`, 'warn');
+  } else if (!isOther(it.name) && it.n < Math.max(...restNon.map((i) => M.rows[i].n))) {
+    sfx.soft(); M.bad = [r];
+    say(`${esc(it.name)}より ${OO}い ものが まだ あるよ。${KAZU}を くらべよう`, 'warn');
+  } else {
+    sfx.tap(); M.bad = [];
+    M.order.push(r);
+    if (M.order.length === M.rows.length) {
+      M.phase = 'draw';
+      say(`1${ME}もりを ${M.step}${uH(M.unit)}に して かこう。ぼうを ゆびで のばしてね。${HYOUDAI}・たんい・${LAB_TXT}の「？」も タップして うめよう`, 'good');
+    } else say(`${M.order.length}ばんめは ${esc(it.name)}。つぎは どれかな？`);
+  }
+  render();
+}
+function svgPt(svg, e) {
+  const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+  return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+function m2SetBar(e) {
+  const M = state.m2, svg = $('#gDraw'), g = GEO.gDraw;
+  if (!g || M.sel < 0) return;
+  const pt = svgPt(svg, e);
+  const v = clamp(Math.round(g.valOf(pt.x, pt.y)), 0, g.axisMax);
+  if (v !== M.bars[M.sel]) {
+    M.bars[M.sel] = v; delete M.marks[M.sel];
+    sfx.tick();
+    drawGraph(svg, m2Opt());
+  }
+}
+function m2Down(e) {
+  const M = state.m2;
+  const b = e.target.closest('[data-blank]');
+  if (b && M.phase === 'draw') {
+    M.pickFor = b.dataset.blank; M.wrongPick = [];
+    sfx.tap(); render(); return;
+  }
+  const s = e.target.closest('[data-slot]');
+  if (!s || M.phase !== 'draw') return;
+  e.preventDefault();
+  M.sel = +s.dataset.slot; M.drag = true;
+  e.currentTarget.setPointerCapture?.(e.pointerId);
+  m2SetBar(e);
+}
+function m2Move(e) { if (state.m2?.drag) m2SetBar(e); }
+function m2Up() { if (state.m2?.drag) { state.m2.drag = false; render(); } }
+function m2Pick(v) {
+  const M = state.m2, c = m2Choices();
+  if (!c) return;
+  if (String(v) === String(c.right)) {
+    sfx.correct();
+    if (M.pickFor === 'title' || M.pickFor === 'unit') M.blank[M.pickFor] = 'filled';
+    else M.blank.labels[+M.pickFor.slice(4)] = 'filled';
+    const nextLab = Object.keys(M.blank.labels).find((k) => M.blank.labels[k] !== 'filled');
+    say(`そう！ ${esc(v)}`, 'good');
+    M.pickFor = M.pickFor.startsWith('lab:') && nextLab ? `lab:${nextLab}` : null;
+    M.wrongPick = [];
+  } else {
+    sfx.soft();
+    M.wrongPick = [...(M.wrongPick || []), String(v)];
+    if (M.pickFor.startsWith('lab:')) {
+      const val = +M.pickFor.slice(4);
+      say(`1${ME}もりは ${M.step}${uH(M.unit)}。${ME}もり ${val / M.step}こ${R('分', 'ぶん')}だと…？`, 'warn');
+    } else say(`${HYOU}を よく ${MI}て みよう`, 'warn');
+  }
+  render();
+}
+function m2Check() {
+  const M = state.m2;
+  const miss = [];
+  if (M.blank.title !== 'filled') miss.push(HYOUDAI);
+  if (M.blank.unit !== 'filled') miss.push('たんい');
+  if (Object.values(M.blank.labels).some((s) => s !== 'filled')) miss.push(LAB_TXT);
+  M.marks = {};
+  const wrong = [];
+  M.order.forEach((r, s) => { if (M.bars[s] !== M.rows[r].n) { M.marks[s] = 'bad'; wrong.push(s); } });
+  M.sel = -1;
+  if (!miss.length && !wrong.length) {
+    M.phase = 'done'; M.pickFor = null;
+    sfx.done(); cheer('できた！'); sparkle($('#gDraw'));
+    say(`グラフの かんせい！ ${HYOUDAI}・たんい・${LAB_TXT}も ちゃんと ${KA}けたね`, 'good');
+  } else {
+    sfx.soft();
+    const parts = [];
+    if (miss.length) parts.push(`${KA}きわすれ：${miss.join('・')}`);
+    if (wrong.length) {
+      const it = M.rows[M.order[wrong[0]]];
+      parts.push(`${esc(it.name)}${wrong.length > 1 ? 'など' : ''}の ぼうを ${MI}なおそう（${HYOU}では ${it.n}${uH(M.unit)}。1${ME}もりは ${M.step}${uH(M.unit)}）`);
+    }
+    say(parts.join('<br>'), 'warn');
+  }
+  render();
+}
+
+/* =========================================================
+   9. 👀 グラフを 読もう
+   ========================================================= */
+const M3_CELLS = 15;
+const M3_PLAN = [['value', 1], ['step', 2], ['value', 2], ['max', 5], ['diff', 2], ['value', 10]];
+// 1目もり step の グラフに あう 数を つくる（いちばん 大きい ものは 1つだけ）
+function m3Vals(nNon, step) {
+  const u = step, maxV = step * M3_CELLS;
+  const top = u * rnd(Math.ceil((maxV * 0.6) / u), Math.floor(maxV / u));
+  const pool = shuffle(range(top / u - 1, (i) => (i + 1) * u)).slice(0, nNon - 1);
+  const other = u * rnd(1, Math.max(1, Math.floor(top / u / 3)));
+  return { non: shuffle([top, ...pool]), other };
+}
+function m3Make([type, step]) {
+  const set = step >= 5 ? pick(BIG_SETS) : pick(PRESETS);
+  const names = shuffle(set.names.filter((n) => !isOther(n))).slice(0, rnd(3, 4));
+  const { non, other } = m3Vals(names.length, step);
+  let items = [...names.map((name, i) => ({ key: name, name, n: non[i], pat: set.names.indexOf(name) })), { key: 'その他', name: 'その他', n: other, pat: 0 }];
+  if (type !== 'max') items = ordered(items, 'desc');   // ふつうは 多い じゅん。「いちばん 多いのは？」だけ ばらばら
+  const nonIt = items.filter((it) => !isOther(it.name));
+  const topIt = nonIt.reduce((a, b) => (b.n > a.n ? b : a));
+  const q = { type, step, title: set.title, unit: set.unit, items, input: '', wrong: 0, first: true, solved: false, ask: false, askBad: [], stepKnown: step === 1, tickIdx: false, guide: false, bad: [] };
+  const U = uH(set.unit), NU = `${NAN}${U}`;
+  if (type === 'value') {
+    const t = pick(nonIt.filter((it) => it !== topIt));   // その他・いちばん 多い もの いがいを 読む
+    Object.assign(q, { targets: [items.indexOf(t)], answer: t.n, text: `${esc(t.name)}は ${NU}ですか？` });
+  } else if (type === 'step') {
+    Object.assign(q, { targets: [], answer: step, text: `このグラフの 1${ME}もりは ${NU}ですか？` });
+  } else if (type === 'diff') {
+    const b = pick(nonIt.filter((it) => it !== topIt));
+    Object.assign(q, { targets: [items.indexOf(topIt), items.indexOf(b)], answer: topIt.n - b.n, text: `${esc(topIt.name)}と ${esc(b.name)}の ちがいは ${NU}ですか？` });
+  } else {
+    Object.assign(q, { targets: [], answer: topIt.name, text: `いちばん ${OO}いのは どれですか？` });
+  }
+  return q;
+}
+function m3Start() {
+  state.m3 = { qs: M3_PLAN.map(m3Make), idx: 0 };
+  say(`グラフを ${YO}んで ${KOTA}えよう。まず 1${ME}もりが いくつかを たしかめてね`);
+}
+const m3Q = () => state.m3.qs[state.m3.idx];
+VIEWS.read = {
+  enter() { if (!state.m3) m3Start(); },
+  setup: () => `<span class="progress">${state.m3.idx + 1} / ${state.m3.qs.length} ${MON}</span>
+    <button class="mini-btn" data-act="m3restart">🔄 はじめから</button>`,
+  build() {
+    stage.className = 'stage cols2';
+    stage.innerHTML = `<div class="card"><h3><span>👀 グラフ</span></h3><svg id="gRead" class="graph" viewBox="0 0 ${GW} ${GH}" role="img" aria-label="読む グラフ"></svg></div>
+      <div class="card" id="m3Side"></div>`;
+  },
+  update() {
+    const Q = m3Q();
+    const marks = {};
+    Q.targets.forEach((i) => { marks[i] = 'sel'; });
+    drawGraph($('#gRead'), {
+      items: Q.items, title: Q.title, unit: Q.unit, step: Q.step, cells: M3_CELLS, dir: 'v',
+      glow: Q.ask || Q.tickIdx, tickNums: Q.stepKnown && Q.step !== 1 && (Q.wrong > 0) ? 'value' : Q.tickIdx ? 'index' : null,
+      guides: Q.guide || Q.solved ? Q.targets : [], marks, showNums: Q.solved && Q.type !== 'step',
+    });
+    const U = uH(Q.unit);
+    let side = `<p class="qtext">${Q.text}</p>`;
+    if (Q.type === 'max') {
+      side += `<div class="choices">${Q.items.map((it, i) => `<button class="choice${Q.bad.includes(i) ? ' bad' : ''}${Q.solved && it.name === Q.answer ? ' right' : ''}" data-act="m3choice" data-v="${i}" ${Q.solved ? 'disabled' : ''}>${esc(it.name)}</button>`).join('')}</div>`;
+    } else {
+      side += `<div class="ansrow"><span class="abox${Q.input ? '' : ' empty'}">${Q.solved ? Q.answer : Q.input || '？'}</span><span>${U}</span></div>`;
+      if (!Q.solved && !Q.ask) side += keypadHTML();
+    }
+    if (Q.ask) {
+      side += `<div class="ask"><p>${LAB_TXT}を ${MI}て みよう。<br>1${ME}もりは ${NAN}${U}かな？</p>
+        <div class="choices">${[1, 2, 5, 10].map((v) => `<button class="choice${Q.askBad.includes(v) ? ' bad' : ''}" data-act="m3ask" data-v="${v}">${v}${U}</button>`).join('')}</div></div>`;
+    }
+    if (Q.solved) {
+      const last = state.m3.idx === state.m3.qs.length - 1;
+      side += `<div class="btn-row"><button class="act-btn b-main" data-act="m3next">${last ? 'けっかを 見る' : `つぎの ${MON}だい ▶`}</button></div>`;
+    } else if (!Q.ask) {
+      side += `<div class="btn-row"><button class="act-btn b-hint" data-act="m3hint">💡 ヒント</button></div>`;
+    }
+    $('#m3Side').innerHTML = side;
+  },
+};
+function keypadHTML() {
+  return `<div class="keypad">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map((d) => `<button class="kp" data-act="key" data-k="${d}">${d}</button>`).join('')}
+    <button class="kp kp-w" data-act="key" data-k="del">けす</button><button class="kp kp-ok" data-act="key" data-k="ok">${KOTA}える</button></div>`;
+}
+function m3Solve(text) {
+  const Q = m3Q();
+  Q.solved = true; Q.ask = false;
+  if (Q.first) { sfx.correct(); sparkle($('#m3Side')); } else sfx.done();
+  say(text, 'good');
+}
+function m3Key(k) {
+  const Q = m3Q();
+  if (Q.solved || Q.ask || Q.type === 'max') return;
+  if (k === 'del') Q.input = Q.input.slice(0, -1);
+  else if (k === 'ok') { if (Q.input) m3Check(); return; }
+  else if (Q.input.length < 3) Q.input = (Q.input === '0' ? '' : Q.input) + k;
+  render();
+}
+function m3Check() {
+  const Q = m3Q(), v = +Q.input, U = uH(Q.unit), lab = LABEL_EVERY[Q.step];
+  if (v === Q.answer) {
+    m3Solve(Q.type === 'step' ? `せいかい！ 0から ${lab}までを ${lab / Q.step}こに ${WA}けて いるので、1${ME}もりは ${Q.step}${U}`
+      : Q.type === 'diff' ? `せいかい！ ${Q.items[Q.targets[0]].n} − ${Q.items[Q.targets[1]].n} ＝ ${Q.answer}` : `せいかい！ ${Q.answer}${U}`);
+    render(); return;
+  }
+  Q.wrong++; Q.first = false; Q.input = '';
+  sfx.soft();
+  if (Q.wrong >= 3) {
+    m3Solve(`${KOTA}えは ${Q.answer}${U}。${Q.type === 'step' ? '' : `1${ME}もりは ${Q.step}${U}だよ`}`);
+    state.say.kind = 'warn'; render(); return;
+  }
+  if (Q.type === 'step') {
+    Q.tickIdx = true;
+    say(`0から ${lab}までに ${ME}もりは ${lab / Q.step}こ。${lab}を ${lab / Q.step}こに ${WA}けると？`, 'warn');
+  } else if (!Q.stepKnown) {
+    Q.ask = true;   // 1目もりが 1 で ない グラフの よみまちがい → 目もりの 数字を 光らせて きく
+    say(`${LAB_TXT}を ${MI}て！ 1${ME}もりは 1${U}かな？`, 'warn');
+  } else {
+    Q.guide = true;
+    say(Q.type === 'diff' ? `2つの ぼうを それぞれ ${YO}んで、ひき${R('算', 'ざん')}しよう` : `ぼうの はしから よこに 点線を ひいたよ。${ME}もりの ${KAZU}を ${MI}て ${YO}もう`, 'warn');
+  }
+  render();
+}
+function m3Ask(v) {
+  const Q = m3Q(), U = uH(Q.unit), lab = LABEL_EVERY[Q.step];
+  if (v === Q.step) {
+    sfx.correct();
+    Q.ask = false; Q.stepKnown = true; Q.tickIdx = false; Q.guide = true;
+    say(`そう！ 1${ME}もりは ${Q.step}${U}。${ME}もりに ${KAZU}を ${KA}いたよ。もう いちど ${YO}んで みよう`, 'good');
+  } else {
+    sfx.soft();
+    Q.askBad.push(v); Q.tickIdx = true;
+    say(`0から ${lab}までに ${ME}もりが ${lab / Q.step}こ あるよ。1こ${R('分', 'ぶん')}は いくつ？`, 'warn');
+  }
+  render();
+}
+function m3Choice(i) {
+  const Q = m3Q(), it = Q.items[i];
+  if (Q.solved) return;
+  if (it.name === Q.answer) {
+    Q.targets = [i];
+    m3Solve(`せいかい！ いちばん ${NAGA}い ぼうは ${esc(it.name)}`);
+  } else {
+    Q.wrong++; Q.first = false; Q.bad.push(i);
+    sfx.soft();
+    say(`いちばん ${NAGA}い ぼうを さがそう`, 'warn');
+  }
+  render();
+}
+function m3Hint() {
+  const Q = m3Q();
+  Q.first = false;
+  if (Q.type === 'max') { say(`ぼうの ${NAGA}さを くらべよう。いちばん ${NAGA}い ぼうが いちばん ${OO}いよ`); }
+  else if (Q.type === 'step' || !Q.stepKnown) { Q.tickIdx = true; Q.glow = true; say(`0と つぎの ${SUU}${JI}の ${AIDA}の ${ME}もりを ${KAZO}えよう`); }
+  else { Q.guide = true; say(`ぼうの はしから よこに 点線を ひいたよ`); }
+  render();
+}
+const AIDA = R('間', 'あいだ');
+function m3Next() {
+  const M = state.m3;
+  if (M.idx < M.qs.length - 1) { M.idx++; say(`つぎの ${MON}だい。1${ME}もりを たしかめてから ${YO}もう`); render(true); return; }
+  const ok = M.qs.filter((q) => q.first).length;
+  $('#resultCard').innerHTML = `<h2>👀 けっか</h2>
+    <p class="res-big">1回で せいかい ${ok} / ${M.qs.length}</p>
+    <p class="box-note">グラフを ${YO}む ときは、まず「1${ME}もりは いくつ？」を たしかめよう！</p>
+    <div class="btn-row"><button class="act-btn b-main" data-act="m3again">もう いちど</button><button class="act-btn b-reset" data-close>とじる</button></div>`;
+  openModal('#modalResult');
+  sfx.done();
+}
+
+/* =========================================================
+   10. 📏 目もりを かえると？（同じ データ・同じ 大きさの 紙）
+   ========================================================= */
+const M4_CELLS = 20;
+function m4Data() {
+  const src = state.m4.src;
+  if (src === 'class') {
+    const d = settings.survey;
+    if (sum(d.items.map((it) => it.n)) > 0) {
+      return { title: d.title, unit: d.unit, items: ordered(d.items, 'desc').map((it) => ({ key: `p${it.pat}`, name: it.name, n: it.n, pat: it.pat })) };
+    }
+  }
+  const s = SCALE_SETS[src === 'class' ? 'small' : src];
+  return { title: s.title, unit: s.unit, items: s.rows.map(([name, n], i) => ({ key: name, name, n, pat: i })), fallback: src === 'class' };
+}
+function scaleJudge(max, step) {
+  if (max > step * M4_CELLS) return { k: 'over', t: `ぼうが ${KAMI}から はみ${DA}して しまう！` };
+  if (max <= step * M4_CELLS * 0.35) return { k: 'short', t: `ぼうが みじかくて、ちがいが ${MI}えにくい` };
+  return { k: 'good', t: `${KAMI}に ${HAI}って、ちがいも よく わかる` };
+}
+const DA = R('出', 'だ');
+const m4Best = (max) => [1, 2, 5, 10].find((s) => max <= s * M4_CELLS) || 10;
+VIEWS.scale = {
+  enter() { say(`${ONA}じ データを、${ONA}じ ${R('大', 'おお')}きさの ${KAMI}（${M4_CELLS}${ME}もり）に かくよ。1${ME}もりを かえると どう なるかな？`); },
+  setup() {
+    const M = state.m4;
+    return `<div class="sgrp"><span class="slabel">データ</span>${chip('m4src', 'big', `${R('大', 'おお')}きい ${KAZU}`, M.src === 'big')}${chip('m4src', 'small', `${R('小', 'ちい')}さい ${KAZU}`, M.src === 'small')}${chip('m4src', 'class', 'クラスの データ', M.src === 'class')}</div>
+      <div class="sgrp"><span class="slabel">${MI}かた</span>${chip('m4view', 'one', '1つで かえる', M.view === 'one')}${chip('m4view', 'three', '3つ ならべる', M.view === 'three')}</div>`;
+  },
+  build() {
+    const M = state.m4;
+    if (M.view === 'one') {
+      stage.className = 'stage cols2';
+      stage.innerHTML = `<div class="card"><h3><span>📏 1${ME}もり＝<span id="m4Step"></span></span><button class="mini-btn" data-act="png" data-svg="gScale">🖼️ ${R('画', 'が')}ぞうで ほぞん</button></h3>
+          <svg id="gScale" class="graph" viewBox="0 0 ${GW} ${GH}" role="img" aria-label="ぼうグラフ"></svg></div>
+        <div class="card" id="m4Side"></div>`;
+      resetAnim('gScale');
+    } else {
+      stage.className = 'stage cols3eq';
+      stage.innerHTML = [1, 2, 5].map((s) => `<div class="card" id="m4c${s}"><p class="cap">1${ME}もり＝<span class="m4u" data-s="${s}"></span></p>
+          <svg id="gS${s}" class="graph" viewBox="0 0 ${GW} ${GH}"></svg><div id="m4n${s}"></div></div>`).join('');
+      resetAnim('gS1', 'gS2', 'gS5');
+    }
+  },
+  update() {
+    const M = state.m4, d = m4Data(), max = Math.max(...d.items.map((it) => it.n)), U = uH(d.unit);
+    const base = { items: d.items, title: d.title, unit: d.unit, cells: M4_CELLS, dir: 'v' };
+    if (M.view === 'one') {
+      $('#m4Step').innerHTML = `${M.step}${U}`;
+      animGraph('gScale', { ...base, step: M.step });
+      const j = scaleJudge(max, M.step), topN = d.items.find((it) => it.n === max);
+      $('#m4Side').innerHTML = `<h3><span>1${ME}もりの ${R('大', 'おお')}きさ</span></h3>
+        <div class="choices big-chips">${[1, 2, 5, 10].map((s) => chip('m4step', s, `${s}${U}`, M.step === s)).join('')}</div>
+        <div class="btn-row"><button class="act-btn" data-act="m4play">▶ 1→2→5 じゅんに ${MI}る</button></div>
+        <p class="cmt ${j.k}">${j.t}</p>
+        <p class="box-note">いちばん ${NAGA}い ${esc(topN.name)}（${max}${U}）は<br>${ME}もり ${Math.round((max / M.step) * 10) / 10}こ${R('分', 'ぶん')}${max > M.step * M4_CELLS ? `（${KAMI}は ${M4_CELLS}${ME}もり）` : ''}</p>
+        ${d.fallback ? `<p class="ed-note">クラスの データが まだ ないので、れいを ${MI}せて います。「${SHIRA}べて つくろう」で データを つくってね。</p>` : ''}`;
+    } else {
+      const best = m4Best(max);
+      [1, 2, 5].forEach((s) => {
+        animGraph(`gS${s}`, { ...base, step: s });
+        $(`.m4u[data-s="${s}"]`).innerHTML = `${s}${U}`;
+        const j = scaleJudge(max, s);
+        $(`#m4c${s}`).classList.toggle('best', M.pick != null && s === best);
+        $(`#m4n${s}`).innerHTML = M.pick == null
+          ? `<div class="btn-row"><button class="act-btn" data-act="m4pick" data-v="${s}">👆 これが ${MI}やすい</button></div>`
+          : `<p class="cmt ${j.k}">${M.pick === s ? '👆 ' : ''}${j.t}</p>`;
+      });
+      if (d.fallback) say(`クラスの データが まだ ないので、れいを ${MI}せて います`, 'warn');
+    }
+  },
+};
+function m4Play() {
+  const M = state.m4, seq = [1, 2, 5];
+  clearTimeout(M.timer);
+  let k = 0;
+  const go = () => {
+    if (state.mode !== 'scale' || M.view !== 'one') return;
+    M.step = seq[k]; sfx.tap(); renderSetup(); render();
+    say(`1${ME}もりを ${seq[k]}に したよ`);
+    k++;
+    if (k < seq.length) M.timer = setTimeout(go, calm() ? 1200 : 2000);
+    else M.timer = setTimeout(() => say(`1${ME}もりを ${R('大', 'おお')}きく すると ぼうは みじかく なるね。${KAMI}に ${HAI}って、ちがいが よく わかる 1${ME}もりを えらぼう`), calm() ? 1200 : 2000);
+  };
+  go();
+}
+function m4Pick(s) {
+  const M = state.m4, d = m4Data(), max = Math.max(...d.items.map((it) => it.n)), best = m4Best(max);
+  M.pick = s;
+  if (s === best) { sfx.correct(); say(`そうだね！ 1${ME}もり ${s}なら ${KAMI}に ${HAI}って、ちがいも よく わかるね`, 'good'); }
+  else {
+    sfx.soft();
+    const j = scaleJudge(max, s);
+    say(`1${ME}もり ${s}だと、${j.t}。${R('黄', 'き')}色い わくの グラフと くらべて みよう`, 'warn');
+  }
+  render();
+}
+
+/* =========================================================
+   11. 🧮 表を まとめよう（二次元表と 合計）
+   ========================================================= */
+function m5New() {
+  const prevSet = state.m5?.setIdx;
+  const setIdx = state.m5?.fixed ? prevSet : (prevSet == null ? 0 : (prevSet + 1) % MERGE_SETS.length);
+  const set = MERGE_SETS[setIdx];
+  let vals, rowT, colT;
+  // 読む もんだいの こたえが 1つに きまるまで 作りなおす
+  for (let t = 0; t < 200; t++) {
+    vals = set.rows.map((name) => set.cols.map(() => (isOther(name) ? rnd(1, 4) : rnd(2, 12))));
+    rowT = vals.map((r) => sum(r));
+    colT = set.cols.map((_, c) => sum(vals.map((r) => r[c])));
+    const nonT = rowT.slice(0, -1), mx = Math.max(...nonT);
+    const r0col = vals[0], mc = Math.max(...r0col);
+    if (nonT.filter((x) => x === mx).length === 1 && r0col.filter((x) => x === mc).length === 1) break;
+  }
+  const holes = {};
+  set.rows.forEach((_, r) => { holes[`${r}:T`] = rowT[r]; });
+  set.cols.forEach((_, c) => { holes[`T:${c}`] = colT[c]; });
+  holes['T:T'] = sum(rowT);
+  const mxRow = rowT.slice(0, -1).indexOf(Math.max(...rowT.slice(0, -1)));
+  const mc = vals[0].indexOf(Math.max(...vals[0]));
+  state.m5 = {
+    setIdx, fixed: false, set, vals, holes, filled: {}, moved: set.cols.map(() => false), phase: 'move',
+    focus: null, input: '', hl: [], shiki: '', wrongs: 0,
+    reads: [
+      { text: `${GOUKEI}で いちばん ${OO}いのは どれ？`, list: set.rows.slice(0, -1), right: mxRow, bad: [] },
+      { text: `${esc(set.rows[0])}が いちばん ${OO}いのは どれ？`, list: set.cols, right: mc, bad: [] },
+    ],
+    ri: 0,
+  };
+  say(`3つの ${HYOU}を タップして、${R('下', 'した')}の 1つの ${HYOU}に うつそう`);
+}
+const m5Key = (r, c) => `${r}:${c}`;
+VIEWS.merge = {
+  enter() { if (!state.m5) m5New(); },
+  setup: () => `<span class="progress">${esc(state.m5.set.title)}</span><button class="mini-btn" data-act="m5new">🔄 べつの ${MON}だい</button>`,
+  build() {
+    stage.className = 'stage cols2';
+    stage.innerHTML = `<div class="card wide"><h3><span>📋 ${R('小', 'ちい')}さな ${HYOU}</span></h3><div class="smalls" id="m5Smalls"></div></div>
+      <div class="card"><h3><span>🧮 1つに まとめた ${HYOU}</span></h3><div id="m5Big" style="overflow-x:auto"></div></div>
+      <div class="card" id="m5Side"></div>`;
+  },
+  update() {
+    const M = state.m5, S = M.set;
+    $('#m5Smalls').innerHTML = S.cols.map((col, c) => `<button class="small-t${M.moved[c] ? ' moved' : ''}" data-act="m5move" data-c="${c}" ${M.moved[c] ? 'disabled' : ''}>
+        <table class="tbl"><caption>${esc(col)}</caption><thead><tr><th>しゅるい</th><th>${NINZUU}</th></tr></thead><tbody>
+        ${S.rows.map((name, r) => `<tr><th>${esc(name)}</th><td>${M.vals[r][c]}</td></tr>`).join('')}</tbody></table>
+        <span class="go">${M.moved[c] ? '✔ うつした' : '👆 うつす'}</span></button>`).join('');
+    const cell = (key, extra = '') => {
+      const isHl = M.hl.includes(key) ? ' hl' : '';
+      if (M.filled[key] != null) return `<td class="ok${extra}${isHl}">${M.filled[key]}</td>`;
+      if (M.phase === 'move') return `<td class="empty${extra}">？</td>`;
+      const f = M.focus === key;
+      return `<td class="hole${f ? ' focus' : ''}${extra}${isHl}" data-act="m5focus" data-k="${key}"><span>${f && M.input ? M.input : '？'}</span></td>`;
+    };
+    $('#m5Big').innerHTML = `<table class="tbl2"><caption style="font-weight:900;padding-bottom:4px">${esc(S.title)}（${R('人', 'にん')}）</caption>
+      <thead><tr><th class="diag"><span class="dtop">${esc(S.colHead)}</span><span class="dbot">しゅるい</span></th>
+      ${S.cols.map((c, i) => `<th class="${M.hl.includes(`h:${i}`) ? 'hl' : ''}">${esc(c)}</th>`).join('')}<th class="tot totc">${GOUKEI}</th></tr></thead><tbody>
+      ${S.rows.map((name, r) => `<tr><th>${esc(name)}</th>${S.cols.map((_, c) => {
+        const key = m5Key(r, c), isHl = M.hl.includes(key) ? ' hl' : '';
+        return M.moved[c] ? `<td class="${isHl.trim()}">${M.vals[r][c]}</td>` : `<td class="empty"></td>`;
+      }).join('')}${cell(m5Key(r, 'T'), ' totc')}</tr>`).join('')}
+      <tr class="sum"><th class="tot">${GOUKEI}</th>${S.cols.map((_, c) => cell(m5Key('T', c))).join('')}${cell('T:T', ' totc')}</tr></tbody></table>`;
+    let side = '';
+    if (M.phase === 'move') {
+      side = `<p class="box-note">${R('上', 'うえ')}の ${HYOU}を 1つずつ タップして、まとめた ${HYOU}に うつそう。</p>`;
+    } else if (M.phase === 'total') {
+      side = `<p class="qtext">${GOUKEI}の らんを うめよう</p>`;
+      if (M.shiki) side += `<p class="shiki">${M.shiki}</p>`;
+      side += `<div class="ansrow"><span class="abox${M.input ? '' : ' empty'}">${M.input || '？'}</span><span>${R('人', 'にん')}</span></div>${keypadHTML()}
+        <p class="ed-note">？の らんを タップすると、そこに ${IRE}れられるよ。</p>`;
+    } else if (M.phase === 'read') {
+      const q = M.reads[M.ri];
+      side = `<p class="qtext">${q.text}</p><div class="choices">${q.list.map((v, i) => `<button class="choice${q.bad.includes(i) ? ' bad' : ''}" data-act="m5read" data-v="${i}">${esc(v)}</button>`).join('')}</div>`;
+    } else {
+      side = `<p class="box-note">まとめた ${HYOU}が かんせい！<br>たての ${GOUKEI}を たしても、よこの ${GOUKEI}を たしても ${ONA}じ ${KAZU}に なるね。</p>
+        <div class="btn-row"><button class="act-btn b-main" data-act="m5new">べつの ${MON}だい ▶</button></div>`;
+    }
+    $('#m5Side').innerHTML = `<h3><span>✏️ やること</span></h3>${side}`;
+  },
+};
+function m5Move(c) {
+  const M = state.m5;
+  if (M.moved[c]) return;
+  M.moved[c] = true; sfx.tap();
+  if (M.moved.every(Boolean)) {
+    M.phase = 'total';
+    M.focus = Object.keys(M.holes)[0];
+    say(`ぜんぶ うつせたね。つぎは ${GOUKEI}を ${R('計算', 'けいさん')}しよう`, 'good');
+  } else say(`${esc(M.set.cols[c])}の ${KAZU}を うつしたよ`);
+  render();
+}
+function m5Formula(key) {
+  const M = state.m5, [r, c] = key.split(':'), S = M.set;
+  if (r === 'T' && c === 'T') {
+    M.hl = S.cols.map((_, i) => `T:${i}`);
+    const parts = S.cols.map((_, i) => (M.filled[`T:${i}`] != null ? M.filled[`T:${i}`] : '□'));
+    return `${parts.join(' ＋ ')} ＝ ？`;
+  }
+  if (c === 'T') { M.hl = S.cols.map((_, i) => `${r}:${i}`); return `${M.vals[+r].join(' ＋ ')} ＝ ？`; }
+  M.hl = S.rows.map((_, i) => `${i}:${c}`);
+  return `${M.vals.map((row) => row[+c]).join(' ＋ ')} ＝ ？`;
+}
+function m5KeyIn(k) {
+  const M = state.m5;
+  if (M.phase !== 'total' || !M.focus) return;
+  if (k === 'del') { M.input = M.input.slice(0, -1); render(); return; }
+  if (k !== 'ok') { if (M.input.length < 3) M.input = (M.input === '0' ? '' : M.input) + k; render(); return; }
+  if (!M.input) return;
+  const v = +M.input, key = M.focus;
+  M.input = '';
+  if (v === M.holes[key]) {
+    sfx.correct();
+    M.filled[key] = v; M.hl = []; M.shiki = ''; M.wrongs = 0;
+    const rest = Object.keys(M.holes).filter((h) => M.filled[h] == null);
+    if (!rest.length) {
+      M.phase = 'read'; M.focus = null;
+      say(`${GOUKEI}が ぜんぶ うまったね！ たての ${GOUKEI}と よこの ${GOUKEI}、どちらを たしても ${M.holes['T:T']}${R('人', 'にん')}`, 'good');
+    } else {
+      M.focus = rest[0];
+      say(key === 'T:T' ? `そう！ ${v}${R('人', 'にん')}` : `せいかい！ ${v}${R('人', 'にん')}`, 'good');
+    }
+  } else {
+    sfx.soft();
+    M.wrongs++;
+    M.shiki = m5Formula(key);
+    say(M.wrongs >= 2 ? `${R('光', 'ひか')}って いる ${KAZU}を たして みよう：${M.shiki}` : `${R('光', 'ひか')}って いる ところを たすよ`, 'warn');
+  }
+  render();
+}
+function m5Read(i) {
+  const M = state.m5, q = M.reads[M.ri];
+  if (i === q.right) {
+    sfx.correct();
+    if (M.ri < M.reads.length - 1) { M.ri++; say(`せいかい！`, 'good'); }
+    else { M.phase = 'done'; sfx.done(); cheer('かんせい！'); say(`せいかい！ まとめた ${HYOU}を つかうと、いろいろな ことが わかるね`, 'good'); }
+  } else {
+    sfx.soft(); q.bad.push(i);
+    say(M.ri === 0 ? `いちばん ${R('右', 'みぎ')}の ${GOUKEI}の れつを くらべよう` : `${esc(M.set.rows[0])}の よこの ならびを くらべよう`, 'warn');
+  }
+  render();
+}
+
+/* =========================================================
+   12. 🧑‍🏫 先生モード（データを 入れて すぐ 表示）
+   ========================================================= */
+VIEWS.teacher = {
+  enter() { say(`${HYOUDAI}・たんい・しゅるいと ${KAZU}を ${IRE}れると、${HYOU}と グラフに すぐ でるよ`); },
+  setup: () => graphSetupHTML(),
+  build() {
+    stage.className = 'stage cols3';
+    stage.innerHTML = `<div class="card" id="edCard"></div>
+      <div class="card" id="tableCard"><h3><span>📋 ${HYOU}</span></h3><div id="tblBox"></div></div>
+      ${surveyGraphCard('gTeach')}`;
+    resetAnim('gTeach');
+    renderEditor();
+  },
+  update() {
+    $('#tblBox').innerHTML = surveyTableHTML();
+    updateSurveyGraph('gTeach');
+  },
+};
+function renderEditor() {
+  const d = settings.survey;
+  $('#edCard').innerHTML = `<h3><span>✏️ データ</span></h3>
+    <div class="ed-line"><span class="slabel">ひながた</span>${PRESETS.map((p) => `<button class="chip" data-act="preset" data-v="${p.key}">${esc(p.label)}</button>`).join('')}</div>
+    <div class="ed-line"><span class="slabel">${HYOUDAI}</span><input type="text" id="edTitle" maxlength="24" value="${esc(d.title)}" aria-label="表題"></div>
+    <div class="ed-line"><span class="slabel">たんい</span><input type="text" id="edUnit" maxlength="4" value="${esc(d.unit)}" style="flex:0 0 5em;min-width:4em" aria-label="たんい">
+      ${['人', '台', 'さつ', 'こ', '回'].map((u) => `<button class="chip" data-act="edUnit" data-v="${u}">${u}</button>`).join('')}</div>
+    ${d.items.map((it, i) => `<div class="ed-row">${swatch(it)}
+      <input type="text" data-ename="${i}" maxlength="8" value="${esc(it.name)}" aria-label="しゅるい">
+      <button class="act-btn" data-act="edN" data-i="${i}" data-v="-1" aria-label="へらす">－</button>
+      <input type="number" data-en="${i}" min="0" max="999" inputmode="numeric" value="${it.n}" aria-label="数">
+      <button class="act-btn" data-act="edN" data-i="${i}" data-v="1" aria-label="ふやす">＋</button>
+      <button class="act-btn b-reset" data-act="edDel" data-i="${i}" aria-label="この行を けす" ${d.items.length <= 2 ? 'disabled' : ''}>✕</button></div>`).join('')}
+    <div class="btn-row">
+      <button class="act-btn" data-act="edAdd" ${d.items.length >= 8 ? 'disabled' : ''}>＋ しゅるいを ふやす</button>
+      <button class="act-btn" data-act="edSample">🎲 れいの ${KAZU}</button>
+      <button class="act-btn b-reset" data-act="edZero">${KAZU}を ぜんぶ 0に</button>
+    </div>
+    <p class="ed-note">「${SONOTA}」と ${KA}いた しゅるいは、いつも いちばん さいごに なります（灰色・模様なし）。
+    ここの データは「${SHIRA}べて つくろう」と「${ME}もりを かえると？（クラスの データ）」で つかわれ、この ブラウザに ほぞん されます。<b>子どもの 名前は 入れないで ください。</b></p>`;
+}
+function teacherChanged(rebuild = false) {
+  saveSettings();
+  state.hist = []; state.last = -1;
+  if (rebuild) renderEditor();
+  render();
+}
+function nextPat() {
+  const used = new Set(settings.survey.items.filter((it) => !isOther(it.name)).map((it) => it.pat));
+  return range(PAT.length, (i) => i).find((i) => !used.has(i)) ?? 0;
+}
+
+/* =========================================================
+   13. ボタンの はたらき（data-act で まとめて うけとる）
+   ========================================================= */
+const ACTS = {
+  vote: (b) => vote(+b.dataset.i),
+  undo, reset0: resetZero,
+  seiDemo: () => openSeiDemo(),
+  toTeacher: () => setMode('teacher'),
+  png: (b) => savePNG(document.getElementById(b.dataset.svg), (state.mode === 'draw' ? state.m2.title : state.mode === 'scale' ? m4Data().title : settings.survey.title)),
+  gstep: (b) => { settings.graph.step = +b.dataset.v; saveSettings(); renderSetup(); render(); },
+  gdir: (b) => { settings.graph.dir = b.dataset.v; saveSettings(); renderSetup(); resetAnim('gMain', 'gTeach'); render(); },
+  gorder: (b) => { settings.graph.order = b.dataset.v; saveSettings(); renderSetup(); render(); },
+  // グラフを かこう
+  m2new: () => { m2New(); render(true); },
+  m2row: (b) => m2Row(+b.dataset.r),
+  m2pick: (b) => m2Pick(b.dataset.v),
+  m2check: () => m2Check(),
+  m2adj: (b) => {
+    const M = state.m2;
+    if (M.sel < 0) return;
+    M.bars[M.sel] = clamp(M.bars[M.sel] + +b.dataset.v, 0, M.step * M2_CELLS);
+    delete M.marks[M.sel]; sfx.tick(); render();
+  },
+  m2dir: (b) => { state.m2.dir = b.dataset.v; renderSetup(); render(); },
+  m2nums: () => { state.m2.showNums = !state.m2.showNums; renderSetup(); render(); },
+  // グラフを 読もう
+  key: (b) => (state.mode === 'read' ? m3Key(b.dataset.k) : m5KeyIn(b.dataset.k)),
+  m3ask: (b) => m3Ask(+b.dataset.v),
+  m3choice: (b) => m3Choice(+b.dataset.v),
+  m3hint: () => m3Hint(),
+  m3next: () => m3Next(),
+  m3restart: () => { m3Start(); render(true); },
+  m3again: () => { closeModals(); m3Start(); render(true); },
+  // 目もりを かえると
+  m4src: (b) => { state.m4.src = b.dataset.v; state.m4.pick = null; renderSetup(); VIEWS.scale.enter(); render(true); },
+  m4view: (b) => { clearTimeout(state.m4.timer); state.m4.view = b.dataset.v; state.m4.pick = null; renderSetup(); render(true); },
+  m4step: (b) => { clearTimeout(state.m4.timer); state.m4.step = +b.dataset.v; sfx.tap(); render(); },
+  m4play: () => m4Play(),
+  m4pick: (b) => m4Pick(+b.dataset.v),
+  // 表を まとめよう
+  m5new: () => { m5New(); render(true); },
+  m5move: (b) => m5Move(+b.dataset.c),
+  m5focus: (b) => { const M = state.m5; M.focus = b.dataset.k; M.input = ''; M.hl = []; M.shiki = ''; M.wrongs = 0; sfx.tap(); render(); },
+  m5read: (b) => m5Read(+b.dataset.v),
+  // 先生モード
+  preset: (b) => {
+    const p = PRESETS.find((x) => x.key === b.dataset.v);
+    settings.survey = presetSurvey(p);
+    resetAnim('gTeach'); teacherChanged(true);
+    say(`「${esc(p.label)}」に したよ`);
+  },
+  edUnit: (b) => { settings.survey.unit = b.dataset.v; $('#edUnit').value = b.dataset.v; teacherChanged(); },
+  edN: (b) => {
+    const it = settings.survey.items[+b.dataset.i];
+    it.n = clamp(it.n + +b.dataset.v, 0, 999);
+    const inp = $(`[data-en="${b.dataset.i}"]`); if (inp) inp.value = it.n;
+    teacherChanged();
+  },
+  edDel: (b) => {
+    if (settings.survey.items.length <= 2) return;
+    settings.survey.items.splice(+b.dataset.i, 1);
+    teacherChanged(true);
+  },
+  edAdd: () => {
+    const items = settings.survey.items;
+    if (items.length >= 8) return;
+    const oi = items.findIndex((it) => isOther(it.name));
+    const it = { name: 'あたらしい', n: 0, pat: nextPat() };
+    if (oi >= 0) items.splice(oi, 0, it); else items.push(it);
+    teacherChanged(true);
+  },
+  edSample: () => { settings.survey.items.forEach((it) => { it.n = isOther(it.name) ? rnd(1, 3) : rnd(1, 12); }); teacherChanged(true); },
+  edZero: () => { settings.survey.items.forEach((it) => { it.n = 0; }); teacherChanged(true); },
+};
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const fn = ACTS[b.dataset.act];
+  if (fn) fn(b, e);
+});
+// 先生モードの 入力（1文字ごとに 表と グラフを かきなおす。入力らんは そのまま）
+document.addEventListener('input', (e) => {
+  if (state.mode !== 'teacher') return;
+  const el = e.target, d = settings.survey;
+  if (el.id === 'edTitle') d.title = el.value.slice(0, 24);
+  else if (el.id === 'edUnit') d.unit = el.value.trim().slice(0, 4) || '人';
+  else if (el.dataset.ename != null) {
+    const it = d.items[+el.dataset.ename];
+    const wasOther = isOther(it.name);
+    it.name = el.value.slice(0, 8);
+    if (wasOther && !isOther(it.name)) it.pat = nextPat();
+  } else if (el.dataset.en != null) {
+    const v = Math.round(Number(el.value));
+    if (!(v >= 0 && v <= 999)) return;
+    d.items[+el.dataset.en].n = v;
+  } else return;
+  saveSettings(); state.hist = []; state.last = -1;
+  render();
+});
+document.addEventListener('change', (e) => {
+  // 名前を かえて 色・模様が かわった ときの ために、さいごに 入力らんも かきなおす
+  if (state.mode === 'teacher' && e.target.dataset.ename != null) renderEditor();
+});
+$$('.mode-btn').forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
+
+document.addEventListener('keydown', (e) => {
+  if ($('.modal.open')) return;
+  if (e.target.matches && e.target.matches('input')) return;
+  if (state.mode === 'survey') {
+    if (/^[1-8]$/.test(e.key) && settings.survey.items[+e.key - 1]) vote(+e.key - 1);
+    if (e.key === 'Backspace') undo();
+  }
+  if (state.mode === 'read' || state.mode === 'merge') {
+    if (/^[0-9]$/.test(e.key)) ACTS.key({ dataset: { k: e.key } });
+    if (e.key === 'Backspace') ACTS.key({ dataset: { k: 'del' } });
+    if (e.key === 'Enter') {
+      if (state.mode === 'read' && m3Q().solved) m3Next();
+      else ACTS.key({ dataset: { k: 'ok' } });
+    }
+  }
+});
+
+function sparkle(el, num = 12) {
+  if (calm() || !el) return;
+  const r = el.getBoundingClientRect();
+  for (let i = 0; i < num; i++) {
+    const s = document.createElement('div');
+    s.className = 'spark'; s.textContent = '✦';
+    s.style.left = `${r.left + Math.random() * r.width}px`;
+    s.style.top = `${r.top + Math.random() * Math.min(r.height, innerHeight)}px`;
+    s.style.animationDelay = `${Math.random() * 0.3}s`;
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 1500);
+  }
+}
+function cheer(text) {
+  const c = document.createElement('div');
+  c.className = 'cheer'; c.textContent = text;
+  document.body.appendChild(c);
+  setTimeout(() => c.remove(), calm() ? 900 : 1500);
+}
+
+/* =========================================================
+   14. まど（せってい・先生へ・正の字・けっか）
+   ========================================================= */
+function openModal(id) { $(id).classList.add('open'); }
+function closeModals() { $$('.modal').forEach((m) => m.classList.remove('open')); }
+$$('.modal').forEach((m) => m.addEventListener('click', (e) => {
+  if (e.target === m || e.target.closest('[data-close]')) closeModals();
+}));
+function renderSettings() {
+  $$('[data-set]').forEach((b) => b.classList.toggle('active', String(settings[b.dataset.set]) === b.dataset.val));
+}
+$('#btnSettings').onclick = () => { renderSettings(); openModal('#modalSettings'); };
+$('#btnHowto').onclick = () => openModal('#modalHowto');
+$('#btnFull').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+};
+$$('[data-set]').forEach((b) => {
+  b.onclick = () => {
+    const raw = b.dataset.val;
+    settings[b.dataset.set] = raw === 'true' ? true : raw === 'false' ? false : raw;
+    saveSettings(); renderSettings(); render();
+  };
+});
+
+reduceMQ.addEventListener?.('change', () => render());
+setMode('survey');
+</script>
+</body>
+</html>
