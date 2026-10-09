@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""index.html を読んで、Obsidian のノートの「教材一覧」を作り直します。
+"""index.html のアプリの表（const D=[...]）を読んで、Obsidian のノートの「教材一覧」を作り直します。
 
 つかい方（ikechan-app フォルダの中で）:
     python3 tools/update-obsidian-note.py
@@ -17,17 +17,25 @@ BASE_URL = 'https://ikechan3351-stack.github.io/ikechan-app/'
 BEGIN = '<!-- ▼ ここから下は tools/update-obsidian-note.py が index.html から自動で作ります。手で直しても次の実行で消えます -->'
 END = '<!-- ▲ ここまで -->'
 
-SECTION_RE = re.compile(
-    r'<section class="subject" id="[^"]+"[^>]*>\s*'
-    r'<div class="subject-head">\s*'
-    r'<span class="emoji">([^<]+)</span><h2>([^<]+)</h2><span class="count">(\d+)</span>\s*'
-    r'</div>\s*<div class="grid">(.*?)</div>\s*</section>', re.S)
-CARD_RE = re.compile(r'<a class="app-card(?: external)?" href="([^"]+)"[^>]*>(.*?)</a>', re.S)
+DATA_RE = re.compile(r'const D=\[(.*?)\n\];', re.S)
+SUBJ_RE = re.compile(r"const SUBJ=\[(.*?)\];", re.S)
+ROW_RE = re.compile(r"^\s*\[(.*)\],?\s*$")
+VALUE_RE = re.compile(r"'((?:[^'\\]|\\.)*)'|(-?\d+)")
 
 
-def span(html, cls):
-    m = re.search(r'<span class="%s">(.*?)</span>' % cls, html, re.S)
-    return re.sub(r'\s+', ' ', m.group(1)).strip() if m else ''
+def values(text):
+    """['m',1,2,'🍒',...] の中身を、文字列と数の並びにする。"""
+    return [s if n == '' else int(n) for s, n in VALUE_RE.findall(text)]
+
+
+def grade_label(g1, g2):
+    """index.html の gradeLabel() と同じ表し方。"""
+    gl = lambda n: f'小{n}' if n <= 6 else f'中{n - 6}'
+    if g1 == 0:
+        return '先生用'
+    if g1 == 1 and g2 == 9:
+        return '全学年'
+    return gl(g1) if g1 == g2 else f'{gl(g1)}〜{gl(g2)}'
 
 
 def to_url(href):
@@ -37,21 +45,46 @@ def to_url(href):
     return BASE_URL + urllib.parse.quote(href)
 
 
-def build(index_html):
-    lines, total, warnings = [], 0, []
-    for emoji, name, count, grid in SECTION_RE.findall(index_html):
-        cards = CARD_RE.findall(grid)
-        if int(count) != len(cards):
-            warnings.append(f'{name}: index.html の件数表示は {count} ですが、実際のカードは {len(cards)} 枚です')
-        total += len(cards)
-        lines.append(f'### {name}（{len(cards)}件）\n')
+def build(index_html, repo):
+    data, subj = DATA_RE.search(index_html), SUBJ_RE.search(index_html)
+    if not data or not subj:
+        sys.exit('index.html にアプリの表（const D=[...]）か教科の表（const SUBJ=[...]）が見つかりません')
+    subjects = dict(zip(*[iter(values(subj.group(1)))] * 2))
+    groups, warnings = {k: [] for k in subjects}, []
+    for line in data.group(1).splitlines():
+        m = ROW_RE.match(line)
+        if not m:
+            continue
+        row = values(m.group(1))
+        if len(row) != 9:
+            warnings.append(f'形がおかしい行があります: {line.strip()}')
+            continue
+        if row[0] not in groups:
+            warnings.append(f'知らない教科の記号 {row[0]!r}: {row[4]}')
+            continue
+        path = row[6]
+        if not path.startswith(('http://', 'https://')) and not (repo / path).exists():
+            warnings.append(f'リンク先のファイルがありません: {path}')
+        groups[row[0]].append(row)
+
+    lines, total = [], 0
+    for key, name in subjects.items():
+        rows = groups[key]
+        if not rows:
+            continue
+        if key == 'm':  # トップページと同じく、算数は学年の低い順
+            rows = sorted(rows, key=lambda r: r[1])
+        total += len(rows)
+        lines.append(f'### {name}（{len(rows)}件）\n')
         lines.append('| 教材 | 学年 | 内容 |')
         lines.append('|---|---|---|')
-        for href, body in cards:
-            title, grade, desc, note = (span(body, c) for c in ('title', 'grade', 'desc', 'note'))
-            if note:
-                desc = f'{desc}（{note}）'
-            lines.append(f'| [{title}]({to_url(href)}) | {grade} | {desc} |')
+        for _, g1, g2, ico, title, desc, path, unit, flags in rows:
+            notes = [n for f, n in (('t', '先生モード・授業向け'), ('x', '起動に少し時間がかかります')) if f in flags]
+            if unit:
+                notes.insert(0, unit)
+            if notes:
+                desc = f'{desc}（{"・".join(notes)}）'
+            lines.append(f'| [{ico} {title}]({to_url(path)}) | {grade_label(g1, g2)} | {desc} |')
         lines.append('')
     head = ('教材名をクリックすると公開ページが開きます。'
             f'この一覧は `index.html` から自動で作っています（ぜんぶで {total} 件）。\n')
@@ -90,7 +123,7 @@ def main():
         if not path.exists():
             sys.exit(f'見つかりません: {path}')
 
-    body, total, warnings = build(index_path.read_text(encoding='utf-8'))
+    body, total, warnings = build(index_path.read_text(encoding='utf-8'), repo)
     note = note_path.read_text(encoding='utf-8')
 
     if BEGIN not in note or END not in note:
