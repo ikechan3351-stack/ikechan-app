@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>合同・相似パズル</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e0f7fa 0%, #fff8e1 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #00838f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #006064; text-align: center; }
+  .subtitle { margin: 0 0 12px; font-size: 0.9rem; color: #00838f; text-align: center; line-height: 1.8; }
+  .wrap { width: 100%; max-width: 940px; display: flex; flex-direction: column; gap: 12px; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 12px 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+
+  /* ステージ選び */
+  .top { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  .modes { display: flex; gap: 6px; }
+  .mode {
+    border: 2px solid #b2ebf2; background: #fff; color: #006064; border-radius: 12px; padding: 8px 16px;
+    font-size: 1.05rem; font-weight: bold; cursor: pointer; touch-action: manipulation; font-family: inherit;
+  }
+  .mode.on { background: #00838f; color: #fff; border-color: #00838f; }
+  .mode rt { font-size: 0.55em; }
+  .stages { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .stages .lbl { font-weight: bold; color: #006064; font-size: 0.95rem; }
+  .dot {
+    width: 40px; height: 40px; border-radius: 50%; border: 2px solid #b2ebf2; background: #fff; color: #006064;
+    font-weight: bold; font-size: 1rem; cursor: pointer; touch-action: manipulation; font-family: inherit; position: relative;
+  }
+  .dot.on { background: #00838f; color: #fff; border-color: #00838f; }
+  .dot.done::after { content: "✓"; position: absolute; right: -4px; top: -6px; font-size: 0.8rem; background: #43a047; color: #fff; border-radius: 50%; width: 18px; height: 18px; line-height: 18px; }
+
+  .mission { font-size: 1.05rem; font-weight: bold; color: #006064; margin-bottom: 6px; }
+
+  /* ステージ */
+  .stage-box { position: relative; }
+  #stage {
+    width: 100%; height: auto; display: block; touch-action: none; user-select: none; -webkit-user-select: none;
+    background: #fafafa; border-radius: 12px;
+  }
+  .mover { cursor: grab; }
+  .knob { cursor: grab; }
+
+  /* クリアの演出 */
+  .banner {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.3);
+    background: rgba(255,255,255,0.95); border: 4px solid #43a047; border-radius: 20px; padding: 14px 26px; text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2); opacity: 0; pointer-events: none; transition: transform 0.35s cubic-bezier(.3,1.6,.5,1), opacity 0.25s;
+  }
+  .banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .banner { white-space: nowrap; }
+  .banner .t1 { font-size: clamp(1.1rem, 4.5vw, 1.8rem); font-weight: bold; color: #2e7d32; }
+  .banner .t2 { font-size: clamp(1.5rem, 6vw, 2.6rem); font-weight: bold; color: #e65100; margin-top: 4px; }
+  .banner .t3 { font-size: 0.95rem; color: #555; margin-top: 2px; }
+  .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: 12px; }
+  .confetti span { position: absolute; top: -30px; font-size: 1.4rem; animation: fall 1.6s ease-in forwards; }
+  @keyframes fall { to { transform: translateY(520px) rotate(540deg); opacity: 0; } }
+
+  /* 操作 */
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .btn {
+    border: none; border-radius: 12px; padding: 10px 16px; font-size: 1rem; font-weight: bold;
+    cursor: pointer; touch-action: manipulation; font-family: inherit; background: #e0f7fa; color: #006064;
+  }
+  .btn.judge { background: #ef6c00; color: #fff; font-size: 1.15rem; padding: 11px 26px; margin-left: auto; }
+  .btn.next { background: #43a047; color: #fff; }
+  .scale-row { display: none; align-items: center; gap: 8px; width: 100%; margin-top: 4px; }
+  .scale-row.on { display: flex; }
+  .scale-row .lbl { font-weight: bold; white-space: nowrap; color: #006064; }
+  .scale-row input { flex: 1; accent-color: #00838f; height: 28px; min-width: 0; }
+  .scale-row .val { font-weight: bold; font-size: 1.3rem; min-width: 70px; text-align: right; color: #006064; font-variant-numeric: tabular-nums; }
+  .hint { margin-top: 8px; min-height: 1.6em; font-weight: bold; color: #c62828; line-height: 1.6; }
+
+  /* 結果 */
+  .result { display: none; }
+  .result.on { display: block; }
+  .result h2 { font-size: 1.1rem; margin: 0 0 6px; color: #2e7d32; }
+  .stmt { font-size: 1.5rem; font-weight: bold; text-align: center; margin: 4px 0 8px; }
+  .ratio-big { text-align: center; font-size: 2.4rem; font-weight: bold; color: #e65100; margin: 2px 0 8px; }
+  .ratio-big small { font-size: 1rem; color: #555; display: block; font-weight: normal; }
+  .tables { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 640px) { .tables { grid-template-columns: 1fr; } }
+  table.t { border-collapse: collapse; width: 100%; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+  table.t th, table.t td { border: 1.5px solid #cfd8dc; padding: 6px 8px; text-align: center; font-weight: bold; }
+  table.t th { background: #e0f2f1; color: #00695c; }
+  .note { font-size: 0.86rem; color: #555; margin-top: 6px; line-height: 1.6; }
+
+  .help {
+    width: 100%; max-width: 940px; margin-top: 12px;
+    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
+    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #006064; }
+  .help ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🧩 <ruby>合同<rt>ごうどう</rt></ruby>・<ruby>相似<rt>そうじ</rt></ruby>パズル</h1>
+<p class="subtitle">オレンジの図形を動かして、点線の図形にぴったり重ねよう。重なったら「判定」！</p>
+
+<div class="wrap">
+  <div class="card top">
+    <div class="modes">
+      <button class="mode on" data-mode="cong">🟰 合同ステージ</button>
+      <button class="mode" data-mode="sim">🔍 相似ステージ</button>
+    </div>
+    <div class="stages" id="stages"></div>
+  </div>
+
+  <div class="card">
+    <div class="mission" id="mission"></div>
+    <div class="stage-box">
+      <svg id="stage" viewBox="0 0 640 440" aria-label="ステージ">
+        <g id="gridG"></g>
+        <g id="targetG"></g>
+        <g id="moverG"></g>
+      </svg>
+      <div class="confetti" id="confetti"></div>
+      <div class="banner" id="banner"><div class="t1" id="b1"></div><div class="t2" id="b2"></div><div class="t3" id="b3"></div></div>
+    </div>
+    <div class="controls" style="margin-top:10px">
+      <button class="btn" id="rotL">↺ 15°</button>
+      <button class="btn" id="rotR">↻ 15°</button>
+      <button class="btn" id="flipBtn">🔁 裏返す</button>
+      <button class="btn" id="resetBtn">やり直し</button>
+      <button class="btn judge" id="judgeBtn">✅ 判定</button>
+      <div class="scale-row" id="scaleRow">
+        <span class="lbl">大きさ（拡大・縮小）</span>
+        <input type="range" id="scale" min="0.5" max="2" step="0.01" value="1">
+        <span class="val" id="scaleV">1.00倍</span>
+      </div>
+    </div>
+    <div class="hint" id="hint"></div>
+  </div>
+
+  <div class="card result" id="result"></div>
+</div>
+
+<div class="help">
+  <h2>📝 使いかた</h2>
+  <ul>
+    <li>オレンジの図形をドラッグすると動きます（平行移動）。上の ↻ ツマミを回すか、↺・↻ ボタンで回せます（回転移動）。</li>
+    <li>「🔁 裏返す」で図形がうらがえります（対称移動）。裏返さないと重ならない問題もあります。</li>
+    <li>相似ステージでは「大きさ」スライダーで拡大・縮小できます。</li>
+    <li>タブレットでは、2本の指で図形をつまむと回転（相似ステージでは拡大・縮小も）できます。</li>
+  </ul>
+</div>
+
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const $ = id => document.getElementById(id);
+  const PX = 40;            // 1cm = 40px
+  const W = 640, H = 440;
+  const TOL = 0.3 * PX;     // 頂点のずれが 0.3cm 以内なら「ぴったり」
+  const LETTERS = 'ABCDEFGHIJ';
+
+  // ---- ステージ（点は cm、t は目標の位置・角度・裏返し、ratio は 動かす図形：目標）----
+  const STAGES = {
+    cong: [
+      { pts: [[0,0],[4,0],[0,3]],                       t: { x: 11.5, y: 5.5, a: 30,  f: false }, msg: '直角三角形を重ねよう' },
+      { pts: [[0,0],[5,0],[1.5,3]],                     t: { x: 11.5, y: 5.5, a: 120, f: false }, msg: '回転させて重ねよう' },
+      { pts: [[0,0],[4,0],[3,2.5]],                     t: { x: 11.5, y: 5.5, a: 200, f: true  }, msg: '回すだけで重なるかな？' },
+      { pts: [[0,0],[4,0],[3.5,2.5],[0.5,3]],           t: { x: 11.5, y: 5.5, a: 75,  f: false }, msg: '四角形を重ねよう' },
+      { pts: [[0,0],[3,-0.5],[4,1.5],[2,3.5],[-0.5,2]], t: { x: 11.5, y: 5.5, a: 250, f: true  }, msg: '五角形を重ねよう' },
+    ],
+    sim: [
+      { pts: [[0,0],[4,0],[0,3]],                       t: { x: 11, y: 5.5, a: 20,  f: false }, ratio: [2, 3], msg: '大きさを変えて重ねよう' },
+      { pts: [[0,0],[3,0],[1,2]],                       t: { x: 11, y: 5.5, a: 150, f: false }, ratio: [1, 2], msg: '何倍にすればいいかな？' },
+      { pts: [[0,0],[4,0],[4,2],[1,3]],                 t: { x: 11, y: 5.5, a: 60,  f: false }, ratio: [4, 3], msg: '縮小することもあるよ' },
+      { pts: [[0,0],[3,0],[2.5,2]],                     t: { x: 11, y: 5.5, a: 300, f: true  }, ratio: [2, 1], msg: '向きに注意！' },
+      { pts: [[0,0],[2,-0.5],[3,1],[1.5,2.5],[-0.5,1.5]], t: { x: 11, y: 5.5, a: 210, f: true }, ratio: [3, 4], msg: '五角形の相似にちょうせん' },
+    ],
+  };
+  const START = { x: 4, y: 5.5, a: 0, f: false, s: 1 };
+
+  let mode = 'cong', idx = 0;
+  const done = { cong: new Set(), sim: new Set() };
+  let shape = [];          // 重心を原点にした cm 座標
+  let target = null;       // { x, y, a, f, s }（x, y は px）
+  let mv = null;           // 動かす図形 { x, y, a, f, s }
+  let cleared = false;
+
+  // ---- 方眼 ----
+  (() => {
+    let h = '';
+    for (let x = 0; x <= W; x += PX) h += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#eceff1"/>`;
+    for (let y = 0; y <= H; y += PX) h += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#eceff1"/>`;
+    $('gridG').innerHTML = h;
+  })();
+
+  // ---- 変形 ----
+  function place(st) {
+    const r = st.a * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+    return shape.map(([x0, y0]) => {
+      let x = (st.f ? -x0 : x0) * st.s * PX, y = y0 * st.s * PX;
+      return [st.x + x * c - y * s, st.y + x * s + y * c];
+    });
+  }
+  const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  function sideLens(pts) { return pts.map((p, i) => dist(p, pts[(i + 1) % pts.length])); }
+  function angles(pts) {
+    const n = pts.length;
+    return pts.map((p, i) => {
+      const a = pts[(i + n - 1) % n], b = pts[(i + 1) % n];
+      const u = [a[0] - p[0], a[1] - p[1]], v = [b[0] - p[0], b[1] - p[1]];
+      const cos = (u[0] * v[0] + u[1] * v[1]) / (Math.hypot(...u) * Math.hypot(...v));
+      return Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI;
+    });
+  }
+  const centroidOf = pts => [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
+  const radiusOf = st => Math.max(...shape.map(([x, y]) => Math.hypot(x, y))) * st.s * PX;
+
+  // ---- 描画 ----
+  function labels(pts, names, color, size) {
+    const c = centroidOf(pts);
+    return pts.map((p, i) => {
+      const d = [p[0] - c[0], p[1] - c[1]], L = Math.hypot(...d) || 1;
+      const x = p[0] + d[0] / L * 18, y = p[1] + d[1] / L * 18;
+      return `<text x="${x}" y="${y}" font-size="${size}" font-weight="bold" fill="${color}" text-anchor="middle" dominant-baseline="central" stroke="#fafafa" stroke-width="4" paint-order="stroke">${names[i]}</text>`;
+    }).join('');
+  }
+  const n = () => shape.length;
+  const namesMv = () => LETTERS.slice(0, n()).split('');
+  const namesTg = () => LETTERS.slice(n(), 2 * n()).split('');
+
+  function drawTarget() {
+    const pts = place(target);
+    $('targetG').innerHTML =
+      `<polygon points="${pts.map(p => p.join(',')).join(' ')}" fill="#b0bec5" fill-opacity="0.25" stroke="#546e7a" stroke-width="3" stroke-dasharray="9 6" stroke-linejoin="round"/>` +
+      labels(pts, namesTg(), '#546e7a', 17);
+  }
+  function drawMover() {
+    const pts = place(mv);
+    const col = cleared ? '#43a047' : '#ef6c00', fill = cleared ? '#a5d6a7' : '#ffcc80';
+    const r = radiusOf(mv) + 34, ar = mv.a * Math.PI / 180;
+    const kx = mv.x + Math.sin(ar) * r, ky = mv.y - Math.cos(ar) * r;
+    let h = '';
+    if (!cleared) {
+      h += `<line x1="${mv.x}" y1="${mv.y}" x2="${kx}" y2="${ky}" stroke="#ffb74d" stroke-width="2.5" stroke-dasharray="5 4"/>`;
+    }
+    h += `<polygon class="mover" points="${pts.map(p => p.join(',')).join(' ')}" fill="${fill}" fill-opacity="0.75" stroke="${col}" stroke-width="3" stroke-linejoin="round"/>`;
+    h += `<circle cx="${mv.x}" cy="${mv.y}" r="4" fill="${col}" pointer-events="none"/>`;
+    h += labels(pts, namesMv(), cleared ? '#2e7d32' : '#e65100', 19);
+    if (!cleared) {
+      h += `<g class="knob" transform="translate(${kx},${ky})"><circle r="22" fill="transparent"/><circle r="15" fill="#fff" stroke="#ef6c00" stroke-width="3"/><text font-size="18" font-weight="bold" fill="#ef6c00" text-anchor="middle" dominant-baseline="central" pointer-events="none">↻</text></g>`;
+    }
+    $('moverG').innerHTML = h;
+  }
+  const render = () => { drawMover(); };
+
+  // ---- ステージ読みこみ ----
+  function buildStageDots() {
+    const box = $('stages');
+    box.innerHTML = '<span class="lbl">ステージ</span>';
+    STAGES[mode].forEach((_, i) => {
+      const b = document.createElement('button');
+      b.className = 'dot' + (i === idx ? ' on' : '') + (done[mode].has(i) ? ' done' : '');
+      b.textContent = i + 1;
+      b.addEventListener('click', () => load(mode, i));
+      box.appendChild(b);
+    });
+  }
+  function load(m, i) {
+    mode = m; idx = i;
+    const S = STAGES[m][i];
+    const c = centroidOf(S.pts);
+    shape = S.pts.map(([x, y]) => [x - c[0], y - c[1]]);
+    const ts = m === 'sim' ? S.ratio[1] / S.ratio[0] : 1;
+    target = { x: S.t.x * PX, y: S.t.y * PX, a: S.t.a, f: S.t.f, s: ts };
+    mv = { x: START.x * PX, y: START.y * PX, a: 0, f: false, s: 1 };
+    cleared = false;
+    document.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+    $('scaleRow').classList.toggle('on', m === 'sim');
+    $('scale').value = 1; $('scaleV').textContent = '1.00倍';
+    const kind = n() === 3 ? '三角形' : n() === 4 ? '四角形' : '五角形';
+    $('mission').textContent = `${m === 'cong' ? '合同' : '相似'} ステージ ${i + 1}：${kind}　${S.msg}`;
+    $('hint').textContent = '';
+    $('result').classList.remove('on');
+    $('banner').classList.remove('show');
+    $('judgeBtn').disabled = false;
+    buildStageDots();
+    drawTarget(); render();
+  }
+
+  // ---- 判定 ----
+  function judge() {
+    if (cleared) return;
+    const a = place(mv), b = place(target);
+    const maxErr = Math.max(...a.map((p, i) => dist(p, b[i])));
+    if (maxErr <= TOL) { clear(); return; }
+    // ずれのヒント
+    const tips = [];
+    if (mv.f !== target.f) tips.push('向きがちがうみたい。「🔁 裏返す」を使ってみよう');
+    else {
+      if (mode === 'sim' && Math.abs(mv.s - target.s) > 0.03) tips.push(`大きさがちがう。もう少し${mv.s < target.s ? '大きく' : '小さく'}しよう`);
+      const d = ((target.a - mv.a) % 360 + 540) % 360 - 180;
+      if (Math.abs(d) > 3) tips.push(`角度がずれている。${d > 0 ? '右回り（↻）' : '左回り（↺）'}にあと約 ${Math.round(Math.abs(d))}°`);
+      if (Math.hypot(mv.x - target.x, mv.y - target.y) > TOL * 0.6) tips.push('位置がずれている。重なるところまで動かそう');
+    }
+    if (!tips.length) tips.push('あと少し！ていねいに合わせよう');
+    $('hint').innerHTML = '🤔 ' + tips.join('<br>🤔 ');
+  }
+
+  function clear() {
+    cleared = true;
+    done[mode].add(idx);
+    $('hint').textContent = '';
+    $('judgeBtn').disabled = true;
+    // ぴったりの位置へ吸いつける
+    const from = { ...mv }, to = { ...target };
+    let d = ((to.a - from.a) % 360 + 540) % 360 - 180;
+    const t0 = performance.now();
+    (function step(t) {
+      const k = Math.min(1, (t - t0) / 300), e = 1 - (1 - k) ** 3;
+      mv = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, a: from.a + d * e, f: to.f, s: from.s + (to.s - from.s) * e };
+      render();
+      if (k < 1) requestAnimationFrame(step);
+      else { mv = { ...to }; render(); celebrate(); }
+    })(t0);
+  }
+
+  function celebrate() {
+    const S = STAGES[mode][idx];
+    const sim = mode === 'sim';
+    $('b1').textContent = `🎉 クリア！ ${sim ? '相似' : '合同'}です！`;
+    $('b2').textContent = sim ? `相似比 ${S.ratio[0]}：${S.ratio[1]}` : '';
+    $('b2').style.display = sim ? '' : 'none';
+    $('b3').textContent = target.f ? '（裏返して重なりました）' : '';
+    $('banner').classList.add('show');
+    setTimeout(() => $('banner').classList.remove('show'), 2600);
+    // 紙ふぶき
+    const cf = $('confetti');
+    cf.innerHTML = '';
+    const em = ['🎉', '⭐', '✨', '🟧', '🟩', '🔷'];
+    for (let i = 0; i < 22; i++) {
+      const s = document.createElement('span');
+      s.textContent = em[i % em.length];
+      s.style.left = Math.random() * 100 + '%';
+      s.style.animationDelay = Math.random() * 0.5 + 's';
+      cf.appendChild(s);
+    }
+    setTimeout(() => { cf.innerHTML = ''; }, 2400);
+    showResult();
+    buildStageDots();
+  }
+
+  function showResult() {
+    const S = STAGES[mode][idx], sim = mode === 'sim';
+    const nm = namesMv(), nt = namesTg(), k = n();
+    // 元の大きさ（動かす前）と目標の長さ・角度
+    const orig = place({ x: 0, y: 0, a: 0, f: false, s: 1 });
+    const tgt = place(target);
+    const L0 = sideLens(orig).map(v => v / PX), L1 = sideLens(tgt).map(v => v / PX);
+    const A0 = angles(orig), A1 = angles(tgt);
+    const poly = k === 3 ? '△' : k === 4 ? '四角形' : '五角形';
+    const sym = sim ? '∽' : '≡';
+    const f1 = v => (Math.round(v * 10) / 10).toFixed(1);
+    let h = `<h2>📏 対応する辺と角をくらべよう</h2>`;
+    h += `<div class="stmt"><span style="color:#e65100">${poly}${nm.join('')}</span> ${sym} <span style="color:#546e7a">${poly}${nt.join('')}</span></div>`;
+    if (sim) {
+      const [r0, r1] = S.ratio;
+      const k = r1 % r0 === 0 ? String(r1 / r0) : `${r1}/${r0}`;
+      h += `<div class="ratio-big">相似比 ${r0} ： ${r1}<small>（${poly}${nm.join('')} の辺を ${k} 倍すると、${poly}${nt.join('')} の辺になる）</small></div>`;
+    }
+    let ts = `<table class="t"><tr><th>辺</th><th style="color:#e65100">${sim ? '元の図形' : '動かした図形'}</th><th style="color:#546e7a">点線の図形</th>${sim ? '<th>比</th>' : ''}</tr>`;
+    for (let i = 0; i < k; i++) {
+      const a = nm[i] + nm[(i + 1) % k], b = nt[i] + nt[(i + 1) % k];
+      ts += `<tr><td>${a} と ${b}</td><td>${f1(L0[i])} cm</td><td>${f1(L1[i])} cm</td>${sim ? `<td>${S.ratio[0]}：${S.ratio[1]}</td>` : ''}</tr>`;
+    }
+    ts += '</table>';
+    let ta = `<table class="t"><tr><th>角</th><th style="color:#e65100">${sim ? '元の図形' : '動かした図形'}</th><th style="color:#546e7a">点線の図形</th></tr>`;
+    for (let i = 0; i < k; i++) {
+      ta += `<tr><td>∠${nm[i]} と ∠${nt[i]}</td><td>${Math.round(A0[i])}°</td><td>${Math.round(A1[i])}°</td></tr>`;
+    }
+    ta += '</table>';
+    h += `<div class="tables">${ts}${ta}</div>`;
+    h += sim
+      ? `<div class="note">相似な図形では、<b>対応する辺の長さの比はすべて等しく</b>（${S.ratio[0]}：${S.ratio[1]}）、<b>対応する角の大きさはそれぞれ等しい</b>。</div>`
+      : `<div class="note">合同な図形では、<b>対応する辺の長さ</b>も<b>対応する角の大きさ</b>も、それぞれ等しい。</div>`;
+    if (target.f) h += `<div class="note">🔁 この問題は裏返して（対称移動して）重なりました。裏返して重なる図形も合同（相似）です。</div>`;
+    const hasNext = idx + 1 < STAGES[mode].length;
+    h += `<div class="controls" style="margin-top:10px">${hasNext ? '<button class="btn next" id="nextBtn">次のステージへ ▶</button>' : `<span style="font-weight:bold;color:#2e7d32">🏆 ${sim ? '相似' : '合同'}ステージをすべて回ったよ！</span>`}</div>`;
+    const el = $('result');
+    el.innerHTML = h;
+    el.classList.add('on');
+    if (hasNext) $('nextBtn').addEventListener('click', () => load(mode, idx + 1));
+  }
+
+  // ---- ボタン ----
+  $('rotL').addEventListener('click', () => { if (!cleared) { mv.a -= 15; render(); } });
+  $('rotR').addEventListener('click', () => { if (!cleared) { mv.a += 15; render(); } });
+  $('flipBtn').addEventListener('click', () => {
+    if (cleared) return;
+    // 裏返す動き：横につぶれて、もどる
+    const f0 = mv.f, t0 = performance.now(), s = mv.s;
+    (function step(t) {
+      const k = Math.min(1, (t - t0) / 360);
+      const w = Math.abs(Math.cos(k * Math.PI));
+      shapeFlipView(k < 0.5 ? f0 : !f0, w);
+      if (k < 1) requestAnimationFrame(step); else { mv.f = !f0; render(); }
+    })(t0);
+    function shapeFlipView(f, w) {
+      const saved = shape;
+      shape = saved.map(([x, y]) => [x * Math.max(w, 0.02), y]);
+      mv.f = f; render();
+      shape = saved;
+    }
+  });
+  $('resetBtn').addEventListener('click', () => load(mode, idx));
+  $('judgeBtn').addEventListener('click', judge);
+  $('scale').addEventListener('input', e => {
+    if (cleared) return;
+    mv.s = +e.target.value; $('scaleV').textContent = mv.s.toFixed(2) + '倍'; render();
+  });
+  document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => load(b.dataset.mode, 0)));
+
+  // ---- ドラッグ（マウス・タッチ共通の PointerEvents）----
+  const svg = $('stage');
+  const pointers = new Map();
+  let gesture = null;   // { kind: 'move' | 'knob', ... }
+  function toSvg(e) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    return [p.x, p.y];
+  }
+  function snapshot() {
+    const pts = [...pointers.values()];
+    gesture = { kind: 'move', pts: pts.map(p => [...p]), mv: { ...mv } };
+  }
+  const clampPos = () => { mv.x = Math.max(10, Math.min(W - 10, mv.x)); mv.y = Math.max(10, Math.min(H - 10, mv.y)); };
+
+  svg.addEventListener('pointerdown', e => {
+    if (cleared) return;
+    const onKnob = e.target.closest('.knob'), onShape = e.target.closest('.mover');
+    if (!onKnob && !onShape && !(gesture && gesture.kind === 'move')) return;
+    e.preventDefault();
+    try { svg.setPointerCapture(e.pointerId); } catch (_) { /* 捕まえられなくても操作は続ける */ }
+    if (onKnob) {
+      pointers.clear();
+      gesture = { kind: 'knob', id: e.pointerId };
+      return;
+    }
+    if (gesture && gesture.kind === 'knob') return;
+    pointers.set(e.pointerId, toSvg(e));
+    snapshot();
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!gesture || cleared) return;
+    const p = toSvg(e);
+    if (gesture.kind === 'knob') {
+      if (e.pointerId !== gesture.id) return;
+      mv.a = Math.round(Math.atan2(p[0] - mv.x, -(p[1] - mv.y)) * 180 / Math.PI);
+      render();
+      return;
+    }
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, p);
+    const now = [...pointers.values()], g = gesture;
+    if (now.length === 1 && g.pts.length === 1) {
+      mv.x = g.mv.x + now[0][0] - g.pts[0][0];
+      mv.y = g.mv.y + now[0][1] - g.pts[0][1];
+    } else if (now.length >= 2 && g.pts.length >= 2) {
+      // 2本指：まん中で移動、ひねりで回転、ひろげて拡大（相似のみ）
+      const mid = q => [(q[0][0] + q[1][0]) / 2, (q[0][1] + q[1][1]) / 2];
+      const ang = q => Math.atan2(q[1][1] - q[0][1], q[1][0] - q[0][0]) * 180 / Math.PI;
+      const len = q => Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]);
+      const m0 = mid(g.pts), m1 = mid(now);
+      mv.x = g.mv.x + m1[0] - m0[0];
+      mv.y = g.mv.y + m1[1] - m0[1];
+      mv.a = Math.round(g.mv.a + ang(now) - ang(g.pts));
+      if (mode === 'sim') {
+        mv.s = Math.max(0.5, Math.min(2, Math.round(g.mv.s * len(now) / len(g.pts) * 100) / 100));
+        $('scale').value = mv.s; $('scaleV').textContent = mv.s.toFixed(2) + '倍';
+      }
+    }
+    clampPos();
+    render();
+  });
+  function up(e) {
+    if (!gesture) return;
+    if (gesture.kind === 'knob') { if (e.pointerId === gesture.id) gesture = null; return; }
+    pointers.delete(e.pointerId);
+    if (pointers.size) snapshot(); else gesture = null;
+  }
+  svg.addEventListener('pointerup', up);
+  svg.addEventListener('pointercancel', up);
+
+  load('cong', 0);
+})();
+</script>
+</body>
+</html>

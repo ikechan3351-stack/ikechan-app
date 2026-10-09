@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>おさらと りんごで かけ算</title>
+<style>
+  :root {
+    --ink: #4e342e; --accent: #ef8f00; --accent-dark: #8d4a00; --soft: #ffcc80;
+    /* 「1つ分」「いくつ分」「ぜんぶ」の 色。色だけで なく 下線の かたちと しるしでも くべつする */
+    --one: #c62828; --one-bg: #ffebee;      /* 1つ分  ：赤・まっすぐな 下線・● */
+    --many: #1565c0; --many-bg: #e3f2fd;    /* いくつ分：青・なみなみの 下線・■ */
+    --all: #2e7d32; --all-bg: #e8f5e9;      /* ぜんぶ ：みどり・二本線の 下線・★ */
+    --ps: 160px;                            /* おさら 1まいの 大きさ（JS で 画面に あわせる） */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #fffaf0 0%, #ffe9c7 100%);
+    min-height: 100vh;
+    padding: 10px 16px 24px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  button { font-family: inherit; color: inherit; }
+  .no-ruby rt { display: none; }
+  [hidden] { display: none !important; }
+  /* がめんの 高さいっぱいに ならべ、のこりを テーブルに つかう */
+  .wrap { width: 100%; max-width: 1400px; display: flex; flex-direction: column; gap: 10px; min-height: calc(100vh - 34px); }
+
+  /* ===== 上の段 ===== */
+  .topbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .back-link { font-size: 0.85rem; color: var(--accent-dark); text-decoration: none; }
+  .title-box { flex: 1; text-align: center; min-width: 220px; }
+  h1 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.8rem); color: var(--accent-dark); }
+  .subtitle { margin: 0; font-size: 0.8rem; color: #a1887f; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tool-btn {
+    min-height: 48px; min-width: 48px; padding: 4px 12px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 0.95rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    min-height: 52px; padding: 6px 14px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: clamp(0.9rem, 2vmin, 1.1rem); font-weight: bold; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+
+  /* ===== えらぶ ところ（もの・しんちょく） ===== */
+  .setup {
+    background: #fff; border-radius: 18px; padding: 6px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; gap: 8px 16px; align-items: center; justify-content: center; flex-wrap: wrap;
+  }
+  .setup .lbl { font-weight: bold; font-size: 0.95rem; }
+  .progress { font-weight: 900; font-size: 1.1rem; color: var(--accent-dark); }
+  .chip {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ===== 上：ことばと しき ===== */
+  .board {
+    background: #fff; border-radius: 18px; padding: 8px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .flow { display: flex; align-items: center; justify-content: center; gap: 0.3em 0.6em; flex-wrap: wrap; min-height: 1.4em;
+    font-size: clamp(1.6rem, 5vmin, 3.2rem); font-weight: 900; line-height: 1.6; }
+  .flow .arrow { color: #bcaaa4; font-size: 0.8em; }
+  .flow .sub { font-size: 0.45em; color: #6d4c41; font-weight: bold; }
+  .words { display: flex; gap: 0.35em; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .formula { display: flex; gap: 0.15em; align-items: center; white-space: nowrap; flex-wrap: wrap; justify-content: center; }
+  .formula .op { color: var(--ink); margin: 0 0.05em; }
+  .formula .plus { color: #8d6e63; }
+  .say {
+    font-size: clamp(1rem, 2.3vmin, 1.35rem); line-height: 1.9; font-weight: bold; text-align: center;
+    background: #fff8e1; border-radius: 12px; padding: 2px 14px; min-height: 1.9em; width: 100%;
+  }
+  .say::before { content: "🍎 "; }
+  .say.warn { background: #fff3e0; color: #bf360c; }
+  .say.warn::before { content: "🤔 "; }
+  .say.good { background: #fffde7; color: #e65100; }
+  .say.good::before { content: "⭐ "; }
+
+  /* だいじな ことば・かず：色 ＋ 下線の かたち ＋ しるし の 3つで くべつ */
+  .k1, .k2, .k3 { padding: 0 0.12em; border-radius: 0.2em; text-underline-offset: 0.22em; text-decoration-thickness: 0.09em; white-space: nowrap; }
+  .k1 { color: var(--one);  background: var(--one-bg);  text-decoration-line: underline; text-decoration-style: solid; }
+  .k2 { color: var(--many); background: var(--many-bg); text-decoration-line: underline; text-decoration-style: wavy; }
+  .k3 { color: var(--all);  background: var(--all-bg);  text-decoration-line: underline; text-decoration-style: double; }
+  .mk { font-size: 0.5em; vertical-align: 0.35em; margin-right: 0.08em; }
+  .pop { display: inline-block; animation: pop 0.45s ease-out; }
+  @keyframes pop { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+  .delta { display: inline-block; font-size: 0.55em; color: var(--one); background: #fff; border: 0.08em solid var(--one); border-radius: 999px;
+    padding: 0 0.35em; margin-left: 0.2em; vertical-align: 0.6em; animation: rise 1.6s ease-out forwards; }
+  @keyframes rise { 0% { transform: translateY(40%) scale(0.5); opacity: 0; } 20% { transform: none; opacity: 1; } 80% { opacity: 1; } 100% { transform: translateY(-30%); opacity: 0; } }
+  .tag-add { font-size: 0.45em; background: #fff3e0; color: #bf360c; border: 0.08em dashed #bf360c; border-radius: 999px; padding: 0.1em 0.6em; margin-right: 0.3em; }
+
+  /* しきに しよう：こたえを 入れる わく */
+  .slot {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 1.3em; height: 1.3em; padding: 0 0.1em;
+    font: inherit; font-weight: 900; border: 0.06em dashed currentColor; border-radius: 0.18em; background: #fff; cursor: pointer;
+    vertical-align: middle; position: relative; touch-action: manipulation;
+  }
+  .slot.wide { min-width: 1.9em; }
+  .slot.cur { box-shadow: 0 0 0 0.08em #ffca28; background: #fffde7; }
+  .slot.bad { border-style: solid; border-color: #bf360c; background: #fff3e0; color: #bf360c; }
+  .slot.bad::after { content: "✕"; position: absolute; top: -0.45em; right: -0.35em; font-size: 0.45em; background: #bf360c; color: #fff; border-radius: 50%; width: 1.4em; height: 1.4em; line-height: 1.4em; }
+  .slot.ok { border-style: solid; }
+  /* ばめんを えらぼう：おはなし と えらぶ ボタン */
+  .story { font-size: clamp(1.2rem, 3.2vmin, 1.9rem); line-height: 2.1; font-weight: bold; text-align: center; max-width: 1100px; }
+  .story .n { font-size: 1.2em; }
+  .showA .phrA { color: var(--one); background: var(--one-bg); text-decoration: underline solid; text-underline-offset: 0.25em; text-decoration-thickness: 3px; border-radius: 6px; }
+  .showB .phrB { color: var(--many); background: var(--many-bg); text-decoration: underline wavy; text-underline-offset: 0.25em; text-decoration-thickness: 2px; border-radius: 6px; }
+  .showA .phrA::before { content: "●"; font-size: 0.6em; vertical-align: 0.3em; }
+  .showB .phrB::before { content: "■"; font-size: 0.6em; vertical-align: 0.3em; }
+  .choices { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .choice {
+    min-height: 72px; min-width: 200px; padding: 4px 28px; border-radius: 18px; border: 4px solid var(--soft); background: #fff;
+    font-size: clamp(1.8rem, 5vmin, 2.8rem); font-weight: 900; cursor: pointer; box-shadow: 0 4px 0 rgba(0,0,0,0.12); touch-action: manipulation;
+  }
+  .choice:active { transform: translateY(3px); box-shadow: none; }
+  .choice.bad { border-style: dashed; border-color: #bf360c; color: #bf360c; background: #fff3e0; text-decoration: line-through; }
+  .choice.right { border-color: var(--all); background: var(--all-bg); }
+  .choice:disabled { cursor: default; }
+  .reveal { font: inherit; font-weight: 900; color: #e65100; background: #fff8e1; border: 0.06em dashed #e65100; border-radius: 0.2em; padding: 0 0.3em; cursor: pointer; }
+
+  /* ===== 中央：テーブル ===== */
+  .table {
+    position: relative; width: 100%; flex: 1 1 0; min-height: 260px; max-height: 720px;
+    border-radius: 22px; padding: 12px;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0 2px, transparent 2px 90px),
+      linear-gradient(180deg, #e8b98a 0%, #d9a273 100%);
+    box-shadow: inset 0 -10px 0 rgba(121,85,72,0.25), 0 6px 16px rgba(121,85,72,0.3);
+    display: flex; gap: 10px; user-select: none; -webkit-user-select: none;
+  }
+  .basket {
+    flex: 0 0 clamp(84px, 12%, 150px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    background: rgba(255,255,255,0.35); border: 3px dashed rgba(255,255,255,0.8); border-radius: 18px; padding: 6px;
+    cursor: grab; touch-action: none;
+  }
+  .basket svg { width: 100%; max-width: 120px; height: auto; pointer-events: none; }
+  .basket .blabel { font-weight: 900; font-size: clamp(0.8rem, 1.8vmin, 1.05rem); text-align: center; color: #5d4037; line-height: 1.4; pointer-events: none; }
+  .basket.drop-ok { background: rgba(255,255,255,0.6); }
+  .plates {
+    flex: 1 1 0; min-width: 0; min-height: 0; display: grid; justify-content: center; align-content: center;
+    grid-template-columns: repeat(var(--cols, 5), var(--ps)); gap: calc(var(--ps) * 0.08) calc(var(--ps) * 0.1);
+  }
+  .veil {
+    position: absolute; inset: 12px; border-radius: 16px; background: rgba(255,248,225,0.92); z-index: 5;
+    display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px;
+    font-size: clamp(1.1rem, 3vmin, 1.6rem); font-weight: 900; color: #8d6e63; line-height: 1.8;
+  }
+  .plate { position: relative; width: var(--ps); height: var(--ps); }
+  .plate .dish { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .plate .cap { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+  .plate.target .dish { filter: drop-shadow(0 0 6px #fff59d) drop-shadow(0 0 10px #ffca28); }
+  .plate.new .dish { animation: newPlate 0.6s ease-in-out 3 alternate; }
+  @keyframes newPlate { from { filter: none; } to { filter: drop-shadow(0 0 8px #ffee58) drop-shadow(0 0 16px #ffab00); } }
+  .plate.counting .dish { filter: drop-shadow(0 0 8px #a5d6a7) drop-shadow(0 0 14px #43a047); }
+  .plate.counted .dish { opacity: 0.85; }
+  /* 数が ちがう おさら：点線の わくで 目立たせる（色だけに たよらない） */
+  .plate.odd::after { content: ""; position: absolute; inset: -3%; border: 4px dashed #bf360c; border-radius: 50%; pointer-events: none; }
+  /* 「1つ分は これ」：赤い まっすぐな わく */
+  .plate.focus1::before { content: ""; position: absolute; inset: -5%; border: 5px solid var(--one); border-radius: 50%; pointer-events: none; z-index: 3; }
+  /* おさらの 上の 赤い かず（●） と 下の 青い ばんごう（■） */
+  .ptag {
+    position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; z-index: 4; pointer-events: none;
+    font-weight: 900; font-size: max(13px, calc(var(--ps) * 0.12)); line-height: 1.35; border-radius: 999px; padding: 0 0.5em; background: #fff;
+  }
+  .ptag.top { top: calc(var(--ps) * -0.06); color: var(--one); border: 2px solid var(--one); text-decoration: underline solid; text-underline-offset: 0.15em; }
+  .ptag.top.odd { color: #bf360c; border: 3px dashed #bf360c; text-decoration: none; background: #fff3e0; }
+  .ptag.bot { bottom: calc(var(--ps) * -0.07); color: var(--many); border: 2px solid var(--many); border-radius: 6px; }
+  .ptag.one { top: calc(var(--ps) * 0.07); left: 4%; transform: none; background: var(--one); color: #fff; border-radius: 6px; font-size: max(11px, calc(var(--ps) * 0.09)); }
+  /* かぞえる ときに 出る「3、6、9…」 */
+  .cum {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; pointer-events: none;
+    font-size: calc(var(--ps) * 0.36); font-weight: 900; color: var(--all); background: rgba(255,255,255,0.92);
+    border: 0.09em double var(--all); border-radius: 0.3em; padding: 0 0.2em; line-height: 1.2;
+    animation: pop 0.45s ease-out;
+  }
+  /* かぞえおわった おさら：かずは 右よこに 小さく よけて、中みが 見える ように */
+  .plate.counted .cum { animation: none; font-size: calc(var(--ps) * 0.2); top: 50%; left: auto; right: -12%; transform: translateY(-50%); }
+
+  /* ===== りんご（や タイヤ・花びら など） ===== */
+  .apple { position: absolute; transform: translate(-50%, -50%) rotate(var(--rot, 0deg)); touch-action: none; z-index: 1; }
+  .can-drag .apple { cursor: grab; }
+  .apple svg { width: 100%; height: 100%; display: block; overflow: visible; pointer-events: none; }
+  .apple.glow svg { animation: glow 0.6s ease-in-out 4 alternate; }
+  @keyframes glow { from { filter: none; transform: scale(1); } to { filter: drop-shadow(0 0 5px #ffee58) drop-shadow(0 0 10px #ffab00); transform: scale(1.15); } }
+  .apple.ghost-src { opacity: 0.3; }
+  .ghost { position: fixed; z-index: 90; pointer-events: none; transform: translate(-50%, -50%) scale(1.2); }
+  .ghost svg { width: 100%; height: 100%; display: block; }
+
+  /* ===== アレイ図 ===== */
+  .arr-stage { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; overflow: hidden; }
+  .arr-wrap { position: absolute; inset: 0; transition: transform 1.1s ease-in-out; }
+  .arr-wrap.rot { transform: rotate(90deg); }
+  .arr-wrap.notrans, .arr-wrap.notrans * { transition: none !important; }
+  .aplate { position: absolute; transform: translate(-50%, -50%); transition: opacity 0.7s, transform 0.7s; }
+  .aplate svg { width: 100%; height: 100%; display: block; }
+  .arr-wrap.dots .aplate { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  .adot { position: absolute; transform: translate(-50%, -50%); transition: left 0.9s ease-in-out, top 0.9s ease-in-out, width 0.9s, height 0.9s; }
+  .adot svg { position: absolute; inset: 0; width: 100%; height: 100%; transition: opacity 0.6s; }
+  .adot .ring { position: absolute; inset: 12%; border-radius: 50%; background: #ef5350; border: 3px solid #b71c1c; opacity: 0; transition: opacity 0.6s; }
+  .arr-wrap.dots .adot svg { opacity: 0; }
+  .arr-wrap.dots .adot .ring { opacity: 1; }
+  .aframe { position: absolute; border: 4px solid var(--one); border-radius: 14px; background: rgba(255,255,255,0.25); animation: fadeIn 0.5s; pointer-events: none; }
+  .alabel { position: absolute; transform: translate(-50%, -50%); font-weight: 900; color: var(--many); background: #fff; border: 2px solid var(--many);
+    border-radius: 6px; padding: 0 6px; font-size: clamp(0.8rem, 2vmin, 1.2rem); white-space: nowrap; animation: fadeIn 0.5s; }
+  .arr-wrap.rot .alabel { transform: translate(-50%, -50%) rotate(-90deg); }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .spark { position: fixed; z-index: 91; pointer-events: none; font-size: clamp(18px, 3vmin, 34px); color: #ffd600; text-shadow: 0 0 6px #fff; animation: spark 1.1s ease-out forwards; }
+  @keyframes spark { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 30% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; } 100% { transform: translate(-50%, -160%) scale(0.6); opacity: 0; } }
+  .cheer {
+    position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 95; pointer-events: none;
+    background: #fff; border: 5px solid #fdd835; border-radius: 24px; padding: 14px 34px;
+    font-size: clamp(2rem, 8vmin, 4.5rem); font-weight: 900; color: #e65100; white-space: nowrap;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: cheer 1.6s ease-out forwards;
+  }
+  @keyframes cheer {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+    15% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+    25%, 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  }
+
+  /* ===== 下：ボタン ===== */
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: stretch; }
+  .ctl {
+    display: flex; align-items: center; gap: 6px; background: #fff; border-radius: 16px; padding: 6px 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 3px solid transparent;
+  }
+  .ctl.c-many { border-color: var(--many); }
+  .ctl.c-one { border-color: var(--one); }
+  .ctl .clbl { font-weight: 900; font-size: clamp(0.95rem, 2vmin, 1.2rem); text-align: center; line-height: 1.3; }
+  .ctl output { min-width: 2.6em; text-align: center; font-size: clamp(1.5rem, 3.6vmin, 2.2rem); font-weight: 900; }
+  .c-many .clbl, .c-many output { color: var(--many); }
+  .c-one .clbl, .c-one output { color: var(--one); }
+  .act-btn {
+    min-height: 56px; min-width: 56px; padding: 6px 14px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: clamp(1rem, 2.2vmin, 1.2rem); font-weight: 900; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12); line-height: 1.25;
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+  .act-btn .sym { font-size: 1.3em; display: block; line-height: 1; }
+  .c-many .act-btn { border-color: #90caf9; background: var(--many-bg); }
+  .c-one .act-btn { border-color: #ef9a9a; background: var(--one-bg); }
+  .b-count { background: #e8f5e9; border-color: #66bb6a; }
+  .b-reset { background: #f5f5f5; border-color: #cfd8dc; }
+  .b-hint { background: #f3e5f5; border-color: #ce93d8; }
+  .b-done, .b-next { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .b-on { background: #fff3e0; border-color: #e65100; }
+  .keypad { display: grid; grid-template-columns: repeat(6, minmax(52px, 1fr)); gap: 6px; background: #fff; border-radius: 16px; padding: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .kp {
+    min-height: 52px; border-radius: 12px; border: 2px solid var(--soft); background: #fff;
+    font-size: 1.6rem; font-weight: 900; cursor: pointer; touch-action: manipulation; color: var(--accent-dark);
+  }
+  .kp.del { font-size: 1rem; background: #f5f5f5; }
+
+  /* ===== まど（せってい・先生へ・けっか） ===== */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+  .modal.open { display: flex; }
+  .modal-card { background: #fff; border-radius: 20px; padding: 16px 20px; max-width: 760px; width: 100%; max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .modal-card h2 { margin: 0; color: var(--accent-dark); font-size: 1.4rem; }
+  .modal-card h3 { margin: 6px 0 0; color: var(--accent-dark); font-size: 1.05rem; }
+  .modal-card p, .modal-card li { line-height: 1.7; }
+  .modal-card ul { margin: 4px 0; padding-left: 1.4em; }
+  .set-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .set-label { font-weight: bold; min-width: 9em; }
+  .res-big { font-size: 1.6rem; font-weight: 900; color: #e65100; text-align: center; }
+  .res-table { border-collapse: collapse; width: 100%; font-size: 1.05rem; }
+  .res-table th, .res-table td { border: 1px solid var(--soft); padding: 6px 8px; text-align: center; }
+  .res-table th { background: #fff3e0; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+  /* 「うごきを へらす」：アニメーションを とめる（光る ところは わくで 見せる） */
+  .calm .pop, .calm .delta, .calm .cum, .calm .apple.glow svg, .calm .plate.new .dish, .calm .cheer, .calm .aframe, .calm .alabel { animation: none; }
+  .calm .apple.glow { outline: 3px solid #ffab00; border-radius: 50%; }
+  .calm .plate.new .dish { filter: drop-shadow(0 0 4px #ffab00); }
+  .calm .arr-wrap, .calm .arr-wrap * { transition: none !important; }
+
+  /* ===== せまい 画面 ===== */
+  @media (max-width: 640px) {
+    body { padding: 8px 10px 20px; }
+    .table { flex-direction: column; flex: 0 0 auto; height: clamp(320px, 58vh, 560px); padding: 8px; }
+    .basket { flex: 0 0 auto; flex-direction: row; padding: 4px 8px; }
+    .basket svg { width: 64px; }
+    .ctl { padding: 4px 6px; }
+    .act-btn { padding: 4px 10px; white-space: nowrap; }
+    .ctl .clbl { font-size: 0.85rem; }
+    .choice { min-width: 140px; }
+    .keypad { grid-template-columns: repeat(6, 1fr); width: 100%; }
+  }
+  @media (min-width: 900px) and (orientation: landscape) and (max-height: 820px) {
+    body { padding-top: 6px; }
+    .wrap { gap: 6px; }
+    .subtitle { display: none; }
+    h1 { font-size: 1.3rem; }
+    .mode-btn { min-height: 48px; padding: 4px 10px; }
+    .act-btn { min-height: 50px; }
+    .chip { min-height: 44px; }
+  }
+</style>
+</head>
+<body>
+<!-- 絵の ぶひん（いちど かいて、なんども つかう） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="defs"></defs></svg>
+
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+    <div class="title-box">
+      <h1>🍎 おさらと りんごで かけ<ruby>算<rt>ざん</rt></ruby></h1>
+      <p class="subtitle">おなじ <ruby>数<rt>かず</rt></ruby>ずつ ならべて、かけ<ruby>算<rt>ざん</rt></ruby>の いみを かんがえよう</p>
+    </div>
+    <div class="tools">
+      <button class="tool-btn" id="btnHowto">❓ <ruby>先生<rt>せんせい</rt></ruby>へ</button>
+      <button class="tool-btn" id="btnFull">⛶ ぜんがめん</button>
+      <button class="tool-btn" id="btnSettings">⚙️ せってい</button>
+    </div>
+  </div>
+
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn" data-mode="free">🍎 じゆうに ならべる</button>
+    <button class="mode-btn" data-mode="shiki">✏️ しきに しよう</button>
+    <button class="mode-btn" data-mode="make">🍽️ ならべて みよう</button>
+    <button class="mode-btn" data-mode="story">📖 ばめんを えらぼう</button>
+    <button class="mode-btn" data-mode="array">🔴 アレイ<ruby>図<rt>ず</rt></ruby></button>
+    <button class="mode-btn" data-mode="items">🚗 いろいろな 1つ<ruby>分<rt>ぶん</rt></ruby></button>
+    <button class="mode-btn" data-mode="teacher">🧑‍🏫 <ruby>先生<rt>せんせい</rt></ruby>モード</button>
+  </div>
+
+  <!-- えらぶ ところ -->
+  <div class="setup" id="setupItems"><span class="lbl">1つ<ruby>分<rt>ぶん</rt></ruby>に する もの</span><span id="itemChips" style="display:contents"></span></div>
+  <div class="setup" id="setupQuiz"><span class="progress" id="progress"></span><button class="chip" id="bRestart">↺ はじめから</button></div>
+
+  <!-- 上：ことばと しき -->
+  <section class="board" id="board" aria-live="polite">
+    <div class="story" id="story" hidden></div>
+    <div class="flow" id="flow"></div>
+    <div class="choices" id="choices" hidden></div>
+    <div class="say" id="say"></div>
+  </section>
+
+  <!-- 中央：テーブル -->
+  <section class="table" id="table">
+    <div class="basket" id="basket" title="ここから ひっぱって のせよう">
+      <svg viewBox="0 0 120 100" id="basketArt"></svg>
+      <div class="blabel"><span id="basketName">りんご</span>の かご<br><small>ひっぱって のせよう</small></div>
+    </div>
+    <div class="plates" id="plates"></div>
+    <div class="arr-stage" id="arrStage" hidden><div class="arr-wrap" id="arrWrap"></div></div>
+    <div class="veil" id="veil" hidden></div>
+  </section>
+
+  <!-- 下：ボタン -->
+  <section class="controls" id="controls">
+    <div class="ctl c-many" id="ctlPlates">
+      <div class="clbl"><span class="mk">■</span><span id="lblPlates">おさら</span><br><small>（いくつ<ruby>分<rt>ぶん</rt></ruby>）</small></div>
+      <button class="act-btn" id="bPlateMinus"><span class="sym">−</span>へらす</button>
+      <output id="outPlates"></output>
+      <button class="act-btn" id="bPlatePlus"><span class="sym">＋</span>ふやす</button>
+    </div>
+    <div class="ctl c-one" id="ctlApples">
+      <div class="clbl"><span class="mk">●</span><span id="lblApples">1さらの りんご</span><br><small>（1つ<ruby>分<rt>ぶん</rt></ruby>）</small></div>
+      <button class="act-btn" id="bAppleMinus"><span class="sym">−</span>へらす</button>
+      <output id="outApples"></output>
+      <button class="act-btn" id="bApplePlus"><span class="sym">＋</span>ふやす</button>
+    </div>
+    <div class="keypad" id="keypad"></div>
+    <button class="act-btn b-on" id="bMorph">🔴 まるに へんしん</button>
+    <button class="act-btn b-on" id="bRotate">🔄 くるっと まわす</button>
+    <button class="act-btn" id="bPrev">◀ もどる</button>
+    <button class="act-btn b-next" id="bStep">すすむ ▶</button>
+    <button class="act-btn" id="bHide">🙈 こたえを かくす</button>
+    <button class="act-btn b-count" id="bCount">🔢 かぞえる</button>
+    <button class="act-btn b-hint" id="bHint">💡 ヒント</button>
+    <button class="act-btn b-done" id="bDone">✅ できた！</button>
+    <button class="act-btn b-next" id="bNext">つぎへ ▶</button>
+    <button class="act-btn b-reset" id="bReset">↺ やりなおし</button>
+  </section>
+</div>
+
+<!-- せってい -->
+<div class="modal" id="modalSettings" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>⚙️ せってい</h2>
+    <div class="set-line"><span class="set-label">おと</span>
+      <button class="chip" data-set="sound" data-val="true">あり</button>
+      <button class="chip" data-set="sound" data-val="false">なし</button></div>
+    <div class="set-line"><span class="set-label">ふりがな</span>
+      <button class="chip" data-set="ruby" data-val="true">あり</button>
+      <button class="chip" data-set="ruby" data-val="false">なし</button></div>
+    <div class="set-line"><span class="set-label">うごき</span>
+      <button class="chip" data-set="motion" data-val="auto">パソコンに あわせる</button>
+      <button class="chip" data-set="motion" data-val="normal">ふつう</button>
+      <button class="chip" data-set="motion" data-val="less">へらす</button></div>
+    <div class="set-line"><span class="set-label">もんだいに 出す だん<br><small>（きょうかしょの じゅん）</small></span>
+      <span id="danChips" style="display:contents"></span></div>
+    <div class="set-line"><span class="set-label">もんだいの かず</span>
+      <button class="chip" data-set="qcount" data-val="5">5もん</button>
+      <button class="chip" data-set="qcount" data-val="10">10もん</button>
+      <button class="chip" data-set="qcount" data-val="15">15もん</button></div>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- 先生へ（つかいかた） -->
+<div class="modal" id="modalHowto" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>❓ 先生へ：つかいかた</h2>
+    <p>お皿に同じ数ずつリンゴを並べる操作を通して、かけ算が「1つ分の数 × いくつ分 ＝ ぜんぶの数」であることを体感する教材です。</p>
+    <h3>モード</h3>
+    <ul>
+      <li><b>じゆうに ならべる</b>：「おさら（いくつ分）」「1さらの りんご（1つ分）」の＋／−や、かごからのドラッグで並べると、「3こずつ 4さら分 ➡ 3×4＝12」と式が出ます。お皿を1まいふやすと、ふえたお皿が光り「＋3」と出ます。「かぞえる」で 3、6、9、12 と数え、式が「3＋3＋3＋3」→「3×4」とかわります。</li>
+      <li><b>しきに しよう</b>：お皿とリンゴの絵を見て「□こずつ □さら分 ➡ □×□＝□」を数字ボタンで入れます。</li>
+      <li><b>ならべて みよう</b>：「4×3」の式を見て、お皿とリンゴを並べて「できた！」を押します。</li>
+      <li><b>ばめんを えらぼう</b>：文章題を読み、「6×2」「2×6」のどちらが正しい式かを選びます。「いくつ分」が先に書かれた文もまぜています。</li>
+      <li><b>アレイ図</b>：「まるに へんしん」でお皿が消え、リンゴが●のならび（1さら＝1れつ）になります。「くるっと まわす」で90度回すと、3×4 と 4×3 が同じ数になること（交換法則）が見えます。場面（3こずつ4さら分／4こずつ3さら分）はちがうことも表示します。</li>
+      <li><b>いろいろな 1つ分</b>：車とタイヤ、くつした、花びら、ふくろとみかん、はことケーキにきりかえて、じゆうに並べます。</li>
+      <li><b>先生モード</b>：下の＋／−で数を決め、「すすむ／もどる」（キーボードの ←→ でも可）で「なんこ？ → 3こずつ → 4さら分 → 3＋3＋3＋3 → 3×4 → ＝12」と1ステップずつ見せます。「こたえを かくす」にすると答えが「？」になり、押すと出ます。</li>
+    </ul>
+    <h3>つまずきへの対応</h3>
+    <ul>
+      <li><b>色と形のきまり</b>（色覚の多様性に配慮）：<b style="color:var(--one)">1つ分＝赤・まっすぐな下線・●</b>、<b style="color:var(--many)">いくつ分＝青・なみ線・■</b>、<b style="color:var(--all)">ぜんぶ＝みどり・二重線・★</b>。ことば・式の数字・絵（お皿の上の●の数、下の■の番号）を同じきまりでつないでいます。</li>
+      <li>数がそろっていないお皿があると「おなじ数ずつ かな？」と出て、かけ算の式は出さず「たし算で もとめよう」とたし算の式を見せます。ちがうお皿は点線のわくで囲みます。</li>
+      <li>かけられる数とかける数を逆にしたときは、「1つ分と いくつ分が いれかわって いるよ」と知らせます。</li>
+      <li>ヒントは3段階：①1つ分は いくつ？ ②いくつ分 ある？ ③数えるアニメ（文章題では、文の中の1つ分・いくつ分に色がつきます）。</li>
+    </ul>
+    <h3>そのほか</h3>
+    <ul>
+      <li>「せってい」で、音・ふりがな・動きを減らす・出題する段（2・5・3・4の段…と教科書の順にならべています）・出題数を変えられます（この端末のブラウザに保存されます）。</li>
+      <li>問題の終わりに、1回で正解した数・ヒントの回数を表示します（記録は保存しません）。</li>
+      <li>授業での使い方の例は、README（おさらと りんごで かけ算_README.md）にあります。</li>
+    </ul>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- けっか -->
+<div class="modal" id="modalResult" role="dialog" aria-modal="true">
+  <div class="modal-card" id="resultCard"></div>
+</div>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+const R = (kanji, kana) => `<ruby>${kanji}<rt>${kana}</rt></ruby>`;   // ルビつきの 漢字
+const KAZU = R('数', 'かず'), BUN = R('分', 'ぶん'), SAN = R('算', 'ざん'), NAN = R('何', 'なん'), HAI = R('入', 'はい');
+const MAX_PLATES = 9, MAX_PER = 9;
+const rnd = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+/* =========================================================
+   1. せってい（この ブラウザに ほぞん。ほぞん できなくても うごく）
+   ========================================================= */
+const SETTINGS_KEY = 'osara-ringo-kakezan-settings';
+const DAN_ORDER = [2, 5, 3, 4, 6, 7, 8, 9, 1];          // きょうかしょで ならう じゅん
+const DEFAULTS = { sound: true, ruby: true, motion: 'auto', dans: [2, 5, 3, 4], qcount: 5 };
+const settings = (() => {
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch (e) { return { ...DEFAULTS }; }
+})();
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ほぞん できなくても よい */ }
+}
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const calm = () => settings.motion === 'less' || (settings.motion === 'auto' && reduceMQ.matches);
+
+/* =========================================================
+   2. 1つ分に する もの
+      name：1つ分の もの　unit：その かぞえかた　group：いくつ分の いいかた（「4さら分」の「さら」）
+      cont：入れもの　contUnit：入れものの かぞえかた　perLabel：ボタンの ことば
+      sym：中みの 絵　dish：入れものの 絵　cap：上に かさねる 絵　layout：ならべかた
+      area：入れものの 中で ならべる ばしょ（まん中 cx, cy と 大きさ s）
+   ========================================================= */
+const DAI = R('台', 'だい'), KURUMA = R('車', 'くるま'), HANA = R('花', 'はな');
+const ITEMS = {
+  apple:  { label: '🍎 おさらと りんご', name: 'りんご', unit: 'こ', group: 'さら', cont: 'おさら', contUnit: 'まい', perLabel: '1さらの りんご',
+            sym: 'apple', dish: 'dish', layout: 'grid', area: { cx: 0.5, cy: 0.5, s: 1 }, start: 3 },
+  car:    { label: `🚗 ${KURUMA}と タイヤ`, name: 'タイヤ', unit: 'こ', group: DAI, cont: KURUMA, contUnit: DAI, perLabel: `1${DAI}の タイヤ`,
+            sym: 'tire', dish: 'car', layout: 'car', area: { cx: 0.5, cy: 0.5, s: 1 }, start: 4 },
+  sock:   { label: '🧦 くつした', name: 'くつした', unit: 'まい', group: 'くみ', cont: 'くつしたの くみ', contUnit: 'くみ', perLabel: '1くみの くつした',
+            sym: 'sock', dish: 'hanger', layout: 'grid', area: { cx: 0.5, cy: 0.64, s: 0.8 }, start: 2 },
+  flower: { label: `🌸 ${HANA}びら`, name: `${HANA}びら`, unit: 'まい', group: 'つ', cont: HANA, contUnit: 'つ', perLabel: `1つの ${HANA}の ${HANA}びら`,
+            sym: 'petal', dish: 'flower', cap: 'flowerCap', layout: 'radial', area: { cx: 0.5, cy: 0.5, s: 1 }, start: 5 },
+  bag:    { label: '🍊 ふくろと みかん', name: 'みかん', unit: 'こ', group: 'ふくろ', cont: 'ふくろ', contUnit: 'つ', perLabel: '1ふくろの みかん',
+            sym: 'mikan', dish: 'bag', layout: 'grid', area: { cx: 0.5, cy: 0.62, s: 0.78 }, start: 3 },
+  cake:   { label: '🍰 はこと ケーキ', name: 'ケーキ', unit: 'こ', group: 'はこ', cont: 'はこ', contUnit: 'つ', perLabel: '1はこの ケーキ',
+            sym: 'cake', dish: 'box', layout: 'grid', area: { cx: 0.5, cy: 0.58, s: 0.86 }, start: 4 },
+};
+
+/* =========================================================
+   3. じょうたい（state）：アプリの じょうほうは ぜんぶ ここに ある
+      がめんは この state を 見て かくだけ（render）
+   ========================================================= */
+const state = {
+  mode: 'free',
+  item: 'apple',
+  contents: [0],     // 入れもの ごとの 中みの 数。contents.length が「いくつ分」
+  count: null,       // かぞえている とちゅう：{ upto: 何まいめまで かぞえたか, done: おわったか }
+  flash: null,       // ひからせる ところ：{ kind: 'plate'|'apple', at: じこく, delta: ふえた数 }
+  say: null,         // ひとこと：{ html, tone: 'warn'|'good' }（なければ じどうで きめる）
+  quiz: null,        // もんだいモード（しきに しよう・ならべて みよう・ばめんを えらぼう）の じょうほう
+  array: { phase: 'plates', framesRot: false },   // アレイ図：plates（おさら）→ dots（まる）→ rot（まわした）
+  teacher: { step: 0, hide: false, revealed: false },
+};
+
+// state から わかる こと（けいさんで もとめる。state には もたない）
+const it = () => ITEMS[state.item];
+const total = () => state.contents.reduce((a, b) => a + b, 0);
+const plateCount = () => state.contents.length;
+/* 1つ分の数：ぜんぶ おなじ数なら その数、そろって いなければ null */
+function perPlate() {
+  const c = state.contents;
+  if (!c.length || c.some((n) => n !== c[0])) return null;
+  return c[0];
+}
+/* いちばん 多い 数（そろって いない おさらを 目立たせる ため） */
+function commonCount() {
+  const freq = {};
+  state.contents.forEach((n) => { freq[n] = (freq[n] || 0) + 1; });
+  return +Object.keys(freq).sort((a, b) => freq[b] - freq[a] || b - a)[0];
+}
+const say = (html, tone = '') => { state.say = { html, tone }; };
+
+/* =========================================================
+   4. 音（ブラウザで 音を つくる。ファイルは つかわない）
+   ========================================================= */
+let actx = null;
+function play(notes) {
+  if (!settings.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const now = actx.currentTime;
+    for (const [f, t, dur, type = 'sine', vol = 0.14] of notes) {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, now + t);
+      g.gain.exponentialRampToValueAtTime(vol, now + t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + t + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(now + t); o.stop(now + t + dur + 0.05);
+    }
+  } catch (e) { /* 音が 出せなくても うごく */ }
+}
+const sfx = {
+  put:     () => play([[660, 0, 0.06, 'triangle', 0.1], [990, 0.05, 0.08, 'triangle', 0.08]]),
+  take:    () => play([[520, 0, 0.08, 'triangle', 0.08]]),
+  plate:   () => play([[523, 0, 0.1], [659, 0.08, 0.1], [784, 0.16, 0.18]]),
+  down:    () => play([[440, 0, 0.1, 'triangle', 0.1], [330, 0.1, 0.16, 'triangle', 0.1]]),
+  tick:    (n = 1) => play([[520 + Math.min(n, 12) * 40, 0, 0.12]]),
+  tap:     () => play([[880, 0, 0.05, 'sine', 0.08]]),
+  morph:   () => play([[392, 0, 0.12], [523, 0.12, 0.12], [659, 0.24, 0.12], [784, 0.36, 0.2]]),
+  correct: () => play([[784, 0, 0.12], [988, 0.1, 0.12], [1175, 0.2, 0.12], [1568, 0.3, 0.35]]),
+  soft:    () => play([[392, 0, 0.15, 'triangle', 0.1], [440, 0.15, 0.2, 'triangle', 0.1]]),
+  no:      () => play([[200, 0, 0.12, 'square', 0.05]]),
+};
+
+/* =========================================================
+   5. ことばと しきを つくる（HTML の もじれつ）
+   ========================================================= */
+const k1 = (t) => `<span class="k1"><span class="mk">●</span>${t}</span>`;   // 1つ分（赤）
+const k2 = (t) => `<span class="k2"><span class="mk">■</span>${t}</span>`;   // いくつ分（青）
+const k3 = (t) => `<span class="k3"><span class="mk">★</span>${t}</span>`;   // ぜんぶ（みどり）
+const n1 = (n, cls = '') => `<span class="k1 ${cls}">${n}</span>`;
+const n2 = (n, cls = '') => `<span class="k2 ${cls}">${n}</span>`;
+const n3 = (n, cls = '') => `<span class="k3 ${cls}">${n}</span>`;
+const OP = (s, cls = 'op') => `<span class="${cls}">${s}</span>`;
+const ARROW = '<span class="arrow">➡</span>';
+const wordsOf = (per, n, I = it(), p1 = '', p2 = '') =>
+  `<span class="words">${k1(`<span class="${p1}">${per}</span>${I.unit}ずつ`)} ${k2(`<span class="${p2}">${n}</span>${I.group}${BUN}`)}</span>`;
+const mulOf = (per, n, ans, cls = '') => `<span class="formula">${n1(per, cls)}${OP('×')}${n2(n, cls)}${ans === null ? '' : OP('＝') + n3(ans, cls)}</span>`;
+const addOf = (arr, colored) => arr.map((v) => (colored ? n1(v) : `<span>${v}</span>`)).join(OP('＋', 'op plus'));
+
+/* じゆうに ならべる・いろいろな 1つ分 の 上の だん */
+function flowFree() {
+  const I = it();
+  const n = plateCount(), per = perPlate(), sum = total();
+  const fl = state.flash && Date.now() - state.flash.at < 1600 ? state.flash : null;
+  const p1 = fl && fl.kind === 'apple' ? 'pop' : '', p2 = fl && fl.kind === 'plate' ? 'pop' : '';
+  const delta = fl && fl.delta ? `<span class="delta">${fl.delta > 0 ? '＋' : '−'}${Math.abs(fl.delta)}</span>` : '';
+
+  if (n === 0 || sum === 0) return `<span class="words" style="color:#a1887f">${I.cont}に ${I.name}を のせよう</span>`;
+
+  // かぞえている とちゅう：3＋3＋3 と のびていく
+  if (state.count && !state.count.done) {
+    const part = state.contents.slice(0, state.count.upto + 1);
+    return `<span class="formula">${addOf(part, per !== null)}${OP('＝')}${n3(part.reduce((a, b) => a + b, 0), 'pop')}</span>`;
+  }
+  // そろって いない：かけ算の しきは 出さず、たし算で
+  if (per === null) {
+    return `<span class="words"><span class="k1" style="text-decoration-style:dashed">おなじ${KAZU}ずつ かな？</span></span>` +
+      `<span class="formula"><span class="tag-add">たし${SAN}で もとめよう</span>${addOf(state.contents, false)}${OP('＝')}${n3(sum)}</span>`;
+  }
+  // 入れものが 1つ だけ：まだ「3こずつ」だけ
+  if (n === 1 && !state.count) return `<span class="words">${k1(`<span class="${p1}">${per}</span>${I.unit}ずつ`)}</span>`;
+
+  const mul = `<span class="formula">${n1(per, p1)}${OP('×')}${n2(n, p2)}${OP('＝')}${n3(sum, fl ? 'pop' : '')}${delta}</span>`;
+  // かぞえおわった ところ：3＋3＋3＋3 ➡ 3×4＝12
+  if (state.count && state.count.done) return `<span class="formula" style="font-size:0.7em">${addOf(state.contents, true)}</span>${ARROW}${mul}`;
+  return wordsOf(per, n, I, p1, p2) + ARROW + mul;
+}
+function sayFree() {
+  const I = it();
+  const n = plateCount(), per = perPlate(), sum = total();
+  if (sum === 0) return [`「${I.name} ＋ふやす」か、かごから ひっぱって のせよう`, ''];
+  if (per === null) return [`${I.cont}に よって ${I.name}の ${KAZU}が ちがうね。おなじ${KAZU}ずつ じゃないと、かけ${SAN}の しきに できないよ`, 'warn'];
+  if (n === 1) return [`${k1(`1${I.group}に ${per}${I.unit}`)}。${I.cont}を ふやして みよう`, ''];
+  return [`${k1(`${per}${I.unit}`)}の ${k2(`${n}${I.group}${BUN}`)}で、${k3(`ぜんぶで ${sum}${I.unit}`)}`, ''];
+}
+
+/* =========================================================
+   6. がめんを かく（state を 見て あわせる）
+   ========================================================= */
+function render() {
+  const m = state.mode;
+  document.body.classList.toggle('no-ruby', !settings.ruby);
+  document.body.classList.toggle('calm', calm());
+  $$('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === m));
+  $('#setupItems').hidden = !(m === 'items' || m === 'teacher');
+  $('#setupQuiz').hidden = !state.quiz || !['shiki', 'make', 'story'].includes(m);
+  renderItemChips();
+  renderBoard();
+  renderTable();
+  renderControls();
+}
+
+function renderItemChips() {
+  $('#itemChips').innerHTML = Object.entries(ITEMS).map(([k, v]) =>
+    `<button class="chip${state.item === k ? ' active' : ''}" data-item="${k}">${v.label}</button>`).join('');
+  if (state.quiz && state.quiz.idx >= 0) {
+    const q = state.quiz;
+    const first = q.results.filter((r) => r.first).length;
+    $('#progress').innerHTML = `${Math.min(q.idx + 1, q.list.length)} / ${q.list.length} もんめ　⭐ ${first}`;
+  }
+}
+
+/* 上の だん：モードに よって 中みが かわる */
+function renderBoard() {
+  const m = state.mode, q = state.quiz;
+  let flow = '', sayHTML = '', tone = '', story = null, choices = null;
+  if (m === 'free' || m === 'items') [flow, [sayHTML, tone]] = [flowFree(), sayFree()];
+  if (m === 'shiki') [flow, sayHTML] = [flowShiki(), 'えを 見て、□に 数字を 入れよう。□を おすと えらべるよ'];
+  if (m === 'make') [flow, sayHTML] = flowMake();
+  if (m === 'story') [story, choices, flow, sayHTML] = boardStory();
+  if (m === 'array') [flow, sayHTML] = flowArray();
+  if (m === 'teacher') [flow, sayHTML] = flowTeacher();
+  if (state.say) { sayHTML = state.say.html; tone = state.say.tone; }
+  $('#flow').innerHTML = flow;
+  $('#flow').hidden = !flow;
+  $('#story').hidden = story === null;
+  if (story !== null) $('#story').innerHTML = story;
+  $('#choices').hidden = choices === null;
+  if (choices !== null) $('#choices').innerHTML = choices;
+  const b = $('#board');
+  b.classList.toggle('showA', !!(q && m === 'story' && (q.hintLv >= 1 || q.solved)));
+  b.classList.toggle('showB', !!(q && m === 'story' && (q.hintLv >= 2 || q.solved)));
+  const s = $('#say');
+  s.innerHTML = sayHTML;
+  s.className = 'say' + (tone ? ' ' + tone : '');
+}
+
+/* 中央：テーブル */
+function renderTable() {
+  const m = state.mode;
+  const arr = m === 'array';
+  $('#plates').hidden = arr;
+  $('#arrStage').hidden = !arr;
+  $('#basket').hidden = !canDrag();
+  $('#table').classList.toggle('can-drag', canDrag());
+  const veil = m === 'story' && state.quiz && !state.quiz.shown;
+  $('#veil').hidden = !veil;
+  if (veil) $('#veil').innerHTML = `おはなしを よんで、しきを えらぼう<br><small>（えは ヒント3 か、こたえた あとに 出るよ）</small>`;
+  if (arr) renderArray();
+  else renderPlates();
+  const I = it();
+  $('#basketName').innerHTML = I.name;
+  $('#basketArt').innerHTML = `
+    <use href="#${I.sym}" x="14" y="8" width="34" height="34"/><use href="#${I.sym}" x="42" y="2" width="36" height="36"/>
+    <use href="#${I.sym}" x="70" y="10" width="32" height="32"/><use href="#${I.sym}" x="28" y="22" width="30" height="30"/>
+    <use href="#${I.sym}" x="58" y="22" width="30" height="30"/>
+    <path d="M8 44 H112 L100 94 H20 Z" fill="#d7a35f" stroke="#8d6e63" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M14 60 H106 M17 76 H103 M40 44 L44 94 M60 44 V94 M80 44 L76 94" stroke="#a1774a" stroke-width="2.5" fill="none"/>`;
+}
+
+/* 中みを 入れものの どこに おくか（かずが ひと目で わかる ならびかた） */
+const ROWS = { 1: [1], 2: [2], 3: [1, 2], 4: [2, 2], 5: [2, 1, 2], 6: [3, 3], 7: [2, 3, 2], 8: [3, 2, 3], 9: [3, 3, 3] };
+function itemPositions(I, n) {
+  if (n <= 0) return [];
+  if (I.layout === 'radial') {                        // 花びら：まわりに ぐるっと
+    const size = n <= 6 ? 0.32 : 0.26, r = n <= 6 ? 0.29 : 0.31;
+    return Array.from({ length: n }, (_, j) => {
+      const ang = -90 + j * 360 / n, rad = ang * Math.PI / 180;
+      return { x: 0.5 + r * Math.cos(rad), y: 0.5 + r * Math.sin(rad), size, rot: ang + 90 };
+    });
+  }
+  if (I.layout === 'car') {                           // タイヤ：車の 左と 右に
+    const L = Math.ceil(n / 2), Rn = n - L, size = Math.min(0.22, 0.8 / L);
+    const col = (cnt, x) => Array.from({ length: cnt }, (_, j) => ({ x, y: 0.5 + (j - (cnt - 1) / 2) * Math.min(0.26, 0.8 / L), size, rot: 0 }));
+    const left = col(L, 0.2), right = col(Rn, 0.8), out = [];
+    for (let j = 0; j < L; j++) { out.push(left[j]); if (right[j]) out.push(right[j]); }
+    return out;
+  }
+  const size = (n <= 4 ? 0.3 : n <= 6 ? 0.27 : 0.23) * I.area.s;
+  const d = size * 1.04, rows = ROWS[n], pos = [];
+  rows.forEach((cnt, r) => {
+    const y = I.area.cy + (r - (rows.length - 1) / 2) * d * 0.98;
+    for (let i = 0; i < cnt; i++) pos.push({ x: I.area.cx + (i - (cnt - 1) / 2) * d, y, size, rot: 0 });
+  });
+  return pos;
+}
+
+/* 入れものの ならびかた：いちばん 大きく なる れつの 数を さがす */
+const PS_MAX = 260;                                     // おさらの 大きさの 上げん
+function bestGrid(W, H, n, gapX = 0.12, gapY = 0.14) {
+  let best = { cols: 1, ps: 0 };
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const ps = Math.min(PS_MAX, W / (cols + (cols - 1) * gapX), H / (rows + (rows - 1) * gapY + 0.15));
+    // 大きさが ほぼ おなじなら、よこ1れつに ならぶ ほう（れつが 少ない ほう）を えらぶ
+    if (ps > best.ps + 2 || (ps >= best.ps - 2 && rows < Math.ceil(n / best.cols))) best = { cols, ps };
+  }
+  return best;
+}
+function layoutPlates() {
+  const box = $('#plates');
+  if (box.hidden) return;
+  const best = bestGrid(box.clientWidth, box.clientHeight, Math.max(1, plateCount()));
+  const ps = Math.max(56, best.ps);
+  box.style.setProperty('--cols', best.cols);
+  document.documentElement.style.setProperty('--ps', ps.toFixed(0) + 'px');
+}
+
+/* どの ふだを 見せるか（モードと ヒントで かわる） */
+function viewFlags() {
+  const m = state.mode, q = state.quiz;
+  const f = { top: 'all', bot: true, oneTag: true, focus1: false, cumAll: false };
+  if (m === 'shiki' && q && !q.solved) {
+    f.top = q.hintLv >= 1 ? 'first' : 'none'; f.bot = q.hintLv >= 2; f.oneTag = false; f.focus1 = q.hintLv >= 1;
+    if (state.count) { f.top = 'all'; f.bot = true; }
+  }
+  if (m === 'story') { f.oneTag = false; f.focus1 = true; }
+  if (m === 'teacher') {
+    const T = state.teacher, s = T.step;
+    f.top = s >= 1 ? 'all' : 'none'; f.bot = s >= 2; f.oneTag = false; f.focus1 = s >= 1;
+    f.cumAll = s >= 3 && (!T.hide || T.revealed);
+  }
+  return f;
+}
+
+function renderPlates() {
+  const I = it(), V = viewFlags();
+  const per = perPlate(), common = per === null && plateCount() ? commonCount() : null;
+  const fl = state.flash && Date.now() - state.flash.at < 1800 ? state.flash : null;
+  const c = state.count;
+  let cum = 0;
+  $('#plates').innerHTML = state.contents.map((v, i) => {
+    cum += v;
+    const cls = ['plate'];
+    const odd = common !== null && v !== common;
+    if (odd) cls.push('odd');
+    if (V.focus1 && i === 0 && plateCount() > 1) cls.push('focus1');
+    if (fl && fl.kind === 'plate' && i === plateCount() - 1 && fl.delta > 0) cls.push('new');
+    if (c && i === c.upto && !c.done) cls.push('counting');
+    if ((c && i <= c.upto && (c.done || i < c.upto)) || V.cumAll) cls.push('counted');
+    const apples = itemPositions(I, v).map((p, j) => {
+      const glow = fl && ((fl.kind === 'apple' && fl.delta > 0 && j === v - 1) || (fl.kind === 'plate' && cls.includes('new')));
+      return `<div class="apple${glow ? ' glow' : ''}" data-plate="${i}" data-j="${j}"
+        style="left:${(p.x * 100).toFixed(1)}%;top:${(p.y * 100).toFixed(1)}%;width:${(p.size * 100).toFixed(1)}%;height:${(p.size * 100).toFixed(1)}%;--rot:${p.rot}deg">
+        <svg viewBox="0 0 100 100"><use href="#${I.sym}"/></svg></div>`;
+    }).join('');
+    const showTop = V.top === 'all' || (V.top === 'first' && i === 0);
+    const topTag = showTop ? `<div class="ptag top${odd ? ' odd' : ''}">${odd ? '？' : '●'}${v}${I.unit}</div>` : '';
+    const oneTag = V.oneTag && per !== null && per > 0 && i === 0 && plateCount() > 1 ? `<div class="ptag one">1つ${BUN}</div>` : '';
+    const botTag = V.bot ? `<div class="ptag bot">■${i + 1}</div>` : '';
+    const cumTag = (c && i <= c.upto) || V.cumAll ? `<div class="cum">${cum}</div>` : '';
+    const cap = I.cap ? `<svg class="cap" viewBox="0 0 100 100"><use href="#${I.cap}"/></svg>` : '';
+    return `<div class="${cls.join(' ')}" data-i="${i}">
+      <svg class="dish" viewBox="0 0 100 100"><use href="#${I.dish}"/></svg>
+      ${apples}${cap}${topTag}${oneTag}${botTag}${cumTag}</div>`;
+  }).join('');
+  layoutPlates();
+}
+
+/* 下：ボタン。モードに よって 出す ものを かえる */
+const VIS = {
+  free:    ['ctlPlates', 'ctlApples', 'bCount', 'bReset'],
+  items:   ['ctlPlates', 'ctlApples', 'bCount', 'bReset'],
+  make:    ['ctlPlates', 'ctlApples', 'bCount', 'bHint', 'bDone', 'bNext', 'bReset'],
+  shiki:   ['keypad', 'bCount', 'bHint', 'bDone', 'bNext'],
+  story:   ['bHint', 'bNext'],
+  array:   ['ctlPlates', 'ctlApples', 'bMorph', 'bRotate', 'bReset'],
+  teacher: ['ctlPlates', 'ctlApples', 'bPrev', 'bStep', 'bHide'],
+};
+function renderControls() {
+  const m = state.mode, I = it(), q = state.quiz;
+  const n = plateCount(), per = perPlate();
+  const counting = !!(state.count && !state.count.done);
+  $$('#controls > *').forEach((el) => { el.hidden = !VIS[m].includes(el.id); });
+  if (q && ['make', 'shiki', 'story'].includes(m)) {
+    const vis = VIS[m];
+    $('#bNext').hidden = !vis.includes('bNext') || !q.solved;
+    $('#bDone').hidden = !vis.includes('bDone') || q.solved;
+    $('#bHint').hidden = !vis.includes('bHint') || q.solved;
+    $('#bHint').innerHTML = `💡 ヒント <small>${Math.min(q.hintLv + 1, 3)}/3</small>`;
+    $('#bDone').innerHTML = m === 'shiki' ? '✅ こたえあわせ' : '✅ できた！';
+    $('#bNext').innerHTML = q.idx + 1 >= q.list.length ? '🏁 けっかを 見る' : 'つぎへ ▶';
+  }
+  $('#lblPlates').innerHTML = I.cont;
+  $('#lblApples').innerHTML = I.perLabel;
+  $('#outPlates').innerHTML = `${n}<small style="font-size:0.5em">${I.contUnit}</small>`;
+  $('#outApples').innerHTML = per === null ? '？' : `${per}<small style="font-size:0.5em">${I.unit}</small>`;
+  const lock = counting || (q && q.solved && m === 'make');
+  $('#bPlateMinus').disabled = lock || n <= 1;
+  $('#bPlatePlus').disabled = lock || n >= MAX_PLATES;
+  $('#bAppleMinus').disabled = lock || state.contents.every((v) => v <= (m === 'array' || m === 'teacher' ? 1 : 0));
+  $('#bApplePlus').disabled = lock || state.contents.every((v) => v >= MAX_PER);
+  $('#bCount').disabled = counting || total() === 0;
+  $('#bDone').disabled = counting;
+  // アレイ図
+  const ph = state.array.phase;
+  $('#bMorph').innerHTML = ph === 'plates' ? '🔴 まるに へんしん' : '🍽️ おさらに もどす';
+  $('#bRotate').disabled = ph === 'plates';
+  // 先生モード
+  const T = state.teacher;
+  $('#bPrev').disabled = T.step <= 0;
+  $('#bStep').disabled = T.step >= TEACHER_LAST;
+  $('#bHide').innerHTML = T.hide ? '🙈 こたえ かくし中（おすと もどす）' : '🙈 こたえを かくす';
+  $('#bHide').classList.toggle('b-on', T.hide);
+}
+
+/* キラキラ（よろこぶ ときの こうか） */
+function sparkle(el, num = 10) {
+  if (calm() || !el) return;
+  const r = el.getBoundingClientRect();
+  for (let i = 0; i < num; i++) {
+    const d = document.createElement('div');
+    d.className = 'spark'; d.textContent = i % 3 ? '✦' : '★';
+    d.style.left = (r.left + Math.random() * r.width) + 'px';
+    d.style.top = (r.top + Math.random() * r.height) + 'px';
+    d.style.animationDelay = (Math.random() * 0.4) + 's';
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 1600);
+  }
+}
+function celebrate() {
+  sfx.correct();
+  sparkle($('#board'), 14);
+  sparkle($('#table'), 14);
+  if (calm()) return;
+  const c = document.createElement('div');
+  c.className = 'cheer'; c.textContent = '⭐ せいかい！';
+  document.body.appendChild(c);
+  setTimeout(() => c.remove(), 1700);
+}
+
+/* =========================================================
+   7. ふやす・へらす・かぞえる（どの モードでも つかう）
+   ========================================================= */
+let countTimer = null, flashTimer = null;
+function stopCount() {
+  clearTimeout(countTimer); countTimer = null;
+  state.count = null;
+}
+/* 数が かわった とき：かぞえるのを やめて、ひからせる */
+function changed(kind, delta, sayHtml = null) {
+  stopCount();
+  state.flash = delta ? { kind, delta, at: Date.now() } : null;
+  state.say = sayHtml ? { html: sayHtml, tone: '' } : null;
+  if (state.mode === 'teacher') state.teacher.revealed = false;
+  render();
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { state.flash = null; if (!drag) render(); }, 1900);
+}
+const showsDelta = () => state.mode === 'free' || state.mode === 'items';
+
+function addPlate() {
+  if (plateCount() >= MAX_PLATES) return;
+  const I = it(), per = perPlate();
+  const v = per !== null ? per : commonCount();
+  state.contents.push(v);
+  sfx.plate();
+  const msg = showsDelta() && per !== null && v > 0
+    ? `${I.cont}が 1${I.contUnit} ふえると、ぜんぶの ${KAZU}は ${k1(`${v}${I.unit}`)} ふえるね（${total() - v} ➡ ${k3(total())}）`
+    : null;
+  changed('plate', v, msg);
+  if (state.mode !== 'array') sparkle($('#plates .plate:last-child'), 8);
+}
+function removePlate() {
+  if (plateCount() <= 1) return;
+  const I = it();
+  const v = state.contents.pop();
+  sfx.down();
+  const msg = showsDelta() && perPlate() !== null && v > 0
+    ? `${I.cont}が 1${I.contUnit} へると、ぜんぶの ${KAZU}は ${k1(`${v}${I.unit}`)} へるね（${total() + v} ➡ ${k3(total())}）`
+    : null;
+  changed('plate', -v, msg);
+}
+/* 中みを ぜんぶの 入れものに 1こずつ ふやす・へらす */
+function changeApples(d) {
+  const I = it(), before = total();
+  const min = state.mode === 'array' || state.mode === 'teacher' ? 1 : 0;
+  state.contents = state.contents.map((v) => Math.max(min, Math.min(MAX_PER, v + d)));
+  const diff = total() - before;
+  if (!diff) return;
+  d > 0 ? sfx.put() : sfx.take();
+  const n = plateCount();
+  const msg = showsDelta() && perPlate() !== null && Math.abs(diff) === n && n > 1
+    ? `1${I.group}に 1${I.unit}ずつ ${d > 0 ? 'ふえる' : 'へる'}と、ぜんぶでは ${k2(`${n}${I.unit}`)} ${d > 0 ? 'ふえる' : 'へる'}ね（${before} ➡ ${k3(total())}）`
+    : null;
+  changed('apple', diff, msg);
+}
+function resetAll() {
+  stopCount();
+  state.flash = null; state.say = null;
+  if (state.mode === 'free' || state.mode === 'make') state.contents = [0];
+  if (state.mode === 'items') state.contents = Array(3).fill(it().start);
+  if (state.mode === 'array') { state.contents = [3, 3, 3, 3]; state.array = { phase: 'plates', framesRot: false }; }
+  render();
+}
+
+/* かぞえる：入れもの ごとに 3、6、9、12… と たしていく */
+function startCount(onDone = null) {
+  if (!total()) return;
+  stopCount();
+  state.flash = null; state.say = null;
+  state.count = { upto: 0, done: false };
+  const step = () => {
+    const c = state.count;
+    if (!c) return;
+    const so = state.contents.slice(0, c.upto + 1).reduce((a, b) => a + b, 0);
+    sfx.tick(c.upto + 1);
+    say(`${c.upto + 1}${it().group}めまでで ${k3(so)}`);
+    render();
+    countTimer = setTimeout(() => {
+      if (c.upto < plateCount() - 1) { c.upto++; step(); }
+      else finishCount(onDone);
+    }, calm() ? 1100 : 900);
+  };
+  step();
+}
+function finishCount(onDone) {
+  const I = it();
+  const per = perPlate(), n = plateCount(), sum = total();
+  state.count = { upto: n - 1, done: true };
+  if (per !== null) {
+    say(n > 1
+      ? `${n1(per)}を ${n2(n)}かい たすのと おなじだから、かけ${SAN}で ${n1(per)}${OP('×')}${n2(n)} と かけるよ`
+      : `${n1(per)}${I.unit}の ${n2(1)}${I.group}${BUN}で ${per}${OP('×')}1`);
+    if (state.mode === 'free' || state.mode === 'items') sfx.correct(); else sfx.tick(12);
+  } else {
+    say(`おなじ${KAZU}ずつ じゃないので、たし${SAN}で ${k3(`ぜんぶで ${sum}${I.unit}`)}。かけ${SAN}には できないね`, 'warn');
+    sfx.soft();
+  }
+  if (state.mode === 'shiki' || state.mode === 'make') say(`${n}${I.group}${BUN} かぞえたら ${k3(`${sum}${I.unit}`)} だったね`);
+  render();
+  if (per !== null && (state.mode === 'free' || state.mode === 'items')) sparkle($('#flow'), 12);
+  if (onDone) onDone();
+}
+
+/* =========================================================
+   8. もんだい（しきに しよう・ならべて みよう・ばめんを えらぼう）
+   ========================================================= */
+/* ばめんを えらぼう の おはなし。A(…)＝1つ分の ところ、B(…)＝いくつ分の ところ */
+const A = (t) => `<span class="phrA">${t}</span>`, B = (t) => `<span class="phrB">${t}</span>`;
+const N = (n) => `<b class="n">${n}</b>`;
+const STORIES = [
+  { item: 'cake', text: (a, b) => `ケーキが ${A(`1はこに ${N(a)}こ`)} ${HAI}って います。${B(`${N(b)}はこ`)} では、ケーキは ぜんぶで ${NAN}こ ですか。` },
+  { item: 'car', text: (a, b) => `${A(`1${DAI}の ${KURUMA}に タイヤが ${N(a)}こ`)} ついて います。${B(`${KURUMA} ${N(b)}${DAI}`)} では、タイヤは ぜんぶで ${NAN}こ ですか。` },
+  { item: 'flower', text: (a, b) => `${A(`${HANA}びらが ${N(a)}まいの ${HANA}`)}が ${B(`${N(b)}つ`)} さいて います。${HANA}びらは ぜんぶで ${NAN}まい ですか。` },
+  { item: 'bag', text: (a, b) => `ふくろが ${B(`${N(b)}つ`)} あります。${A(`1ふくろに みかんが ${N(a)}こずつ`)} ${HAI}って います。みかんは ぜんぶで ${NAN}こ ですか。` },
+  { item: 'apple', text: (a, b) => `おさらが ${B(`${N(b)}まい`)} あります。${A(`1さらに りんごを ${N(a)}こずつ`)} のせます。りんごは ぜんぶで ${NAN}こ ですか。` },
+  { item: 'sock', ok: (a) => a === 2, text: (a, b) => `くつしたは ${A(`${N(a)}まいで 1くみ`)} です。${B(`${N(b)}くみ`)} では、くつしたは ぜんぶで ${NAN}まい ですか。` },
+];
+
+function genList(kind) {
+  const dans = settings.dans.length ? settings.dans : [2];
+  const list = [];
+  let prev = '';
+  for (let i = 0; i < settings.qcount; i++) {
+    let p, tries = 0;
+    do {
+      const a = pick(dans);
+      let b = rnd(2, 9);
+      if (kind === 'story') while (b === a) b = rnd(2, 9);   // 6×2 と 2×6 を くらべる ので おなじ数は さける
+      p = { a, b };
+      if (kind === 'story') {
+        p.story = pick(STORIES.filter((s) => !s.ok || s.ok(a)));
+        p.order = Math.random() < 0.5 ? [0, 1] : [1, 0];
+      }
+    } while (`${p.a}x${p.b}` === prev && ++tries < 20);
+    prev = `${p.a}x${p.b}`;
+    list.push(p);
+  }
+  return list;
+}
+function startQuiz(kind) {
+  closeModals();
+  state.quiz = { kind, list: genList(kind), idx: -1, results: [] };
+  nextQuestion();
+}
+function nextQuestion() {
+  const q = state.quiz;
+  stopCount();
+  if (q.idx + 1 >= q.list.length) { showResult(); return; }   // さいごの もんだいの あと：けっかを 出す（がめんは そのまま）
+  q.idx++;
+  const p = q.list[q.idx];
+  Object.assign(q, { solved: false, wrong: 0, hintLv: 0, slots: ['', '', '', '', ''], cur: 0, bad: [], chosen: [], shown: false });
+  state.flash = null; state.say = null;
+  if (q.kind === 'shiki') { state.item = 'apple'; state.contents = Array(p.b).fill(p.a); }
+  if (q.kind === 'make') { state.item = 'apple'; state.contents = [0]; }
+  if (q.kind === 'story') { state.item = p.story.item; state.contents = Array(p.b).fill(p.a); }
+  render();
+}
+function solved() {
+  const q = state.quiz;
+  q.solved = true;
+  q.results.push({ p: q.list[q.idx], first: q.wrong === 0 && q.hintLv === 0, wrong: q.wrong, hints: q.hintLv });
+  celebrate();
+  render();
+}
+function missed(msg) {
+  state.quiz.wrong++;
+  sfx.soft();
+  say(msg, 'warn');
+  render();
+}
+
+/* ---- しきに しよう ---- */
+function flowShiki() {
+  const q = state.quiz, I = it();
+  const slot = (i, wide = false) => {
+    const cls = ['slot'];
+    if (wide) cls.push('wide');
+    if (q.cur === i && !q.solved) cls.push('cur');
+    if (q.bad[i]) cls.push('bad');
+    if (q.solved) cls.push('ok');
+    return `<button class="${cls.join(' ')}" data-slot="${i}" aria-label="${i + 1}ばんめの わく">${q.slots[i] || '&nbsp;'}</button>`;
+  };
+  return `<span class="words"><span class="k1"><span class="mk">●</span>${slot(0)}${I.unit}ずつ</span> <span class="k2"><span class="mk">■</span>${slot(1)}${I.group}${BUN}</span></span>` +
+    ARROW + `<span class="formula"><span class="k1">${slot(2)}</span>${OP('×')}<span class="k2">${slot(3)}</span>${OP('＝')}<span class="k3">${slot(4, true)}</span></span>`;
+}
+function keyIn(d) {
+  const q = state.quiz;
+  if (!q || q.solved || state.mode !== 'shiki') return;
+  sfx.tap();
+  const i = q.cur;
+  q.bad[i] = false;
+  state.say = null;
+  if (d === 'del') { q.slots[i] = ''; render(); return; }
+  if (i === 4) q.slots[4] = (q.slots[4].length >= 2 || q.slots[4] === '0' ? '' : q.slots[4]) + d;   // こたえは 2けたまで
+  else {
+    q.slots[i] = d;
+    const nextEmpty = [0, 1, 2, 3, 4].find((k) => k > i && !q.slots[k]);
+    q.cur = nextEmpty !== undefined ? nextEmpty : Math.min(i + 1, 4);
+  }
+  render();
+}
+function checkShiki() {
+  const q = state.quiz, p = q.list[q.idx], I = it();
+  const v = q.slots.map((s) => (s === '' ? null : +s));
+  const empty = v.findIndex((x) => x === null);
+  if (empty >= 0) { q.cur = empty; say('まだ あいて いる □が あるよ', 'warn'); sfx.no(); render(); return; }
+  const want = [p.a, p.b, p.a, p.b, p.a * p.b];
+  q.bad = want.map((w, i) => v[i] !== w);
+  if (!q.bad.some(Boolean)) {
+    say(`${k1(`${p.a}${I.unit}ずつ`)} ${k2(`${p.b}${I.group}${BUN}`)} だから ${n1(p.a)}${OP('×')}${n2(p.b)}${OP('＝')}${n3(p.a * p.b)}`, 'good');
+    solved(); return;
+  }
+  q.cur = q.bad.findIndex(Boolean);
+  const swapped = p.a !== p.b && ((v[0] === p.b && v[1] === p.a) || (v[2] === p.b && v[3] === p.a));
+  if (swapped) missed(`${k1('1つ分')}と ${k2('いくつ分')}が いれかわって いるよ。かけ${SAN}は ${k1(`1${I.group}の ${KAZU}`)} が さき、${k2(`${I.cont}の ${KAZU}`)} が あと`);
+  else if (q.bad.slice(0, 4).every((b) => !b)) missed(`しきは あって いるよ！ こたえを もういちど たしかめよう（「かぞえる」で しらべられるよ）`);
+  else missed('✕の ついた □を なおそう。こまったら ヒントを おしてね');
+}
+
+/* ---- ならべて みよう ---- */
+function flowMake() {
+  const q = state.quiz, p = q.list[q.idx], I = it();
+  const per = perPlate(), n = plateCount();
+  const now = total() === 0 ? 'まだ のって いないよ'
+    : per === null ? `<span class="k1" style="text-decoration-style:dashed">おなじ${KAZU}ずつ かな？</span>`
+    : `${k1(`${per}${I.unit}ずつ`)} ${k2(`${n}${I.group}${BUN}`)}`;
+  const flow = `<span class="formula">${n1(p.a)}${OP('×')}${n2(p.b)}${q.solved ? OP('＝') + n3(p.a * p.b) : ''}</span>` +
+    `<span class="sub">の えに なるように ならべよう<br>いま：${now}</span>`;
+  return [flow, `ならべおわったら「できた！」を おしてね`];
+}
+function checkMake() {
+  const q = state.quiz, p = q.list[q.idx], I = it();
+  const per = perPlate(), n = plateCount();
+  if (per === p.a && n === p.b) {
+    say(`${k1(`${p.a}${I.unit}ずつ`)} ${k2(`${p.b}${I.group}${BUN}`)}で ${n1(p.a)}${OP('×')}${n2(p.b)}${OP('＝')}${n3(p.a * p.b)}`, 'good');
+    solved(); return;
+  }
+  if (per === null) missed(`おなじ${KAZU}ずつ に なって いるかな？ ${I.cont}の 上の ${k1('●の 数')}を 見てみよう`);
+  else if (per === p.b && n === p.a && p.a !== p.b) missed(`おしい！ ${k1('1つ分')}と ${k2('いくつ分')}が ぎゃくだよ。${n1(p.a)}${OP('×')}${n2(p.b)} は 「${k1(`${p.a}${I.unit}ずつ`)} ${k2(`${p.b}${I.group}${BUN}`)}」`);
+  else if (per !== p.a) missed(`${k1('1つ分')}（1${I.group}の ${I.name}）は いくつかな？ しきの ${n1(p.a)} を 見よう`);
+  else missed(`${k1('1つ分')}は あって いるよ。${k2('いくつ分')}（${I.cont}の ${KAZU}）は いくつかな？`);
+}
+
+/* ---- ばめんを えらぼう ---- */
+function boardStory() {
+  const q = state.quiz, p = q.list[q.idx];
+  const story = p.story.text(p.a, p.b);
+  const opts = [[p.a, p.b], [p.b, p.a]];
+  const choices = p.order.map((k) => {
+    const [x, y] = opts[k];
+    const cls = q.chosen.includes(k) ? (k === 0 ? 'right' : 'bad') : '';
+    return `<button class="choice ${cls}" data-choice="${k}" ${q.solved || q.chosen.includes(k) ? 'disabled' : ''}>${x} × ${y}</button>`;
+  }).join('');
+  const flow = q.solved ? mulOf(p.a, p.b, p.a * p.b) : '';
+  return [story, choices, flow, `しきは どっちかな？ ${KAZU}の いみを かんがえて えらぼう`];
+}
+function chooseStory(k) {
+  const q = state.quiz, p = q.list[q.idx], I = ITEMS[p.story.item];
+  if (q.solved || q.chosen.includes(k)) return;
+  q.chosen.push(k);
+  if (k === 0) {
+    q.shown = true;
+    say(`${k1(`1つ分は ${p.a}${I.unit}`)}、${k2(`いくつ分は ${p.b}${I.group}`)}。だから ${n1(p.a)}${OP('×')}${n2(p.b)}${OP('＝')}${n3(p.a * p.b)}`, 'good');
+    solved();
+  } else {
+    missed(`${p.b}×${p.a} だと「${p.b}${I.unit}ずつ ${p.a}${I.group}${BUN}」の ばめんに なって しまうよ。${k1('1つ分')}は どれかな？`);
+  }
+}
+
+/* ---- ヒント（3だんかい） ---- */
+function hint() {
+  const q = state.quiz;
+  if (!q || q.solved) return;
+  const p = q.list[q.idx], I = it();
+  if (q.hintLv < 3) q.hintLv++;
+  sfx.tap();
+  const lv = q.hintLv;
+  if (q.kind === 'shiki') {
+    if (lv === 1) say(`ヒント1：${k1('1つ分は いくつ？')} 赤い わくの ${I.cont}の ${I.name}を かぞえよう`);
+    if (lv === 2) say(`ヒント2：${k2('いくつ分 ある？')} ${I.cont}の 下の ■の ばんごうを 見よう`);
+    if (lv === 3) { startCount(); return; }
+  }
+  if (q.kind === 'make') {
+    if (lv === 1) say(`ヒント1：${k1(`1つ分は ${p.a}${I.unit}`)}。1${I.group}に ${p.a}${I.unit} のせよう`);
+    if (lv === 2) say(`ヒント2：${k2(`いくつ分は ${p.b}`)}。${I.cont}を ${p.b}${I.contUnit}に しよう`);
+    if (lv === 3) { state.contents = Array(p.b).fill(p.a); startCount(); return; }
+  }
+  if (q.kind === 'story') {
+    if (lv === 1) say(`ヒント1：${k1('1つ分は いくつ？')} 赤く なった ところを よもう`);
+    if (lv === 2) say(`ヒント2：${k2('いくつ分 ある？')} 青く なった ところを よもう`);
+    if (lv === 3) { q.shown = true; startCount(); return; }
+  }
+  render();
+}
+
+/* ---- けっか ---- */
+function showResult() {
+  const q = state.quiz;
+  const first = q.results.filter((r) => r.first).length;
+  const hints = q.results.reduce((s, r) => s + r.hints, 0);
+  const rows = q.results.map((r, i) => `<tr><td>${i + 1}</td><td>${r.p.a} × ${r.p.b} ＝ ${r.p.a * r.p.b}</td>
+    <td>${r.first ? '⭐ 1かいで せいかい' : '○ できた'}</td><td>${r.hints}</td></tr>`).join('');
+  $('#resultCard').innerHTML = `<h2>🏁 おわり！ よく がんばったね</h2>
+    <div class="res-big">⭐ 1かいで せいかい：${first} / ${q.results.length}もん</div>
+    <div class="res-big" style="font-size:1.2rem;color:#6a1b9a">💡 ヒントを つかった かず：${hints}かい</div>
+    <table class="res-table"><tr><th>もん</th><th>しき</th><th>けっか</th><th>ヒント</th></tr>${rows}</table>
+    <p style="font-size:0.9rem;color:#8d6e63">※ この けっかは ほぞん されません。</p>
+    <div class="btn-row"><button class="act-btn b-done" id="bAgain">↺ もういちど</button>
+    <button class="act-btn b-reset" data-close>とじる</button></div>`;
+  $('#bAgain').onclick = () => startQuiz(q.kind);
+  openModal('#modalResult');
+}
+
+/* =========================================================
+   9. アレイ図：おさらを はずして、まるの ならびに へんしん
+      1さら ＝ 1れつ。まわすと 3×4 と 4×3 が おなじ 数だと わかる
+   ========================================================= */
+function flowArray() {
+  const per = state.contents[0], n = plateCount(), sum = total(), A_ = state.array;
+  if (A_.phase === 'plates') return [wordsOf(per, n) + ARROW + mulOf(per, n, sum), `「まるに へんしん」を おすと、おさらが きえて まるの ならびに なるよ`];
+  if (!A_.framesRot) {
+    return [`<span class="words">${k1(`${per}こずつ`)} ${k2(`${n}れつ`)}</span>${ARROW}${mulOf(per, n, sum)}`,
+      `1さらが よこ 1れつ に なったね。「くるっと まわす」で むきを かえて みよう`];
+  }
+  return [`<span class="words">${k1(`${n}こずつ`)} ${k2(`${per}れつ`)}</span>${ARROW}${mulOf(n, per, sum)}` +
+    `<span class="sub">${per}×${n}＝${sum} と こたえが おなじ！</span>`,
+    `まわしても まるの ${KAZU}は かわらないね。でも「${per}こずつ ${n}さら${BUN}」と「${n}こずつ ${per}さら${BUN}」は ばめんが ちがうよ`];
+}
+let arrKey = '', rotTimer = null;
+function renderArray() {
+  const st = $('#arrStage'), wrap = $('#arrWrap');
+  const W = st.clientWidth, H = st.clientHeight;
+  if (!W || !H) return;
+  const per = state.contents[0], n = plateCount(), A_ = state.array;
+  const key = `${per}x${n}x${W}x${H}`;
+  const rebuild = key !== arrKey;
+  if (rebuild) {
+    arrKey = key;
+    wrap.classList.add('notrans');
+    let html = '';
+    for (let i = 0; i < n; i++) html += `<div class="aplate" data-i="${i}"><svg viewBox="0 0 100 100"><use href="#dish"/></svg></div>`;
+    for (let i = 0; i < n; i++) for (let j = 0; j < per; j++) html += `<div class="adot" data-i="${i}" data-j="${j}"><svg viewBox="0 0 100 100"><use href="#apple"/></svg><div class="ring"></div></div>`;
+    wrap.innerHTML = html + '<div id="arrFrames"></div>';
+  }
+  // おさらの ばしょ
+  const best = bestGrid(W, H, n);
+  const ps = Math.min(best.ps, 220), rows = Math.ceil(n / best.cols);
+  const gx = ps * 1.12, gy = ps * 1.14;
+  const platePos = (i) => {
+    const r = Math.floor(i / best.cols), cInRow = Math.min(best.cols, n - r * best.cols), c = i % best.cols;
+    return { x: W / 2 + (c - (cInRow - 1) / 2) * gx, y: H / 2 + (r - (rows - 1) / 2) * gy };
+  };
+  // まるの ばしょ（まわしても はみださない 大きさ）
+  const g = Math.min(W, H, 9999) / (Math.max(per, n) + 1.2), gg = Math.min(g, 90), d = gg * 0.8;
+  const dotPos = (i, j) => ({ x: W / 2 + (j - (per - 1) / 2) * gg, y: H / 2 + (i - (n - 1) / 2) * gg });
+  const pos = itemPositions(ITEMS.apple, per);
+  $$('.aplate', wrap).forEach((el) => {
+    const P = platePos(+el.dataset.i);
+    Object.assign(el.style, { left: P.x + 'px', top: P.y + 'px', width: ps + 'px', height: ps + 'px' });
+  });
+  $$('.adot', wrap).forEach((el) => {
+    const i = +el.dataset.i, j = +el.dataset.j;
+    let x, y, s;
+    if (A_.phase === 'plates') { const P = platePos(i); x = P.x + (pos[j].x - 0.5) * ps; y = P.y + (pos[j].y - 0.5) * ps; s = pos[j].size * ps; }
+    else { const P = dotPos(i, j); x = P.x; y = P.y; s = d; }
+    Object.assign(el.style, { left: x + 'px', top: y + 'px', width: s + 'px', height: s + 'px' });
+  });
+  wrap.classList.toggle('dots', A_.phase !== 'plates');
+  wrap.classList.toggle('rot', A_.phase === 'rot');
+  // わく（1つ分）と ばんごう（いくつ分）
+  let fr = '';
+  if (A_.phase !== 'plates' && (A_.phase === 'dots' ? !A_.framesRot : A_.framesRot)) {
+    const pad = gg * 0.08;
+    if (!A_.framesRot) {
+      for (let i = 0; i < n; i++) {
+        const P = dotPos(i, 0);
+        fr += `<div class="aframe" style="left:${P.x - gg / 2 + pad}px;top:${P.y - gg / 2 + pad}px;width:${per * gg - pad * 2}px;height:${gg - pad * 2}px"></div>`;
+        fr += `<div class="alabel" style="left:${P.x - gg * 0.95}px;top:${P.y}px">■${i + 1}</div>`;
+      }
+    } else {
+      // まわした あと：もとの たての れつが、見た目では よこの れつ
+      for (let j = 0; j < per; j++) {
+        const P = dotPos(0, j);
+        fr += `<div class="aframe" style="left:${P.x - gg / 2 + pad}px;top:${P.y - gg / 2 + pad}px;width:${gg - pad * 2}px;height:${n * gg - pad * 2}px"></div>`;
+        fr += `<div class="alabel" style="left:${P.x}px;top:${P.y - gg * 0.95}px">■${j + 1}</div>`;
+      }
+    }
+  }
+  $('#arrFrames').innerHTML = fr;
+  if (rebuild) { void wrap.offsetWidth; wrap.classList.remove('notrans'); }
+}
+function toggleMorph() {
+  const A_ = state.array;
+  clearTimeout(rotTimer);
+  if (A_.phase === 'plates') { A_.phase = 'dots'; sfx.morph(); }
+  else { A_.phase = 'plates'; sfx.down(); }
+  A_.framesRot = false;
+  state.say = null;
+  render();
+}
+function rotate() {
+  const A_ = state.array;
+  if (A_.phase === 'plates') return;
+  clearTimeout(rotTimer);
+  sfx.morph();
+  A_.phase = A_.phase === 'rot' ? 'dots' : 'rot';
+  A_.framesRot = null;                          // まわって いる あいだは わくを けす
+  state.say = null;
+  render();
+  rotTimer = setTimeout(() => {
+    A_.framesRot = A_.phase === 'rot';
+    render();
+    if (A_.framesRot) sparkle($('#flow'), 10);
+  }, calm() ? 50 : 1150);
+}
+
+/* =========================================================
+   10. 先生モード：1ステップずつ 見せる
+      0 なんこ？ → 1 3こずつ → 2 4さら分 → 3 3＋3＋3＋3 → 4 3×4 → 5 ＝12
+   ========================================================= */
+const TEACHER_LAST = 5;
+function flowTeacher() {
+  const T = state.teacher, s = T.step, I = it();
+  const per = state.contents[0], n = plateCount(), sum = total();
+  const ans = T.hide && !T.revealed ? `<button class="reveal" data-reveal>？</button>` : n3(sum, 'pop');
+  const lines = [
+    `ぜんぶで ${NAN}${I.unit} あるかな？`,
+    `${k1(`1${I.group}に ${per}${I.unit}`)} ずつ`,
+    `${k1(`${per}${I.unit}ずつ`)}、${k2(`${n}${I.group}${BUN}`)}`,
+    `${per}を ${n}かい たすと…`,
+    `${per}${I.unit}ずつ ${n}${I.group}${BUN}は、かけ${SAN}の しきで かけるよ`,
+    `${k1(`${per}${I.unit}ずつ`)} ${k2(`${n}${I.group}${BUN}`)}で ${k3(`ぜんぶで ${T.hide && !T.revealed ? '？' : sum}${I.unit}`)}`,
+  ];
+  let flow = '';
+  if (s === 0) flow = `<span class="words" style="color:#a1887f">ぜんぶで ${NAN}${I.unit}？</span>`;
+  if (s === 1) flow = `<span class="words">${k1(`${per}${I.unit}ずつ`)}</span>`;
+  if (s >= 2) flow = wordsOf(per, n);
+  if (s === 3) flow += ARROW + `<span class="formula">${addOf(state.contents, true)}${T.hide && !T.revealed ? '' : OP('＝') + n3(sum)}</span>`;
+  if (s === 4) flow += ARROW + mulOf(per, n, null);
+  if (s === 5) flow += ARROW + `<span class="formula">${n1(per)}${OP('×')}${n2(n)}${OP('＝')}${ans}</span>`;
+  return [flow, lines[s]];
+}
+function teacherStep(d) {
+  const T = state.teacher;
+  const s = Math.max(0, Math.min(TEACHER_LAST, T.step + d));
+  if (s === T.step) return;
+  T.step = s;
+  state.say = null;
+  sfx.tick(s + 1);
+  render();
+}
+function revealAnswer() {
+  state.teacher.revealed = true;
+  celebrate();
+  render();
+}
+
+/* =========================================================
+   11. モードを きりかえる
+   ========================================================= */
+function setMode(m) {
+  stopCount();
+  clearTimeout(rotTimer);
+  state.mode = m;
+  state.say = null; state.flash = null;
+  if (!['shiki', 'make', 'story'].includes(m)) state.quiz = null;
+  if (m === 'free') { state.item = 'apple'; state.contents = [0]; }
+  if (m === 'items') { if (state.item === 'apple') state.item = 'car'; state.contents = Array(3).fill(it().start); }
+  if (m === 'array') { state.item = 'apple'; state.contents = [3, 3, 3, 3]; state.array = { phase: 'plates', framesRot: false }; arrKey = ''; }
+  if (m === 'teacher') { state.contents = Array(4).fill(it().start); state.teacher = { step: 0, hide: state.teacher.hide, revealed: false }; }
+  if (['shiki', 'make', 'story'].includes(m)) { startQuiz(m); return; }
+  render();
+}
+function setItem(k) {
+  state.item = k;
+  stopCount();
+  state.say = null; state.flash = null;
+  const per = perPlate();
+  if (state.mode === 'items') state.contents = Array(Math.max(1, plateCount())).fill(ITEMS[k].start);
+  if (state.mode === 'teacher') state.contents = Array(plateCount()).fill(per || ITEMS[k].start);
+  sfx.tap();
+  render();
+}
+function canDrag() {
+  const m = state.mode;
+  return m === 'free' || m === 'items' || (m === 'make' && state.quiz && !state.quiz.solved);
+}
+
+/* =========================================================
+   12. ドラッグ：中みを 1こずつ うごかす
+      かご → 入れもの：1こ ふえる　入れもの → かご（または そと）：1こ へる
+      入れもの → ほかの 入れもの：うつす
+   ========================================================= */
+let drag = null;
+function plateAt(x, y) {
+  for (const el of $$('#plates .plate')) {
+    const r = el.getBoundingClientRect();
+    if (Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2)) <= r.width * 0.58) return el;
+  }
+  return null;
+}
+function overBasket(x, y) {
+  const r = $('#basket').getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+function startDrag(e, from, srcEl) {
+  if (!canDrag() || (state.count && !state.count.done)) return;
+  e.preventDefault();
+  const ps = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ps')) || 140;
+  const g = document.createElement('div');
+  g.className = 'ghost';
+  const sz = srcEl ? srcEl.getBoundingClientRect().width : ps * 0.3;
+  g.style.width = g.style.height = Math.max(sz, 30) + 'px';
+  g.innerHTML = `<svg viewBox="0 0 100 100"><use href="#${it().sym}"/></svg>`;
+  document.body.appendChild(g);
+  if (srcEl) srcEl.classList.add('ghost-src');
+  drag = { from, ghost: g, srcEl, id: e.pointerId };
+  moveDrag(e);
+}
+function moveDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag.ghost.style.left = e.clientX + 'px';
+  drag.ghost.style.top = e.clientY + 'px';
+  const p = plateAt(e.clientX, e.clientY);
+  $$('#plates .plate').forEach((el) => el.classList.toggle('target', el === p && +el.dataset.i !== drag.from));
+  $('#basket').classList.toggle('drop-ok', drag.from !== 'basket' && overBasket(e.clientX, e.clientY));
+}
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag; drag = null;
+  d.ghost.remove();
+  if (d.srcEl) d.srcEl.classList.remove('ghost-src');
+  $$('#plates .plate').forEach((el) => el.classList.remove('target'));
+  $('#basket').classList.remove('drop-ok');
+  const p = plateAt(e.clientX, e.clientY);
+  const to = p ? +p.dataset.i : 'basket';
+  if (to === d.from || (d.from === 'basket' && to === 'basket')) return;   // おなじ ばしょ：なにも しない
+  if (to !== 'basket' && state.contents[to] >= MAX_PER) { sfx.no(); say(`1${it().group}に のせられるのは ${MAX_PER}${it().unit}まで だよ`, 'warn'); render(); return; }
+  if (d.from !== 'basket') state.contents[d.from]--;
+  if (to !== 'basket') state.contents[to]++;
+  to === 'basket' ? sfx.take() : sfx.put();
+  changed('drag', 0);
+}
+$('#basket').addEventListener('pointerdown', (e) => startDrag(e, 'basket', null));
+$('#plates').addEventListener('pointerdown', (e) => {
+  const a = e.target.closest('.apple');
+  if (a) startDrag(e, +a.dataset.plate, a);
+});
+window.addEventListener('pointermove', moveDrag);
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
+
+/* =========================================================
+   13. ボタン・まど
+   ========================================================= */
+$('#bPlatePlus').onclick = addPlate;
+$('#bPlateMinus').onclick = removePlate;
+$('#bApplePlus').onclick = () => changeApples(1);
+$('#bAppleMinus').onclick = () => changeApples(-1);
+$('#bCount').onclick = () => startCount();
+$('#bReset').onclick = resetAll;
+$('#bHint').onclick = hint;
+$('#bDone').onclick = () => (state.mode === 'shiki' ? checkShiki() : checkMake());
+$('#bNext').onclick = nextQuestion;
+$('#bRestart').onclick = () => startQuiz(state.mode);
+$('#bMorph').onclick = toggleMorph;
+$('#bRotate').onclick = rotate;
+$('#bPrev').onclick = () => teacherStep(-1);
+$('#bStep').onclick = () => teacherStep(1);
+$('#bHide').onclick = () => { state.teacher.hide = !state.teacher.hide; state.teacher.revealed = false; sfx.tap(); render(); };
+$$('.mode-btn').forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
+$('#itemChips').addEventListener('click', (e) => { const b = e.target.closest('[data-item]'); if (b) setItem(b.dataset.item); });
+$('#flow').addEventListener('click', (e) => {
+  const s = e.target.closest('[data-slot]');
+  if (s && state.quiz && !state.quiz.solved) { state.quiz.cur = +s.dataset.slot; sfx.tap(); render(); }
+  if (e.target.closest('[data-reveal]')) revealAnswer();
+});
+$('#choices').addEventListener('click', (e) => { const b = e.target.closest('[data-choice]'); if (b) chooseStory(+b.dataset.choice); });
+$('#keypad').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map((d) => `<button class="kp" data-key="${d}">${d}</button>`).join('') +
+  '<button class="kp del" data-key="del" style="grid-column: span 2">けす</button>';
+$('#keypad').addEventListener('click', (e) => { const b = e.target.closest('[data-key]'); if (b) keyIn(b.dataset.key); });
+document.addEventListener('keydown', (e) => {
+  if ($('.modal.open')) return;
+  if (state.mode === 'teacher' && e.key === 'ArrowRight') teacherStep(1);
+  if (state.mode === 'teacher' && e.key === 'ArrowLeft') teacherStep(-1);
+  if (state.mode === 'shiki' && /^[0-9]$/.test(e.key)) keyIn(e.key);
+  if (state.mode === 'shiki' && e.key === 'Backspace') keyIn('del');
+  if (state.mode === 'shiki' && e.key === 'Enter' && !state.quiz.solved) checkShiki();
+});
+
+function openModal(id) { $(id).classList.add('open'); }
+function closeModals() { $$('.modal').forEach((m) => m.classList.remove('open')); }
+$$('.modal').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m || e.target.closest('[data-close]')) closeModals(); }));
+function renderSettings() {
+  $$('[data-set]').forEach((b) => b.classList.toggle('active', String(settings[b.dataset.set]) === b.dataset.val));
+  $('#danChips').innerHTML = DAN_ORDER.map((d) =>
+    `<button class="chip${settings.dans.includes(d) ? ' active' : ''}" data-dan="${d}">${d}のだん</button>`).join('');
+}
+$('#danChips').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-dan]');
+  if (!b) return;
+  const d = +b.dataset.dan, s = new Set(settings.dans);
+  s.has(d) ? s.delete(d) : s.add(d);
+  if (!s.size) s.add(d);                                    // 1つは のこす
+  settings.dans = DAN_ORDER.filter((x) => s.has(x));
+  saveSettings(); renderSettings();
+  if (state.quiz) startQuiz(state.mode);
+});
+$('#btnSettings').onclick = () => { renderSettings(); openModal('#modalSettings'); };
+$('#btnHowto').onclick = () => openModal('#modalHowto');
+$('#btnFull').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+};
+$$('[data-set]').forEach((b) => {
+  b.onclick = () => {
+    const key = b.dataset.set, raw = b.dataset.val;
+    settings[key] = raw === 'true' ? true : raw === 'false' ? false : /^\d+$/.test(raw) ? +raw : raw;
+    saveSettings(); renderSettings();
+    if (key === 'qcount' && state.quiz) { startQuiz(state.mode); openModal('#modalSettings'); }
+    else render();
+  };
+});
+
+/* =========================================================
+   14. 絵（SVG）と はじめる
+   ========================================================= */
+(function makeDefs() {
+  const S = (id, body) => `<symbol id="${id}" viewBox="0 0 100 100">${body}</symbol>`;
+  $('#defs').innerHTML = [
+    // りんご：まるくて かわいい。かげと ひかりで ぷっくり 見せる
+    S('apple', `<ellipse cx="50" cy="93" rx="30" ry="5" fill="rgba(0,0,0,0.15)"/>
+      <path d="M50 30 C34 18 10 26 12 52 C14 76 32 92 50 86 C68 92 86 76 88 52 C90 26 66 18 50 30 Z" fill="#e53935" stroke="#b71c1c" stroke-width="3"/>
+      <path d="M50 30 C44 26 38 25 33 26" fill="none" stroke="#b71c1c" stroke-width="2" opacity=".5"/>
+      <ellipse cx="32" cy="45" rx="7" ry="11" fill="#fff" opacity=".45" transform="rotate(-20 32 45)"/>
+      <path d="M50 31 Q51 18 56 10" fill="none" stroke="#6d4c41" stroke-width="5" stroke-linecap="round"/>
+      <path d="M55 18 Q68 6 80 13 Q70 26 55 18 Z" fill="#66bb6a" stroke="#2e7d32" stroke-width="2.5" stroke-linejoin="round"/>`),
+    // おさら
+    S('dish', `<ellipse cx="50" cy="54" rx="48" ry="46" fill="rgba(93,64,55,0.25)"/>
+      <circle cx="50" cy="50" r="47" fill="#fffefa" stroke="#bcaaa4" stroke-width="2"/>
+      <circle cx="50" cy="50" r="41" fill="none" stroke="#90caf9" stroke-width="2.5"/>
+      <circle cx="50" cy="50" r="35" fill="#fbf7ef"/>`),
+    // タイヤ（上から 見た かたち）
+    S('tire', `<rect x="26" y="8" width="48" height="84" rx="14" fill="#37474f" stroke="#212121" stroke-width="3"/>
+      <path d="M28 26 H72 M28 42 H72 M28 58 H72 M28 74 H72" stroke="#78909c" stroke-width="4"/>`),
+    // 車（上から 見た ところ）
+    S('car', `<rect x="22" y="3" width="56" height="94" rx="22" fill="rgba(93,64,55,0.25)" transform="translate(1 2)"/>
+      <rect x="22" y="3" width="56" height="94" rx="22" fill="#4fc3f7" stroke="#0277bd" stroke-width="3"/>
+      <rect x="30" y="20" width="40" height="16" rx="6" fill="#e1f5fe" stroke="#0277bd" stroke-width="2"/>
+      <rect x="31" y="40" width="38" height="26" rx="6" fill="#81d4fa"/>
+      <rect x="32" y="72" width="36" height="12" rx="5" fill="#e1f5fe" stroke="#0277bd" stroke-width="2"/>
+      <circle cx="33" cy="8" r="3" fill="#fff59d"/><circle cx="67" cy="8" r="3" fill="#fff59d"/>`),
+    // くつした と ハンガー
+    S('sock', `<path d="M36 6 H64 V50 Q64 58 70 62 L84 72 Q93 81 85 90 Q78 96 68 90 L42 74 Q34 68 34 58 Z" fill="#ff8a65" stroke="#d84315" stroke-width="3" stroke-linejoin="round"/>
+      <rect x="34" y="6" width="32" height="12" fill="#fff3e0" stroke="#d84315" stroke-width="3"/>
+      <path d="M36 34 H64 M36 46 H64" stroke="#fff" stroke-width="4" opacity=".7"/>`),
+    S('hanger', `<circle cx="50" cy="54" r="45" fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.8)" stroke-width="2"/>
+      <path d="M50 6 Q58 6 58 12 Q58 18 50 20 V26" stroke="#78909c" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M12 40 L50 26 L88 40 Z" fill="none" stroke="#78909c" stroke-width="4" stroke-linejoin="round"/>`),
+    // 花びら と 花
+    S('petal', `<ellipse cx="50" cy="50" rx="21" ry="45" fill="#f48fb1" stroke="#c2185b" stroke-width="3"/>
+      <path d="M50 16 V80" stroke="#c2185b" stroke-width="2" opacity=".35"/>`),
+    S('flower', `<circle cx="50" cy="50" r="47" fill="#f1f8e9" stroke="#aed581" stroke-width="2"/>
+      <path d="M50 52 Q46 78 50 98" stroke="#43a047" stroke-width="5" fill="none"/>`),
+    S('flowerCap', `<circle cx="50" cy="50" r="13" fill="#ffd54f" stroke="#f9a825" stroke-width="3"/>
+      <circle cx="46" cy="47" r="2" fill="#f9a825"/><circle cx="54" cy="50" r="2" fill="#f9a825"/><circle cx="49" cy="55" r="2" fill="#f9a825"/>`),
+    // みかん と ふくろ
+    S('mikan', `<circle cx="50" cy="55" r="40" fill="#ffa726" stroke="#e65100" stroke-width="3"/>
+      <ellipse cx="36" cy="42" rx="8" ry="5" fill="#fff" opacity=".4" transform="rotate(-30 36 42)"/>
+      <circle cx="50" cy="17" r="5" fill="#6d4c41"/><path d="M52 16 Q66 4 76 12 Q66 22 52 16 Z" fill="#66bb6a" stroke="#2e7d32" stroke-width="2"/>`),
+    S('bag', `<path d="M14 32 Q8 96 50 96 Q92 96 86 32 Z" fill="rgba(93,64,55,0.2)" transform="translate(1 2)"/>
+      <path d="M14 32 Q8 96 50 96 Q92 96 86 32 Z" fill="#fff8e1" stroke="#ef6c00" stroke-width="3"/>
+      <path d="M20 46 Q50 54 80 46 M16 62 Q50 70 84 62 M18 78 Q50 86 82 78" stroke="#ffb74d" stroke-width="2" fill="none"/>
+      <path d="M30 32 Q50 14 70 32" stroke="#ef6c00" stroke-width="3" fill="none"/><rect x="42" y="10" width="16" height="10" rx="3" fill="#e53935"/>`),
+    // ケーキ と はこ
+    S('cake', `<path d="M12 42 L88 42 L88 86 Q50 92 12 86 Z" fill="#fff3e0" stroke="#8d6e63" stroke-width="3"/>
+      <rect x="13" y="58" width="74" height="8" fill="#f48fb1"/>
+      <path d="M12 42 Q50 30 88 42" fill="#fff" stroke="#8d6e63" stroke-width="3"/>
+      <path d="M50 12 Q64 16 62 30 Q50 40 38 30 Q36 16 50 12 Z" fill="#e53935" stroke="#b71c1c" stroke-width="2"/>`),
+    S('box', `<rect x="7" y="16" width="86" height="80" rx="8" fill="rgba(93,64,55,0.2)" transform="translate(1 2)"/>
+      <rect x="7" y="16" width="86" height="80" rx="8" fill="#fce4ec" stroke="#ad1457" stroke-width="3"/>
+      <rect x="7" y="16" width="86" height="14" rx="6" fill="#f8bbd0" stroke="#ad1457" stroke-width="3"/>`),
+  ].join('');
+})();
+
+window.addEventListener('resize', () => { if (state.mode === 'array') renderArray(); else layoutPlates(); });
+document.addEventListener('fullscreenchange', () => setTimeout(() => render(), 120));
+reduceMQ.addEventListener?.('change', render);
+setMode('free');
+</script>
+</body>
+</html>
