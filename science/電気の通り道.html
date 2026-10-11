@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>豆電球をつけよう！電気の通り道</title>
+<!--
+  豆電球をつけよう！電気の通り道（小学3年 理科「電気の通り道」）
+  ・タブ：① 回路をつくろう（部品をおいて、どう線でつなぐ）　② 電気を通す物しらべ（クリップに物をはさむ）
+  ・回路のつながりの判定・電流の計算は、共通ファイル circuit-engine.js でしています（4年・6年でも使う）。
+  ・部品のかたちと、たんしの位置は PARTS に書いてあります。調べる物は ITEMS に1行たすとふやせます。
+  ・ワークシート部品（worksheet.js）を使っています。②で物を調べると、結果が自動で記録されます。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+
+  /* タブ */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .tab {
+    min-height: 48px; border: 3px solid #aed581; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 4px 12px; font-family: inherit; font-size: 17px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .tab.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+
+  .fig-title { margin: 0 0 4px; font-size: 16px; font-weight: bold; color: #33691e; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 17px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 16px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn:disabled { opacity: 0.4; cursor: default; }
+  .lbl { font-size: 16px; color: #555; font-weight: bold; }
+  .diff { font-size: 15px; color: #666; margin: 6px 0 0; line-height: 1.6; }
+  .hidden { display: none !important; }
+
+  /* 部品箱（ここからドラッグして、じっけん台におく） */
+  .palette { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .pbtn {
+    min-height: 52px; min-width: 110px; border: 3px solid #aed581; background: #fafff5; border-radius: 12px;
+    font-family: inherit; font-size: 17px; font-weight: bold; color: #33691e; cursor: grab;
+    touch-action: none; user-select: none; -webkit-user-select: none; display: flex; align-items: center; gap: 4px; justify-content: center;
+  }
+  .pbtn svg { width: 40px; height: 30px; pointer-events: none; }
+  .pbtn:disabled { opacity: 0.4; cursor: default; }
+  .ghost { position: fixed; z-index: 70; pointer-events: none; transform: translate(-50%, -50%); opacity: 0.85; }
+  .ghost svg { width: 120px; height: 90px; }
+
+  /* じっけん台 */
+  .board-wrap { position: relative; border-radius: 10px; }
+  svg#board { display: block; width: 100%; height: auto; touch-action: none; border-radius: 10px; user-select: none; -webkit-user-select: none; }
+  .board-wrap.out { outline: 4px dashed #c62828; outline-offset: -4px; }
+  .trash-tip {
+    position: absolute; left: 50%; top: 8px; transform: translateX(-50%); background: #c62828; color: #fff;
+    padding: 2px 12px; border-radius: 10px; font-size: 15px; font-weight: bold; pointer-events: none;
+  }
+
+  /* じょうたいの表示 */
+  .status {
+    min-height: 52px; border-radius: 12px; padding: 8px 14px; margin-top: 8px;
+    font-weight: bold; text-align: center; background: #f5f5f5; color: #455a64; border: 3px solid #e0e0e0; line-height: 1.7;
+  }
+  .status.lit { background: #fff8d6; color: #6d4c00; border-color: #f2c200; }
+  .status.danger {
+    background: repeating-linear-gradient(45deg, #ffebee 0 14px, #ffcdd2 14px 28px); color: #b71c1c; border: 4px solid #c62828;
+    animation: blink 0.7s infinite alternate;
+  }
+  @keyframes blink { from { box-shadow: 0 0 0 0 rgba(198,40,40,0.5); } to { box-shadow: 0 0 0 6px rgba(198,40,40,0.15); } }
+  .status.hint { background: #e3f2fd; color: #0d47a1; border-color: #64b5f6; }
+
+  /* ② 調べる物 */
+  .tray { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; background: #f5f5f5; border-radius: 12px; padding: 8px; }
+  .item {
+    position: relative; width: 84px; min-height: 88px; background: #fff; border: 3px solid #bdbdbd; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px;
+    cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  .item svg { width: 56px; height: 44px; pointer-events: none; }
+  .item .nm { font-size: 14px; font-weight: bold; line-height: 1.25; text-align: center; pointer-events: none; }
+  .item .mat { font-size: 12px; color: #6d4c41; pointer-events: none; text-align: center; line-height: 1.2; }
+  .item.inslot { opacity: 0.35; border-style: dashed; }
+  .item.dragging { position: fixed; z-index: 60; pointer-events: none; box-shadow: 0 8px 18px rgba(0,0,0,0.3); margin: 0; }
+  .badge { position: absolute; top: -11px; right: -9px; font-size: 12px; font-weight: bold; padding: 1px 6px; border-radius: 10px; pointer-events: none; white-space: nowrap; }
+  .badge.yes { background: #6d4c00; color: #fff; border: 2px solid #6d4c00; }
+  .badge.no { background: #fff; color: #546e7a; border: 2px dashed #78909c; }
+
+  @media (max-width: 560px) {
+    .tab { font-size: 15px; padding: 4px 8px; }
+    .pbtn { min-width: 0; font-size: 15px; padding: 0 6px; }
+    .pbtn svg { width: 30px; }
+    .item { width: 76px; min-height: 84px; }
+    .item svg { width: 50px; height: 40px; }
+    .item .nm { font-size: 13px; }
+    .chip, .go-btn { font-size: 15px; padding-left: 9px; padding-right: 9px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>💡 <ruby>豆電球<rt>まめでんきゅう</rt></ruby>をつけよう！<ruby>電気<rt>でんき</rt></ruby>の<ruby>通<rt>とお</rt></ruby>り<ruby>道<rt>みち</rt></ruby></h1>
+<p class="subtitle">かん<ruby>電池<rt>でんち</rt></ruby>と<ruby>豆電球<rt>まめでんきゅう</rt></ruby>を、どう<ruby>線<rt>せん</rt></ruby>でつないでみよう</p>
+
+<div class="panel">
+  <div class="tabs">
+    <button class="tab active" data-tab="t1">① <ruby>回路<rt>かいろ</rt></ruby>をつくろう</button>
+    <button class="tab" data-tab="t2">② <ruby>電気<rt>でんき</rt></ruby>を<ruby>通<rt>とお</rt></ruby>す<ruby>物<rt>もの</rt></ruby>しらべ</button>
+  </div>
+
+  <div class="card">
+    <p class="fig-title" id="figTitle">&nbsp;</p>
+    <!-- 部品箱 -->
+    <div class="palette" id="palette">
+      <button class="pbtn" data-type="battery" aria-label="かん電池をおく">
+        <svg viewBox="-60 -24 120 48" aria-hidden="true"><rect x="-52" y="-20" width="96" height="40" rx="6" fill="#37474f"/><rect x="14" y="-20" width="30" height="40" rx="5" fill="#f2c200"/><rect x="44" y="-8" width="9" height="16" rx="2" fill="#b0bec5"/></svg>
+        かん<ruby>電池<rt>でんち</rt></ruby>
+      </button>
+      <button class="pbtn" data-type="bulb" aria-label="豆電球をおく">
+        <svg viewBox="-30 -58 60 76" aria-hidden="true"><circle cx="0" cy="-34" r="20" fill="#fffde7" stroke="#8d6e63" stroke-width="3"/><rect x="-20" y="-6" width="40" height="20" rx="4" fill="#43a047"/></svg>
+        <ruby>豆電球<rt>まめでんきゅう</rt></ruby>
+      </button>
+      <button class="pbtn" data-type="switch" aria-label="スイッチをおく">
+        <svg viewBox="-48 -34 96 54" aria-hidden="true"><rect x="-44" y="-12" width="88" height="28" rx="6" fill="#ffe0b2" stroke="#8d6e63" stroke-width="3"/><line x1="-24" y1="0" x2="10" y2="-28" stroke="#455a64" stroke-width="7" stroke-linecap="round"/></svg>
+        スイッチ
+      </button>
+    </div>
+    <div class="board-wrap" id="boardWrap" style="margin-top:6px">
+      <svg id="board" viewBox="0 0 640 360" aria-label="じっけん台。部品をおいて、たんしどうしをどう線でつなぐ">
+        <defs>
+          <radialGradient id="glow">
+            <stop offset="0%" stop-color="#fff176" stop-opacity="0.95"/>
+            <stop offset="55%" stop-color="#ffd54f" stop-opacity="0.45"/>
+            <stop offset="100%" stop-color="#ffd54f" stop-opacity="0"/>
+          </radialGradient>
+          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M20 0 H0 V20" fill="none" stroke="#e6eedf" stroke-width="1"/>
+          </pattern>
+        </defs>
+        <rect width="640" height="360" fill="#fbfdf8"/>
+        <rect width="640" height="360" fill="url(#grid)"/>
+        <g id="partLayer"></g>
+        <g id="wireLayer"></g>
+        <g id="termLayer"></g>
+        <g id="flowLayer"></g>
+        <g id="hintLayer"></g>
+        <g id="tempLayer"></g>
+      </svg>
+      <div class="trash-tip hidden" id="trashTip">ここで<ruby>手<rt>て</rt></ruby>をはなすと、とりのぞくよ</div>
+    </div>
+    <div class="status" id="status">&nbsp;</div>
+    <div class="row">
+      <button class="go-btn" id="btnHint">🔍 ヒント</button>
+      <button class="go-btn sub" id="btnRot" disabled>↻ <ruby>回<rt>まわ</rt></ruby>す</button>
+      <button class="go-btn sub" id="btnDel" disabled>🗑 とる</button>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+    <div class="row">
+      <button class="chip active" id="btnFlow"><ruby>電流<rt>でんりゅう</rt></ruby>のつぶ ON</button>
+      <span class="lbl">つぶの<ruby>速<rt>はや</rt></ruby>さ</span>
+      <button class="chip" data-speed="0.4">ゆっくり</button>
+      <button class="chip active" data-speed="1">ふつう</button>
+      <button class="chip" data-speed="2.5">はやおくり</button>
+    </div>
+    <div class="row" id="presetRow">
+      <span class="lbl">お<ruby>手本<rt>てほん</rt></ruby></span>
+      <button class="go-btn sub" data-preset="basic">きほんの<ruby>回路<rt>かいろ</rt></ruby></button>
+      <button class="go-btn sub" data-preset="withSwitch">スイッチつき</button>
+    </div>
+  </div>
+
+  <!-- ② 調べる物 -->
+  <div class="card hidden" id="itemCard">
+    <p class="fig-title"><ruby>調<rt>しら</rt></ruby>べる<ruby>物<rt>もの</rt></ruby>　（<ruby>予想<rt>よそう</rt></ruby>してから、クリップのあいだにドラッグしてはさもう。タッチだけでもはさめるよ）</p>
+    <div class="row" style="margin-top:0;margin-bottom:6px">
+      <span class="lbl"><ruby>予想<rt>よそう</rt></ruby>：<ruby>明<rt>あ</rt></ruby>かりは</span>
+      <button class="chip" data-pred="つく">○ つく</button>
+      <button class="chip" data-pred="つかない">× つかない</button>
+    </div>
+    <div class="tray" id="tray"></div>
+    <div class="row">
+      <button class="go-btn sub" id="btnReset2"><ruby>調<rt>しら</rt></ruby>べる<ruby>回路<rt>かいろ</rt></ruby>にもどす</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="diff" id="howto"></p>
+    <p class="diff">※じっさいとのちがい：<ruby>電流<rt>でんりゅう</rt></ruby>のつぶは、<ruby>目<rt>め</rt></ruby>に<ruby>見<rt>み</rt></ruby>えない<ruby>電気<rt>でんき</rt></ruby>の<ruby>流<rt>なが</rt></ruby>れを<ruby>見<rt>み</rt></ruby>やすくしたものです（<ruby>電流<rt>でんりゅう</rt></ruby>の<ruby>向<rt>む</rt></ruby>きは、かん<ruby>電池<rt>でんち</rt></ruby>の＋<ruby>極<rt>きょく</rt></ruby>から−<ruby>極<rt>きょく</rt></ruby>へと<ruby>決<rt>き</rt></ruby>められています）。じっさいのエナメル<ruby>線<rt>せん</rt></ruby>は、はしのまくを<ruby>紙<rt>かみ</rt></ruby>やすりでけずらないと<ruby>電気<rt>でんき</rt></ruby>を<ruby>通<rt>とお</rt></ruby>しません。ショート<ruby>回路<rt>かいろ</rt></ruby>は<ruby>電池<rt>でんち</rt></ruby>が<ruby>熱<rt>あつ</rt></ruby>くなってきけんなので、じっさいの<ruby>実験<rt>じっけん</rt></ruby>ではぜったいにしません。</p>
+  </div>
+</div>
+
+<script src="circuit-engine.js"></script>
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: '<ruby>豆電球<rt>まめでんきゅう</rt></ruby>をつけよう！<ruby>電気<rt>でんき</rt></ruby>の<ruby>通<rt>とお</rt></ruby>り<ruby>道<rt>みち</rt></ruby>',
+  question: '<ruby>回路<rt>かいろ</rt></ruby>のとちゅうに<ruby>消<rt>け</rt></ruby>しゴムをはさむと、<ruby>豆電球<rt>まめでんきゅう</rt></ruby>の<ruby>明<rt>あ</rt></ruby>かりはつくだろうか？',
+  predictionChoices: ['つく', 'つかない'],
+  experimentNote: '「② <ruby>電気<rt>でんき</rt></ruby>を<ruby>通<rt>とお</rt></ruby>す<ruby>物<rt>もの</rt></ruby>しらべ」で、いろいろな<ruby>物<rt>もの</rt></ruby>をクリップのあいだにはさんで<ruby>調<rt>しら</rt></ruby>べよう。<ruby>調<rt>しら</rt></ruby>べると、<ruby>結果<rt>けっか</rt></ruby>が<ruby>自動<rt>じどう</rt></ruby>で<ruby>記録<rt>きろく</rt></ruby>されます。',
+  columns: [
+    { key: 'obj',  label: '<ruby>調<rt>しら</rt></ruby>べた<ruby>物<rt>もの</rt></ruby>' },
+    { key: 'mat',  label: '何でできているか' },
+    { key: 'pred', label: '<ruby>予想<rt>よそう</rt></ruby>' },
+    { key: 'res',  label: '<ruby>明<rt>あ</rt></ruby>かりは' }
+  ],
+  chart: false,   // 「つく／つかない」の表だけなので、グラフは出さない
+  hint: 'まず①で「1つの輪になるとつく」ことを確かめてから②に進みます。「消しゴム」「空きかん（色がぬってある所）」は予想が分かれやすい物です。空きかんは、色をけずると電気を通すことから、「金属は電気を通す。表面のとりょうは通さない」ことに気づかせましょう。',
+  answer: '消しゴムをはさむと、明かりはつかない。電気を通すのは、鉄・銅・アルミニウムなどの金属でできた物（鉄くぎ・10円玉・アルミニウムはく・銅線・空きかんのけずった所）である。紙・木・ゴム・プラスチック・ガラスは電気を通さない。空きかんも、色がぬってある所は電気を通さない。'
+});
+const TEACHER = Worksheet.isTeacher();
+
+// ===== 小さな道具 =====
+const $ = id => document.getElementById(id);
+const R = (k, y) => '<ruby>' + k + '<rt>' + y + '</rt></ruby>';   // ふりがな付きの文字
+const NS = 'http://www.w3.org/2000/svg';
+const BW = 640, BH = 360;                  // じっけん台の大きさ（SVG の座標）
+const svg = $('board');
+const L = { part: $('partLayer'), wire: $('wireLayer'), term: $('termLayer'), flow: $('flowLayer'), hint: $('hintLayer'), temp: $('tempLayer') };
+function el(tag, attrs, parent, html) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (html != null) e.innerHTML = html;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+// 部品の中の位置（lx, ly）を、じっけん台の位置にする（rot＝回した角度 0/90/180/270）
+function toBoard(p, lx, ly) {
+  const r = p.rot * Math.PI / 180, c = Math.round(Math.cos(r)), s = Math.round(Math.sin(r));
+  return { x: p.x + lx * c - ly * s, y: p.y + lx * s + ly * c };
+}
+// 指・マウスの位置を、SVG の座標にする
+function svgPoint(e) {
+  const r = svg.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * BW, y: (e.clientY - r.top) / r.height * BH, inside: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom };
+}
+
+// =====================================================================
+// 調べる物の一覧。cond＝電気を通すか。物をふやすときは、ここに1行たして、ICON に絵をかく。
+// =====================================================================
+const ITEMS = [
+  { id: 'cuwire', name: R('銅線', 'どうせん'),                   text: '銅線',                   mat: '銅（金属）',             matR: R('銅', 'どう') + '（' + R('金属', 'きんぞく') + '）',      cond: true },
+  { id: 'nail',   name: R('鉄', 'てつ') + 'くぎ',                text: '鉄くぎ',                 mat: '鉄（金属）',             matR: R('鉄', 'てつ') + '（' + R('金属', 'きんぞく') + '）',      cond: true },
+  { id: 'foil',   name: 'アルミニウムはく',                       text: 'アルミニウムはく',       mat: 'アルミニウム（金属）',   matR: 'アルミニウム（' + R('金属', 'きんぞく') + '）',             cond: true },
+  { id: 'yen10',  name: '10' + R('円玉', 'えんだま'),             text: '10円玉',                 mat: '銅（金属）',             matR: R('銅', 'どう') + '（' + R('金属', 'きんぞく') + '）',      cond: true },
+  { id: 'eraser', name: R('消', 'け') + 'しゴム',                 text: '消しゴム',               mat: 'プラスチック',           matR: 'プラスチック',                                               cond: false },
+  { id: 'glass',  name: 'ガラスのコップ',                         text: 'ガラスのコップ',         mat: 'ガラス',                 matR: 'ガラス',                                                     cond: false },
+  { id: 'rubber', name: R('輪', 'わ') + 'ゴム',                   text: '輪ゴム',                 mat: 'ゴム',                   matR: 'ゴム',                                                       cond: false },
+  { id: 'paper',  name: R('紙', 'かみ'),                          text: '紙',                     mat: '紙',                     matR: R('紙', 'かみ'),                                              cond: false },
+  { id: 'straw',  name: 'ストロー',                               text: 'ストロー',               mat: 'プラスチック',           matR: 'プラスチック',                                               cond: false },
+  { id: 'hashi',  name: 'わりばし',                               text: 'わりばし',               mat: '木',                     matR: R('木', 'き'),                                                cond: false },
+  { id: 'canP',   name: R('空', 'あ') + 'きかん<br>（' + R('色', 'いろ') + 'がぬってある' + R('所', 'ところ') + '）', text: '空きかん（色がぬってある所）', mat: '金属の上に、とりょう（色）', matR: R('金属', 'きんぞく') + 'の上に<br>とりょう（' + R('色', 'いろ') + '）', cond: false },
+  { id: 'canS',   name: R('空', 'あ') + 'きかん<br>（けずった' + R('所', 'ところ') + '）', text: '空きかん（けずった所）', mat: '金属', matR: R('金属', 'きんぞく'), cond: true }
+];
+// 物の絵（SVG。横64×たて52）
+const ICON = {
+  cuwire: '<path d="M6 34 C18 10 28 44 40 22 S56 18 60 14" fill="none" stroke="#b8642b" stroke-width="4" stroke-linecap="round"/>',
+  nail:   '<rect x="11" y="23" width="40" height="7" fill="#90a4ae" stroke="#455a64" stroke-width="2"/><rect x="6" y="15" width="6" height="23" rx="2" fill="#78909c" stroke="#455a64" stroke-width="2"/><polygon points="51,23 61,26.5 51,30" fill="#90a4ae" stroke="#455a64" stroke-width="2"/>',
+  foil:   '<path d="M8 14 L50 8 L58 38 L14 46 Z" fill="#e0e0e0" stroke="#9e9e9e" stroke-width="2"/><path d="M16 18 L44 14 M18 30 L52 26 M20 40 L40 36" stroke="#fff" stroke-width="2.5"/>',
+  yen10:  '<circle cx="32" cy="26" r="21" fill="#c27a3a" stroke="#7a4317" stroke-width="3"/><circle cx="32" cy="26" r="15" fill="none" stroke="#e3a46c" stroke-width="2"/><text x="32" y="33" font-size="19" font-weight="bold" fill="#fff" text-anchor="middle">10</text>',
+  eraser: '<rect x="8" y="17" width="48" height="20" rx="3" fill="#fff" stroke="#9e9e9e" stroke-width="2"/><rect x="26" y="15" width="31" height="24" rx="2" fill="#1e88e5" stroke="#0d47a1" stroke-width="2"/>',
+  glass:  '<path d="M18 6 H46 L42 47 H22 Z" fill="rgba(178,235,242,0.55)" stroke="#26a69a" stroke-width="2.5"/><path d="M24 12 L26 40" stroke="#fff" stroke-width="3" stroke-linecap="round"/>',
+  rubber: '<ellipse cx="32" cy="26" rx="24" ry="14" fill="none" stroke="#e6a23c" stroke-width="5"/>',
+  paper:  '<path d="M12 6 H44 L54 16 V48 H12 Z" fill="#fffdf0" stroke="#9e9e9e" stroke-width="2"/><path d="M44 6 V16 H54" fill="none" stroke="#9e9e9e" stroke-width="2"/><path d="M18 24 H46 M18 32 H46 M18 40 H38" stroke="#cfd8dc" stroke-width="2"/>',
+  straw:  '<rect x="4" y="21" width="56" height="10" rx="4" fill="#fff" stroke="#e53935" stroke-width="2"/><path d="M12 21 L18 31 M24 21 L30 31 M36 21 L42 31 M48 21 L54 31" stroke="#e53935" stroke-width="3"/>',
+  hashi:  '<path d="M10 40 L56 10 M14 44 L58 16" stroke="#c99a5b" stroke-width="5" stroke-linecap="round"/>',
+  canP:   '<ellipse cx="32" cy="8" rx="14" ry="4" fill="#cfd8dc" stroke="#455a64" stroke-width="2"/><rect x="18" y="8" width="28" height="38" fill="#c62828" stroke="#455a64" stroke-width="2"/><path d="M18 22 H46 M18 30 H46" stroke="#fff" stroke-width="3"/><ellipse cx="32" cy="46" rx="14" ry="4" fill="#90a4ae" stroke="#455a64" stroke-width="2"/>',
+  canS:   '<ellipse cx="32" cy="8" rx="14" ry="4" fill="#cfd8dc" stroke="#455a64" stroke-width="2"/><rect x="18" y="8" width="28" height="38" fill="#c62828" stroke="#455a64" stroke-width="2"/><rect x="24" y="16" width="16" height="22" rx="3" fill="#cfd8dc" stroke="#78909c" stroke-width="1.5"/><path d="M27 20 L37 34 M30 18 L39 30" stroke="#fff" stroke-width="1.5"/><ellipse cx="32" cy="46" rx="14" ry="4" fill="#90a4ae" stroke="#455a64" stroke-width="2"/>'
+};
+const itemById = id => ITEMS.find(it => it.id === id);
+
+// =====================================================================
+// 部品のかたち。terms＝たんし（部品の中の位置）。1つ目が circuit-engine の a、2つ目が b。
+// かん電池は a＝−極、b＝＋極。flow＝電流のつぶが通る道（a のたんしから b のたんしまで）。
+// hit＝さわって動かせるはんい。
+// =====================================================================
+const PARTS = {
+  battery: {
+    max: 2, terms: [['-', -72, 0], ['+', 72, 0]], hit: [-58, -26, 116, 52],
+    flow: 'M -72 0 L 72 0',
+    draw(g, p, st) {
+      el('line', { x1: -72, y1: 0, x2: -52, y2: 0, stroke: '#78909c', 'stroke-width': 5 }, g);
+      el('line', { x1: 52, y1: 0, x2: 72, y2: 0, stroke: '#78909c', 'stroke-width': 5 }, g);
+      if (st.hot) {   // ショートのとき：電池のまわりを赤くし、ゆらゆらした「熱」の線をかく
+        el('rect', { x: -60, y: -28, width: 120, height: 56, rx: 12, fill: 'rgba(229,57,53,0.25)', stroke: '#c62828', 'stroke-width': 3, 'stroke-dasharray': '6 4' }, g);
+      }
+      el('rect', { x: -52, y: -20, width: 96, height: 40, rx: 6, fill: '#37474f', stroke: st.hot ? '#c62828' : '#263238', 'stroke-width': 2 }, g);
+      el('rect', { x: 14, y: -20, width: 30, height: 40, rx: 5, fill: '#f2c200' }, g);
+      el('rect', { x: 44, y: -8, width: 9, height: 16, rx: 2, fill: '#b0bec5', stroke: '#78909c' }, g);
+    },
+    labels: [['−', -22, 0, '#fff', 30], ['+', 29, 0, '#263238', 28]]
+  },
+  bulb: {
+    max: 2, terms: [['a', -36, 42], ['b', 36, 42]], hit: [-30, -58, 60, 76],
+    flow: 'M -36 42 Q -12 34 -7 14 L -7 -20 L -8 -34 L 8 -34 L 7 -20 L 7 14 Q 12 34 36 42',
+    draw(g, p, st) {
+      const b = st.bright || 0, on = b > 0.05;
+      if (on) {
+        el('circle', { cx: 0, cy: -34, r: 30 + 22 * Math.min(b, 1.5), fill: 'url(#glow)' }, g);
+        // 光っているしるし（色だけでなく、まわりの線でも分かるように）
+        for (let i = 0; i < 8; i++) {
+          const a = i * Math.PI / 4, r1 = 27, r2 = 27 + 9 + 6 * Math.min(b, 1.5);
+          el('line', { x1: Math.cos(a) * r1, y1: -34 + Math.sin(a) * r1, x2: Math.cos(a) * r2, y2: -34 + Math.sin(a) * r2, stroke: '#f2a900', 'stroke-width': 3.5, 'stroke-linecap': 'round' }, g);
+        }
+      }
+      // どう線（ソケットから出ている2本）
+      el('path', { d: 'M -7 14 Q -12 34 -36 42', fill: 'none', stroke: '#78909c', 'stroke-width': 5, 'stroke-linecap': 'round' }, g);
+      el('path', { d: 'M 7 14 Q 12 34 36 42', fill: 'none', stroke: '#78909c', 'stroke-width': 5, 'stroke-linecap': 'round' }, g);
+      // 電球のガラス
+      el('circle', { cx: 0, cy: -34, r: 20, fill: on ? 'hsl(52,100%,' + (86 - 16 * Math.min(b, 1)) + '%)' : '#f7f7f2', stroke: '#8d6e63', 'stroke-width': 2.5 }, g);
+      // フィラメント
+      const fc = on ? '#e65100' : '#9e9e9e';
+      el('path', { d: 'M -6 -18 L -8 -34 L -5 -38 L -2 -34 L 1 -38 L 4 -34 L 7 -38 L 8 -34 L 6 -18', fill: 'none', stroke: fc, 'stroke-width': 2 }, g);
+      // 口金とソケット
+      el('rect', { x: -11, y: -16, width: 22, height: 12, fill: '#bcaaa4', stroke: '#8d6e63', 'stroke-width': 1.5 }, g);
+      el('path', { d: 'M -11 -12 H 11 M -11 -8 H 11', stroke: '#8d6e63', 'stroke-width': 1.2 }, g);
+      el('rect', { x: -20, y: -6, width: 40, height: 20, rx: 4, fill: '#43a047', stroke: '#2e7d32', 'stroke-width': 2 }, g);
+    },
+    labels: []
+  },
+  switch: {
+    max: 2, terms: [['a', -64, 0], ['b', 64, 0]], hit: [-48, -36, 96, 70],
+    flow: 'M -64 0 L 64 0',
+    draw(g, p) {
+      el('line', { x1: -64, y1: 0, x2: -44, y2: 0, stroke: '#78909c', 'stroke-width': 5 }, g);
+      el('line', { x1: 44, y1: 0, x2: 64, y2: 0, stroke: '#78909c', 'stroke-width': 5 }, g);
+      el('rect', { x: -44, y: -14, width: 88, height: 30, rx: 6, fill: '#ffe0b2', stroke: '#8d6e63', 'stroke-width': 2.5 }, g);
+      el('rect', { x: 18, y: -7, width: 12, height: 14, rx: 2, fill: '#90a4ae', stroke: '#546e7a' }, g);   // うけ（金具）
+      if (p.on) el('line', { x1: -24, y1: 0, x2: 28, y2: 0, stroke: '#455a64', 'stroke-width': 7, 'stroke-linecap': 'round' }, g);
+      else el('line', { x1: -24, y1: 0, x2: 8, y2: -30, stroke: '#455a64', 'stroke-width': 7, 'stroke-linecap': 'round' }, g);
+      el('circle', { cx: -24, cy: 0, r: 6, fill: '#546e7a' }, g);
+    },
+    labels: []   // 「入」「切」は drawPart で、いつも上向きにかく
+  },
+  gap: {   // 物をはさむ所（わにぐちクリップ2つ）。②だけで使う
+    max: 1, terms: [['a', -92, 0], ['b', 92, 0]], hit: [-74, -34, 148, 68],
+    flow: 'M -92 0 L 92 0',
+    draw(g, p, st) {
+      el('line', { x1: -92, y1: 0, x2: -60, y2: 0, stroke: '#78909c', 'stroke-width': 5 }, g);
+      el('line', { x1: 60, y1: 0, x2: 92, y2: 0, stroke: '#78909c', 'stroke-width': 5 }, g);
+      // クリップ（左と右）
+      [-1, 1].forEach(s => {
+        el('path', { d: `M ${60 * s} -8 L ${32 * s} -14 L ${32 * s} 14 L ${60 * s} 8 Z`, fill: '#b0bec5', stroke: '#546e7a', 'stroke-width': 2 }, g);
+        el('path', { d: `M ${32 * s} -14 l ${-4 * s} 4 l ${4 * s} 4 l ${-4 * s} 4 l ${4 * s} 4 l ${-4 * s} 4 l ${4 * s} 4`, fill: 'none', stroke: '#546e7a', 'stroke-width': 1.5 }, g);
+      });
+      if (p.item) {
+        el('g', { transform: 'translate(-30,-24.4) scale(0.94)' }, g, ICON[p.item]);
+      } else {
+        el('rect', { x: -26, y: -22, width: 52, height: 44, rx: 6, fill: '#fff', stroke: st.slotHot ? '#f57c00' : '#9e9e9e', 'stroke-width': st.slotHot ? 4 : 2, 'stroke-dasharray': '5 4' }, g);
+      }
+    },
+    labels: []
+  }
+};
+
+// =====================================================================
+// じっけん台のようす（タブごとに1つずつ）
+//   parts: { id, type, x, y, rot, on(スイッチ), item(はさんだ物) }
+//   wires: { id, a:'部品id:たんし', b:'部品id:たんし' }
+// =====================================================================
+const S = {
+  tab: 't1',
+  boards: { t1: null, t2: null },
+  sel: null,           // えらんでいる物 { kind:'part'|'wire', id }
+  flowOn: true, speed: 1,
+  hintOn: false,
+  pred: null,          // ②の予想（'つく'／'つかない'）
+  tested: {},          // ②で調べた物
+  seq: 1
+};
+const B = () => S.boards[S.tab];
+const newId = pfx => pfx + (S.seq++);
+function addPart(bd, type, x, y, rot, extra) {
+  const p = Object.assign({ id: newId({ battery: 'D', bulb: 'L', switch: 'S', gap: 'G' }[type]), type, x, y, rot: rot || 0 }, extra || {});
+  if (type === 'switch' && p.on == null) p.on = false;
+  bd.parts.push(p);
+  return p;
+}
+function addWire(bd, a, b) {
+  if (a === b) return null;
+  if (bd.wires.some(w => (w.a === a && w.b === b) || (w.a === b && w.b === a))) return null;   // 同じつなぎ方は1本だけ
+  const w = { id: newId('w'), a, b };
+  bd.wires.push(w);
+  return w;
+}
+const tname = (p, i) => p.id + ':' + PARTS[p.type].terms[i][0];
+// たんしの、じっけん台の上の位置
+function termPos(bd, name) {
+  const [pid, k] = name.split(':');
+  const p = bd.parts.find(q => q.id === pid);
+  const t = PARTS[p.type].terms.find(t => t[0] === k);
+  return toBoard(p, t[1], t[2]);
+}
+
+// ---- お手本の回路 ----
+const PRESETS = {
+  // ①のはじめ：電池と豆電球をおいただけ（まだつないでいない）
+  start() {
+    const bd = { parts: [], wires: [] };
+    addPart(bd, 'battery', 320, 290);
+    addPart(bd, 'bulb', 320, 110);
+    return bd;
+  },
+  basic() {
+    const bd = { parts: [], wires: [] };
+    const bt = addPart(bd, 'battery', 320, 290), lb = addPart(bd, 'bulb', 320, 110);
+    addWire(bd, tname(lb, 0), tname(bt, 0)); addWire(bd, tname(bt, 1), tname(lb, 1));
+    return bd;
+  },
+  withSwitch() {
+    const bd = { parts: [], wires: [] };
+    const bt = addPart(bd, 'battery', 220, 290), lb = addPart(bd, 'bulb', 320, 100), sw = addPart(bd, 'switch', 470, 290);
+    addWire(bd, tname(lb, 0), tname(bt, 0)); addWire(bd, tname(bt, 1), tname(sw, 0)); addWire(bd, tname(sw, 1), tname(lb, 1));
+    return bd;
+  },
+  // ②：とちゅうに「物をはさむ所」がある回路
+  checker() {
+    const bd = { parts: [], wires: [] };
+    const lb = addPart(bd, 'bulb', 170, 100), gp = addPart(bd, 'gap', 460, 110), bt = addPart(bd, 'battery', 400, 290);
+    addWire(bd, tname(lb, 1), tname(gp, 0)); addWire(bd, tname(gp, 1), tname(bt, 1)); addWire(bd, tname(bt, 0), tname(lb, 0));
+    return bd;
+  }
+};
+S.boards.t1 = PRESETS.start();
+S.boards.t2 = PRESETS.checker();
+
+// circuit-engine にわたす形にする
+function toCircuit(bd) {
+  const elements = bd.parts.map(p => {
+    const e = { id: p.id, type: p.type, a: tname(p, 0), b: tname(p, 1) };
+    if (p.type === 'switch') e.on = p.on;
+    if (p.type === 'gap') e.conductor = !!(p.item && itemById(p.item).cond);
+    return e;
+  });
+  bd.wires.forEach(w => elements.push({ id: w.id, type: 'wire', a: w.a, b: w.b }));
+  return { elements };
+}
+
+// どう線の道（すこしたるんだ曲線）
+function wirePath(p1, p2) {
+  const d = Math.hypot(p2.x - p1.x, p2.y - p1.y), sag = Math.min(40, d * 0.18);
+  const cx = (p1.x + p2.x) / 2, cy = (p1.y + p2.y) / 2 + sag;
+  return `M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`;
+}
+// 曲線上の点（t＝0〜1）
+function wirePointAt(p1, p2, t) {
+  const d = Math.hypot(p2.x - p1.x, p2.y - p1.y), sag = Math.min(40, d * 0.18);
+  const cx = (p1.x + p2.x) / 2, cy = (p1.y + p2.y) / 2 + sag, u = 1 - t;
+  return { x: u * u * p1.x + 2 * u * t * cx + t * t * p2.x, y: u * u * p1.y + 2 * u * t * cy + t * t * p2.y };
+}
+
+// =====================================================================
+// 計算して、かき直す
+// =====================================================================
+let diag = null;               // いまの回路のしらべた結果
+const flows = [];              // 電流のつぶ { path, len, v, dots, off }
+const I_NOM = CircuitEngine.EMF / (CircuitEngine.TYPES.battery.R + CircuitEngine.TYPES.bulb.R);   // ふつうの電流
+const FLOW_MIN = I_NOM * 0.15;   // これより小さい電流は、つぶを出さない（ショートのとき豆電球にわずかに流れる分など）
+
+function render() {
+  const bd = B();
+  diag = CircuitEngine.diagnose(toCircuit(bd));
+  const sim = diag.sim;
+  Object.values(L).forEach(g => { if (g !== L.temp) g.textContent = ''; });
+  flows.length = 0;
+
+  // ---- 部品 ----
+  bd.parts.forEach(p => {
+    const def = PARTS[p.type];
+    const g = el('g', { transform: `translate(${p.x},${p.y}) rotate(${p.rot})`, 'data-part': p.id }, L.part);
+    def.draw(g, p, { bright: sim.brightness.get(p.id), hot: sim.shortIds.includes(p.id), slotHot: dragItem && dragItem.overSlot });
+    if (S.sel && S.sel.kind === 'part' && S.sel.id === p.id) {
+      const [hx, hy, hw, hh] = def.hit;
+      el('rect', { x: hx - 6, y: hy - 6, width: hw + 12, height: hh + 12, rx: 10, fill: 'none', stroke: '#ef6c00', 'stroke-width': 3, 'stroke-dasharray': '8 5' }, g);
+    }
+    // 文字はいつも上向きにかく
+    def.labels.forEach(([t, lx, ly, color, size]) => {
+      const q = toBoard(p, lx, ly);
+      el('text', { x: q.x, y: q.y + size * 0.36, 'text-anchor': 'middle', 'font-size': size, 'font-weight': 'bold', fill: color, 'pointer-events': 'none' }, L.part).textContent = t;
+    });
+    if (p.type === 'switch') {
+      const q = toBoard(p, 0, p.rot % 180 ? 0 : 32);
+      const q2 = p.rot % 180 ? { x: q.x + 34, y: q.y + 6 } : { x: q.x, y: q.y + 6 };
+      el('text', { x: q2.x, y: q2.y, 'text-anchor': 'middle', 'font-size': 18, 'font-weight': 'bold', fill: p.on ? '#2e7d32' : '#c62828', stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke', 'pointer-events': 'none' }, L.part).textContent = p.on ? '入' : '切';
+    }
+    if (p.type === 'battery' && sim.shortIds.includes(p.id)) {
+      // 熱のしるし（ゆらゆら線）と「あつい！」
+      const q = toBoard(p, 0, 0);
+      [-24, 0, 24].forEach(dx => el('path', { d: `M ${q.x + dx} ${q.y - 34} q 6 -7 0 -14 q -6 -7 0 -14`, fill: 'none', stroke: '#c62828', 'stroke-width': 3, 'stroke-linecap': 'round', class: 'heat' }, L.part));
+      el('text', { x: q.x, y: q.y - 70, 'text-anchor': 'middle', 'font-size': 18, 'font-weight': 'bold', fill: '#c62828', stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke', 'pointer-events': 'none' }, L.part).textContent = '⚠ あつい！';
+    }
+    // 電流のつぶの道（部品の中）
+    const I = sim.current.get(p.id) || 0;
+    if (Math.abs(I) > FLOW_MIN) {
+      const path = el('path', { d: def.flow, fill: 'none', stroke: 'none' }, L.flow);   // 部品の中の座標のまま
+      addFlow(path, I, p);
+    }
+  });
+
+  // ---- どう線 ----
+  bd.wires.forEach(w => {
+    const p1 = termPos(bd, w.a), p2 = termPos(bd, w.b), d = wirePath(p1, p2);
+    const selected = S.sel && S.sel.kind === 'wire' && S.sel.id === w.id;
+    if (selected) el('path', { d, fill: 'none', stroke: '#ef6c00', 'stroke-width': 13, 'stroke-dasharray': '8 5', 'stroke-linecap': 'round' }, L.wire);
+    el('path', { d, fill: 'none', stroke: '#455a64', 'stroke-width': 6, 'stroke-linecap': 'round' }, L.wire);
+    el('path', { d, fill: 'none', stroke: '#90a4ae', 'stroke-width': 2, 'stroke-linecap': 'round' }, L.wire);
+    const I = sim.current.get(w.id) || 0;
+    if (Math.abs(I) > FLOW_MIN) addFlow(el('path', { d, fill: 'none', stroke: 'none' }, L.flow), I, null);
+  });
+
+  // ---- たんし（さわると、どう線が引ける） ----
+  bd.parts.forEach(p => PARTS[p.type].terms.forEach(([k, lx, ly]) => {
+    const q = toBoard(p, lx, ly);
+    el('circle', { cx: q.x, cy: q.y, r: 10, fill: '#cfd8dc', stroke: '#455a64', 'stroke-width': 3 }, L.term);
+    el('circle', { cx: q.x, cy: q.y, r: 3.5, fill: '#455a64' }, L.term);
+    if (p.type === 'battery') {   // ＋極・−極の名前（たんしの外がわ）
+      const o = toBoard(p, lx * 1.32, ly);
+      el('text', { x: o.x, y: o.y + 8, 'text-anchor': 'middle', 'font-size': 22, 'font-weight': 'bold', fill: '#263238', stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke', 'pointer-events': 'none' }, L.term).textContent = k === '+' ? '＋' : '−';
+    }
+  }));
+
+  drawHints();
+  updateStatus();
+  updateButtons();
+  ensureAnim();
+  if (S.tab === 't2') checkRecord();
+}
+
+// 電流のつぶを用意する（I＞0 なら a→b の向き）
+function addFlow(path, I, part) {
+  const len = path.getTotalLength();
+  if (!(len > 1)) return;
+  const ratio = Math.min(Math.abs(I) / I_NOM, 5);
+  const v = Math.sign(I) * 55 * Math.max(0.35, ratio);    // 電流が大きいほど速い（ショートはとても速い）
+  const gap = 26, n = Math.max(1, Math.floor(len / gap));
+  const dots = [];
+  for (let i = 0; i < n; i++) dots.push(el('circle', { r: 5, fill: '#ffd600', stroke: '#e65100', 'stroke-width': 1.5 }, L.flow));
+  flows.push({ path, len, v, dots, part, step: len / n, off: Math.random() * gap });
+}
+
+// ヒント（行き止まりのたんしなどに「？」の印）
+function drawHints() {
+  if (!S.hintOn || !diag) return;
+  const bd = B();
+  const mark = (x, y) => {
+    el('circle', { cx: x, cy: y, r: 20, fill: 'none', stroke: '#ef6c00', 'stroke-width': 4, 'stroke-dasharray': '6 4', class: 'pulse' }, L.hint);
+    el('text', { x: x, y: y - 26, 'text-anchor': 'middle', 'font-size': 24, 'font-weight': 'bold', fill: '#ef6c00', stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke' }, L.hint).textContent = '？';
+  };
+  diag.terminals.forEach(t => { const q = termPos(bd, t); mark(q.x, q.y); });
+  if (diag.kind === 'switchOff' || diag.kind === 'blocked') {
+    diag.ids.forEach(id => { const p = bd.parts.find(q => q.id === id); if (p) mark(p.x, p.y - (p.type === 'gap' ? 6 : 0)); });
+  }
+}
+
+// じょうたいの表示
+function updateStatus() {
+  const st = $('status'), bd = B();
+  st.className = 'status';
+  const bulbN = bd.parts.filter(p => p.type === 'bulb').length;
+  const gp = bd.parts.find(p => p.type === 'gap');
+  const it = gp && gp.item ? itemById(gp.item) : null;
+  const k = diag.kind;
+  let t;
+  if (k === 'short') {
+    st.classList.add('danger');
+    t = '⚠ あぶない！<ruby>電池<rt>でんち</rt></ruby>が<ruby>熱<rt>あつ</rt></ruby>くなるよ。<ruby>豆電球<rt>まめでんきゅう</rt></ruby>を<ruby>通<rt>とお</rt></ruby>らずに、かん<ruby>電池<rt>でんち</rt></ruby>の＋と−が<ruby>直<rt>ちょく</rt></ruby><ruby>接<rt>せつ</rt></ruby>つながっている（ショート<ruby>回路<rt>かいろ</rt></ruby>）。すぐにどう<ruby>線<rt>せん</rt></ruby>をはずそう！';
+  } else if (k === 'ok') {
+    st.classList.add('lit');
+    const max = Math.max(...diag.sim.brightness.values());
+    t = '💡 ついた！ かん<ruby>電池<rt>でんち</rt></ruby>の＋<ruby>極<rt>きょく</rt></ruby>から<ruby>豆電球<rt>まめでんきゅう</rt></ruby>を<ruby>通<rt>とお</rt></ruby>って−<ruby>極<rt>きょく</rt></ruby>まで、1つの<ruby>輪<rt>わ</rt></ruby>になっているね。';
+    if (S.tab === 't2' && it) t = '💡 ついた！ <b>' + it.name.replace('<br>', '') + '</b>は、<ruby>電気<rt>でんき</rt></ruby>を<ruby>通<rt>とお</rt></ruby>す。（' + it.matR.replace('<br>', '') + '）';
+    else if (max < 0.6) t += '（ちょっと<ruby>暗<rt>くら</rt></ruby>いね）';
+    else if (max > 1.6) t += '（とても<ruby>明<rt>あか</rt></ruby>るい！）';
+  } else if (k === 'noSource') {
+    t = '<ruby>部品<rt>ぶひん</rt></ruby><ruby>箱<rt>ばこ</rt></ruby>から、かん<ruby>電池<rt>でんち</rt></ruby>をじっけん<ruby>台<rt>だい</rt></ruby>にドラッグしておこう。';
+  } else if (k === 'noLoad') {
+    t = '<ruby>部品<rt>ぶひん</rt></ruby><ruby>箱<rt>ばこ</rt></ruby>から、<ruby>豆電球<rt>まめでんきゅう</rt></ruby>をじっけん<ruby>台<rt>だい</rt></ruby>にドラッグしておこう。';
+  } else if (bd.wires.length === 0) {
+    t = 'たんし（●）をタッチして、べつのたんしまで<ruby>指<rt>ゆび</rt></ruby>でなぞると、どう<ruby>線<rt>せん</rt></ruby>が<ruby>引<rt>ひ</rt></ruby>けるよ。';
+  } else if (k === 'switchOff') {
+    t = 'スイッチが「<ruby>切<rt>きり</rt></ruby>」になっているよ。スイッチをタッチして「<ruby>入<rt>いり</rt></ruby>」にしてみよう。';
+  } else if (k === 'blocked' && S.tab === 't2' && !it) {
+    t = '<ruby>調<rt>しら</rt></ruby>べる<ruby>物<rt>もの</rt></ruby>を、クリップのあいだにはさもう。';
+  } else if (k === 'blocked' && it) {
+    t = 'つかない… <b>' + it.name.replace('<br>', '') + '</b>は、<ruby>電気<rt>でんき</rt></ruby>を<ruby>通<rt>とお</rt></ruby>さないようだ。（' + it.matR.replace('<br>', '') + '）';
+  } else if (S.hintOn) {
+    st.classList.add('hint');
+    if (k === 'bypassed') {
+      const pole = bypassPole();
+      t = '<ruby>豆電球<rt>まめでんきゅう</rt></ruby>から<ruby>出<rt>で</rt></ruby>ている2本の<ruby>線<rt>せん</rt></ruby>が、' + (pole ? 'どちらもかん<ruby>電池<rt>でんち</rt></ruby>の' + pole + '<ruby>極<rt>きょく</rt></ruby>に' : 'どう<ruby>線<rt>せん</rt></ruby>だけで') + 'つながっているよ。1本は＋<ruby>極<rt>きょく</rt></ruby>、もう1本は−<ruby>極<rt>きょく</rt></ruby>につなごう。';
+    } else if (k === 'open') {
+      t = '「？」のたんしが、どこにもつながっていないよ。<ruby>電気<rt>でんき</rt></ruby>の<ruby>通<rt>とお</rt></ruby>り<ruby>道<rt>みち</rt></ruby>が<ruby>切<rt>き</rt></ruby>れているね。';
+    } else {
+      t = 'かん<ruby>電池<rt>でんち</rt></ruby>の＋<ruby>極<rt>きょく</rt></ruby>から、<ruby>豆電球<rt>まめでんきゅう</rt></ruby>を<ruby>通<rt>とお</rt></ruby>って−<ruby>極<rt>きょく</rt></ruby>までもどる、1つの<ruby>輪<rt>わ</rt></ruby>になっているかな？ ' + (bd.parts.filter(p => p.type === 'battery').length > 1 ? 'かん<ruby>電池<rt>でんち</rt></ruby>の<ruby>向<rt>む</rt></ruby>きも<ruby>見<rt>み</rt></ruby>てみよう。' : '');
+    }
+  } else {
+    t = 'まだつかないね。どこが<ruby>切<rt>き</rt></ruby>れているかな？（こまったら「🔍 ヒント」）';
+  }
+  if (k === 'ok' && bulbN > 1 && diag.sim.brightness.size && [...diag.sim.brightness.values()].some(b => b <= 0.05)) t += ' つかない<ruby>豆電球<rt>まめでんきゅう</rt></ruby>もあるね。';
+  st.innerHTML = t;
+}
+// 豆電球の2本が、どちらも同じ極につながっているとき、その極（'＋'／'−'）
+function bypassPole() {
+  const bd = B(), lb = bd.parts.find(p => p.id === diag.ids[0]);
+  if (!lb) return '';
+  const c = toCircuit(bd);
+  for (const bt of bd.parts.filter(p => p.type === 'battery')) {
+    if (connectedByWire(c, tname(lb, 0), tname(bt, 1))) return '＋';
+    if (connectedByWire(c, tname(lb, 0), tname(bt, 0))) return '−';
+  }
+  return '';
+}
+// 2つのたんしが、どう線（とスイッチ・電気を通す物）だけでつながっているか
+function connectedByWire(c, from, to) {
+  const adj = new Map();
+  c.elements.forEach(e => {
+    const m = CircuitEngine.model(e);
+    if (!m || m.emf || CircuitEngine.isLoad(e) || m.R > 0.05) return;
+    [[e.a, e.b], [e.b, e.a]].forEach(([x, y]) => { if (!adj.has(x)) adj.set(x, []); adj.get(x).push(y); });
+  });
+  const seen = new Set([from]), q = [from];
+  while (q.length) { const x = q.shift(); if (x === to) return true; (adj.get(x) || []).forEach(y => { if (!seen.has(y)) { seen.add(y); q.push(y); } }); }
+  return false;
+}
+
+function updateButtons() {
+  const bd = B();
+  const sp = S.sel && S.sel.kind === 'part' ? bd.parts.find(p => p.id === S.sel.id) : null;
+  $('btnRot').disabled = !sp;
+  $('btnDel').disabled = !S.sel || (sp && sp.type === 'gap');
+  document.querySelectorAll('.pbtn').forEach(b => {
+    const type = b.dataset.type;
+    b.disabled = bd.parts.filter(p => p.type === type).length >= PARTS[type].max;
+  });
+  $('btnHint').classList.toggle('active', S.hintOn);
+}
+
+// =====================================================================
+// 電流のつぶを動かす（流れているときだけ）
+// =====================================================================
+let animOn = false, lastT = 0;
+// つぶを道の上にならべる（部品の中の道は、部品の向きに合わせてじっけん台の座標になおす）
+function placeDots(f) {
+  f.dots.forEach((d, i) => {
+    let pt = f.path.getPointAtLength((f.off + i * f.step) % f.len);
+    if (f.part) pt = toBoard(f.part, pt.x, pt.y);
+    d.setAttribute('cx', pt.x); d.setAttribute('cy', pt.y);
+  });
+}
+function frame(t) {
+  if (!S.flowOn || !flows.length) { animOn = false; return; }
+  const dt = Math.min((t - lastT) / 1000, 0.1); lastT = t;
+  flows.forEach(f => {
+    f.off = ((f.off + f.v * S.speed * dt) % f.len + f.len) % f.len;
+    placeDots(f);
+  });
+  requestAnimationFrame(frame);
+}
+function ensureAnim() {
+  L.flow.style.display = S.flowOn ? '' : 'none';
+  if (!S.flowOn) return;
+  flows.forEach(placeDots);   // 止まっていても、つぶを1回ならべておく
+  if (!animOn && flows.length) { animOn = true; lastT = performance.now(); requestAnimationFrame(frame); }
+}
+
+// =====================================================================
+// じっけん台のさわり方（マウスでもタッチでも動くように pointer events を使う）
+// =====================================================================
+let act = null;   // いまの操作 { kind:'wire'|'part', ... }
+// たんしのさわれる大きさ（画面が小さいときは大きくする）
+const hitR = () => Math.min(34, Math.max(22, 22 * BW / svg.getBoundingClientRect().width * 0.75));
+function nearestTerm(bd, pt, except) {
+  let best = null;
+  bd.parts.forEach(p => PARTS[p.type].terms.forEach((t, i) => {
+    const name = tname(p, i);
+    if (name === except) return;
+    const q = toBoard(p, t[1], t[2]), d = Math.hypot(q.x - pt.x, q.y - pt.y);
+    if (d <= hitR() && (!best || d < best.d)) best = { name, d, q };
+  }));
+  return best;
+}
+function partAt(bd, pt) {
+  for (let i = bd.parts.length - 1; i >= 0; i--) {
+    const p = bd.parts[i], [hx, hy, hw, hh] = PARTS[p.type].hit;
+    // 部品の中の座標にもどして、はんいの中か調べる
+    const r = -p.rot * Math.PI / 180, c = Math.round(Math.cos(r)), s = Math.round(Math.sin(r));
+    const dx = pt.x - p.x, dy = pt.y - p.y, lx = dx * c - dy * s, ly = dx * s + dy * c;
+    if (lx >= hx && lx <= hx + hw && ly >= hy && ly <= hy + hh) return p;
+  }
+  return null;
+}
+function wireAt(bd, pt) {
+  let best = null;
+  bd.wires.forEach(w => {
+    const p1 = termPos(bd, w.a), p2 = termPos(bd, w.b);
+    for (let i = 0; i <= 24; i++) {
+      const q = wirePointAt(p1, p2, i / 24), d = Math.hypot(q.x - pt.x, q.y - pt.y);
+      if (d < 16 && (!best || d < best.d)) best = { w, d };
+    }
+  });
+  return best && best.w;
+}
+// 部品がじっけん台からはみ出さないようにする
+function clampPart(p) {
+  p.x = Math.max(40, Math.min(BW - 40, p.x));
+  p.y = Math.max(40, Math.min(BH - 30, p.y));
+}
+
+svg.addEventListener('pointerdown', e => {
+  if (act) return;
+  e.preventDefault();
+  const bd = B(), pt = svgPoint(e);
+  try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+  const t = nearestTerm(bd, pt);
+  if (t) { act = { kind: 'wire', from: t.name, start: t.q }; return; }
+  const p = partAt(bd, pt);
+  if (p) { act = { kind: 'part', p, dx: p.x - pt.x, dy: p.y - pt.y, sx: pt.x, sy: pt.y, moved: false, out: false }; return; }
+  const w = wireAt(bd, pt);
+  S.sel = w ? { kind: 'wire', id: w.id } : null;
+  render();
+});
+svg.addEventListener('pointermove', e => {
+  if (!act) return;
+  const bd = B(), pt = svgPoint(e);
+  if (act.kind === 'wire') {
+    L.temp.textContent = '';
+    const tg = nearestTerm(bd, pt, act.from);
+    const end = tg ? tg.q : pt;
+    el('path', { d: wirePath(act.start, end), fill: 'none', stroke: '#455a64', 'stroke-width': 6, 'stroke-dasharray': '10 6', 'stroke-linecap': 'round', opacity: 0.7 }, L.temp);
+    if (tg) el('circle', { cx: tg.q.x, cy: tg.q.y, r: 18, fill: 'none', stroke: '#2e7d32', 'stroke-width': 4 }, L.temp);
+  } else if (act.kind === 'part') {
+    if (!act.moved && Math.hypot(pt.x - act.sx, pt.y - act.sy) < 6) return;
+    act.moved = true;
+    act.p.x = pt.x + act.dx; act.p.y = pt.y + act.dy;
+    clampPart(act.p);
+    act.out = !pt.inside && act.p.type !== 'gap';   // じっけん台の外に出したら、とりのぞく
+    $('boardWrap').classList.toggle('out', act.out);
+    $('trashTip').classList.toggle('hidden', !act.out);
+    render();
+  }
+});
+function endAct(e) {
+  if (!act) return;
+  const bd = B(), a = act;
+  act = null;
+  L.temp.textContent = '';
+  $('boardWrap').classList.remove('out'); $('trashTip').classList.add('hidden');
+  if (a.kind === 'wire') {
+    const tg = e.type === 'pointerup' ? nearestTerm(bd, svgPoint(e), a.from) : null;
+    if (tg) { addWire(bd, a.from, tg.name); S.hintOn = false; }
+  } else if (a.kind === 'part') {
+    if (a.out) removePart(a.p);
+    else if (!a.moved) {
+      // タッチだけ：スイッチは「入」「切」が切りかわる。ほかの部品はえらぶ
+      if (a.p.type === 'switch') a.p.on = !a.p.on;
+      else if (a.p.type === 'gap' && a.p.item) returnItem();
+      S.sel = { kind: 'part', id: a.p.id };
+    }
+  }
+  render();
+}
+svg.addEventListener('pointerup', endAct);
+svg.addEventListener('pointercancel', endAct);
+
+function removePart(p) {
+  const bd = B();
+  if (p.type === 'gap') return;
+  bd.parts = bd.parts.filter(q => q !== p);
+  bd.wires = bd.wires.filter(w => !w.a.startsWith(p.id + ':') && !w.b.startsWith(p.id + ':'));
+  S.sel = null;
+}
+
+// ---- 部品箱からドラッグしておく（タッチだけなら、あいている所におく） ----
+let pal = null;
+document.querySelectorAll('.pbtn').forEach(b => b.addEventListener('pointerdown', e => {
+  if (b.disabled) return;
+  e.preventDefault();
+  try { b.setPointerCapture(e.pointerId); } catch (_) {}
+  const gh = document.createElement('div');
+  gh.className = 'ghost hidden';
+  gh.innerHTML = b.querySelector('svg').outerHTML;
+  document.body.appendChild(gh);
+  pal = { type: b.dataset.type, gh, sx: e.clientX, sy: e.clientY, moved: false };
+}));
+document.addEventListener('pointermove', e => {
+  if (!pal) return;
+  if (!pal.moved && Math.hypot(e.clientX - pal.sx, e.clientY - pal.sy) < 6) return;
+  pal.moved = true;
+  pal.gh.classList.remove('hidden');
+  pal.gh.style.left = e.clientX + 'px'; pal.gh.style.top = e.clientY + 'px';
+});
+function endPal(e) {
+  if (!pal) return;
+  const a = pal; pal = null;
+  a.gh.remove();
+  if (e.type !== 'pointerup') return;
+  const bd = B();
+  let x, y;
+  if (a.moved) {
+    const pt = svgPoint(e);
+    if (!pt.inside) return;
+    x = pt.x; y = pt.y;
+  } else {
+    // あいている所をさがす（ほかの部品から、いちばんはなれた所）
+    let best = null;
+    for (let gy = 70; gy <= BH - 60; gy += 30) for (let gx = 90; gx <= BW - 90; gx += 30) {
+      const d = Math.min(...bd.parts.map(p => Math.hypot((p.x - gx) * 0.8, p.y - gy)), 9999);
+      if (!best || d > best.d) best = { d, gx, gy };
+    }
+    x = best.gx; y = best.gy;
+  }
+  const p = addPart(bd, a.type, x, y);
+  clampPart(p);
+  S.sel = { kind: 'part', id: p.id };
+  render();
+}
+document.addEventListener('pointerup', endPal);
+document.addEventListener('pointercancel', endPal);
+
+// ---- ボタン ----
+$('btnRot').addEventListener('click', () => {
+  const p = S.sel && B().parts.find(q => q.id === S.sel.id);
+  if (!p) return;
+  p.rot = (p.rot + 90) % 360;
+  render();
+});
+$('btnDel').addEventListener('click', () => {
+  const bd = B();
+  if (!S.sel) return;
+  if (S.sel.kind === 'wire') bd.wires = bd.wires.filter(w => w.id !== S.sel.id);
+  else { const p = bd.parts.find(q => q.id === S.sel.id); if (p) removePart(p); }
+  S.sel = null;
+  render();
+});
+$('btnHint').addEventListener('click', () => { S.hintOn = !S.hintOn; render(); });
+function resetTab() {
+  if (S.tab === 't1') S.boards.t1 = PRESETS.start();
+  else { returnItem(); S.boards.t2 = PRESETS.checker(); }
+  S.sel = null; S.hintOn = false;
+  render();
+}
+$('btnReset').addEventListener('click', resetTab);
+$('btnReset2').addEventListener('click', resetTab);
+document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
+  S.boards.t1 = PRESETS[b.dataset.preset]();
+  S.sel = null; S.hintOn = false;
+  render();
+}));
+$('btnFlow').addEventListener('click', e => {
+  S.flowOn = !S.flowOn;
+  e.currentTarget.classList.toggle('active', S.flowOn);
+  e.currentTarget.innerHTML = R('電流', 'でんりゅう') + 'のつぶ ' + (S.flowOn ? 'ON' : 'OFF');
+  ensureAnim();
+});
+document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => {
+  S.speed = +b.dataset.speed;
+  document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('active', x === b));
+}));
+
+// ---- タブ ----
+const HOWTO = {
+  t1: '【つかい<ruby>方<rt>かた</rt></ruby>】<ruby>部品<rt>ぶひん</rt></ruby><ruby>箱<rt>ばこ</rt></ruby>から<ruby>部品<rt>ぶひん</rt></ruby>をドラッグしておく。たんし（●）をタッチして、べつのたんしまでなぞると、どう<ruby>線<rt>せん</rt></ruby>が<ruby>引<rt>ひ</rt></ruby>ける。<ruby>部品<rt>ぶひん</rt></ruby>やどう<ruby>線<rt>せん</rt></ruby>をタッチしてえらぶと「<ruby>回<rt>まわ</rt></ruby>す」「とる」が<ruby>使<rt>つか</rt></ruby>える。<ruby>部品<rt>ぶひん</rt></ruby>をじっけん<ruby>台<rt>だい</rt></ruby>の<ruby>外<rt>そと</rt></ruby>までドラッグしても、とりのぞける。スイッチはタッチで「<ruby>入<rt>いり</rt></ruby>」「<ruby>切<rt>きり</rt></ruby>」が<ruby>切<rt>き</rt></ruby>りかわる。',
+  t2: '【つかい<ruby>方<rt>かた</rt></ruby>】<ruby>予想<rt>よそう</rt></ruby>のボタンをおしてから、<ruby>調<rt>しら</rt></ruby>べる<ruby>物<rt>もの</rt></ruby>をクリップのあいだにドラッグする（タッチだけでもはさめる）。はさんだ<ruby>物<rt>もの</rt></ruby>をタッチすると、もとにもどる。<ruby>調<rt>しら</rt></ruby>べた<ruby>結果<rt>けっか</rt></ruby>は、ワークシートに<ruby>自動<rt>じどう</rt></ruby>で<ruby>記録<rt>きろく</rt></ruby>される。'
+};
+function setTab(tab) {
+  S.tab = tab; S.sel = null; S.hintOn = false;
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $('itemCard').classList.toggle('hidden', tab !== 't2');
+  $('presetRow').classList.toggle('hidden', tab !== 't1');
+  $('figTitle').innerHTML = tab === 't1'
+    ? '<ruby>部品<rt>ぶひん</rt></ruby><ruby>箱<rt>ばこ</rt></ruby>　（ドラッグして、じっけん<ruby>台<rt>だい</rt></ruby>におこう）'
+    : 'じっけん<ruby>台<rt>だい</rt></ruby>　（クリップのあいだに<ruby>物<rt>もの</rt></ruby>をはさむと、<ruby>電気<rt>でんき</rt></ruby>を<ruby>通<rt>とお</rt></ruby>すか<ruby>調<rt>しら</rt></ruby>べられる）';
+  $('palette').classList.toggle('hidden', tab !== 't1');
+  $('howto').innerHTML = HOWTO[tab];
+  render();
+}
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+
+// =====================================================================
+// ② 電気を通す物しらべ
+// =====================================================================
+const itemEl = {};
+let dragItem = null;
+function buildItems() {
+  ITEMS.forEach(it => {
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.setAttribute('role', 'button');
+    d.setAttribute('aria-label', it.text);
+    d.innerHTML = '<svg viewBox="0 0 64 52" aria-hidden="true">' + ICON[it.id] + '</svg><div class="nm">' + it.name + '</div><div class="mat"></div>';
+    itemEl[it.id] = d;
+    d.addEventListener('pointerdown', e => startItemDrag(e, it, d));
+    $('tray').appendChild(d);
+  });
+  refreshItems();
+}
+function refreshItems() {
+  const gp = S.boards.t2.parts.find(p => p.type === 'gap');
+  ITEMS.forEach(it => {
+    const d = itemEl[it.id];
+    d.classList.toggle('inslot', !!(gp && gp.item === it.id));
+    let bdg = d.querySelector('.badge');
+    if (S.tested[it.id] != null) {
+      if (!bdg) { bdg = document.createElement('span'); d.appendChild(bdg); }
+      bdg.className = 'badge ' + (S.tested[it.id] ? 'yes' : 'no');
+      bdg.textContent = S.tested[it.id] ? '💡 つく' : 'つかない';
+    } else if (bdg) bdg.remove();
+    d.querySelector('.mat').innerHTML = (TEACHER || S.tested[it.id] != null) ? '（' + it.matR + '）' : '';
+  });
+}
+function gapPart() { return S.boards.t2.parts.find(p => p.type === 'gap'); }
+function putItem(id) {
+  const gp = gapPart();
+  if (!gp) return;
+  gp.item = id;
+  refreshItems();
+  render();
+}
+function returnItem() {
+  const gp = gapPart();
+  if (gp) gp.item = null;
+  refreshItems();
+}
+function overSlot(e) {
+  const gp = gapPart(), pt = svgPoint(e);
+  return gp && pt.inside && Math.hypot(pt.x - gp.x, pt.y - gp.y) < 90;
+}
+function startItemDrag(e, it, d) {
+  if (dragItem) return;
+  e.preventDefault();
+  const r = d.getBoundingClientRect();
+  dragItem = { it, d, ox: e.clientX - r.left, oy: e.clientY - r.top, sx: e.clientX, sy: e.clientY, moved: false, w: r.width, overSlot: false };
+  try { d.setPointerCapture(e.pointerId); } catch (_) {}
+}
+document.addEventListener('pointermove', e => {
+  const g = dragItem;
+  if (!g) return;
+  if (!g.moved && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < 6) return;
+  if (!g.moved) { g.moved = true; g.d.style.width = g.w + 'px'; g.d.classList.add('dragging'); }
+  g.d.style.left = (e.clientX - g.ox) + 'px';
+  g.d.style.top = (e.clientY - g.oy) + 'px';
+  const o = overSlot(e);
+  if (o !== g.overSlot) { g.overSlot = o; render(); }
+});
+function endItemDrag(e) {
+  const g = dragItem;
+  if (!g) return;
+  dragItem = null;
+  g.d.classList.remove('dragging'); g.d.removeAttribute('style');
+  if (e.type !== 'pointerup') { render(); return; }
+  const gp = gapPart();
+  if (!g.moved) {
+    // タッチだけ：はさむ（はさんでいる物なら、もどす）
+    if (gp && gp.item === g.it.id) { returnItem(); render(); } else putItem(g.it.id);
+  } else if (overSlot(e)) putItem(g.it.id);
+  else render();
+}
+document.addEventListener('pointerup', endItemDrag);
+document.addEventListener('pointercancel', endItemDrag);
+
+// 予想ボタン
+document.querySelectorAll('[data-pred]').forEach(b => b.addEventListener('click', () => {
+  S.pred = S.pred === b.dataset.pred ? null : b.dataset.pred;
+  document.querySelectorAll('[data-pred]').forEach(x => x.classList.toggle('active', x.dataset.pred === S.pred));
+}));
+
+// 回路がつながっていて、物をはさんだら、結果を記録する（1つの物につき1回）
+function checkRecord() {
+  const gp = gapPart();
+  if (!gp || !gp.item || S.tested[gp.item] != null) return;
+  // 「電気を通す物をはさんだら、つく回路か」を確かめてから記録する（回路が切れていたら記録しない）
+  const c = toCircuit(S.boards.t2);
+  c.elements.forEach(x => { if (x.type === 'gap') x.conductor = true; });
+  const s = CircuitEngine.solve(c);
+  if (!s.lit || s.short) return;
+  const it = itemById(gp.item);
+  S.tested[it.id] = it.cond;
+  Worksheet.addRecord({ obj: it.text, mat: it.mat, pred: S.pred || '', res: it.cond ? 'つく' : 'つかない' });
+  S.pred = null;
+  document.querySelectorAll('[data-pred]').forEach(x => x.classList.remove('active'));
+  refreshItems();
+}
+
+// ===== はじめる =====
+buildItems();
+// 前に調べた物は、ワークシートの記録から「調べた」しるしをつける
+Worksheet.getRecords().forEach(r => { const it = ITEMS.find(x => x.text === r.obj); if (it) S.tested[it.id] = it.cond; });
+refreshItems();
+setTab('t1');
+window.addEventListener('resize', () => render());
+</script>
+
+</body>
+</html>

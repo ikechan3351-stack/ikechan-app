@@ -40,6 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - 1つのシミュレーションは `science/` の中の1つの HTML ファイルにする（例: `science/ふりこの実験.html`）。CSS と JS も同じファイルの中に書く。今の教材と同じ形。
 - ただし、ワークシート部品だけは共通ファイルにする: `science/worksheet.js` と `science/worksheet.css`。各シミュレーションからは `<script src="worksheet.js">` で読みこむ。
+- 回路のつながりの判定（電流の計算・ショートの判定・つかない理由）も共通ファイルにする: `science/circuit-engine.js`。電気の単元（3年「電気の通り道」・4年「電流のはたらき」・6年「電気の利用」など）では `<script src="circuit-engine.js">` で読みこんで使い回す。部品の種類は `CircuitEngine.defineType()` で足せる。共通ファイルを直したら、使っている教材ぜんぶで動作を確かめる。
 - 外部ライブラリ・CDN・画像ファイルは使わない（学校のネットワーク制限やオフラインでも動くように）。絵は Canvas か SVG でコードで描く。
 - ファイル名は子ども向けの日本語にする。アドレスに `game`・`battle` を入れない（学校のフィルターで止まる）。
 - 「もどる」リンクは `../index.html`。説明書は `science/○○_README.md` として同じフォルダに置く。
