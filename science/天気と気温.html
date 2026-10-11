@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>天気と気温</title>
+<!--
+  天気と気温（小学4年 理科「天気の様子」）
+  ・① 雲と天気：見上げた空の絵。空全体を10として、雲の量が0〜8なら晴れ、9〜10ならくもり。
+      雨がふっていれば、雲の量に関係なく雨。雲の量のスライダーで、雲と天気記号が変わる。
+      「もんだい」で、ランダムな空を見て晴れ・くもりを答える練習ができる。
+  ・② 気温の変化：晴れ・くもり・雨の日の気温（教育用の典型的なデータ）を、
+      1時間ごとに「はかる」と記録して、折れ線グラフにする。3つの日の線をかさねてくらべられる。
+      はかり方は「自動」（数字が出る）と「目もりを読む」（温度計を読んで入れる）からえらべる。
+  ・③ 気温のはかり方：百葉箱の絵をタップして、はかる場所のくふうを見つける。温度計の目もりを読むクイズ（10問）。
+  ・しくみ：雲の量は、空の円の中で雲がしめる広さを、画面の点の数で数えています。
+      気温のデータは下の「気温のデータ」で変えられます。
+  ・ワークシート部品（worksheet.js）を使っています。② で「はかる」と、時刻・天気・気温を記録します。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+
+  /* タブ */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .tab {
+    min-height: 48px; border: 3px solid #aed581; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 4px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .tab.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+
+  canvas { display: block; width: 100%; touch-action: none; border-radius: 8px; }
+  #cv { aspect-ratio: 640 / 400; }
+  /* ② は景色とグラフを横にならべる（せまい画面では、たてにならぶ） */
+  .stage { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .stage > div { flex: 380 1 240px; min-width: 0; max-width: 420px; }
+  .stage > div.gwrap { flex: 360 1 280px; max-width: none; }
+  #scv { aspect-ratio: 380 / 380; }
+  #gcv { aspect-ratio: 360 / 380; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 16px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.blue { background: #1565c0; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn:disabled, .chip:disabled { opacity: 0.4; cursor: default; }
+  .lbl { font-size: 16px; color: #555; font-weight: bold; }
+  .msg { min-height: 3em; line-height: 1.5; text-align: center; font-weight: bold; color: #1565c0; margin-top: 6px; display: flex; align-items: center; justify-content: center; }
+  .diff { font-size: 15px; color: #666; margin: 4px 0 0; }
+  .hint { font-size: 15px; color: #777; text-align: center; margin: 2px 0 0; }
+  .clock { font-size: 1.3rem; font-weight: bold; color: #bf360c; min-width: 5.5em; text-align: center; }
+  .summary { font-size: 16px; font-weight: bold; color: #333; text-align: center; margin-top: 4px; line-height: 1.6; }
+  .hidden { display: none !important; }
+
+  /* スライダー（指でもつかみやすく大きく） */
+  input[type=range] { width: min(360px, 70vw); height: 44px; accent-color: #558b2f; }
+  .big { font-size: 1.4rem; font-weight: bold; color: #33691e; min-width: 2em; text-align: center; }
+  /* 目もりを読んで入れるところ */
+  .readbox { background: #fff8e1; border: 3px solid #f9a825; border-radius: 12px; padding: 6px 10px; }
+  .readval { font-size: 1.5rem; font-weight: bold; color: #bf360c; min-width: 3.5em; text-align: center; }
+  /* クイズの答えのボタン */
+  .ans { min-width: 5.5em; }
+  .ans.ok { background: #2e7d32; border-color: #2e7d32; color: #fff; }
+  .ans.ng { background: #fff; border-color: #c62828; color: #c62828; text-decoration: line-through; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>⛅ <ruby>天気<rt>てんき</rt></ruby>と<ruby>気温<rt>きおん</rt></ruby></h1>
+<p class="subtitle"><ruby>空<rt>そら</rt></ruby>の<ruby>雲<rt>くも</rt></ruby>と、1<ruby>日<rt>にち</rt></ruby>の<ruby>気温<rt>きおん</rt></ruby>の<ruby>変<rt>か</rt></ruby>わり<ruby>方<rt>かた</rt></ruby>をしらべよう</p>
+
+<div class="panel">
+  <div class="tabs">
+    <button class="tab active" data-tab="sky">☁ ① <ruby>雲<rt>くも</rt></ruby>と<ruby>天気<rt>てんき</rt></ruby></button>
+    <button class="tab" data-tab="temp">📈 ② <ruby>気温<rt>きおん</rt></ruby>の<ruby>変化<rt>へんか</rt></ruby></button>
+    <button class="tab" data-tab="how">🌡 ③ <ruby>気温<rt>きおん</rt></ruby>のはかり<ruby>方<rt>かた</rt></ruby></button>
+  </div>
+
+  <div class="card">
+    <!-- ①・③ の絵 -->
+    <canvas id="cv" aria-label="空のようす"></canvas>
+    <!-- ② の絵とグラフ -->
+    <div class="stage hidden" id="stage">
+      <div><canvas id="scv" aria-label="校庭と百葉箱のようす"></canvas></div>
+      <div class="gwrap"><canvas id="gcv" aria-label="気温と時刻のグラフ"></canvas></div>
+    </div>
+    <div class="msg" id="msg">&nbsp;</div>
+
+    <!-- ① 雲と天気の操作 -->
+    <div id="ctlSky">
+      <div class="row">
+        <span class="lbl"><ruby>雲<rt>くも</rt></ruby>の<ruby>量<rt>りょう</rt></ruby></span>
+        <input type="range" id="cloud" min="0" max="10" step="1" value="3" aria-label="雲の量">
+        <span class="big" id="cloudNum">3</span>
+      </div>
+      <div class="row">
+        <button class="chip" id="btnRain">☂ <ruby>雨<rt>あめ</rt></ruby> OFF</button>
+        <button class="chip" id="btnGrid">◔ マス<ruby>目<rt>め</rt></ruby>を<ruby>出<rt>だ</rt></ruby>す</button>
+        <button class="go-btn sub" id="btnNewSky"><ruby>新<rt>あたら</rt></ruby>しい<ruby>空<rt>そら</rt></ruby></button>
+        <button class="go-btn blue" id="btnQuiz">❓ もんだい</button>
+      </div>
+      <div class="row hidden" id="quizSky">
+        <span class="lbl">この<ruby>空<rt>そら</rt></ruby>の<ruby>天気<rt>てんき</rt></ruby>は？</span>
+        <button class="chip ans" data-sky="晴れ">☀ <ruby>晴<rt>は</rt></ruby>れ</button>
+        <button class="chip ans" data-sky="くもり">☁ くもり</button>
+        <button class="go-btn hidden" id="btnNextSky">つぎのもんだい ▶</button>
+        <button class="go-btn sub" id="btnEndSky">おわる</button>
+      </div>
+    </div>
+
+    <!-- ② 気温の変化の操作 -->
+    <div id="ctlTemp" class="hidden">
+      <div class="row">
+        <span class="lbl"><ruby>天気<rt>てんき</rt></ruby></span>
+        <button class="chip active" data-w="晴れ">☀ <ruby>晴<rt>は</rt></ruby>れの<ruby>日<rt>ひ</rt></ruby></button>
+        <button class="chip" data-w="くもり">☁ くもりの<ruby>日<rt>ひ</rt></ruby></button>
+        <button class="chip" data-w="雨">☂ <ruby>雨<rt>あめ</rt></ruby>の<ruby>日<rt>ひ</rt></ruby></button>
+      </div>
+      <div class="row">
+        <button class="go-btn sub" id="btnPrev" aria-label="1時間もどす">◀</button>
+        <span class="clock" id="clock"><ruby>午前<rt>ごぜん</rt></ruby>9<ruby>時<rt>じ</rt></ruby></span>
+        <button class="go-btn sub" id="btnNext" aria-label="1時間すすめる">▶</button>
+        <button class="go-btn orange" id="btnMeasure">🌡 はかる</button>
+        <button class="go-btn" id="btnAutoRun">▶ <ruby>自動<rt>じどう</rt></ruby>で1<ruby>日<rt>にち</rt></ruby>はかる</button>
+      </div>
+      <div class="row readbox hidden" id="readBox">
+        <span class="lbl"><ruby>温度計<rt>おんどけい</rt></ruby>の<ruby>目<rt>め</rt></ruby>もりを<ruby>読<rt>よ</rt></ruby>もう</span>
+        <button class="go-btn sub" id="btnMinus" aria-label="1へらす">−</button>
+        <span class="readval" id="readVal">20℃</span>
+        <button class="go-btn sub" id="btnPlus" aria-label="1ふやす">＋</button>
+        <button class="go-btn orange" id="btnReadOk">これで<ruby>記録<rt>きろく</rt></ruby></button>
+      </div>
+      <div class="row">
+        <span class="lbl">はかり<ruby>方<rt>かた</rt></ruby></span>
+        <button class="chip active" data-mode="auto"><ruby>自動<rt>じどう</rt></ruby></button>
+        <button class="chip" data-mode="read"><ruby>目<rt>め</rt></ruby>もりを<ruby>読<rt>よ</rt></ruby>む</button>
+        <span class="lbl"><ruby>時間<rt>じかん</rt></ruby></span>
+        <button class="chip active" data-range="school"><ruby>午前<rt>ごぜん</rt></ruby>9<ruby>時<rt>じ</rt></ruby>〜<ruby>午後<rt>ごご</rt></ruby>3<ruby>時<rt>じ</rt></ruby></button>
+        <button class="chip" data-range="day"><ruby>朝<rt>あさ</rt></ruby>6<ruby>時<rt>じ</rt></ruby>〜<ruby>夕方<rt>ゆうがた</rt></ruby>6<ruby>時<rt>じ</rt></ruby></button>
+      </div>
+      <div class="row">
+        <span class="lbl"><ruby>自動<rt>じどう</rt></ruby>のはやさ</span>
+        <button class="chip" data-speed="2">ゆっくり</button>
+        <button class="chip active" data-speed="1">ふつう</button>
+        <button class="chip" data-speed="0.3">はやおくり</button>
+        <button class="chip active" id="btnHeat">☀ <ruby>熱<rt>ねつ</rt></ruby>の<ruby>矢印<rt>やじるし</rt></ruby> ON</button>
+        <button class="go-btn sub" id="btnResetT">もういちど</button>
+      </div>
+      <div class="summary" id="summary"></div>
+    </div>
+
+    <!-- ③ 気温のはかり方の操作 -->
+    <div id="ctlHow" class="hidden">
+      <div class="row" id="quizHow"></div>
+      <div class="row">
+        <button class="go-btn hidden" id="btnNextHow">つぎのもんだい ▶</button>
+        <button class="go-btn sub" id="btnResetHow">もういちど</button>
+      </div>
+      <p class="hint">左の<ruby>百葉箱<rt>ひゃくようばこ</rt></ruby>の<ruby>絵<rt>え</rt></ruby>をタップすると、はかる<ruby>場所<rt>ばしょ</rt></ruby>のくふうが<ruby>分<rt>わ</rt></ruby>かるよ</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="diff">※じっさいとのちがい：<ruby>気温<rt>きおん</rt></ruby>は、よくある<ruby>形<rt>かたち</rt></ruby>にした<ruby>学習用<rt>がくしゅうよう</rt></ruby>のデータです。<ruby>本当<rt>ほんとう</rt></ruby>の<ruby>日<rt>ひ</rt></ruby>は、<ruby>風<rt>かぜ</rt></ruby>や<ruby>雲<rt>くも</rt></ruby>の<ruby>動<rt>うご</rt></ruby>きで、もっとでこぼこします。<ruby>雲<rt>くも</rt></ruby>の<ruby>量<rt>りょう</rt></ruby>は、<ruby>空<rt>そら</rt></ruby>の<ruby>円<rt>えん</rt></ruby>の<ruby>中<rt>なか</rt></ruby>で<ruby>雲<rt>くも</rt></ruby>がしめる<ruby>広<rt>ひろ</rt></ruby>さで<ruby>決<rt>き</rt></ruby>めています。<ruby>雲<rt>くも</rt></ruby>の<ruby>量<rt>りょう</rt></ruby>が0〜1のときを「<ruby>快晴<rt>かいせい</rt></ruby>」と<ruby>分<rt>わ</rt></ruby>けることもあります。<ruby>雲<rt>くも</rt></ruby>の<ruby>動<rt>うご</rt></ruby>きと<ruby>天気<rt>てんき</rt></ruby>の<ruby>変<rt>か</rt></ruby>わり<ruby>方<rt>かた</rt></ruby>は、5<ruby>年<rt>ねん</rt></ruby>でくわしく<ruby>学<rt>まな</rt></ruby>びます。</p>
+  </div>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: '<ruby>天気<rt>てんき</rt></ruby>と<ruby>気温<rt>きおん</rt></ruby>',
+  question: '<ruby>晴<rt>は</rt></ruby>れの<ruby>日<rt>ひ</rt></ruby>と<ruby>雨<rt>あめ</rt></ruby>の<ruby>日<rt>ひ</rt></ruby>で、1<ruby>日<rt>にち</rt></ruby>の<ruby>気温<rt>きおん</rt></ruby>の<ruby>変<rt>か</rt></ruby>わり<ruby>方<rt>かた</rt></ruby>はどうちがうだろうか？',
+  predictionChoices: ['<ruby>晴<rt>は</rt></ruby>れの<ruby>日<rt>ひ</rt></ruby>のほうが、<ruby>大<rt>おお</rt></ruby>きく<ruby>変<rt>か</rt></ruby>わる', '<ruby>雨<rt>あめ</rt></ruby>の<ruby>日<rt>ひ</rt></ruby>のほうが、<ruby>大<rt>おお</rt></ruby>きく<ruby>変<rt>か</rt></ruby>わる', 'どちらも<ruby>同<rt>おな</rt></ruby>じくらい'],
+  experimentNote: '「② <ruby>気温<rt>きおん</rt></ruby>の<ruby>変化<rt>へんか</rt></ruby>」で<ruby>天気<rt>てんき</rt></ruby>をえらび、1<ruby>時間<rt>じかん</rt></ruby>ごとに「はかる」をおそう。<ruby>時刻<rt>じこく</rt></ruby>と<ruby>気温<rt>きおん</rt></ruby>が<ruby>記録<rt>きろく</rt></ruby>されて、グラフになるよ。<ruby>晴<rt>は</rt></ruby>れの<ruby>日<rt>ひ</rt></ruby>と<ruby>雨<rt>あめ</rt></ruby>の<ruby>日<rt>ひ</rt></ruby>（くもりの<ruby>日<rt>ひ</rt></ruby>も）をはかって、<ruby>線<rt>せん</rt></ruby>の<ruby>形<rt>かたち</rt></ruby>をくらべよう。',
+  columns: [
+    { key: 'timeLabel', label: '<ruby>時刻<rt>じこく</rt></ruby>' },
+    { key: 'weather', label: '<ruby>天気<rt>てんき</rt></ruby>' },
+    { key: 'temp', label: '<ruby>気温<rt>きおん</rt></ruby>', unit: '℃' }
+  ],
+  // グラフは天気ごとの3本の線（表には出さない項目に、気温を入れる）。
+  // 横じくは短い時刻の名前（表には出さない項目「時刻」）を、時刻の順にならべる
+  chart: { type: 'line', x: '時刻', y: ['晴れ', 'くもり', '雨'], sortBy: 'h', yLabel: '気温（℃）' },
+  hint: '晴れの日は、朝は低く、昼すぎ（午後2時ごろ）にいちばん高くなり、1日の気温の差が大きいこと、くもりや雨の日は、1日の気温の差が小さいことに目を向けさせましょう。晴れの日は、日光が地面を温め、温まった地面が空気を温めるので、太陽がいちばん高くなる正午より少しおくれて気温が最も高くなります。くもりや雨の日は、雲が日光をさえぎるので、気温があまり上がりません。③では、百葉箱のくふう（白い色・よろい戸・北向きのとびら・しばふ・1.2〜1.5mの高さ）と、目もりの読み方をおさえます。',
+  answer: '晴れの日は、1日の気温の変化が大きく、朝や夕方は低く、昼すぎに最も高くなる。くもりや雨の日は、1日の気温の変化が小さい。天気によって、1日の気温の変わり方にちがいがある。'
+});
+
+// ===== 気温のデータ（午前6時〜午後6時。学習用の典型的な形。ここを変えるとグラフが変わります） =====
+const DATA = {
+  '晴れ':   { 6: 15, 7: 15, 8: 16, 9: 18, 10: 20, 11: 22, 12: 24, 13: 25, 14: 26, 15: 25, 16: 24, 17: 22, 18: 20 },
+  'くもり': { 6: 17, 7: 17, 8: 18, 9: 18, 10: 19, 11: 19, 12: 20, 13: 20, 14: 20, 15: 20, 16: 19, 17: 19, 18: 18 },
+  '雨':     { 6: 16, 7: 16, 8: 16, 9: 17, 10: 17, 11: 17, 12: 17, 13: 18, 14: 18, 15: 17, 16: 17, 17: 17, 18: 16 }
+};
+const WEATHERS = ['晴れ', 'くもり', '雨'];
+// 線の色・印・もよう（ワークシートのグラフと同じ。色だけで区別しないように、印と線のもようもかえる）
+const STYLE = {
+  '晴れ':   { color: '#0072B2', mark: 'circle', dash: [] },
+  'くもり': { color: '#D55E00', mark: 'square', dash: [9, 5] },
+  '雨':     { color: '#009E73', mark: 'triangle', dash: [2, 5] }
+};
+
+// ===== 小さな道具 =====
+const $ = id => document.getElementById(id);
+const R = (k, y) => '<ruby>' + k + '<rt>' + y + '</rt></ruby>';
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function setupCanvas(cv, w, h) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = w * dpr; cv.height = h * dpr;
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return c;
+}
+const CW = 640, CH = 400, SW = 380, SH = 380, GW = 360, GH = 380;
+const cv = $('cv'), ctx = setupCanvas(cv, CW, CH);
+const scv = $('scv'), sctx = setupCanvas(scv, SW, SH);
+const gcv = $('gcv'), gctx = setupCanvas(gcv, GW, GH);
+// 決まった順に出てくる、でたらめな数（同じ seed なら同じ空になる）
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+// 文字をかく（白いふちどり付き）
+function label(c, text, x, y, color, size, align) {
+  c.save();
+  c.font = 'bold ' + (size || 14) + 'px ' + FONT;
+  c.textAlign = align || 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 4; c.strokeStyle = 'rgba(255,255,255,0.92)'; c.strokeText(text, x, y);
+  c.fillStyle = color || '#333'; c.fillText(text, x, y);
+  c.restore();
+}
+function arrow(c, x1, y1, x2, y2, w, color) {
+  const a = Math.atan2(y2 - y1, x2 - x1), hl = Math.max(7, w * 2.6);
+  c.save();
+  c.strokeStyle = color; c.fillStyle = color; c.lineWidth = w; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2 - Math.cos(a) * hl * 0.7, y2 - Math.sin(a) * hl * 0.7); c.stroke();
+  c.beginPath(); c.moveTo(x2, y2);
+  c.lineTo(x2 - Math.cos(a - 0.5) * hl, y2 - Math.sin(a - 0.5) * hl);
+  c.lineTo(x2 - Math.cos(a + 0.5) * hl, y2 - Math.sin(a + 0.5) * hl);
+  c.closePath(); c.fill();
+  c.restore();
+}
+// グラフの印（●■▲）
+function mark(c, kind, x, y, r, color) {
+  c.fillStyle = color; c.strokeStyle = '#fff'; c.lineWidth = 1.5;
+  c.beginPath();
+  if (kind === 'square') c.rect(x - r, y - r, r * 2, r * 2);
+  else if (kind === 'triangle') { c.moveTo(x, y - r * 1.25); c.lineTo(x + r * 1.15, y + r * 0.85); c.lineTo(x - r * 1.15, y + r * 0.85); c.closePath(); }
+  else c.arc(x, y, r, 0, 6.28);
+  c.fill(); c.stroke();
+}
+// 天気記号（晴れ＝○にたての線、くもり＝◎、雨＝●）
+function weatherSymbol(c, kind, x, y, r) {
+  c.save();
+  c.strokeStyle = '#222'; c.fillStyle = '#fff'; c.lineWidth = Math.max(2, r * 0.09);
+  c.beginPath(); c.arc(x, y, r, 0, 6.28); c.fill(); c.stroke();
+  if (kind === '晴れ') { c.beginPath(); c.moveTo(x, y - r); c.lineTo(x, y + r); c.stroke(); }
+  if (kind === 'くもり') { c.beginPath(); c.arc(x, y, r * 0.55, 0, 6.28); c.stroke(); }
+  if (kind === '雨') { c.fillStyle = '#222'; c.beginPath(); c.arc(x, y, r, 0, 6.28); c.fill(); }
+  c.restore();
+}
+// 時刻の名前
+const hourName = h => h < 12 ? '午前' + h + '時' : h === 12 ? '正午' : '午後' + (h - 12) + '時';
+// グラフの横じく用の短い名前（午前9・10・11・正午・午後1・2・3）
+const hourTick = h => h === 12 ? '正午' : h === 6 || h === 9 ? '午前' + h : h === 13 ? '午後1' : h === 18 ? '午後6' : String(h > 12 ? h - 12 : h);
+const hourHTML = h => h < 12 ? R('午前', 'ごぜん') + h + R('時', 'じ') : h === 12 ? R('正午', 'しょうご') : R('午後', 'ごご') + (h - 12) + R('時', 'じ');
+function setMsg(html) { $('msg').innerHTML = html || '&nbsp;'; }
+
+// ===== 温度計をかく（①②③で使う） =====
+// x：管のまん中　top・bottom：目もりのはし　lo〜hi：目もりのはんい（℃）　v：液の先の温度
+function drawThermometer(c, x, top, bottom, lo, hi, v, opt) {
+  opt = opt || {};
+  const yOf = t => bottom - (t - lo) / (hi - lo) * (bottom - top);
+  const big = opt.big;
+  // 板
+  c.fillStyle = '#fffdf5'; c.strokeStyle = '#bcaaa4'; c.lineWidth = 2;
+  const bw = big ? 120 : 64;
+  c.beginPath(); c.roundRect ? c.roundRect(x - bw / 2 - 10, top - 18, bw, bottom - top + 60, 10) : c.rect(x - bw / 2 - 10, top - 18, bw, bottom - top + 60); c.fill(); c.stroke();
+  // 目もり（1℃ごと。5℃は長く、10℃に数字）
+  c.strokeStyle = '#333'; c.fillStyle = '#222'; c.textAlign = 'right'; c.textBaseline = 'middle';
+  c.font = 'bold ' + (big ? 18 : 12) + 'px ' + FONT;
+  for (let t = lo; t <= hi; t++) {
+    const y = yOf(t), L = t % 10 === 0 ? (big ? 26 : 14) : t % 5 === 0 ? (big ? 18 : 10) : (big ? 10 : 6);
+    c.lineWidth = t % 5 === 0 ? 2 : 1.2;
+    c.beginPath(); c.moveTo(x - 9, y); c.lineTo(x - 9 - L, y); c.stroke();
+    if (t % 10 === 0) c.fillText(t, x - 13 - (big ? 26 : 14), y);
+  }
+  // ガラスの管と液だめ
+  c.fillStyle = 'rgba(227,242,253,0.9)'; c.strokeStyle = '#78909c'; c.lineWidth = 2;
+  c.beginPath(); c.roundRect ? c.roundRect(x - 6, top - 10, 12, bottom - top + 22, 6) : c.rect(x - 6, top - 10, 12, bottom - top + 22); c.fill(); c.stroke();
+  c.beginPath(); c.arc(x, bottom + 22, big ? 13 : 10, 0, 6.28); c.fill(); c.stroke();
+  // 赤い液
+  c.fillStyle = '#e53935';
+  const yv = clamp(yOf(v), top - 6, bottom + 14);
+  c.fillRect(x - 2.5, yv, 5, bottom + 18 - yv);
+  c.beginPath(); c.arc(x, bottom + 22, big ? 9 : 7, 0, 6.28); c.fill();
+  // 液の先（大きな温度計のときは、ここを見るように）
+  if (opt.pointer) arrow(c, x + 32, yv, x + 10, yv, 3, '#1565c0');
+  c.fillStyle = '#555'; c.font = 'bold ' + (big ? 16 : 12) + 'px ' + FONT; c.textAlign = 'center';
+  c.fillText('℃', x + (big ? 26 : 18), top - 4);
+  if (opt.show) label(c, Math.round(v) + '℃', x, bottom + 48, '#c62828', big ? 20 : 16);
+}
+
+// =====================================================================
+// ① 雲と天気
+// =====================================================================
+const SKY = { cx: 212, cy: 200, r: 168 };
+const sky = { seed: 7, n: 3, rain: false, grid: false, quiz: null, score: [0, 0], blobs: [], cover: 0, k: 0, s: 1, dirty: true };
+const skyImg = document.createElement('canvas');     // 空の絵（雲の量が変わったときだけかき直す）
+const mask = document.createElement('canvas');        // 雲の広さを数えるための小さな絵
+const MS = 180; mask.width = MS; mask.height = MS;
+const mctx = mask.getContext('2d', { willReadFrequently: true });
+
+// 雲のかたまりを、決まった順にたくさん用意する
+function makeBlobs(seed) {
+  const rnd = rng(seed), list = [];
+  for (let i = 0; i < 160; i++) {
+    const a = rnd() * 6.283, d = Math.sqrt(rnd()) * SKY.r * 1.05;
+    const x = SKY.cx + Math.cos(a) * d, y = SKY.cy + Math.sin(a) * d;
+    const n = 4 + Math.floor(rnd() * 4), parts = [];
+    const size = 14 + rnd() * 20;
+    for (let k = 0; k < n; k++) parts.push({ dx: (rnd() - 0.5) * size * 2.6, dy: (rnd() - 0.5) * size * 1.2, r: size * (0.6 + rnd() * 0.6) });
+    list.push({ x, y, parts });
+  }
+  return list;
+}
+// はじめの k こ（k こ目は s 倍の大きさ）の雲で、空の何わりがかくれるか
+function coverage(k, s) {
+  const f = MS / (SKY.r * 2);
+  mctx.setTransform(1, 0, 0, 1, 0, 0);
+  mctx.fillStyle = '#000'; mctx.fillRect(0, 0, MS, MS);
+  mctx.save();
+  mctx.beginPath(); mctx.arc(MS / 2, MS / 2, MS / 2, 0, 6.28); mctx.clip();
+  mctx.fillStyle = '#fff';
+  mctx.setTransform(f, 0, 0, f, (SKY.r - SKY.cx) * f, (SKY.r - SKY.cy) * f);
+  for (let i = 0; i < k; i++) {
+    const b = sky.blobs[i], sc = i === k - 1 ? s : 1;
+    mctx.beginPath();
+    b.parts.forEach(p => { mctx.moveTo(b.x + p.dx * sc + p.r * sc, b.y + p.dy * sc); mctx.arc(b.x + p.dx * sc, b.y + p.dy * sc, p.r * sc, 0, 6.28); });
+    mctx.fill();
+  }
+  mctx.restore();
+  const d = mctx.getImageData(0, 0, MS, MS).data;
+  let on = 0, all = 0;
+  for (let j = 0; j < MS; j++) for (let i = 0; i < MS; i++) {
+    const dx = i + 0.5 - MS / 2, dy = j + 0.5 - MS / 2;
+    if (dx * dx + dy * dy > (MS / 2) * (MS / 2)) continue;
+    all++; if (d[(j * MS + i) * 4] > 127) on++;
+  }
+  return on / all;
+}
+// 雲の量 n（0〜10）にちょうど合うように、雲のかたまりの数と大きさを決める
+function fitClouds() {
+  const t = sky.n / 10;
+  if (sky.n === 0) { sky.k = 0; sky.s = 1; sky.cover = 0; return; }
+  if (sky.n === 10) { sky.k = sky.blobs.length; sky.s = 1; sky.cover = 1; return; }
+  let k = 1;
+  while (k < sky.blobs.length && coverage(k, 1) < t) k++;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; coverage(k, m) < t ? lo = m : hi = m; }
+  sky.k = k; sky.s = hi; sky.cover = coverage(k, hi);
+}
+// 今の空の天気
+function skyWeather() { return sky.rain ? '雨' : sky.n <= 8 ? '晴れ' : 'くもり'; }
+
+function renderSky() {
+  const c = skyImg.getContext('2d');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  skyImg.width = CW * dpr; skyImg.height = CH * dpr;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const { cx, cy, r } = SKY;
+  const gray = sky.rain ? 0.75 : 0;   // 雨の日だけ空を暗くする（くもりでも、雲のすき間は青空）
+  c.save();
+  c.beginPath(); c.arc(cx, cy, r, 0, 6.28); c.clip();
+  // 青空（雨やくもりの日は灰色に）
+  const g = c.createRadialGradient(cx, cy, 10, cx, cy, r);
+  g.addColorStop(0, gray ? 'rgb(' + [150, 160, 172].map(v => Math.round(v * (1 - gray * 0.3))) + ')' : '#4fa3e3');
+  g.addColorStop(1, gray ? 'rgb(' + [176, 186, 196].map(v => Math.round(v * (1 - gray * 0.3))) + ')' : '#a9d8f5');
+  c.fillStyle = g; c.fillRect(cx - r, cy - r, r * 2, r * 2);
+  // 雲（下にかげ、上に白）
+  const cloudCol = sky.rain ? '#9aa4ad' : sky.n >= 9 ? '#d5d9de' : '#ffffff';
+  const shadeCol = sky.rain ? 'rgba(60,70,80,0.45)' : sky.n >= 9 ? 'rgba(90,100,110,0.35)' : 'rgba(120,140,160,0.35)';
+  if (sky.n === 10 || sky.rain) { c.fillStyle = cloudCol; c.fillRect(cx - r, cy - r, r * 2, r * 2); }
+  const k = sky.n === 10 || sky.rain ? sky.blobs.length : sky.k;
+  for (const pass of [0, 1]) {
+    for (let i = 0; i < k; i++) {
+      const b = sky.blobs[i], sc = i === k - 1 && sky.n < 10 && !sky.rain ? sky.s : 1;
+      c.fillStyle = pass ? cloudCol : shadeCol;
+      c.beginPath();
+      b.parts.forEach(p => { const x = b.x + p.dx * sc, y = b.y + p.dy * sc + (pass ? 0 : 4); c.moveTo(x + p.r * sc, y); c.arc(x, y, p.r * sc, 0, 6.28); });
+      c.fill();
+    }
+  }
+  c.restore();
+  // まわりの木と建物（見上げたときの、空のふち）
+  c.save();
+  c.fillStyle = '#2e5e2e';
+  for (let i = 0; i < 26; i++) {
+    const a = i / 26 * 6.283, h = 7 + ((i * 37) % 5);
+    const x = cx + Math.cos(a) * (r + 5), y = cy + Math.sin(a) * (r + 5);
+    c.beginPath(); c.arc(x, y, h, 0, 6.28); c.fill();
+  }
+  c.restore();
+  c.strokeStyle = '#33691e'; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, r, 0, 6.28); c.stroke();
+  sky.dirty = false;
+}
+
+function drawSkyTab(t) {
+  const c = ctx;
+  c.fillStyle = '#eef6e2'; c.fillRect(0, 0, CW, CH);
+  if (sky.dirty) renderSky();
+  c.drawImage(skyImg, 0, 0, CW, CH);
+  const { cx, cy, r } = SKY;
+  // 雨のすじ
+  if (sky.rain) {
+    c.save(); c.beginPath(); c.arc(cx, cy, r, 0, 6.28); c.clip();
+    c.strokeStyle = 'rgba(30,60,110,0.55)'; c.lineWidth = 2;
+    c.beginPath();
+    for (let i = 0; i < 90; i++) {
+      const x = cx - r + ((i * 53) % (r * 2)), y = cy - r + ((i * 97 + t * 420) % (r * 2));
+      c.moveTo(x, y); c.lineTo(x - 4, y + 14);
+    }
+    c.stroke(); c.restore();
+  }
+  // マス目（空を10この同じ広さに分ける）
+  if (sky.grid) {
+    c.save(); c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 2; c.setLineDash([7, 5]);
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i / 10 * 6.283;
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); c.stroke();
+    }
+    c.restore();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i + 0.5) / 10 * 6.283;
+      label(c, String(i + 1), cx + Math.cos(a) * r * 0.72, cy + Math.sin(a) * r * 0.72, '#1a237e', 15);
+    }
+  }
+  // 方位（見上げた空なので、東と西が地図と反対になる）
+  label(c, '北', cx, cy - r - 20, '#33691e', 15);
+  label(c, '南', cx, cy + r + 21, '#33691e', 15);
+  label(c, '東', cx - r - 28, cy, '#33691e', 15);
+  label(c, '西', cx + r + 28, cy, '#33691e', 15);
+
+  // 右がわ：天気記号と判定
+  const q = sky.quiz, hide = q && !q.answered;
+  const wx = 525;
+  c.fillStyle = '#fff'; c.strokeStyle = '#aed581'; c.lineWidth = 3;
+  c.beginPath(); c.roundRect ? c.roundRect(420, 18, 205, 364, 14) : c.rect(420, 18, 205, 364); c.fill(); c.stroke();
+  label(c, '雲の量', wx, 48, '#555', 17);
+  c.font = 'bold 54px ' + FONT; c.fillStyle = '#33691e'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(hide ? '？' : String(sky.rain ? 10 : sky.n), wx, 98);
+  c.font = 'bold 15px ' + FONT; c.fillStyle = '#777'; c.fillText('（空全体を10として）', wx, 134);
+  if (hide) {
+    c.font = 'bold 60px ' + FONT; c.fillStyle = '#bbb'; c.fillText('？', wx, 215);
+  } else {
+    const w = skyWeather();
+    weatherSymbol(c, w, wx, 215, 40);
+    c.font = 'bold 28px ' + FONT; c.fillStyle = '#bf360c'; c.fillText(w, wx, 282);
+  }
+  // 決まり
+  c.font = 'bold 14px ' + FONT; c.fillStyle = '#333'; c.textAlign = 'left';
+  ['雲の量 0〜8 → 晴れ', '雲の量 9〜10 → くもり', '雨がふっている → 雨'].forEach((s, i) => c.fillText(s, 438, 322 + i * 22));
+  if (q) label(c, 'せいかい ' + sky.score[0] + ' / ' + sky.score[1], 110, 380, '#1565c0', 15);
+}
+
+function setCloud(n) {
+  sky.n = n; $('cloud').value = n; $('cloudNum').textContent = n;
+  fitClouds(); sky.dirty = true;
+}
+$('cloud').addEventListener('input', () => {
+  setCloud(+$('cloud').value);
+  setMsg(R('雲', 'くも') + 'の' + R('量', 'りょう') + 'は ' + sky.n + '。' + (sky.n <= 8 ? R('青空', 'あおぞら') + 'が' + R('見', 'み') + 'えているので「' + R('晴', 'は') + 'れ」' : R('空', 'そら') + 'のほとんどが' + R('雲', 'くも') + 'なので「くもり」'));
+});
+$('btnRain').onclick = () => {
+  sky.rain = !sky.rain;
+  $('btnRain').classList.toggle('active', sky.rain);
+  $('btnRain').innerHTML = '☂ ' + R('雨', 'あめ') + (sky.rain ? ' ON' : ' OFF');
+  $('cloud').disabled = sky.rain;
+  sky.dirty = true;
+  setMsg(sky.rain ? '☂ ' + R('雨', 'あめ') + 'がふっているときは、' + R('雲', 'くも') + 'の' + R('量', 'りょう') + 'に' + R('関係', 'かんけい') + 'なく「' + R('雨', 'あめ') + '」だよ' : '');
+};
+$('btnGrid').onclick = () => {
+  sky.grid = !sky.grid;
+  $('btnGrid').classList.toggle('active', sky.grid);
+  if (sky.grid) setMsg(R('空', 'そら') + 'を10こに' + R('分', 'わ') + 'けたよ。' + R('雲', 'くも') + 'がしめるところを' + R('合', 'あ') + 'わせると、いくつ' + R('分', 'ぶん') + 'になるかな？');
+};
+$('btnNewSky').onclick = () => { sky.seed = Math.floor(Math.random() * 1e9); sky.blobs = makeBlobs(sky.seed); setCloud(sky.n); };
+
+// --- もんだい：空を見て、晴れかくもりかを答える ---
+function newSkyQuiz() {
+  if (sky.rain) $('btnRain').onclick();
+  // 8 と 9 のさかい目を多めに出す
+  const pool = [1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 10, 7, 9];
+  sky.seed = Math.floor(Math.random() * 1e9); sky.blobs = makeBlobs(sky.seed);
+  sky.quiz = { n: pool[Math.floor(Math.random() * pool.length)], answered: false };
+  setCloud(sky.quiz.n);
+  $('cloudNum').textContent = '？';
+  sky.grid = false; $('btnGrid').classList.remove('active');
+  ['cloud', 'btnRain', 'btnGrid', 'btnNewSky', 'btnQuiz'].forEach(id => $(id).disabled = true);
+  $('quizSky').classList.remove('hidden'); $('btnNextSky').classList.add('hidden');
+  document.querySelectorAll('[data-sky]').forEach(b => { b.disabled = false; b.classList.remove('ok', 'ng'); });
+  setMsg('❓ ' + R('空', 'そら') + 'をよく' + R('見', 'み') + 'て、' + R('天気', 'てんき') + 'を' + R('答', 'こた') + 'えよう。' + R('青空', 'あおぞら') + 'はどのくらい' + R('見', 'み') + 'えるかな？');
+}
+function endSkyQuiz() {
+  sky.quiz = null;
+  sky.grid = false; $('btnGrid').classList.remove('active');
+  ['cloud', 'btnRain', 'btnGrid', 'btnNewSky', 'btnQuiz'].forEach(id => $(id).disabled = false);
+  $('quizSky').classList.add('hidden');
+  setMsg('');
+}
+document.querySelectorAll('[data-sky]').forEach(b => b.onclick = () => {
+  const q = sky.quiz; if (!q || q.answered) return;
+  q.answered = true;
+  const right = skyWeather(), ok = b.dataset.sky === right;
+  sky.score[1]++; if (ok) sky.score[0]++;
+  document.querySelectorAll('[data-sky]').forEach(x => { x.disabled = true; if (x.dataset.sky === right) x.classList.add('ok'); else if (x === b) x.classList.add('ng'); });
+  sky.grid = true; $('btnGrid').classList.add('active');
+  $('cloudNum').textContent = sky.n;
+  setMsg((ok ? '⭕ せいかい！ ' : '❌ ざんねん。') + R('雲', 'くも') + 'の' + R('量', 'りょう') + 'は ' + sky.n + ' だから「' + (right === '晴れ' ? R('晴', 'は') + 'れ' : 'くもり') + '」。マス' + R('目', 'め') + 'で' + R('数', 'かぞ') + 'えてみよう');
+  $('btnNextSky').classList.remove('hidden');
+});
+$('btnQuiz').onclick = newSkyQuiz;
+$('btnNextSky').onclick = newSkyQuiz;
+$('btnEndSky').onclick = endSkyQuiz;
+
+// =====================================================================
+// ② 気温の変化
+// =====================================================================
+const TP = { w: '晴れ', h: 9, mode: 'auto', range: 'school', speed: 1, heat: true, rec: { '晴れ': {}, 'くもり': {}, '雨': {} }, run: false, runT: 0, readV: 20, tries: 0 };
+const H0 = () => TP.range === 'school' ? 9 : 6;
+const H1 = () => TP.range === 'school' ? 15 : 18;
+
+function drawScene(t) {
+  const c = sctx, w = TP.w, h = TP.h;
+  // 空
+  const g = c.createLinearGradient(0, 0, 0, 290);
+  if (w === '晴れ') { g.addColorStop(0, h <= 6 || h >= 18 ? '#8fb3d9' : '#4fa3e3'); g.addColorStop(1, '#cfeaf9'); }
+  else if (w === 'くもり') { g.addColorStop(0, '#9eaab6'); g.addColorStop(1, '#d9dfe5'); }
+  else { g.addColorStop(0, '#6f7b87'); g.addColorStop(1, '#aab4bd'); }
+  c.fillStyle = g; c.fillRect(0, 0, SW, 300);
+  // 太陽（南を向いて見ているので、東が左、西が右。正午に南の空でいちばん高くなる）
+  const th = (h - 6) / 12 * Math.PI;
+  const sx = 150 - Math.cos(th) * 135, sy = 270 - Math.sin(th) * 215;
+  if (w === '晴れ') {
+    c.fillStyle = 'rgba(255,214,0,0.35)'; c.beginPath(); c.arc(sx, sy, 26, 0, 6.28); c.fill();
+    c.fillStyle = '#ffca28'; c.beginPath(); c.arc(sx, sy, 17, 0, 6.28); c.fill();
+  } else if (w === 'くもり') {
+    c.fillStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.arc(sx, sy, 15, 0, 6.28); c.fill();
+  }
+  // 雲
+  const clouds = w === '晴れ' ? [[150, 170, 0.55]] : w === 'くもり' ? [[40, 60, 1.3], [140, 40, 1.5], [250, 70, 1.3], [90, 110, 1.2], [200, 120, 1.3]] : [[30, 50, 1.6], [130, 40, 1.7], [250, 60, 1.6], [80, 100, 1.5], [200, 100, 1.6]];
+  const cc = w === '雨' ? '#7d8893' : w === 'くもり' ? '#e1e5ea' : '#fff';
+  clouds.forEach(([x, y, s]) => {
+    c.fillStyle = cc;
+    c.beginPath();
+    [[-28, 6, 20], [-8, -6, 26], [18, 0, 22], [36, 8, 16]].forEach(([dx, dy, r]) => { c.moveTo(x + dx * s + r * s, y + dy * s); c.arc(x + dx * s, y + dy * s, r * s, 0, 6.28); });
+    c.fill();
+  });
+  // 地面（しばふ）と、遠くの校舎
+  c.fillStyle = '#cfd8dc'; c.fillRect(10, 230, 90, 60); c.fillStyle = '#90a4ae';
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) c.fillRect(20 + i * 26, 242 + j * 22, 16, 12);
+  // 太陽に温められた地面は、少し色がこくなる
+  const warm = w === '晴れ' ? Math.max(0, Math.sin(th)) : 0;
+  c.fillStyle = 'rgb(' + Math.round(102 + warm * 40) + ',' + Math.round(160 - warm * 10) + ',' + Math.round(70 - warm * 20) + ')';
+  c.fillRect(0, 290, SW, 90);
+  // 百葉箱
+  drawShelter(c, 215, 290, 0.55);
+  // 雨
+  if (w === '雨') {
+    c.strokeStyle = 'rgba(30,60,110,0.5)'; c.lineWidth = 1.5; c.beginPath();
+    for (let i = 0; i < 70; i++) { const x = (i * 47) % 300, y = 40 + ((i * 89 + t * 380) % 330); c.moveTo(x, y); c.lineTo(x - 3, y + 12); }
+    c.stroke();
+  }
+  // 熱の見える化：日光 → 地面 → 空気
+  if (TP.heat && w !== '雨' && h > 6 && h < 18) {
+    const k = Math.sin(th);
+    if (w === '晴れ') {
+      for (let i = 0; i < 3; i++) {
+        const tx = 70 + i * 60, ty = 288;
+        const off = ((t * 60) % 30);
+        c.save(); c.setLineDash([10, 8]); c.lineDashOffset = -off;
+        c.strokeStyle = 'rgba(255,143,0,' + (0.4 + k * 0.5) + ')'; c.lineWidth = 2 + k * 3;
+        c.beginPath(); c.moveTo(sx + (tx - sx) * 0.15, sy + (ty - sy) * 0.15); c.lineTo(tx, ty - 6); c.stroke(); c.restore();
+        arrow(c, tx - (tx - sx) * 0.04, ty - 6 - (ty - sy) * 0.04, tx, ty - 2, 2 + k * 3, 'rgba(255,111,0,0.9)');
+      }
+      // 地面から空気へ（ゆらゆら）
+      c.strokeStyle = 'rgba(230,81,0,' + (0.25 + k * 0.5) + ')'; c.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        const x0 = 50 + i * 55; c.beginPath();
+        for (let y = 285; y > 285 - 20 - k * 30; y -= 3) c.lineTo(x0 + Math.sin(y * 0.25 + t * 4 + i) * 4, y);
+        c.stroke();
+      }
+      label(c, '日光が地面を温め、地面が空気を温める', 150, 342, '#bf360c', 12);
+    } else {
+      // くもり：日光が雲でさえぎられる
+      for (let i = 0; i < 3; i++) { const x = 90 + i * 60; arrow(c, x, 12, x, 36, 3, 'rgba(255,143,0,0.7)'); }
+      label(c, '雲が日光をさえぎる', 150, 342, '#bf360c', 12);
+    }
+  }
+  // 時刻
+  label(c, hourName(h), 150, 365, '#333', 18);
+  // 右のらん：百葉箱の中の温度計を大きくしたもの
+  c.fillStyle = '#f5f5f0'; c.fillRect(300, 0, 80, SH);
+  c.strokeStyle = '#ccc'; c.lineWidth = 2; c.beginPath(); c.moveTo(300, 0); c.lineTo(300, SH); c.stroke();
+  label(c, '百葉箱の', 340, 14, '#555', 12); label(c, '中の温度計', 340, 30, '#555', 12);
+  drawThermometer(c, 348, 62, 292, 10, 30, DATA[w][h], { show: TP.mode === 'auto', pointer: TP.mode === 'read' });
+}
+
+function drawGraph() {
+  const c = gctx, L = 44, Rm = 12, T = 44, B = 52, PW = GW - L - Rm, PH = GH - T - B;
+  const h0 = H0(), h1 = H1(), lo = 10, hi = 30;
+  const px = h => L + (h - h0) / (h1 - h0) * PW, py = v => T + (hi - v) / (hi - lo) * PH;
+  c.fillStyle = '#fff'; c.fillRect(0, 0, GW, GH);
+  // 目もり
+  c.font = '13px ' + FONT; c.textBaseline = 'middle';
+  for (let v = lo; v <= hi; v++) {
+    c.strokeStyle = v % 5 === 0 ? '#ccc' : '#f0f0f0'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(L, py(v)); c.lineTo(L + PW, py(v)); c.stroke();
+    if (v % 5 === 0) { c.fillStyle = '#444'; c.textAlign = 'right'; c.fillText(v, L - 5, py(v)); }
+  }
+  c.textAlign = 'center';
+  for (let h = h0; h <= h1; h++) {
+    c.strokeStyle = '#eee'; c.beginPath(); c.moveTo(px(h), T); c.lineTo(px(h), T + PH); c.stroke();
+    c.fillStyle = h === TP.h ? '#bf360c' : '#444';
+    c.font = (h === TP.h ? 'bold ' : '') + '13px ' + FONT;
+    c.fillText(h === 12 ? '正午' : String(h > 12 ? h - 12 : h), px(h), T + PH + 12);
+  }
+  c.font = '12px ' + FONT; c.fillStyle = '#666';
+  c.fillText('午前', px(h0 + 1.2), T + PH + 28); c.fillText('午後', px(14), T + PH + 28);
+  // 今の時刻
+  c.save(); c.strokeStyle = 'rgba(191,54,12,0.5)'; c.setLineDash([4, 4]); c.lineWidth = 2;
+  c.beginPath(); c.moveTo(px(TP.h), T); c.lineTo(px(TP.h), T + PH); c.stroke(); c.restore();
+  // じく
+  c.strokeStyle = '#555'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(L, T); c.lineTo(L, T + PH); c.lineTo(L + PW, T + PH); c.stroke();
+  c.fillStyle = '#333'; c.font = 'bold 14px ' + FONT;
+  c.fillText('時刻', L + PW / 2, GH - 8);
+  c.save(); c.translate(13, T + PH / 2); c.rotate(-Math.PI / 2); c.fillText('気温（℃）', 0, 0); c.restore();
+  c.fillText('1日の気温の変わり方', GW / 2 + 10, 12);
+  // はんれい
+  let lx = L + 4;
+  c.font = '13px ' + FONT;
+  WEATHERS.forEach(w => {
+    const s = STYLE[w];
+    c.strokeStyle = s.color; c.lineWidth = 3; c.setLineDash(s.dash);
+    c.beginPath(); c.moveTo(lx, 31); c.lineTo(lx + 26, 31); c.stroke(); c.setLineDash([]);
+    mark(c, s.mark, lx + 13, 31, 4.5, s.color);
+    c.fillStyle = w === TP.w ? '#000' : '#555'; c.textAlign = 'left';
+    c.font = (w === TP.w ? 'bold ' : '') + '13px ' + FONT;
+    c.fillText(w, lx + 31, 31);
+    lx += 40 + c.measureText(w).width + 12;
+  });
+  // 線（はかったところだけ）
+  WEATHERS.forEach(w => {
+    const s = STYLE[w];
+    const pts = Object.keys(TP.rec[w]).map(Number).filter(h => h >= h0 && h <= h1).sort((a, b) => a - b).map(h => [h, TP.rec[w][h]]);
+    c.save(); c.globalAlpha = w === TP.w ? 1 : 0.75;
+    c.strokeStyle = s.color; c.lineWidth = 3; c.setLineDash(s.dash); c.lineJoin = 'round';
+    c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(px(p[0]), py(p[1])) : c.moveTo(px(p[0]), py(p[1]))); c.stroke();
+    c.setLineDash([]);
+    pts.forEach(p => mark(c, s.mark, px(p[0]), py(p[1]), 5, s.color));
+    c.restore();
+  });
+  // 晴れの日の、いちばん高いところ
+  const sun = TP.rec['晴れ'];
+  const hs = Object.keys(sun).map(Number).filter(h => h >= h0 && h <= h1);
+  if (hs.length >= 5) {
+    const hm = hs.reduce((a, b) => sun[b] > sun[a] ? b : a);
+    if (hm > Math.min(...hs) && hm < Math.max(...hs)) label(c, 'いちばん高い（' + hourName(hm) + 'ごろ）', clamp(px(hm), L + 80, L + PW - 80), py(sun[hm]) - 16, '#0d47a1', 13);
+  }
+}
+
+// 天気ごとの「いちばん高い・低い・差」
+function updateSummary() {
+  const h0 = H0(), h1 = H1();
+  const lines = WEATHERS.map(w => {
+    const hs = Object.keys(TP.rec[w]).map(Number).filter(h => h >= h0 && h <= h1);
+    if (hs.length < 2) return null;
+    const v = hs.map(h => TP.rec[w][h]), mx = Math.max(...v), mn = Math.min(...v);
+    return (w === '晴れ' ? '☀ ' + R('晴', 'は') + 'れ' : w === 'くもり' ? '☁ くもり' : '☂ ' + R('雨', 'あめ')) + '：いちばん' + R('高', 'たか') + 'い ' + mx + '℃・いちばん' + R('低', 'ひく') + 'い ' + mn + '℃・' + R('差', 'さ') + ' <b>' + (mx - mn) + '℃</b>';
+  }).filter(Boolean);
+  $('summary').innerHTML = lines.join('<br>');
+}
+function updateClock() {
+  $('clock').innerHTML = hourHTML(TP.h);
+  $('btnPrev').disabled = TP.h <= H0() || TP.run;
+  $('btnNext').disabled = TP.h >= H1() || TP.run;
+}
+
+// 記録する（ワークシートにも送る）
+function recordTemp(v) {
+  const w = TP.w, h = TP.h;
+  TP.rec[w][h] = v;
+  const rec = { timeLabel: hourName(h), h, weather: w, temp: v, '時刻': hourTick(h) };
+  rec[w] = v;
+  Worksheet.addRecord(rec);
+  updateSummary();
+}
+function measure() {
+  const w = TP.w, h = TP.h, v = DATA[w][h];
+  if (TP.rec[w][h] != null) { setMsg(hourHTML(h) + 'は、もうはかったよ。▶ で' + R('時刻', 'じこく') + 'を' + R('進', 'すす') + 'めよう'); return; }
+  if (TP.mode === 'read' && !TP.run) {
+    // 目もりを読んで入れる
+    TP.readV = 20; TP.tries = 0; $('readVal').textContent = '20℃';
+    $('readBox').classList.remove('hidden');
+    setMsg('🌡 ' + R('液', 'えき') + 'の' + R('先', 'さき') + 'の' + R('目', 'め') + 'もりを' + R('読', 'よ') + 'んで、＋ − で' + R('入', 'い') + 'れよう（1' + R('目', 'め') + 'もり＝1℃）');
+    return;
+  }
+  recordTemp(v);
+  setMsg('🌡 ' + hourHTML(h) + 'の' + R('気温', 'きおん') + 'は ' + v + '℃。' + (h < H1() ? '▶ で1' + R('時間', 'じかん') + 'あとにしよう' : R('記録', 'きろく') + 'がそろったね。グラフの' + R('形', 'かたち') + 'を' + R('見', 'み') + 'てみよう'));
+  if (!TP.run && h < H1()) TP.h++;
+  updateClock();
+}
+$('btnMeasure').onclick = measure;
+$('btnReadOk').onclick = () => {
+  const v = DATA[TP.w][TP.h];
+  if (TP.readV === v) {
+    $('readBox').classList.add('hidden');
+    recordTemp(v);
+    setMsg('⭕ ' + R('正', 'ただ') + 'しく' + R('読', 'よ') + 'めたね！ ' + hourHTML(TP.h) + 'は ' + v + '℃');
+    if (TP.h < H1()) TP.h++;
+    updateClock();
+  } else {
+    TP.tries++;
+    setMsg(TP.tries >= 2
+      ? '💡 ' + R('答', 'こた') + 'えは ' + v + '℃。10と20の' + R('間', 'あいだ') + 'には' + R('目', 'め') + 'もりが10こあるよ。もう' + R('一度', 'いちど') + '' + R('入', 'い') + 'れてみよう'
+      : '❌ ちがうみたい。' + R('液', 'えき') + 'の' + R('先', 'さき') + 'を' + R('真横', 'まよこ') + 'から' + R('見', 'み') + 'て、10ごとの' + R('数字', 'すうじ') + 'から' + R('数', 'かぞ') + 'えてみよう');
+  }
+};
+$('btnMinus').onclick = () => { TP.readV = Math.max(0, TP.readV - 1); $('readVal').textContent = TP.readV + '℃'; };
+$('btnPlus').onclick = () => { TP.readV = Math.min(40, TP.readV + 1); $('readVal').textContent = TP.readV + '℃'; };
+$('btnPrev').onclick = () => { if (TP.h > H0()) { TP.h--; $('readBox').classList.add('hidden'); updateClock(); } };
+$('btnNext').onclick = () => { if (TP.h < H1()) { TP.h++; $('readBox').classList.add('hidden'); updateClock(); } };
+// 自動で1日はかる
+$('btnAutoRun').onclick = () => {
+  if (TP.run) { stopRun(); return; }
+  TP.run = true; TP.runT = 0; TP.h = H0();
+  $('readBox').classList.add('hidden');
+  $('btnAutoRun').innerHTML = '■ ' + R('止', 'と') + 'める';
+  updateClock();
+  setMsg('▶ ' + hourHTML(H0()) + 'から1' + R('時間', 'じかん') + 'ごとに' + R('自動', 'じどう') + 'ではかるよ');
+};
+function stopRun() {
+  TP.run = false;
+  $('btnAutoRun').innerHTML = '▶ ' + R('自動', 'じどう') + 'で1' + R('日', 'にち') + 'はかる';
+  updateClock();
+}
+function runStep(dt) {
+  if (!TP.run) return;
+  TP.runT += dt;
+  if (TP.runT < TP.speed) return;
+  TP.runT = 0;
+  if (TP.rec[TP.w][TP.h] == null) { recordTemp(DATA[TP.w][TP.h]); }
+  if (TP.h >= H1()) {
+    stopRun();
+    setMsg('✅ ' + R('記録', 'きろく') + 'がそろったよ。ほかの' + R('天気', 'てんき') + 'の' + R('日', 'ひ') + 'もはかって、グラフをくらべよう');
+    return;
+  }
+  TP.h++;
+  updateClock();
+}
+document.querySelectorAll('[data-w]').forEach(b => b.onclick = () => {
+  if (TP.run) stopRun();
+  TP.w = b.dataset.w;
+  document.querySelectorAll('[data-w]').forEach(x => x.classList.toggle('active', x === b));
+  // まだはかっていない時刻から始める
+  let h = H0(); while (h < H1() && TP.rec[TP.w][h] != null) h++;
+  TP.h = h;
+  $('readBox').classList.add('hidden');
+  updateClock();
+  setMsg((TP.w === '晴れ' ? '☀ ' + R('晴', 'は') + 'れ' : TP.w === 'くもり' ? '☁ くもり' : '☂ ' + R('雨', 'あめ')) + 'の' + R('日', 'ひ') + 'だよ。「はかる」で' + R('気温', 'きおん') + 'を' + R('記録', 'きろく') + 'しよう');
+});
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+  TP.mode = b.dataset.mode;
+  document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('active', x === b));
+  $('readBox').classList.add('hidden');
+});
+document.querySelectorAll('[data-range]').forEach(b => b.onclick = () => {
+  if (TP.run) stopRun();
+  TP.range = b.dataset.range;
+  document.querySelectorAll('[data-range]').forEach(x => x.classList.toggle('active', x === b));
+  TP.h = clamp(TP.h, H0(), H1());
+  updateClock(); updateSummary();
+});
+document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => {
+  TP.speed = +b.dataset.speed;
+  document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('active', x === b));
+});
+$('btnHeat').onclick = () => {
+  TP.heat = !TP.heat;
+  $('btnHeat').classList.toggle('active', TP.heat);
+  $('btnHeat').innerHTML = '☀ ' + R('熱', 'ねつ') + 'の' + R('矢印', 'やじるし') + (TP.heat ? ' ON' : ' OFF');
+};
+$('btnResetT').onclick = () => {
+  if (TP.run) stopRun();
+  TP.rec = { '晴れ': {}, 'くもり': {}, '雨': {} };
+  TP.h = H0();
+  $('readBox').classList.add('hidden');
+  updateClock(); updateSummary();
+  setMsg('グラフを' + R('消', 'け') + 'したよ（ワークシートの' + R('記録', 'きろく') + 'は' + R('残', 'のこ') + 'っています）');
+};
+
+// =====================================================================
+// ③ 気温のはかり方
+// =====================================================================
+// 百葉箱をかく（x：まん中　ground：地面の高さ　s：大きさ）
+function drawShelter(c, x, ground, s) {
+  const M = 140 * s;                 // 1m の長さ
+  const boxBot = ground - 1.15 * M, boxTop = ground - 1.75 * M, bw = 0.62 * M;
+  // あし
+  c.fillStyle = '#eceff1'; c.strokeStyle = '#90a4ae'; c.lineWidth = 1.5;
+  [-0.38, 0.38].forEach(k => { c.fillRect(x + k * bw - 3 * s, boxBot, 6 * s, ground - boxBot); c.strokeRect(x + k * bw - 3 * s, boxBot, 6 * s, ground - boxBot); });
+  // 箱（白い色）
+  c.fillStyle = '#fff'; c.strokeStyle = '#78909c'; c.lineWidth = 2;
+  c.fillRect(x - bw / 2, boxTop, bw, boxBot - boxTop); c.strokeRect(x - bw / 2, boxTop, bw, boxBot - boxTop);
+  // よろい戸（ななめの板）
+  c.strokeStyle = '#b0bec5'; c.lineWidth = 1.5;
+  for (let y = boxTop + 6 * s; y < boxBot - 2; y += 7 * s) { c.beginPath(); c.moveTo(x - bw / 2 + 4, y); c.lineTo(x + bw / 2 - 4, y + 3 * s); c.stroke(); }
+  // 屋根
+  c.fillStyle = '#fff'; c.strokeStyle = '#78909c';
+  c.beginPath(); c.moveTo(x - bw / 2 - 8 * s, boxTop); c.lineTo(x, boxTop - 16 * s); c.lineTo(x + bw / 2 + 8 * s, boxTop); c.closePath(); c.fill(); c.stroke();
+  return { M, boxBot, boxTop, bw };
+}
+
+const HOW = { found: {}, q: 0, score: 0, list: [], answered: false };
+const SPOTS = [
+  { id: 'white', name: '白い色', html: '⬜ ' + R('白', 'しろ') + 'い' + R('色', 'いろ') + '：' + R('日光', 'にっこう') + 'をはね' + R('返', 'かえ') + 'して、' + R('箱', 'はこ') + 'の' + R('中', 'なか') + 'が' + R('温', 'あたた') + 'まりにくい' },
+  { id: 'louver', name: 'よろい戸', html: '🪟 よろい' + R('戸', 'ど') + '：ななめの' + R('板', 'いた') + 'のすき' + R('間', 'ま') + 'から' + R('風', 'かぜ') + 'が' + R('通', 'とお') + 'り、' + R('日光', 'にっこう') + 'は' + R('直接', 'ちょくせつ') + '' + R('入', 'はい') + 'らない' },
+  { id: 'door', name: 'とびら（北向き）', html: '🚪 とびらは' + R('北', 'きた') + '' + R('向', 'む') + 'き：' + R('開', 'あ') + 'けて' + R('温度計', 'おんどけい') + 'を' + R('読', 'よ') + 'むときに、' + R('日光', 'にっこう') + 'が' + R('入', 'はい') + 'らない' },
+  { id: 'grass', name: 'しばふ', html: '🌱 しばふの' + R('上', 'うえ') + '：' + R('地面', 'じめん') + 'からの' + R('照', 'て') + 'り' + R('返', 'かえ') + 'しや' + R('熱', 'ねつ') + 'を' + R('受', 'う') + 'けにくい' },
+  { id: 'height', name: '1.2〜1.5mの高さ', html: '📏 ' + R('地面', 'じめん') + 'から1.2〜1.5mの' + R('高', 'たか') + 'さ：' + R('地面', 'じめん') + 'に' + R('近', 'ちか') + 'すぎると、' + R('地面', 'じめん') + 'の' + R('温度', 'おんど') + 'のえいきょうを' + R('受', 'う') + 'けてしまう' },
+  { id: 'thermo', name: '温度計', html: '🌡 ' + R('箱', 'はこ') + 'の' + R('中', 'なか') + 'の' + R('温度計', 'おんどけい') + '：' + R('日光', 'にっこう') + 'が' + R('直接', 'ちょくせつ') + '' + R('当', 'あ') + 'たらず、' + R('風通', 'かぜとお') + 'しのよいところで' + R('気温', 'きおん') + 'をはかれる' }
+];
+let spotRects = {};
+
+function drawHowTab() {
+  const c = ctx;
+  c.fillStyle = '#fff'; c.fillRect(0, 0, CW, CH);
+  // ----- 左：百葉箱 -----
+  const g = c.createLinearGradient(0, 0, 0, 330);
+  g.addColorStop(0, '#6fb6ea'); g.addColorStop(1, '#d6eefb');
+  c.fillStyle = g; c.fillRect(0, 0, 320, 330);
+  c.fillStyle = '#7cb342'; c.fillRect(0, 330, 320, 70);
+  c.fillStyle = '#9ccc65';
+  for (let i = 0; i < 40; i++) { const x = (i * 23) % 320, y = 334 + (i * 17) % 60; c.fillRect(x, y, 2, 5); }
+  // 太陽（南の空）
+  c.fillStyle = '#ffca28'; c.beginPath(); c.arc(105, 34, 18, 0, 6.28); c.fill();
+  label(c, '←南', 105, 66, '#555', 13);
+  const x = 175, ground = 330;
+  const S = drawShelter(c, x, ground, 1.15);
+  // とびら（北がわ＝右がわに開いている）
+  c.fillStyle = '#fafafa'; c.strokeStyle = '#78909c'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(x + S.bw / 2, S.boxTop + 4); c.lineTo(x + S.bw / 2 + 26, S.boxTop + 14); c.lineTo(x + S.bw / 2 + 26, S.boxBot - 6); c.lineTo(x + S.bw / 2, S.boxBot - 2); c.closePath(); c.fill(); c.stroke();
+  label(c, '北→', 300, S.boxTop + 10, '#555', 13);
+  // 中の温度計（見えるように、まどをあけてかく）
+  c.fillStyle = '#eceff1'; c.fillRect(x - 16, S.boxTop + 10, 32, S.boxBot - S.boxTop - 20);
+  c.fillStyle = '#e53935'; c.fillRect(x - 2, S.boxTop + 30, 4, S.boxBot - S.boxTop - 44);
+  c.beginPath(); c.arc(x, S.boxBot - 14, 5, 0, 6.28); c.fill();
+  // ものさし（地面からの高さ）
+  const rx = 40;
+  c.strokeStyle = '#333'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(rx, ground); c.lineTo(rx, ground - 1.8 * S.M); c.stroke();
+  c.font = 'bold 12px ' + FONT; c.fillStyle = '#222'; c.textAlign = 'left'; c.textBaseline = 'middle';
+  for (let m = 0; m <= 1.75; m += 0.25) {
+    const y = ground - m * S.M;
+    c.beginPath(); c.moveTo(rx, y); c.lineTo(rx + (m % 0.5 === 0 ? 12 : 7), y); c.stroke();
+    if (m % 0.5 === 0) c.fillText(m + 'm', rx + 14, y);
+  }
+  c.fillStyle = 'rgba(255,152,0,0.35)'; c.fillRect(rx - 8, ground - 1.5 * S.M, 16, 0.3 * S.M);
+  c.save(); c.setLineDash([5, 4]); c.strokeStyle = '#ef6c00'; c.lineWidth = 1.5;
+  [1.2, 1.5].forEach(m => { c.beginPath(); c.moveTo(rx, ground - m * S.M); c.lineTo(x - 16, ground - m * S.M); c.stroke(); });
+  c.restore();
+  label(c, '1.2〜1.5m', rx + 40, ground - 1.35 * S.M, '#e65100', 13);
+  // タップできるところ
+  spotRects = {
+    thermo: [x - 16, S.boxTop + 10, 32, S.boxBot - S.boxTop - 20],
+    louver: [x - S.bw / 2, S.boxTop, S.bw, S.boxBot - S.boxTop],
+    door: [x + S.bw / 2, S.boxTop, 30, S.boxBot - S.boxTop],
+    white: [x - S.bw / 2 - 12, S.boxTop - 22, S.bw + 24, 24],
+    height: [rx - 14, ground - 1.8 * S.M, 70, 1.8 * S.M],
+    grass: [0, ground, 320, 70]
+  };
+  // 見つけたところに ✔
+  SPOTS.forEach(sp => {
+    if (!HOW.found[sp.id]) return;
+    const r = spotRects[sp.id];
+    label(c, '✔', r[0] + r[2] - 6, sp.id === 'height' ? r[1] + r[3] / 2 : r[1] + 10, '#2e7d32', 18);
+  });
+  const n = Object.keys(HOW.found).length;
+  label(c, '見つけたくふう ' + n + ' / 6', 160, 388, n === 6 ? '#2e7d32' : '#1b5e20', 15);
+
+  // ----- 右：温度計クイズ -----
+  c.fillStyle = '#fffdf5'; c.fillRect(322, 0, 318, CH);
+  c.strokeStyle = '#ddd'; c.lineWidth = 2; c.beginPath(); c.moveTo(321, 0); c.lineTo(321, CH); c.stroke();
+  const q = HOW.list[HOW.q];
+  if (!q) {
+    label(c, 'クイズおわり！', 480, 170, '#33691e', 26);
+    label(c, 'せいかい ' + HOW.score + ' / ' + HOW.list.length, 480, 215, '#bf360c', 22);
+    return;
+  }
+  label(c, 'もんだい ' + (HOW.q + 1) + ' / ' + HOW.list.length + '　せいかい ' + HOW.score, 480, 18, '#555', 14);
+  if (q.type === 'read') {
+    label(c, '気温は何℃？', 480, 44, '#1565c0', 18);
+    drawThermometer(c, 470, 80, 330, q.lo, q.lo + 20, q.v, { big: true, pointer: true });
+    if (HOW.answered && q.v % 1 !== 0) label(c, '目もりと目もりの間 → 近いほうを読む', 480, 386, '#bf360c', 13);
+  } else if (q.type === 'eye') {
+    label(c, '目の位置は、どれが正しい？', 480, 44, '#1565c0', 18);
+    drawThermometer(c, 420, 90, 330, 10, 30, 22, { big: true });
+    const yv = 330 - (22 - 10) / 20 * 240;
+    [['ア', yv - 70], ['イ', yv], ['ウ', yv + 70]].forEach(([k, y]) => {
+      c.save(); c.setLineDash([5, 4]); c.strokeStyle = '#888'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(560, y); c.lineTo(430, yv); c.stroke(); c.restore();
+      // 目
+      c.fillStyle = '#fff'; c.strokeStyle = '#333'; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(575, y, 16, 9, 0, 0, 6.28); c.fill(); c.stroke();
+      c.fillStyle = '#333'; c.beginPath(); c.arc(569, y, 4.5, 0, 6.28); c.fill();
+      label(c, k, 608, y, '#333', 18);
+    });
+  } else {
+    label(c, '気温は、どこではかる？', 480, 44, '#1565c0', 18);
+    c.font = 'bold 15px ' + FONT; c.fillStyle = '#333'; c.textAlign = 'left';
+    ['ア：日なたの、地面のすぐ近く', 'イ：日かげで風通しのよい、', '　　地面から1.2〜1.5mの高さ', 'ウ：教室のまどぎわ'].forEach((s, i) => c.fillText(s, 345, 110 + i * 34));
+  }
+}
+
+// クイズを作る（10問：目もりを読む 7・目の位置 2・はかる場所 1）
+function makeHowQuiz() {
+  const list = [];
+  for (let i = 0; i < 7; i++) {
+    let v = 5 + Math.floor(Math.random() * 30);
+    if (i >= 4) v += Math.random() < 0.5 ? 0.3 : 0.7;   // 目もりの間（近いほうを読む）
+    const lo = Math.floor((v - 7) / 5) * 5;
+    const ans = Math.round(v);
+    const opts = new Set([ans]);
+    [ans + 1, ans - 1, ans + 2, ans - 2, ans + 10, ans - 10, ans + 5].sort(() => Math.random() - 0.5).forEach(o => { if (opts.size < 4 && o >= 0) opts.add(o); });
+    list.push({ type: 'read', v, lo, ans: ans + '℃', opts: [...opts].sort((a, b) => a - b).map(o => o + '℃') });
+  }
+  list.splice(2, 0, { type: 'eye', ans: 'イ', opts: ['ア', 'イ', 'ウ'] });
+  list.splice(6, 0, { type: 'eye', ans: 'イ', opts: ['ア', 'イ', 'ウ'] });
+  list.splice(8, 0, { type: 'place', ans: 'イ', opts: ['ア', 'イ', 'ウ'] });
+  HOW.list = list.slice(0, 10); HOW.q = 0; HOW.score = 0; HOW.answered = false;
+  showHowQuestion();
+}
+function showHowQuestion() {
+  const q = HOW.list[HOW.q], box = $('quizHow');
+  HOW.answered = false;
+  $('btnNextHow').classList.add('hidden');
+  box.innerHTML = q ? q.opts.map(o => '<button class="chip ans" data-ans="' + o + '">' + o + '</button>').join('') : '';
+  box.querySelectorAll('[data-ans]').forEach(b => b.onclick = () => answerHow(b));
+  if (!q) setMsg('🎉 おつかれさま！ 「もういちど」で、' + R('新', 'あたら') + 'しいもんだいになるよ');
+}
+function answerHow(b) {
+  if (HOW.answered) return;
+  HOW.answered = true;
+  const q = HOW.list[HOW.q], ok = b.dataset.ans === q.ans;
+  if (ok) HOW.score++;
+  $('quizHow').querySelectorAll('[data-ans]').forEach(x => { x.disabled = true; if (x.dataset.ans === q.ans) x.classList.add('ok'); else if (x === b) x.classList.add('ng'); });
+  const head = ok ? '⭕ せいかい！ ' : '❌ ざんねん。' + R('答', 'こた') + 'えは「' + q.ans + '」。';
+  if (q.type === 'read') setMsg(head + (q.v % 1 !== 0 ? R('液', 'えき') + 'の' + R('先', 'さき') + 'が' + R('目', 'め') + 'もりと' + R('目', 'め') + 'もりの' + R('間', 'あいだ') + 'のときは、' + R('近', 'ちか') + 'いほうの' + R('目', 'め') + 'もりを' + R('読', 'よ') + 'むよ' : '10ごとの' + R('数字', 'すうじ') + 'から、1' + R('目', 'め') + 'もり＝1℃で' + R('数', 'かぞ') + 'えよう'));
+  else if (q.type === 'eye') setMsg(head + R('目', 'め') + 'もりは、' + R('液', 'えき') + 'の' + R('先', 'さき') + 'と' + R('同', 'おな') + 'じ' + R('高', 'たか') + 'さから、' + R('真横', 'まよこ') + 'に' + R('見', 'み') + 'て' + R('読', 'よ') + 'むよ');
+  else setMsg(head + R('気温', 'きおん') + 'は、' + R('日光', 'にっこう') + 'が' + R('直接', 'ちょくせつ') + '' + R('当', 'あ') + 'たらない、' + R('風通', 'かぜとお') + 'しのよいところで、' + R('地面', 'じめん') + 'から1.2〜1.5mの' + R('高', 'たか') + 'さではかるよ');
+  $('btnNextHow').classList.remove('hidden');
+}
+$('btnNextHow').onclick = () => { HOW.q++; showHowQuestion(); if (HOW.list[HOW.q]) setMsg(''); };
+$('btnResetHow').onclick = () => { HOW.found = {}; makeHowQuiz(); setMsg(''); };
+
+// 百葉箱をタップ
+cv.addEventListener('pointerdown', e => {
+  if (tab !== 'how') return;
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * CW, y = (e.clientY - r.top) / r.height * CH;
+  // 小さいものから順にしらべる
+  for (const id of ['thermo', 'door', 'white', 'louver', 'height', 'grass']) {
+    const s = spotRects[id];
+    if (s && x >= s[0] && x <= s[0] + s[2] && y >= s[1] && y <= s[1] + s[3]) {
+      HOW.found[id] = true;
+      const sp = SPOTS.find(p => p.id === id);
+      setMsg(sp.html + (Object.keys(HOW.found).length === 6 ? '　🎉 6つ' + R('全部', 'ぜんぶ') + '' + R('見', 'み') + 'つけた！' : ''));
+      return;
+    }
+  }
+});
+
+// =====================================================================
+// タブの切りかえと、毎回の動き
+// =====================================================================
+let tab = 'sky';
+const TAB_MSG = {
+  sky: '☁ ' + R('雲', 'くも') + 'の' + R('量', 'りょう') + 'を' + R('変', 'か') + 'えて、' + R('天気', 'てんき') + 'がどう' + R('変', 'か') + 'わるか' + R('見', 'み') + 'てみよう',
+  temp: '📈 ' + R('天気', 'てんき') + 'をえらんで、1' + R('時間', 'じかん') + 'ごとに「はかる」をおそう',
+  how: '🌡 ' + R('百葉箱', 'ひゃくようばこ') + 'のくふうを' + R('見', 'み') + 'つけよう。' + R('右', 'みぎ') + 'は' + R('温度計', 'おんどけい') + 'のクイズだよ'
+};
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  $('ctlSky').classList.toggle('hidden', tab !== 'sky');
+  $('ctlTemp').classList.toggle('hidden', tab !== 'temp');
+  $('ctlHow').classList.toggle('hidden', tab !== 'how');
+  cv.classList.toggle('hidden', tab === 'temp');
+  $('stage').classList.toggle('hidden', tab !== 'temp');
+  if (tab !== 'temp' && TP.run) stopRun();
+  if (tab !== 'sky' && sky.quiz) endSkyQuiz();
+  setMsg(TAB_MSG[tab]);
+}));
+
+let lastTs = 0, clockT = 0;
+function loop(ts) {
+  const dt = clamp((ts - lastTs) / 1000 || 0, 0, 0.05);
+  lastTs = ts; clockT += dt;
+  if (tab === 'sky') drawSkyTab(clockT);
+  else if (tab === 'temp') { runStep(dt); drawScene(clockT); drawGraph(); }
+  else drawHowTab();
+  requestAnimationFrame(loop);
+}
+
+// ===== はじめ =====
+sky.blobs = makeBlobs(sky.seed);
+setCloud(3);
+makeHowQuiz();
+updateClock();
+setMsg(TAB_MSG.sky);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
