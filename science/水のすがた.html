@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>水のすがた</title>
+<!--
+  水のすがた（小学4年 理科「水のすがたと温度」）
+  ・ビーカーの水（または氷）を、アルコールランプで熱したり、氷と食塩で冷やしたりする。
+  ・氷（固体）→ 水（液体）→ 水じょう気（気体）とすがたが変わるようすを、つぶで見える化する。
+      氷＝きちんとならんで、その場で小さくゆれる／水＝自由に動き回る／水じょう気＝速く飛び回る
+  ・氷がとけている間は0℃、ふっとうしている間は約100℃で、温度が変わらない（右のグラフが平らになる）。
+  ・水がこおると、体積が約1.1倍にふえる。氷は水にうく。
+  ・ふっとうしたときの「あわ」は水じょう気（気体）、「湯気」は小さな水のつぶ（液体）。
+  ・水の量（少・多）をかえて、ふっとうまでの時間をくらべられる（グラフに前の線が残る）。
+  ・しくみ：ランプからもらう熱の量（ジュール）を毎秒たして、
+      氷の温度を上げる → 氷をとかす → 水の温度を上げる → 水を水じょう気にする、の順に使う計算です。
+      数字は下の「しくみの数字」でかえられます。
+  ・ワークシート部品（worksheet.js）を使っています。「記録する」で、そのときの時間と温度を記録します。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+
+  .safety {
+    background: #fff8e1; border: 3px solid #f9a825; border-radius: 12px;
+    padding: 4px 12px; font-size: 16px; font-weight: bold; color: #6d4c00; text-align: center;
+  }
+
+  /* ビーカーとグラフを横にならべる（せまい画面では、たてにならぶ） */
+  .stage { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .stage > div { flex: 300 1 240px; min-width: 0; }
+  .stage > div.gwrap { flex: 360 1 280px; }
+  .stage > div:first-child { max-width: 300px; }
+  canvas { display: block; width: 100%; touch-action: none; border-radius: 8px; }
+  #cv { aspect-ratio: 300 / 420; }
+  #gcv { aspect-ratio: 360 / 420; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 16px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.blue { background: #1565c0; }
+  .go-btn.stop { background: #455a64; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn.on { outline: 4px solid #ffd54f; outline-offset: 1px; }
+  .go-btn:disabled, .chip:disabled { opacity: 0.4; cursor: default; }
+  .lbl { font-size: 16px; color: #555; font-weight: bold; }
+  .msg { min-height: 3em; line-height: 1.5; text-align: center; font-weight: bold; color: #1565c0; margin-top: 6px; display: flex; align-items: center; justify-content: center; }
+  .diff { font-size: 15px; color: #666; margin: 4px 0 0; }
+  .hint { font-size: 15px; color: #777; text-align: center; margin: 2px 0 0; }
+  .clock { font-size: 1.3rem; font-weight: bold; color: #bf360c; min-width: 6.5em; text-align: center; }
+  .readout { font-size: 17px; font-weight: bold; color: #333; gap: 14px; }
+  .readout b { color: #bf360c; font-size: 1.2rem; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🧊 <ruby>水<rt>みず</rt></ruby>のすがた</h1>
+<p class="subtitle"><ruby>熱<rt>ねっ</rt></ruby>したり<ruby>冷<rt>ひ</rt></ruby>やしたりすると、<ruby>水<rt>みず</rt></ruby>はどんなすがたになるのかな</p>
+
+<div class="panel">
+  <div class="safety" id="safety"></div>
+
+  <div class="card">
+    <div class="stage">
+      <div><canvas id="cv" aria-label="ビーカーのようす。水のつぶの動きを表す"></canvas></div>
+      <div class="gwrap"><canvas id="gcv" aria-label="温度と時間のグラフ"></canvas></div>
+    </div>
+
+    <div class="msg" id="msg">&nbsp;</div>
+    <div class="row readout">
+      <span>🌡 <ruby>温度<rt>おんど</rt></ruby> <b id="rT">20℃</b></span>
+      <span>すがた <b id="rPhase">水</b></span>
+      <span><ruby>体積<rt>たいせき</rt></ruby> <b id="rVol">100mL</b></span>
+    </div>
+    <div class="row">
+      <button class="go-btn orange" id="btnHeat">🔥 <ruby>熱<rt>ねっ</rt></ruby>する</button>
+      <button class="go-btn blue" id="btnCool">❄ <ruby>冷<rt>ひ</rt></ruby>やす</button>
+      <button class="go-btn stop" id="btnStop">⏸ <ruby>止<rt>と</rt></ruby>める</button>
+      <span class="clock" id="clock">⏱ 0<ruby>分<rt>ふん</rt></ruby>0<ruby>秒<rt>びょう</rt></ruby></span>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+    <div class="row">
+      <span class="lbl">はじめ</span>
+      <button class="chip" data-start="ice">🧊 <ruby>氷<rt>こおり</rt></ruby>（−10℃）</button>
+      <button class="chip active" data-start="water">💧 <ruby>水<rt>みず</rt></ruby>（20℃）</button>
+      <span class="lbl"><ruby>水<rt>みず</rt></ruby>の<ruby>量<rt>りょう</rt></ruby></span>
+      <button class="chip" data-amount="50">▲ <ruby>少<rt>すく</rt></ruby>ない 50mL</button>
+      <button class="chip active" data-amount="100">● <ruby>多<rt>おお</rt></ruby>い 100mL</button>
+    </div>
+    <div class="row">
+      <span class="lbl">ようす</span>
+      <button class="chip" data-speed="10">ゆっくり</button>
+      <button class="chip active" data-speed="30">ふつう</button>
+      <button class="chip" data-speed="120">はやおくり</button>
+      <button class="chip active" id="btnDots">● つぶ ON</button>
+    </div>
+    <div class="row">
+      <button class="go-btn" id="btnRec">📝 <ruby>記録<rt>きろく</rt></ruby>する</button>
+      <button class="chip" id="btnAuto">⏲ 2<ruby>分<rt>ふん</rt></ruby>ごとに<ruby>自動<rt>じどう</rt></ruby><ruby>記録<rt>きろく</rt></ruby></button>
+      <button class="go-btn sub" id="btnClearG">グラフを<ruby>消<rt>け</rt></ruby>す</button>
+    </div>
+    <p class="hint">ビーカーの<ruby>氷<rt>こおり</rt></ruby>・<ruby>水<rt>みず</rt></ruby>・あわ・<ruby>湯気<rt>ゆげ</rt></ruby>をタップすると、<ruby>説明<rt>せつめい</rt></ruby>が<ruby>出<rt>で</rt></ruby>るよ</p>
+  </div>
+
+  <div class="card">
+    <p class="diff">※じっさいとのちがい：<ruby>時間<rt>じかん</rt></ruby>ははやく<ruby>進<rt>すす</rt></ruby>めています（ふつう＝30<ruby>倍<rt>ばい</rt></ruby>）。<ruby>本当<rt>ほんとう</rt></ruby>の<ruby>水<rt>みず</rt></ruby>は、100℃ちょうどではなく「100℃<ruby>近<rt>ちか</rt></ruby>く」でふっとうします（<ruby>場所<rt>ばしょ</rt></ruby>や<ruby>天気<rt>てんき</rt></ruby>で少しかわります）。ここでは100℃にしています。<ruby>教科書<rt>きょうかしょ</rt></ruby>では、<ruby>水<rt>みず</rt></ruby>をこおらせるときは<ruby>試験管<rt>しけんかん</rt></ruby>に<ruby>少<rt>すこ</rt></ruby>しの<ruby>水<rt>みず</rt></ruby>を<ruby>入<rt>い</rt></ruby>れて<ruby>冷<rt>ひ</rt></ruby>やします。<ruby>本当<rt>ほんとう</rt></ruby>は0℃より<ruby>少<rt>すこ</rt></ruby>し<ruby>下<rt>さ</rt></ruby>がってからこおり<ruby>始<rt>はじ</rt></ruby>めることもあります。つぶは、<ruby>本当<rt>ほんとう</rt></ruby>は<ruby>目<rt>め</rt></ruby>に<ruby>見<rt>み</rt></ruby>えないほど<ruby>小<rt>ちい</rt></ruby>さく、ずっと<ruby>数<rt>かず</rt></ruby>が<ruby>多<rt>おお</rt></ruby>いです。</p>
+  </div>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: '<ruby>水<rt>みず</rt></ruby>のすがた',
+  question: 'ふっとうしているとき、<ruby>温度<rt>おんど</rt></ruby>はこのあとどうなるだろうか？',
+  predictionChoices: ['どんどん<ruby>上<rt>あ</rt></ruby>がっていく', '<ruby>上<rt>あ</rt></ruby>がらずに、<ruby>変<rt>か</rt></ruby>わらない', '<ruby>下<rt>さ</rt></ruby>がっていく'],
+  experimentNote: '「<ruby>水<rt>みず</rt></ruby>（20℃）」から「<ruby>熱<rt>ねっ</rt></ruby>する」をおす。ときどき「<ruby>記録<rt>きろく</rt></ruby>する」をおすと、<ruby>時間<rt>じかん</rt></ruby>と<ruby>温度<rt>おんど</rt></ruby>が<ruby>記録<rt>きろく</rt></ruby>されて、グラフになるよ。ふっとうしてからも、しばらく<ruby>記録<rt>きろく</rt></ruby>を<ruby>続<rt>つづ</rt></ruby>けよう。<ruby>水<rt>みず</rt></ruby>の<ruby>量<rt>りょう</rt></ruby>をかえたり、「<ruby>冷<rt>ひ</rt></ruby>やす」でこおるときもためしてみよう。',
+  columns: [
+    { key: 'amount', label: '<ruby>水<rt>みず</rt></ruby>の<ruby>量<rt>りょう</rt></ruby>' },
+    { key: 'time', label: '<ruby>時間<rt>じかん</rt></ruby>', unit: '分', digits: 1 },
+    { key: 'temp', label: '<ruby>温度<rt>おんど</rt></ruby>', unit: '℃', digits: 0 },
+    { key: 'state', label: 'すがた' }
+  ],
+  // グラフは水の量「少ない」「多い」の2本の線にする（表には出さない項目に、温度を入れる）
+  chart: { type: 'line', x: 'time', y: ['少ない', '多い'], yLabel: '温度（℃）' },
+  hint: 'グラフが平らになるところに目を向けさせましょう。ふっとうしている間は、熱し続けても温度は約100℃のまま上がりません（熱は、水を水じょう気にすることに使われます）。同じように、氷がとけている間・水がこおっている間は0℃のままです。あわは水じょう気（気体）、湯気は水じょう気が冷やされてできた小さな水のつぶ（液体）であることを、ビーカーのタップで確かめさせます。水の量が多いと、ふっとうするまでの時間が長くなることも、2本の線でくらべられます。',
+  answer: '水はおよそ100℃でふっとうし、ふっとうしている間は、熱し続けても温度は変わらない。ふっとうしているときに出てくるあわは水じょう気で、水は熱すると目に見えない水じょう気（気体）にすがたを変える。湯気は、水じょう気が冷やされて小さな水のつぶ（液体）になったもの。水を冷やすと0℃でこおり始め、ぜんぶこおるまで温度は0℃のまま変わらない。水が氷（固体）になると、体積がふえる（約1.1倍）。'
+});
+
+// ===== しくみの数字（ここをかえると、温まり方・冷え方がかわります） =====
+const P_HEAT = 60;     // アルコールランプから水がもらう熱（ジュール／秒）
+const K_LOSS = 0.15;   // 熱しているとき、まわりの空気へにげる熱（ジュール／秒／℃）
+const H_COOL = 2.5;    // 氷と食塩に熱をうばわれるはやさ（ジュール／秒／℃）
+const T_BATH = -15;    // 氷と食塩の温度（℃）
+const ROOM = 20;       // 部屋の温度（℃）
+const C_W = 4.2;       // 水1gを1℃上げる熱（ジュール）
+const C_ICE = 2.1;     // 氷1gを1℃上げる熱（ジュール）
+const L_MELT = 334;    // 氷1gをとかす熱（ジュール）
+const L_BOIL = 2260;   // 水1gを水じょう気にする熱（ジュール）
+const T_BOIL = 100;    // ふっとうする温度（℃）
+const ICE_V = 1.09;    // 氷になると体積が何倍になるか
+const DRY = 0.35;      // 水がこの割合までへったら、からだきしないように火を消す
+
+// ===== 小さな道具 =====
+const $ = id => document.getElementById(id);
+const R = (k, y) => '<ruby>' + k + '<rt>' + y + '</rt></ruby>';
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rnd = (a, b) => a + Math.random() * (b - a);
+function setupCanvas(cv, w, h) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = w * dpr; cv.height = h * dpr;
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return c;
+}
+const CW = 300, CH = 420, GW = 360, GH = 420;
+const cv = $('cv'), ctx = setupCanvas(cv, CW, CH);
+const gcv = $('gcv'), gctx = setupCanvas(gcv, GW, GH);
+
+// 文字をかく（白いふちどり付き）
+function label(c, text, x, y, color, size, align) {
+  c.save();
+  c.font = 'bold ' + (size || 14) + 'px ' + FONT;
+  c.textAlign = align || 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 4; c.strokeStyle = 'rgba(255,255,255,0.92)'; c.strokeText(text, x, y);
+  c.fillStyle = color || '#333'; c.fillText(text, x, y);
+  c.restore();
+}
+
+// ===== ビーカーの大きさ（画面の上での位置） =====
+const XL = 55, XR = 235, BW = XR - XL;  // ビーカーの内がわの左はし・右はし
+const Y0 = 300;                        // ビーカーの底
+const S = 1.0;                         // 1mL が何ピクセルの高さになるか
+const Y_TOP = Y0 - 210 * S;            // ビーカーの口
+const TH_X = XR - 26;                  // 温度計の位置
+
+// ===== 実験の状態 =====
+let startKind = 'water', amount = 100, speed = 30, showDots = true, autoRec = false;
+const st = {};          // 今の水のようす
+let runs = [];          // グラフの線（前の実験の線も残す）
+let run = null;         // 今の実験の線
+
+function resetSim() {
+  st.mode = null;                       // 'heat'＝熱している／'cool'＝冷やしている／null＝止めている
+  st.t = 0;                             // 時間（秒）
+  st.m0 = amount;                       // はじめの水の量（g ＝ mL）
+  st.ice = startKind === 'ice' ? amount : 0;   // 氷の重さ（g）
+  st.liq = startKind === 'ice' ? 0 : amount;   // 水の重さ（g）
+  st.T = startKind === 'ice' ? -10 : ROOM;     // 温度（℃）
+  st.q = 0;                             // 今、1秒あたりに入ってくる熱（＋なら温まる、−なら冷える）
+  st.look = 'float';                    // 氷と水がまざっているときの絵：'float'＝氷がうく／'wall'＝かべからこおる
+  st.app = 'lamp';                      // 器具：'lamp'＝アルコールランプ／'bowl'＝氷と食塩
+  st.nextSample = 0; st.nextAuto = 120;
+  st.phase = phaseCode();
+  st.boilSeen = false;
+  parts.length = 0; vapor.length = 0; bubbles.length = 0; puffs.length = 0;
+  // グラフに新しい線を用意する（前の線は4本まで残す）
+  run = { amount, start: startKind, pts: [[0, st.T, st.phase]] };
+  runs.push(run);
+  if (runs.length > 4) runs.shift();
+  updateButtons();
+  setMsg(startKind === 'ice'
+    ? '−10℃の' + R('氷', 'こおり') + 'だよ。「' + R('熱', 'ねっ') + 'する」をおしてみよう'
+    : '20℃の' + R('水', 'みず') + 'だよ。「' + R('熱', 'ねっ') + 'する」か「' + R('冷', 'ひ') + 'やす」をおしてみよう');
+}
+
+// ===== 熱の計算 =====
+// Q（ジュール）の熱を入れる（マイナスなら、うばう）。
+// 氷の温度を上げる → 氷をとかす → 水の温度を上げる → 水じょう気にする、の順に使う。
+function addHeat(Q) {
+  for (let k = 0; k < 6 && Math.abs(Q) > 1e-9; k++) {
+    if (st.ice > 1e-9 && st.liq > 1e-9) {
+      // 氷と水がまざっている：温度は0℃のまま、とけたり、こおったりする
+      st.T = 0;
+      if (Q > 0) { const d = Math.min(st.ice, Q / L_MELT); st.ice -= d; st.liq += d; Q -= d * L_MELT; }
+      else { const d = Math.min(st.liq, -Q / L_MELT); st.liq -= d; st.ice += d; Q += d * L_MELT; }
+    } else if (st.liq <= 1e-9) {
+      // ぜんぶ氷
+      st.liq = 0;
+      const nT = st.T + Q / (st.ice * C_ICE);
+      if (nT > 0) {          // 0℃をこえる分は、とかすのに使う
+        Q -= (0 - st.T) * st.ice * C_ICE; st.T = 0;
+        const d = Math.min(st.ice, Q / L_MELT); st.ice -= d; st.liq += d; Q -= d * L_MELT;
+      } else if (st.T >= 0 && Q < 0) { st.T = nT; Q = 0; }
+      else { st.T = nT; Q = 0; }
+    } else {
+      // ぜんぶ水
+      st.ice = 0;
+      const nT = st.T + Q / (st.liq * C_W);
+      if (nT < 0) {          // 0℃より下がる分は、こおらせるのに使う
+        Q += st.T * st.liq * C_W; st.T = 0;
+        const d = Math.min(st.liq, -Q / L_MELT); st.liq -= d; st.ice += d; Q += d * L_MELT;
+      } else if (nT > T_BOIL) {   // 100℃をこえる分は、水じょう気にするのに使う（温度は上がらない）
+        Q -= (T_BOIL - st.T) * st.liq * C_W; st.T = T_BOIL;
+        const d = Math.min(st.liq, Q / L_BOIL); st.liq -= d; Q = 0;
+      } else { st.T = nT; Q = 0; }
+    }
+  }
+  if (st.ice < 1e-6) st.ice = 0;
+  if (st.liq < 1e-6) st.liq = 0;
+}
+// 1秒ごとに計算する
+function physStep(dt) {
+  let q = 0;
+  if (st.mode === 'heat') q = P_HEAT + K_LOSS * (ROOM - st.T);
+  else if (st.mode === 'cool') q = H_COOL * (T_BATH - st.T);
+  st.q = q;
+  addHeat(q * dt);
+  st.t += dt;
+}
+// 今のすがた
+function phaseCode() {
+  if (st.ice > 0 && st.liq > 0) return st.q > 0 ? 'melt' : st.q < 0 ? 'freeze' : 'mix';
+  if (st.liq <= 0) return 'ice';
+  return (st.T >= T_BOIL - 1e-6 && st.q > 0) ? 'boil' : 'liq';
+}
+const PHASE_NAME = { ice: '氷', melt: '氷と水', freeze: '氷と水', mix: '氷と水', liq: '水', boil: '水（ふっとう）' };
+const PHASE_HTML = {
+  ice: R('氷', 'こおり') + '（' + R('固体', 'こたい') + '）',
+  melt: R('氷', 'こおり') + 'と' + R('水', 'みず') + '（とけている）',
+  freeze: R('氷', 'こおり') + 'と' + R('水', 'みず') + '（こおっている）',
+  mix: R('氷', 'こおり') + 'と' + R('水', 'みず'),
+  liq: R('水', 'みず') + '（' + R('液体', 'えきたい') + '）',
+  boil: 'ふっとう' + R('中', 'ちゅう')
+};
+
+// すがたが変わったときのメッセージ
+function phaseChanged(a, b) {
+  const was = x => x === 'melt' || x === 'freeze' || x === 'mix';
+  if (b === 'melt' && !was(a)) setMsg('🧊 0℃で' + R('氷', 'こおり') + 'がとけ' + R('始', 'はじ') + 'めた！ とけている' + R('間', 'あいだ') + 'は、' + R('温度', 'おんど') + 'が0℃のまま' + R('変', 'か') + 'わらないよ');
+  if (b === 'freeze' && !was(a)) setMsg('❄ 0℃でこおり' + R('始', 'はじ') + 'めた！ こおっている' + R('間', 'あいだ') + 'は、' + R('温度', 'おんど') + 'が0℃のまま' + R('変', 'か') + 'わらないよ');
+  if (b === 'liq' && was(a)) setMsg('💧 ' + R('氷', 'こおり') + 'がぜんぶとけて' + R('水', 'みず') + 'になった。ここから' + R('温度', 'おんど') + 'がまた' + R('上', 'あ') + 'がるよ');
+  if (b === 'ice' && was(a)) setMsg('🧊 ぜんぶ' + R('氷', 'こおり') + 'になった。' + R('体積', 'たいせき') + 'が' + R('約', 'やく') + '1.1' + R('倍', 'ばい') + 'にふえたよ（' + R('点線', 'てんせん') + 'とくらべてみよう）');
+  if (b === 'boil' && a !== 'boil') {
+    setMsg('♨ ふっとうした！ ' + R('約', 'やく') + '100℃。' + R('熱', 'ねっ') + 'し' + R('続', 'つづ') + 'けると、' + R('温度', 'おんど') + 'はどうなるかな？');
+    st.boilSeen = true;
+  }
+}
+
+// ===== つぶ・あわ・湯気 =====
+const parts = [];    // 水（液体）のつぶ
+const vapor = [];    // 水じょう気のつぶ
+const bubbles = [];  // ふっとうのあわ
+const puffs = [];    // 湯気
+
+// 今の氷と水の形を計算する
+function geom() {
+  const mi = st.ice, ml = st.liq;
+  if (mi <= 0) return { type: 'none', liqTop: Y0 - ml * S };
+  if (ml <= 0) return { type: 'full', iceTop: Y0 - mi * ICE_V * S, liqTop: Y0 };
+  if (st.look === 'wall') {
+    // 冷やしたとき：ビーカーのかべと底から、同じあつさで氷ができていく
+    const D = (ml + ICE_V * mi) * S, area = ICE_V * mi * S * BW;
+    let lo = 0, hi = Math.min(BW / 2, D);
+    for (let i = 0; i < 30; i++) {
+      const t = (lo + hi) / 2;
+      (D * BW - (BW - 2 * t) * (D - t) < area) ? lo = t : hi = t;
+    }
+    return { type: 'wall', liqTop: Y0 - D, t: lo };
+  }
+  // 熱したとき：氷のかたまりが水にうく（水の中にしずむのは約9わり）
+  const f = mi / (mi + ml);
+  const w = BW * (0.3 + 0.55 * Math.sqrt(f));
+  const hb = ICE_V * mi * S * BW / w, hs = hb / ICE_V;
+  const cx = XL + BW * 0.42;
+  let D = (ml + mi) * S, bottom;
+  if (hs <= D) bottom = Y0 - D + hs;                       // ういている
+  else { D = ml * S * BW / (BW - w); bottom = Y0; }        // 水が少なくて、底についている
+  return { type: 'float', liqTop: Y0 - D, bx: cx - w / 2, bw: w, by: bottom - hb, bh: hb, floating: bottom < Y0 - 0.5 };
+}
+function inIce(x, y, g) {
+  if (x < XL || x > XR || y > Y0) return false;
+  if (g.type === 'full') return y >= g.iceTop;
+  if (g.type === 'wall') return y >= g.liqTop && (x < XL + g.t || x > XR - g.t || y > Y0 - g.t);
+  if (g.type === 'float') return x >= g.bx && x <= g.bx + g.bw && y >= g.by && y <= g.by + g.bh;
+  return false;
+}
+function inLiquid(x, y, g, m) {
+  m = m || 0;
+  if (g.type === 'full') return false;
+  if (x < XL + m || x > XR - m || y < g.liqTop + m || y > Y0 - m) return false;
+  if (g.type === 'wall') return x > XL + g.t + m && x < XR - g.t - m && y < Y0 - g.t - m;
+  if (g.type === 'float') return !(x >= g.bx - m && x <= g.bx + g.bw + m && y >= g.by - m && y <= g.by + g.bh + m);
+  return true;
+}
+// 水の中の、どこか空いているところ
+function randomInLiquid(g) {
+  for (let i = 0; i < 40; i++) {
+    const x = rnd(XL + 3, XR - 3), y = rnd(g.liqTop + 3, Y0 - 3);
+    if (inLiquid(x, y, g, 3)) return [x, y];
+  }
+  return null;
+}
+function liquidArea(g) {
+  if (g.type === 'full') return 0;
+  if (g.type === 'wall') return Math.max(0, (BW - 2 * g.t) * (Y0 - g.t - g.liqTop));
+  const a = BW * (Y0 - g.liqTop);
+  if (g.type === 'float') {
+    const sub = Math.max(0, Math.min(g.by + g.bh, Y0) - Math.max(g.by, g.liqTop));
+    return Math.max(0, a - g.bw * sub);
+  }
+  return a;
+}
+
+// つぶ・あわ・湯気を動かす（dt は画面の上の本当の秒）
+function animate(dt, g) {
+  const T = st.T, boiling = st.phase === 'boil';
+  // --- 水のつぶ：数を水の量に合わせ、温度が高いほど速く動く ---
+  const want = Math.round(liquidArea(g) / 150);
+  while (parts.length > want) parts.pop();
+  while (parts.length < want) {
+    const p = randomInLiquid(g); if (!p) break;
+    const a = rnd(0, 6.28);
+    parts.push({ x: p[0], y: p[1], vx: Math.cos(a), vy: Math.sin(a) });
+  }
+  const sp = 14 + Math.max(0, T) * 0.55;
+  parts.forEach(p => {
+    p.vx += rnd(-1.5, 1.5) * dt * 6; p.vy += rnd(-1.5, 1.5) * dt * 6;
+    const n = Math.hypot(p.vx, p.vy) || 1; p.vx /= n; p.vy /= n;
+    let nx = p.x + p.vx * sp * dt, ny = p.y + p.vy * sp * dt;
+    if (!inLiquid(nx, ny, g, 3)) {
+      if (!inLiquid(p.x - p.vx * 2, ny, g, 3)) p.vy = -p.vy;
+      if (!inLiquid(nx, p.y, g, 3)) p.vx = -p.vx;
+      nx = p.x + p.vx * sp * dt; ny = p.y + p.vy * sp * dt;
+      if (!inLiquid(nx, ny, g, 3)) {
+        const q = inLiquid(p.x, p.y, g, 3) ? null : randomInLiquid(g);
+        if (q) { nx = q[0]; ny = q[1]; } else { nx = p.x; ny = p.y; }
+      }
+    }
+    p.x = nx; p.y = ny;
+  });
+
+  // --- ふっとうのあわ：底から出て、大きくなりながら上がり、水面でわれて水じょう気になる ---
+  const pre = st.mode === 'heat' && g.type === 'none' && T > 88 && !boiling; // ふっとう直前の小さなあわ
+  if (boiling && Math.random() < dt * 16) bubbles.push({ x: rnd(XL + 30, XR - 50), y: Y0 - 4, r: 2, vy: rnd(50, 80), weak: false, ph: rnd(0, 6) });
+  if (pre && Math.random() < dt * (T - 88) * 0.8) bubbles.push({ x: rnd(XL + 40, XR - 60), y: Y0 - 4, r: 1.5, vy: rnd(30, 45), weak: true, ph: rnd(0, 6) });
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    b.y -= b.vy * dt; b.x += Math.sin(b.y * 0.15 + b.ph) * 0.3;
+    b.r += (b.weak ? -0.8 : 3.2) * dt;
+    if (b.weak && (b.r < 0.4 || b.y < Y0 - 40)) { bubbles.splice(i, 1); continue; }  // 上の冷たい水でつぶれる
+    if (g.type !== 'none' || b.y - b.r < g.liqTop) {
+      bubbles.splice(i, 1);
+      if (!b.weak) for (let k = 0; k < 2; k++) addVapor(b.x, g.liqTop - 2);   // われて、水じょう気が出ていく
+    }
+  }
+  // 水面からも、少しずつ水じょう気になる（温度が高いほど多い）
+  if (g.type !== 'full' && T > 30 && !boiling && Math.random() < dt * (T - 30) / 25) addVapor(rnd(XL + 8, XR - 8), g.liqTop - 2);
+
+  // --- 水じょう気のつぶ：速く飛び回り、ビーカーの外へ出ていく ---
+  for (let i = vapor.length - 1; i >= 0; i--) {
+    const v = vapor[i];
+    v.x += v.vx * dt; v.y += v.vy * dt;
+    if (v.y > Y_TOP) {             // ビーカーの中ではかべではね返る
+      if (v.x < XL + 2) { v.x = XL + 2; v.vx = Math.abs(v.vx); }
+      if (v.x > XR - 2) { v.x = XR - 2; v.vx = -Math.abs(v.vx); }
+      if (v.y > g.liqTop - 2 || (g.type === 'full' && v.y > g.iceTop - 2)) v.vy = -Math.abs(v.vy);
+    }
+    if (v.y < -10 || v.x < -10 || v.x > CW + 10) vapor.splice(i, 1);
+  }
+
+  // --- 湯気：ビーカーの口から少しはなれたところで白く見え、やがて見えなくなる ---
+  const steamRate = boiling ? 9 : (T > 70 && g.type === 'none' ? (T - 70) / 8 : 0);
+  if (Math.random() < dt * steamRate) puffs.push({ x: rnd(XL + 30, XR - 30), y: Y_TOP - 26, r: rnd(7, 11), a: 0, life: 0, vx: rnd(-8, 8), ph: rnd(0, 6) });
+  for (let i = puffs.length - 1; i >= 0; i--) {
+    const p = puffs[i];
+    p.life += dt; p.y -= 26 * dt; p.x += p.vx * dt; p.r += 6 * dt;
+    p.a = p.life < 0.5 ? p.life / 0.5 : Math.max(0, 1 - (p.life - 0.5) / 2.2);
+    if (p.life > 2.7) puffs.splice(i, 1);
+  }
+}
+function addVapor(x, y) {
+  if (vapor.length > 60) return;
+  const a = rnd(-Math.PI * 0.85, -Math.PI * 0.15), s = rnd(150, 230);
+  vapor.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s });
+}
+
+// ===== ビーカーをかく =====
+let clockT = 0;   // 絵を動かすための時計（秒）
+function drawScene(g) {
+  const c = ctx;
+  // 背景（湯気の白が見えるように、少しこい色）
+  const bg = c.createLinearGradient(0, 0, 0, CH);
+  bg.addColorStop(0, '#b0bec5'); bg.addColorStop(0.45, '#cfd8dc'); bg.addColorStop(1, '#eceff1');
+  c.fillStyle = bg; c.fillRect(0, 0, CW, CH);
+  // 机
+  c.fillStyle = '#a1887f'; c.fillRect(0, 404, CW, 16);
+
+  if (st.app === 'bowl') drawBowl(false);
+  else drawLamp();
+
+  // ビーカーの中の水
+  const waterFill = showDots ? 'rgba(144,202,249,0.35)' : 'rgba(100,181,246,0.45)';
+  if (g.type !== 'full') {
+    c.fillStyle = waterFill;
+    c.fillRect(XL, g.liqTop, BW, Y0 - g.liqTop);
+    // 水面
+    c.strokeStyle = 'rgba(21,101,192,0.6)'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(XL, g.liqTop); c.lineTo(XR, g.liqTop); c.stroke();
+  }
+  // 氷
+  drawIce(g);
+  // ふっとう石
+  c.fillStyle = '#8d6e63';
+  [[XL + 22, 0], [XL + 34, 1], [XL + 120, 2]].forEach(([x, k]) => { c.beginPath(); c.ellipse(x, Y0 - 3, 4, 2.6, k, 0, 6.28); c.fill(); });
+
+  // つぶ
+  if (showDots) {
+    parts.forEach(p => dot(p.x, p.y));
+  }
+  // あわ
+  bubbles.forEach(b => {
+    c.fillStyle = 'rgba(255,255,255,0.45)'; c.strokeStyle = 'rgba(21,101,192,0.7)'; c.lineWidth = 1.2;
+    c.beginPath(); c.arc(b.x, b.y, Math.max(0.5, b.r), 0, 6.28); c.fill(); c.stroke();
+    if (showDots && b.r > 4 && !b.weak) {   // あわの中は、水じょう気のつぶ
+      for (let k = 0; k < 2; k++) {
+        const a = clockT * 14 + k * 3 + b.ph;
+        dot(b.x + Math.cos(a) * (b.r - 3), b.y + Math.sin(a * 1.3) * (b.r - 3), 2.2);
+      }
+    }
+  });
+
+  // ビーカー（ガラス）
+  c.strokeStyle = '#546e7a'; c.lineWidth = 3;
+  c.beginPath(); c.moveTo(XL - 6, Y_TOP - 6); c.lineTo(XL, Y_TOP); c.lineTo(XL, Y0); c.lineTo(XR, Y0); c.lineTo(XR, Y_TOP); c.stroke();
+  c.fillStyle = 'rgba(255,255,255,0.18)'; c.fillRect(XL + 4, Y_TOP + 6, 6, Y0 - Y_TOP - 12);
+  // 目もり（50mL ごと）
+  c.font = '11px ' + FONT; c.fillStyle = '#37474f'; c.textAlign = 'left'; c.textBaseline = 'middle'; c.lineWidth = 1.5; c.strokeStyle = '#546e7a';
+  for (let v = 25; v <= 200; v += 25) {
+    const y = Y0 - v * S, big = v % 50 === 0;
+    c.beginPath(); c.moveTo(XR, y); c.lineTo(XR - (big ? 12 : 7), y); c.stroke();
+    if (big) c.fillText(v, XR + 4, y);
+  }
+  c.fillText('mL', XR + 4, Y_TOP - 2);
+
+  // 水のときの水面（氷になると体積がふえることを、くらべられるように）
+  if (st.ice > 0) {
+    const y = Y0 - st.m0 * S;
+    c.save(); c.setLineDash([6, 4]); c.strokeStyle = '#d84315'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(XL - 14, y); c.lineTo(XR, y); c.stroke(); c.restore();
+    label(c, '水のときの高さ', XL - 2, y - 11, '#d84315', 12, 'left');
+    if (g.type === 'full' && st.ice > st.m0 * 0.98) {
+      // 氷になって、水のときより高くなった分
+      arrow(XL + 150, y, XL + 150, g.iceTop - 4, '#0d47a1');
+      label(c, '約1.1倍にふえた', XL + 100, g.iceTop - 30, '#0d47a1', 14);
+    }
+  }
+
+  // 氷と水の名前
+  if (g.type === 'full') label(c, '氷（固体）', XL + 60, Math.min(Y0 - 14, g.iceTop + 36), '#0d47a1', 14);
+  if (g.type === 'float' && g.bh > 14) label(c, '氷', g.bx + g.bw / 2, g.by + Math.min(14, g.bh / 2), '#0d47a1', 14);
+  if (g.type === 'wall' && g.t > 4) label(c, '氷', XL + g.t / 2 + 2, (g.liqTop + Y0) / 2, '#0d47a1', 14);
+  const wt = g.type === 'wall' ? g.t : 0;
+  if (g.type !== 'full' && Y0 - wt - g.liqTop > 30 && st.phase !== 'boil') label(c, '水（液体）', XL + wt + 44, Y0 - wt - 12, '#01579b', 13);
+
+
+  // 水じょう気のつぶ（速く動くので、うしろに線を引く）
+  if (showDots) vapor.forEach(v => {
+    c.strokeStyle = 'rgba(13,71,161,0.35)'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(v.x, v.y); c.lineTo(v.x - v.vx * 0.04, v.y - v.vy * 0.04); c.stroke();
+    dot(v.x, v.y);
+  });
+  // 湯気
+  puffs.forEach(p => {
+    c.fillStyle = 'rgba(255,255,255,' + (0.8 * p.a) + ')';
+    c.beginPath(); c.arc(p.x, p.y, p.r, 0, 6.28); c.fill();
+    if (showDots && p.a > 0.3) {     // 湯気の中は、つぶが集まった小さな水のつぶ（液体）
+      c.globalAlpha = p.a;
+      for (let k = 0; k < 3; k++) dot(p.x - 2.5 + (k % 2) * 5 + Math.sin(clockT * 6 + p.ph) * 0.6, p.y - 2 + (k > 1 ? 4 : 0), 2.2);
+      c.globalAlpha = 1;
+    }
+  });
+
+  if (st.app === 'bowl') drawBowl(true);
+  // 温度計（湯気より前にかく）
+  drawThermo(g);
+
+  // ふっとうしているときの名前
+  if (st.phase === 'boil') {
+    label(c, '湯気（小さな水のつぶ＝液体）', 110, 44, '#37474f', 13);
+    // ビーカーの口のすぐ上は、何も見えない（水じょう気がある）
+    c.save(); c.strokeStyle = '#d84315'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(XL - 2, Y_TOP - 4); c.lineTo(XL - 8, Y_TOP - 4); c.lineTo(XL - 8, Y_TOP - 24); c.lineTo(XL - 2, Y_TOP - 24); c.stroke(); c.restore();
+    label(c, 'ここは見えない＝水じょう気', XL + 2, Y_TOP - 14, '#d84315', 12, 'left');
+    if (g.type === 'none') label(c, 'あわ＝水じょう気（気体）', (XL + XR) / 2 - 10, Math.min(Y0 - 14, g.liqTop + 18), '#0d47a1', 13);
+  }
+  // つぶの見方
+  if (showDots) label(c, '● つぶ（氷も水も水じょう気も同じつぶ）', 6, CH - 8, '#0d47a1', 12, 'left');
+}
+// 小さな矢印
+function arrow(x1, y1, x2, y2, color) {
+  const c = ctx, a = Math.atan2(y2 - y1, x2 - x1);
+  c.save(); c.strokeStyle = color; c.fillStyle = color; c.lineWidth = 2.5;
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+  c.beginPath(); c.moveTo(x2, y2); c.lineTo(x2 - Math.cos(a - 0.5) * 7, y2 - Math.sin(a - 0.5) * 7); c.lineTo(x2 - Math.cos(a + 0.5) * 7, y2 - Math.sin(a + 0.5) * 7); c.closePath(); c.fill();
+  c.restore();
+}
+// つぶを1こかく（どのすがたでも同じつぶ。ならび方と動き方がちがう）
+function dot(x, y, r) {
+  r = r || 3.2;
+  ctx.fillStyle = '#1e88e5'; ctx.strokeStyle = '#0d47a1'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.28); ctx.fill(); ctx.stroke();
+}
+// 氷をかく
+function drawIce(g) {
+  const c = ctx;
+  if (g.type === 'none') return;
+  c.save();
+  c.beginPath();
+  if (g.type === 'full') {
+    // 体積がふえて、まん中が少しもり上がる
+    c.moveTo(XL, Y0); c.lineTo(XL, g.iceTop + 3);
+    c.quadraticCurveTo((XL + XR) / 2, g.iceTop - 7, XR, g.iceTop + 3); c.lineTo(XR, Y0); c.closePath();
+  } else if (g.type === 'wall') {
+    c.rect(XL, g.liqTop, g.t, Y0 - g.liqTop);
+    c.rect(XR - g.t, g.liqTop, g.t, Y0 - g.liqTop);
+    c.rect(XL + g.t, Y0 - g.t, BW - 2 * g.t, g.t);
+  } else {
+    const r = Math.min(8, g.bw / 4, g.bh / 3);
+    c.roundRect ? c.roundRect(g.bx, g.by, g.bw, g.bh, r) : c.rect(g.bx, g.by, g.bw, g.bh);
+  }
+  c.fillStyle = showDots ? 'rgba(245,251,255,0.85)' : 'rgba(236,247,255,0.95)';
+  c.fill();
+  c.strokeStyle = '#1976d2'; c.lineWidth = 2.5; c.stroke();
+  c.clip();
+  if (showDots) {
+    // きちんとならんだつぶ。その場で小さくゆれる（0℃に近いほど大きくゆれる）
+    const amp = 0.5 + clamp((st.T + 20) / 20, 0, 1) * 0.9;
+    const top = g.type === 'full' ? g.iceTop - 8 : g.type === 'wall' ? g.liqTop : g.by;
+    const bottom = g.type === 'float' ? g.by + g.bh : Y0;
+    const left = g.type === 'float' ? g.bx : XL, right = g.type === 'float' ? g.bx + g.bw : XR;
+    // ならびの基準は、ビーカーの底とかべにそろえる（氷がうくときは、かたまりにそろえる）
+    const ox = left + 5, oy = bottom - 5, grid = [];
+    for (let j = 0; oy - j * 7.8 > top - 4; j++) {
+      grid[j] = [];
+      for (let i = 0; ox + i * 9 < right + 4; i++) {
+        const x = ox + i * 9 + (j % 2) * 4.5, y = oy - j * 7.8;
+        if (!inIce(x, y, g)) continue;
+        const ph = (i * 7 + j * 13) % 10;
+        grid[j][i] = [x + Math.sin(clockT * 13 + ph) * amp, y + Math.cos(clockT * 11 + ph * 1.7) * amp];
+      }
+    }
+    // となりのつぶと手をつないでいる線（きちんとならんでいることが分かるように）
+    c.strokeStyle = 'rgba(13,71,161,0.45)'; c.lineWidth = 1.2;
+    c.beginPath();
+    grid.forEach((row, j) => row.forEach((p, i) => {
+      if (!p) return;
+      const up = grid[j + 1] || [], d = j % 2 ? 0 : -1;
+      [row[i + 1], up[i + d], up[i + d + 1]].forEach(q => { if (q) { c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); } });
+    }));
+    c.stroke();
+    grid.forEach(row => row.forEach(p => p && dot(p[0], p[1], 3)));
+  } else {
+    // 氷のきらきら
+    c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 2;
+    const x0 = g.type === 'float' ? g.bx : XL + 6, y0 = g.type === 'full' ? g.iceTop + 8 : g.type === 'float' ? g.by + 5 : g.liqTop + 6;
+    c.beginPath(); c.moveTo(x0 + 6, y0 + 4); c.lineTo(x0 + 18, y0 + 14); c.moveTo(x0 + 10, y0 + 18); c.lineTo(x0 + 16, y0 + 24); c.stroke();
+  }
+  c.restore();
+}
+// 温度計
+function drawThermo(g) {
+  const c = ctx, x = TH_X, top = Y_TOP - 60, bulb = Y0 - 16;
+  c.fillStyle = 'rgba(255,255,255,0.85)'; c.strokeStyle = '#78909c'; c.lineWidth = 1.5;
+  c.beginPath(); c.roundRect ? c.roundRect(x - 4, top, 8, bulb - top, 4) : c.rect(x - 4, top, 8, bulb - top); c.fill(); c.stroke();
+  // 赤い液の高さ（−20℃〜110℃）
+  const yOf = T => bulb - 8 - (T + 20) / 130 * (bulb - 8 - top - 6);
+  c.fillStyle = '#e53935';
+  c.fillRect(x - 1.5, yOf(st.T), 3, bulb - yOf(st.T));
+  c.beginPath(); c.arc(x, bulb, 5, 0, 6.28); c.fill();
+  // 0℃と100℃の目もり
+  [[0, '0'], [100, '100']].forEach(([T, s]) => {
+    c.strokeStyle = '#37474f'; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(x - 7, yOf(T)); c.lineTo(x - 3, yOf(T)); c.stroke();
+  });
+  // 数字の札
+  const txt = Math.round(st.T) + '℃';
+  c.font = 'bold 18px ' + FONT;
+  const w = c.measureText(txt).width + 14;
+  c.fillStyle = '#fff'; c.strokeStyle = '#e53935'; c.lineWidth = 2;
+  c.beginPath(); c.roundRect ? c.roundRect(x - w / 2, top - 28, w, 24, 6) : c.rect(x - w / 2, top - 28, w, 24); c.fill(); c.stroke();
+  c.fillStyle = '#c62828'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, x, top - 16);
+}
+// アルコールランプと三きゃく・金あみ
+function drawLamp() {
+  const c = ctx, cx = (XL + XR) / 2;
+  // 三きゃく
+  c.strokeStyle = '#455a64'; c.lineWidth = 4;
+  c.beginPath(); c.moveTo(XL - 14, 404); c.lineTo(XL, Y0 + 6); c.moveTo(XR + 14, 404); c.lineTo(XR, Y0 + 6); c.stroke();
+  // 金あみ
+  c.fillStyle = '#90a4ae'; c.fillRect(XL - 16, Y0 + 1, BW + 32, 6);
+  c.fillStyle = '#eceff1'; c.fillRect(cx - 30, Y0 + 2, 60, 4);
+  // ほのお
+  if (st.mode === 'heat') {
+    const h = 34 + Math.sin(clockT * 17) * 3;
+    const fg = c.createLinearGradient(0, 352 - h, 0, 352);
+    fg.addColorStop(0, 'rgba(255,152,0,0.2)'); fg.addColorStop(0.5, 'rgba(255,152,0,0.85)'); fg.addColorStop(1, 'rgba(66,165,245,0.9)');
+    c.fillStyle = fg;
+    c.beginPath(); c.moveTo(cx, 352 - h); c.quadraticCurveTo(cx + 13, 340, cx + 6, 352); c.lineTo(cx - 6, 352); c.quadraticCurveTo(cx - 13, 340, cx, 352 - h); c.fill();
+  }
+  // ランプ
+  c.fillStyle = '#795548'; c.fillRect(cx - 3, 350, 6, 8);
+  c.fillStyle = '#9e9e9e'; c.fillRect(cx - 8, 356, 16, 6);
+  c.fillStyle = 'rgba(227,242,253,0.85)'; c.strokeStyle = '#78909c'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(cx - 8, 362); c.quadraticCurveTo(cx - 34, 372, cx - 32, 402); c.lineTo(cx + 32, 402); c.quadraticCurveTo(cx + 34, 372, cx + 8, 362); c.closePath(); c.fill(); c.stroke();
+  c.fillStyle = 'rgba(239,154,154,0.6)'; c.fillRect(cx - 28, 384, 56, 17);
+  if (st.mode !== 'heat') label(c, 'アルコールランプ', cx, 392, '#455a64', 12);
+}
+// 氷と食塩の入れもの（front＝true なら、ビーカーの前がわだけかく）
+function drawBowl(front) {
+  const c = ctx, x1 = 22, x2 = 278, y1 = 200, y2 = 318;
+  if (!front) {
+    c.fillStyle = 'rgba(207,216,220,0.9)'; c.strokeStyle = '#607d8b'; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(x1, y1 - 10); c.lineTo(x1 + 8, y2); c.lineTo(x2 - 8, y2); c.lineTo(x2, y1 - 10); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = 'rgba(224,242,254,0.9)'; c.fillRect(x1 + 4, y1, x2 - x1 - 8, y2 - y1 - 2);
+    return;
+  }
+  // ビーカーの左右と下に見える、氷と食塩
+  const cubes = [[30, 210], [30, 240], [36, 270], [34, 296], [244, 214], [250, 244], [244, 274], [250, 300], [70, 304], [110, 306], [150, 304], [190, 306]];
+  c.lineWidth = 1.5;
+  cubes.forEach(([x, y], i) => {
+    if (x > XL && x < XR && y < Y0 + 2) return;
+    c.save(); c.translate(x, y); c.rotate(i * 0.5);
+    c.fillStyle = 'rgba(255,255,255,0.9)'; c.strokeStyle = '#90caf9';
+    c.fillRect(-9, -8, 18, 16); c.strokeRect(-9, -8, 18, 16);
+    c.restore();
+  });
+  c.fillStyle = '#fff';
+  for (let i = 0; i < 40; i++) { const x = 26 + (i * 37) % 250, y = 206 + (i * 53) % 108; if (x > XL - 2 && x < XR + 2 && y < Y0 + 4) continue; c.fillRect(x, y, 2.5, 2.5); }
+  label(c, '氷と食塩（約−15℃）', CW / 2, y2 + 14, '#0d47a1', 13);
+}
+
+// ===== グラフをかく =====
+const SERIES = { 50: { color: '#D55E00', dash: [8, 5], mark: 'tri', name: '少ない' }, 100: { color: '#0072B2', dash: [], mark: 'circle', name: '多い' } };
+function drawGraph() {
+  const c = gctx;
+  const L = 46, Rm = 14, T = 40, B = 46, PW = GW - L - Rm, PH = GH - T - B;
+  const yLo = -20, yHi = 110;
+  let xMax = 10;
+  runs.forEach(r => { const last = r.pts[r.pts.length - 1]; if (last) xMax = Math.max(xMax, last[0]); });
+  const step = xMax <= 10 ? 2 : xMax <= 25 ? 5 : xMax <= 60 ? 10 : 20;
+  xMax = Math.ceil(xMax / step) * step;
+  const px = m => L + m / xMax * PW, py = v => T + (yHi - v) / (yHi - yLo) * PH;
+
+  c.fillStyle = '#fff'; c.fillRect(0, 0, GW, GH);
+  c.font = '13px ' + FONT; c.textBaseline = 'middle';
+  // 目もり
+  for (let v = -20; v <= 100; v += 20) {
+    c.strokeStyle = '#e3e3e3'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(L, py(v)); c.lineTo(L + PW, py(v)); c.stroke();
+    c.fillStyle = '#444'; c.textAlign = 'right'; c.fillText(v, L - 5, py(v));
+  }
+  c.textAlign = 'center';
+  for (let m = 0; m <= xMax + 1e-6; m += step) {
+    c.strokeStyle = '#eee'; c.beginPath(); c.moveTo(px(m), T); c.lineTo(px(m), T + PH); c.stroke();
+    c.fillStyle = '#444'; c.fillText(m, px(m), T + PH + 12);
+  }
+  // 0℃と100℃の線
+  [[0, '0℃'], [100, '100℃']].forEach(([v, s]) => {
+    c.save(); c.setLineDash([6, 4]); c.strokeStyle = '#ef6c00'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(L, py(v)); c.lineTo(L + PW, py(v)); c.stroke(); c.restore();
+  });
+  // じく
+  c.strokeStyle = '#555'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(L, T); c.lineTo(L, T + PH); c.lineTo(L + PW, T + PH); c.stroke();
+  c.fillStyle = '#333'; c.font = 'bold 14px ' + FONT;
+  c.fillText('時間（分）', L + PW / 2, GH - 12);
+  c.save(); c.translate(14, T + PH / 2); c.rotate(-Math.PI / 2); c.fillText('温度（℃）', 0, 0); c.restore();
+  c.fillText('温度の変わり方', GW / 2 + 10, 12);
+  // はんれい
+  let lx = L + 6;
+  [50, 100].forEach(a => {
+    const s = SERIES[a];
+    c.strokeStyle = s.color; c.lineWidth = 3; c.setLineDash(s.dash);
+    c.beginPath(); c.moveTo(lx, 30); c.lineTo(lx + 26, 30); c.stroke(); c.setLineDash([]);
+    gmark(c, s.mark, lx + 13, 30, s.color);
+    c.fillStyle = '#333'; c.font = '13px ' + FONT; c.textAlign = 'left';
+    const t = s.name + ' ' + a + 'mL';
+    c.fillText(t, lx + 32, 30);
+    lx += 40 + c.measureText(t).width;
+  });
+
+  // 線（前の実験はうすく）
+  runs.forEach(r => {
+    const s = SERIES[r.amount], cur = r === run;
+    const pts = r.pts.concat(cur ? [[st.t / 60, st.T, st.phase]] : []);
+    if (pts.length < 1) return;
+    c.save(); c.beginPath(); c.rect(L, T - 4, PW + 4, PH + 8); c.clip();
+    c.globalAlpha = cur ? 1 : 0.4;
+    c.strokeStyle = s.color; c.lineWidth = 3; c.setLineDash(s.dash); c.lineJoin = 'round';
+    c.beginPath();
+    pts.forEach((p, i) => i ? c.lineTo(px(p[0]), py(p[1])) : c.moveTo(px(p[0]), py(p[1])));
+    c.stroke(); c.setLineDash([]);
+    // 1分ごとに印
+    let next = 0;
+    pts.forEach(p => { if (p[0] >= next - 1e-6) { gmark(c, s.mark, px(p[0]), py(p[1]), s.color); next = Math.floor(p[0]) + 1; } });
+    c.restore();
+  });
+  // 平らなところに名前を付ける（今の線だけ）
+  if (run) {
+    const pts = run.pts.concat([[st.t / 60, st.T, st.phase]]);
+    const NAME = { melt: 'とけている間', freeze: 'こおっている間', boil: 'ふっとうしている間' };
+    let i = 0;
+    while (i < pts.length) {
+      const k = pts[i][2];
+      let j = i;
+      while (j + 1 < pts.length && pts[j + 1][2] === k) j++;
+      if (NAME[k] && pts[j][0] - pts[i][0] >= 0.8) {
+        const mx = px((pts[i][0] + pts[j][0]) / 2), v = pts[i][1];
+        const txt = NAME[k] + '（' + (k === 'boil' ? '約100' : '0') + '℃のまま）';
+        c.font = 'bold 13px ' + FONT;
+        const hw = c.measureText(txt).width / 2 + 4;
+        label(c, txt, clamp(mx, L + hw, L + PW - hw), py(v) + (k === 'boil' ? 18 : -16), '#bf360c', 13);
+      }
+      i = j + 1;
+    }
+  }
+}
+function gmark(c, kind, x, y, color) {
+  c.fillStyle = color; c.strokeStyle = '#fff'; c.lineWidth = 1.5;
+  c.beginPath();
+  if (kind === 'tri') { c.moveTo(x, y - 6); c.lineTo(x + 5.5, y + 4); c.lineTo(x - 5.5, y + 4); c.closePath(); }
+  else c.arc(x, y, 4.5, 0, 6.28);
+  c.fill(); c.stroke();
+}
+
+// ===== 画面の表示 =====
+function setMsg(html) { $('msg').innerHTML = html || '&nbsp;'; }
+function clockText(t) {
+  const s = Math.floor(t);
+  return '⏱ ' + Math.floor(s / 60) + R('分', 'ふん') + (s % 60) + R('秒', 'びょう');
+}
+let lastClock = '';
+function updateReadouts() {
+  const ck = clockText(st.t);
+  if (ck !== lastClock) { $('clock').innerHTML = ck; lastClock = ck; }
+  $('rT').textContent = Math.round(st.T) + '℃';
+  $('rPhase').innerHTML = PHASE_HTML[st.phase];
+  $('rVol').textContent = '約' + Math.round(st.liq + ICE_V * st.ice) + 'mL';
+}
+function updateButtons() {
+  $('btnHeat').classList.toggle('on', st.mode === 'heat');
+  $('btnCool').classList.toggle('on', st.mode === 'cool');
+  $('btnStop').classList.toggle('on', st.mode === null);
+  $('safety').innerHTML = st.app === 'bowl'
+    ? '⚠ ' + R('食塩', 'しょくえん') + 'をまぜた' + R('氷', 'こおり') + 'はとても' + R('冷', 'つめ') + 'たい（−15℃くらい）。' + R('手', 'て') + 'で' + R('長', 'なが') + 'くさわらない。'
+    : '⚠ ふっとう' + R('石', 'いし') + 'を' + R('入', 'い') + 'れてから' + R('熱', 'ねっ') + 'する。ふっとうしたお' + R('湯', 'ゆ') + 'や' + R('湯気', 'ゆげ') + 'はとても' + R('熱', 'あつ') + 'い。やけどに' + R('注意', 'ちゅうい') + '！';
+}
+
+// ===== 記録 =====
+function record() {
+  const rec = { amount: SERIES[st.m0].name, time: +(st.t / 60).toFixed(1), temp: Math.round(st.T), state: PHASE_NAME[st.phase] };
+  rec[SERIES[st.m0].name] = Math.round(st.T);
+  Worksheet.addRecord(rec);
+}
+
+// ===== 毎回の動き =====
+let lastTs = 0;
+function loop(ts) {
+  const dt = clamp((ts - lastTs) / 1000 || 0, 0, 0.05);   // タブを切りかえたときなどに、大きく進みすぎないように
+  lastTs = ts;
+  clockT += dt;
+  if (st.mode) {
+    // 時間を進める（1秒ずつ計算する）
+    let rest = dt * speed;
+    while (rest > 1e-9) {
+      const d = Math.min(1, rest);
+      physStep(d);
+      rest -= d;
+      const ph = phaseCode();
+      if (ph !== st.phase) { phaseChanged(st.phase, ph); st.phase = ph; run.pts.push([st.t / 60, st.T, ph]); }
+      if (st.t >= st.nextSample) { run.pts.push([st.t / 60, st.T, ph]); st.nextSample = st.t + 10; }
+      if (autoRec && st.t >= st.nextAuto) { record(); st.nextAuto += 120; }
+      // からだきしないように、火を消す
+      if (st.mode === 'heat' && st.liq > 0 && st.ice === 0 && st.liq < st.m0 * DRY) {
+        st.mode = null; st.q = 0; st.phase = phaseCode(); updateButtons();
+        setMsg('🧯 ' + R('水', 'みず') + 'が' + R('少', 'すく') + 'なくなったので、' + R('火', 'ひ') + 'を' + R('消', 'け') + 'したよ。へった' + R('水', 'みず') + 'は、' + R('水', 'すい') + 'じょう' + R('気', 'き') + 'になって' + R('空気', 'くうき') + 'の' + R('中', 'なか') + 'へ' + R('出', 'で') + 'ていったんだ');
+        break;
+      }
+    }
+  }
+  const g = geom();
+  animate(dt, g);
+  drawScene(g);
+  drawGraph();
+  updateReadouts();
+  requestAnimationFrame(loop);
+}
+
+// ===== ボタン =====
+function start(mode) {
+  // 冷やすと、かべと底から氷ができる。熱すると、氷のかたまりがうく
+  st.app = mode === 'cool' ? 'bowl' : 'lamp';
+  st.look = mode === 'cool' ? 'wall' : 'float';
+  st.mode = mode;
+  updateButtons();
+  setMsg(mode === 'heat'
+    ? '🔥 ' + R('熱', 'ねっ') + 'しているよ。' + R('温度', 'おんど') + 'とグラフを' + R('見', 'み') + 'てみよう'
+    : '❄ ' + R('氷', 'こおり') + 'と' + R('食塩', 'しょくえん') + 'で' + R('冷', 'ひ') + 'やしているよ。0℃になるとどうなるかな？');
+}
+$('btnHeat').onclick = () => start('heat');
+$('btnCool').onclick = () => start('cool');
+$('btnStop').onclick = () => { st.mode = null; st.q = 0; st.phase = phaseCode(); updateButtons(); setMsg('⏸ ' + R('止', 'と') + 'めたよ。「' + R('熱', 'ねっ') + 'する」か「' + R('冷', 'ひ') + 'やす」で、つづきから' + R('始', 'はじ') + 'まるよ'); };
+$('btnReset').onclick = () => { runs.pop(); resetSim(); };
+$('btnRec').onclick = record;
+$('btnAuto').onclick = () => {
+  autoRec = !autoRec;
+  $('btnAuto').classList.toggle('active', autoRec);
+  st.nextAuto = Math.floor(st.t / 120) * 120 + 120;
+};
+$('btnClearG').onclick = () => { runs = [run]; };
+$('btnDots').onclick = () => {
+  showDots = !showDots;
+  $('btnDots').classList.toggle('active', showDots);
+  $('btnDots').textContent = showDots ? '● つぶ ON' : '○ つぶ OFF';
+};
+document.querySelectorAll('[data-start]').forEach(b => b.onclick = () => {
+  startKind = b.dataset.start;
+  document.querySelectorAll('[data-start]').forEach(x => x.classList.toggle('active', x === b));
+  if (run && run.pts.length <= 1) runs.pop();
+  resetSim();
+});
+document.querySelectorAll('[data-amount]').forEach(b => b.onclick = () => {
+  amount = +b.dataset.amount;
+  document.querySelectorAll('[data-amount]').forEach(x => x.classList.toggle('active', x === b));
+  if (run && run.pts.length <= 1) runs.pop();
+  resetSim();
+});
+document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => {
+  speed = +b.dataset.speed;
+  document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('active', x === b));
+});
+
+// ===== ビーカーをタップすると説明 =====
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * CW, y = (e.clientY - r.top) / r.height * CH;
+  const g = geom(), boiling = st.phase === 'boil';
+  if (inIce(x, y, g)) {
+    setMsg('🧊 ' + R('氷', 'こおり') + '（' + R('固体', 'こたい') + '）。つぶがきちんとならんで、その' + R('場', 'ば') + 'でゆれているだけ。' + R('水', 'みず') + 'がこおると' + R('体積', 'たいせき') + 'が' + R('約', 'やく') + '1.1' + R('倍', 'ばい') + 'になるので、' + R('同', 'おな') + 'じ' + R('重', 'おも') + 'さでは' + R('水', 'みず') + 'より' + R('軽', 'かる') + 'く、' + R('氷', 'こおり') + 'は' + R('水', 'みず') + 'にうくよ');
+  } else if (inLiquid(x, y, g) && boiling) {
+    setMsg('🫧 あわの' + R('中', 'なか') + 'みは' + R('水', 'すい') + 'じょう' + R('気', 'き') + '（' + R('気体', 'きたい') + '）。' + R('空気', 'くうき') + 'ではないよ。' + R('水', 'みず') + 'が' + R('中', 'なか') + 'から' + R('目', 'め') + 'に' + R('見', 'み') + 'えない' + R('水', 'すい') + 'じょう' + R('気', 'き') + 'にすがたを' + R('変', 'か') + 'えて、あわになって' + R('出', 'で') + 'てくるんだ');
+  } else if (inLiquid(x, y, g)) {
+    setMsg('💧 ' + R('水', 'みず') + '（' + R('液体', 'えきたい') + '）。つぶがくっつきながら、' + R('自由', 'じゆう') + 'に' + R('動', 'うご') + 'き' + R('回', 'まわ') + 'っている。' + R('温度', 'おんど') + 'が' + R('高', 'たか') + 'いほど、' + R('速', 'はや') + 'く' + R('動', 'うご') + 'くよ');
+  } else if (y < Y_TOP && y > Y_TOP - 30 && x > XL - 50 && x < XR) {
+    setMsg('👀 ビーカーの' + R('口', 'くち') + 'のすぐ' + R('上', 'うえ') + 'は、' + R('何', 'なに') + 'も' + R('見', 'み') + 'えない。ここには、' + R('目', 'め') + 'に' + R('見', 'み') + 'えない' + R('水', 'すい') + 'じょう' + R('気', 'き') + '（' + R('気体', 'きたい') + '）があるよ');
+  } else if (y < Y_TOP - 20) {
+    setMsg('☁ ' + R('湯気', 'ゆげ') + 'は、' + R('水', 'すい') + 'じょう' + R('気', 'き') + 'が' + R('冷', 'ひ') + 'やされて、' + R('小', 'ちい') + 'さな' + R('水', 'みず') + 'のつぶ（' + R('液体', 'えきたい') + '）にもどったもの。だから' + R('白', 'しろ') + 'く' + R('見', 'み') + 'える。やがて' + R('見', 'み') + 'えなくなるのは、また' + R('水', 'すい') + 'じょう' + R('気', 'き') + 'になって' + R('空気', 'くうき') + 'にまざるからだよ');
+  }
+});
+
+resetSim();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
