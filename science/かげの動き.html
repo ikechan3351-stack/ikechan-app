@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>かげの動き</title>
+<!--
+  かげの動き（小学3年 理科「かげと太陽」）
+  ・時こくを動かすと、太陽が 東→南→西 へ、ぼうのかげが 西→北→東 へ動きます。
+  ・太陽の位置は「北緯35度（東京あたり）・春分の日」として計算しています（下の sunAt）。
+  ・ワークシート部品（worksheet.js）を使っています。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+
+  /* 安全メッセージ */
+  .safety {
+    background: #fff8e1; border: 3px solid #f9a825; border-radius: 12px;
+    padding: 4px 12px; font-size: 16px; font-weight: bold; color: #6d4c00; text-align: center;
+  }
+
+  /* 上：真上から見た図　右：横から見た図と温度 */
+  .main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; }
+  @media (max-width: 640px) { .main { grid-template-columns: 1fr; } }
+  .side { display: flex; flex-direction: column; gap: 10px; }
+  .side .card { padding: 8px 12px; }
+  .fig-title { margin: 0 0 4px; font-size: 16px; font-weight: bold; color: #33691e; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #top { aspect-ratio: 1 / 1; max-height: 46vh; max-width: 46vh; margin: 0 auto; }
+  /* スマホ：図のすぐ下に時こくのスライダーが来るようにならべかえる */
+  @media (max-width: 640px) {
+    #top { max-height: none; max-width: none; }
+    .main { display: contents; }
+    .main > .card { order: 1; }
+    .ctrl { order: 2; }
+    .side { order: 3; }
+    .diff { order: 4; }
+  }
+  #sideView { aspect-ratio: 2 / 1; }
+
+  /* いまのようす */
+  .top-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .now { display: flex; flex-direction: column; font-size: 17px; }
+  .now b { color: #33691e; }
+  .clock { font-size: 1.4rem; font-weight: bold; color: #33691e; white-space: nowrap; }
+
+  /* 地面の温度（横向きの温度計） */
+  .thermo { display: flex; flex-direction: column; gap: 6px; }
+  .th { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+  .th > span:first-child { white-space: nowrap; width: 5.2em; }
+  .th .tube { position: relative; flex: 1; height: 22px; background: #eee; border: 2px solid #999; border-radius: 11px; overflow: hidden; }
+  .th .fill { position: absolute; left: 0; top: 0; bottom: 0; transition: width .2s; }
+  .th.sun .fill { background: repeating-linear-gradient(45deg, #e65100 0 6px, #ef6c00 6px 12px); }
+  .th.shade .fill { background: #0072B2; }
+  .th .deg { font-size: 1.15rem; font-weight: bold; width: 3.2em; text-align: right; }
+  .th.sun .deg { color: #bf360c; }
+  .th.shade .deg { color: #0072B2; }
+
+  /* 時こくのスライダーとボタン */
+  .time-row { display: flex; align-items: center; gap: 10px; }
+  .ctrl .row { margin-top: 2px; }
+  .ctrl .msg { margin-top: 4px; }
+  .time-row span { font-size: 16px; white-space: nowrap; color: #555; }
+  input[type=range] { flex: 1; height: 44px; accent-color: #558b2f; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 20px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.mark { background: #6a1b9a; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #6a1b9a; }
+  .diff { font-size: 15px; color: #666; margin: 6px 0 0; }
+  ruby rt { font-size: 0.55em; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🌞 かげの<ruby>動<rt>うご</rt></ruby>き</h1>
+<p class="subtitle">時こくを<ruby>動<rt>うご</rt></ruby>かして、<ruby>太陽<rt>たいよう</rt></ruby>とぼうのかげの<ruby>動<rt>うご</rt></ruby>きを<ruby>調<rt>しら</rt></ruby>べよう</p>
+
+<div class="panel">
+  <div class="safety">⚠ <ruby>太陽<rt>たいよう</rt></ruby>を<ruby>直<rt>ちょく</rt></ruby><ruby>接<rt>せつ</rt></ruby>見てはいけません（<ruby>目<rt>め</rt></ruby>をいためます）</div>
+
+  <div class="main">
+    <div class="card">
+      <div class="top-head">
+        <p class="fig-title">① <ruby>真上<rt>まうえ</rt></ruby>から見た<ruby>校庭<rt>こうてい</rt></ruby></p>
+        <div class="clock" id="clock">午前8時</div>
+      </div>
+      <canvas id="top" aria-label="真上から見た校庭。ぼうと、太陽の向きと、かげ"></canvas>
+    </div>
+    <div class="side">
+      <div class="card now">
+        <span>☀️ <ruby>太陽<rt>たいよう</rt></ruby>：<b id="sunDir">-</b> の空</span>
+        <span>▬ かげ：<b id="shDir">-</b> 向き</span>
+        <span>📏 長さ：<b id="shLen">-</b></span>
+      </div>
+      <div class="card">
+        <p class="fig-title">② <ruby>横<rt>よこ</rt></ruby>から見た図</p>
+        <canvas id="sideView" aria-label="横から見た図。太陽の高さとかげの長さ"></canvas>
+      </div>
+      <div class="card">
+        <p class="fig-title">③ <ruby>地面<rt>じめん</rt></ruby>の<ruby>温度<rt>おんど</rt></ruby></p>
+        <div class="thermo">
+          <div class="th sun"><span>☀️ 日なた</span><div class="tube"><div class="fill" id="fillSun"></div></div><span class="deg" id="tSun">-</span></div>
+          <div class="th shade"><span>🏫 日かげ</span><div class="tube"><div class="fill" id="fillShade"></div></div><span class="deg" id="tShade">-</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card ctrl">
+      <div class="time-row">
+        <span>午前8時</span>
+        <input type="range" id="slider" min="480" max="960" step="any" value="480" aria-label="時こく">
+        <span>午後4時</span>
+      </div>
+      <div class="row">
+        <button class="go-btn" id="btnPlay">▶ さいせい</button>
+        <span>
+          <button class="chip" data-speed="8">ゆっくり</button>
+          <button class="chip active" data-speed="4">ふつう</button>
+          <button class="chip" data-speed="1.5">はやおくり</button>
+        </span>
+        <button class="go-btn mark" id="btnMark">📍 かげの先にしるしをつける</button>
+        <button class="chip active" id="btnArrow">➡ <ruby>矢印<rt>やじるし</rt></ruby> ON</button>
+        <button class="go-btn sub" id="btnReset">もういちど</button>
+      </div>
+      <div class="msg" id="msg">しるしは、ちょうどの時こく（9時、10時…）につけるよ</div>
+  </div>
+
+  <p class="diff">※じっさいとのちがい：<ruby>北緯<rt>ほくい</rt></ruby>35<ruby>度<rt>ど</rt></ruby>（東京あたり）の<ruby>春分<rt>しゅんぶん</rt></ruby>の日として<ruby>計算<rt>けいさん</rt></ruby>しています。<ruby>太陽<rt>たいよう</rt></ruby>が<ruby>真南<rt>まみなみ</rt></ruby>にくる時こくは、<ruby>場所<rt>ばしょ</rt></ruby>によって正午から少しずれます。ぼうの高さは1m、<ruby>温度<rt>おんど</rt></ruby>は<ruby>目安<rt>めやす</rt></ruby>です。</p>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: 'かげの<ruby>動<rt>うご</rt></ruby>き',
+  question: '正午（昼の12時）に、ぼうのかげはどちらを向くだろうか？',
+  predictionChoices: ['東', '西', '南', '北'],
+  experimentNote: '時こくを<ruby>動<rt>うご</rt></ruby>かして、ちょうどの時こくごとに「📍 かげの先にしるしをつける」をおそう。',
+  columns: [
+    { key: 'time', label: '時こく' },
+    { key: 'dir',  label: 'かげの<ruby>向<rt>む</rt></ruby>き' },
+    { key: 'len',  label: 'かげの長さ', unit: 'cm' }
+  ],
+  chart: { type: 'line', x: 'time', y: 'len', sortBy: 'h' }, // h（何時か）の順にならべる
+  hint: 'かげは太陽の反対がわにできることを、矢印で確かめさせましょう。午前と午後で、かげの長さがどうなるかにも目を向けさせます。',
+  answer: '正午のかげは北を向く。かげは太陽の反対がわにでき、太陽が東→南→西と動くので、かげは西→北→東と動く。正午ごろ、太陽がいちばん高くなり、かげはいちばん短くなる。'
+});
+
+// ===== 太陽の位置の計算 =====
+const LAT = 35 * Math.PI / 180; // 北緯35度
+const POLE = 100;               // ぼうの高さ（cm）
+// min：0時からの分（480＝午前8時）。春分の日なので、太陽の「赤緯」は0度として計算する。
+function sunAt(min) {
+  const H = (min / 60 - 12) * 15 * Math.PI / 180;     // 時角（正午から何度回ったか）
+  const up = Math.cos(LAT) * Math.cos(H);             // 太陽の向き（上）
+  const east = -Math.sin(H);                          // 太陽の向き（東）
+  const north = -Math.sin(LAT) * Math.cos(H);         // 太陽の向き（北）
+  const alt = Math.asin(up);                          // 太陽の高さ（ラジアン）
+  const az = Math.atan2(east, north);                 // 太陽の方位（北から時計回り）
+  const len = POLE / Math.tan(alt);                   // かげの長さ（cm）
+  const g = Math.hypot(east, north);
+  // かげは太陽の反対がわ（東・北の向きの長さ）
+  return { alt, az, len, shE: -east / g * len, shN: -north / g * len };
+}
+const DIRS = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
+function dirName(az) { // 方位（ラジアン）→ 8方位
+  const d = ((az * 180 / Math.PI) % 360 + 360) % 360;
+  return DIRS[Math.round(d / 45) % 8];
+}
+// 地面の温度（目安）：午後1時ごろにいちばん高くなる
+function temps(min) {
+  const s = Math.max(0, Math.sin(Math.PI * (min / 60 - 6) / 14));
+  return { sun: 8 + 12 * s, shade: 9 + 5 * s };
+}
+// 時こくの名前
+function clockName(min) {
+  min = Math.round(min);
+  const h = Math.floor(min / 60), m = min % 60;
+  if (min === 720) return '正午';
+  const s = (h < 12 ? '午前' + h : '午後' + (h - 12)) + '時';
+  return m ? s + m + '分' : s;
+}
+// 表・グラフ用の短い名前（8時・9時…正午…1時・4時）
+const shortName = h => h === 12 ? '正午' : (h < 12 ? h : h - 12) + '時';
+
+// ===== 画面の部品 =====
+const $ = id => document.getElementById(id);
+const slider = $('slider');
+let now = 480;          // いまの時こく（分）
+let playing = false;
+let secPerHour = 4;     // 1時間すすむのに何秒かけるか
+let showArrow = true;
+
+// ===== ① 真上から見た図 =====
+const topCv = $('top'), sideCv = $('sideView');
+function fit(cv) { // 画面の大きさに合わせて、くっきりかく
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, W: r.width, H: r.height };
+}
+let topGeo = null; // しるしをタップで付けるときに使う
+
+function arrow(ctx, x1, y1, x2, y2, color, w, dash) {
+  const a = Math.atan2(y2 - y1, x2 - x1), hl = w * 3.2;
+  ctx.save();
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = w; ctx.setLineDash(dash || []);
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - Math.cos(a) * hl * 0.8, y2 - Math.sin(a) * hl * 0.8); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - Math.cos(a - 0.45) * hl, y2 - Math.sin(a - 0.45) * hl);
+  ctx.lineTo(x2 - Math.cos(a + 0.45) * hl, y2 - Math.sin(a + 0.45) * hl);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function label(ctx, text, x, y, color, size) {
+  ctx.font = 'bold ' + size + 'px "Hiragino Sans", "Yu Gothic", sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+}
+
+function drawTop() {
+  const { ctx, W, H } = fit(topCv);
+  const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 26;
+  const scale = R * 0.9 / 230;            // 230cm が R の 0.9 倍
+  topGeo = { cx, cy, scale };
+  const fs = Math.max(15, R * 0.1);
+  ctx.clearRect(0, 0, W, H);
+
+  // 校庭（すな色）と方位の輪
+  ctx.fillStyle = '#f3e3bd';
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#c8a96a'; ctx.lineWidth = 2; ctx.stroke();
+  // 方位の線（うすく）
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1;
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(a) * R, cy - Math.cos(a) * R); ctx.stroke();
+  }
+
+  // しるし（記録から作る）と、それをむすぶ点線
+  const marks = Worksheet.getRecords().filter(r => typeof r.h === 'number').sort((a, b) => a.h - b.h);
+  const mp = marks.map(r => { const s = sunAt(r.h * 60); return { x: cx + s.shE * scale, y: cy - s.shN * scale, r }; });
+  if (mp.length > 1) {
+    ctx.save(); ctx.strokeStyle = '#6a1b9a'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+    ctx.beginPath(); mp.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    ctx.restore();
+  }
+
+  // かげ
+  const s = sunAt(now);
+  const tipX = cx + s.shE * scale, tipY = cy - s.shN * scale;
+  topGeo.tip = { x: tipX, y: tipY };
+  ctx.save();
+  ctx.strokeStyle = 'rgba(40,40,40,0.75)'; ctx.lineWidth = Math.max(7, R * 0.05); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(tipX, tipY); ctx.stroke();
+  ctx.restore();
+
+  // しるしの点（むらさきの◆と時こく）
+  // 時こくの文字は、重ならないように上・下に交互にずらす
+  mp.forEach((p, i) => {
+    ctx.save(); ctx.fillStyle = '#6a1b9a'; ctx.translate(p.x, p.y); ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-5, -5, 10, 10); ctx.restore();
+    label(ctx, p.r.time, p.x, p.y + (p.r.h % 2 ? 1 : -1) * fs * 0.95, '#6a1b9a', fs * 0.72);
+  });
+
+  // ぼう（真上から見ると点）
+  ctx.fillStyle = '#795548';
+  ctx.beginPath(); ctx.arc(cx, cy, Math.max(6, R * 0.035), 0, Math.PI * 2); ctx.fill();
+
+  // 太陽（輪の上）
+  const sx = cx + Math.sin(s.az) * R, sy = cy - Math.cos(s.az) * R;
+  ctx.save();
+  ctx.strokeStyle = '#f57f17'; ctx.lineWidth = 3;
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4, r1 = fs * 0.85, r2 = fs * 1.2;
+    ctx.beginPath(); ctx.moveTo(sx + Math.cos(a) * r1, sy + Math.sin(a) * r1); ctx.lineTo(sx + Math.cos(a) * r2, sy + Math.sin(a) * r2); ctx.stroke();
+  }
+  ctx.fillStyle = '#ffd54f'; ctx.strokeStyle = '#f57f17';
+  ctx.beginPath(); ctx.arc(sx, sy, fs * 0.72, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+
+  // 東西南北の文字（北が上）。太陽にかくれないように、さいごにかく
+  [['北', 0, -1], ['東', 1, 0], ['南', 0, 1], ['西', -1, 0]].forEach(([t, dx, dy]) => {
+    const x = cx + dx * (R + 13), y = cy + dy * (R + 13);
+    label(ctx, t, x, y, t === '北' ? '#c62828' : '#333', fs * 1.05);
+  });
+
+  // 矢印：太陽の向き（オレンジの実線）と、かげの向き（こい灰色の点線）
+  if (showArrow) {
+    const ra = R * 0.62;
+    const ax = cx + Math.sin(s.az) * ra, ay = cy - Math.cos(s.az) * ra;
+    arrow(ctx, cx, cy, ax, ay, '#e65100', 4);
+    label(ctx, '太陽', cx + Math.sin(s.az) * ra * 0.6 + Math.cos(s.az) * 18, cy - Math.cos(s.az) * ra * 0.6 + Math.sin(s.az) * 18, '#e65100', fs * 0.8);
+    const sl = Math.min(R * 0.8, Math.hypot(tipX - cx, tipY - cy) + 24);
+    const ux = (tipX - cx) / Math.hypot(tipX - cx, tipY - cy), uy = (tipY - cy) / Math.hypot(tipX - cx, tipY - cy);
+    arrow(ctx, cx, cy, cx + ux * sl, cy + uy * sl, '#212121', 3, [8, 6]);
+    label(ctx, 'かげ', cx + ux * (sl + fs * 0.9), cy + uy * (sl + fs * 0.9), '#212121', fs * 0.8);
+  }
+}
+
+// ===== ② 横から見た図（太陽とぼうをふくむ面を横から見る） =====
+function drawSide() {
+  const { ctx, W, H } = fit(sideCv);
+  const s = sunAt(now);
+  ctx.clearRect(0, 0, W, H);
+  // 空と地面
+  ctx.fillStyle = '#e3f2fd'; ctx.fillRect(0, 0, W, H);
+  const gy = H * 0.8;
+  ctx.fillStyle = '#f3e3bd'; ctx.fillRect(0, gy, W, H - gy);
+  ctx.strokeStyle = '#a1887f'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+
+  const bx = W * 0.32;                       // ぼうの位置
+  const k = Math.min(W * 0.62 / 240, gy * 0.42 / POLE); // 1cm を何ピクセルにするか
+  const ph = POLE * k;                       // ぼうの高さ（ピクセル）
+  const tipX = bx + s.len * k;
+  // 太陽の光（ぼうの先を通る線）
+  const rayL = Math.min(W * 0.25, (gy - ph - 16) / Math.sin(56 * Math.PI / 180)); // 正午でも図からはみ出さない長さ
+  const sx = bx - Math.cos(s.alt) * rayL, sy = gy - ph - Math.sin(s.alt) * rayL;
+  ctx.save(); ctx.strokeStyle = '#f9a825'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tipX, gy); ctx.stroke(); ctx.restore();
+  // かげ
+  ctx.strokeStyle = 'rgba(40,40,40,0.75)'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(bx, gy); ctx.lineTo(Math.min(tipX, W - 4), gy); ctx.stroke();
+  ctx.lineCap = 'butt';
+  // ぼう
+  ctx.fillStyle = '#795548'; ctx.fillRect(bx - 3, gy - ph, 6, ph);
+  // 太陽
+  ctx.fillStyle = '#ffd54f'; ctx.strokeStyle = '#f57f17'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(sx, sy, 13, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  const fs = Math.max(13, W * 0.055);
+  label(ctx, s.alt > 50 * Math.PI / 180 ? '太陽が高い' : (s.alt < 30 * Math.PI / 180 ? '太陽がひくい' : ''), W * 0.72, H * 0.14, '#e65100', fs);
+  label(ctx, 'かげ', bx + Math.min(s.len * k, W - bx - 10) / 2, gy + (H - gy) / 2, '#212121', fs);
+}
+
+// ===== 数字の表示 =====
+function cmText(cm) {
+  cm = Math.round(cm);
+  return cm >= 100 ? cm + 'cm（' + Math.floor(cm / 100) + 'm' + (cm % 100) + 'cm）' : cm + 'cm';
+}
+function updateText() {
+  const s = sunAt(now);
+  $('clock').textContent = clockName(now);
+  $('sunDir').textContent = dirName(s.az);
+  $('shDir').textContent = dirName(s.az + Math.PI);
+  $('shLen').textContent = cmText(s.len);
+  const t = temps(now);
+  const pct = v => Math.max(5, Math.min(100, (v - 0) / 30 * 100)) + '%'; // 0〜30℃
+  $('tSun').textContent = t.sun.toFixed(0) + '℃';
+  $('tShade').textContent = t.shade.toFixed(0) + '℃';
+  $('fillSun').style.width = pct(t.sun);
+  $('fillShade').style.width = pct(t.shade);
+}
+function draw() { updateText(); drawTop(); drawSide(); }
+
+// ===== 操作 =====
+function setTime(min) {
+  now = Math.max(480, Math.min(960, min));
+  slider.value = now;
+  draw();
+}
+slider.addEventListener('input', () => { stop(); setTime(parseFloat(slider.value)); });
+
+// さいせい
+let lastT = 0;
+function loop(t) {
+  if (!playing) return;
+  const dt = lastT ? (t - lastT) / 1000 : 0;
+  lastT = t;
+  setTime(now + dt * 60 / secPerHour);
+  if (now >= 960) { stop(); return; }
+  requestAnimationFrame(loop);
+}
+function play() {
+  if (now >= 960) setTime(480);
+  playing = true; lastT = 0;
+  $('btnPlay').textContent = '⏸ とめる';
+  requestAnimationFrame(loop);
+}
+function stop() { playing = false; $('btnPlay').textContent = '▶ さいせい'; }
+$('btnPlay').onclick = () => playing ? stop() : play();
+document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => {
+  secPerHour = parseFloat(b.dataset.speed);
+  document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('active', x === b));
+});
+
+// しるしをつける（いちばん近い、ちょうどの時こくにつける）
+function mark() {
+  stop();
+  const h = Math.round(now / 60);
+  setTime(h * 60);
+  if (Worksheet.getRecords().some(r => r.h === h)) {
+    $('msg').textContent = shortName(h) + ' のしるしは、もうついているよ';
+    return;
+  }
+  const s = sunAt(h * 60);
+  Worksheet.addRecord({ time: shortName(h), dir: dirName(s.az + Math.PI), len: Math.round(s.len), h });
+  $('msg').textContent = '📍 ' + clockName(h * 60) + ' のかげの先にしるしをつけたよ';
+  draw();
+}
+$('btnMark').onclick = mark;
+// かげの先をタップしても、しるしがつく
+topCv.addEventListener('pointerdown', e => {
+  if (!topGeo || !topGeo.tip) return;
+  const r = topCv.getBoundingClientRect();
+  if (Math.hypot(e.clientX - r.left - topGeo.tip.x, e.clientY - r.top - topGeo.tip.y) < 30) mark();
+});
+
+$('btnArrow').onclick = () => {
+  showArrow = !showArrow;
+  $('btnArrow').classList.toggle('active', showArrow);
+  $('btnArrow').innerHTML = '➡ <ruby>矢印<rt>やじるし</rt></ruby> ' + (showArrow ? 'ON' : 'OFF');
+  draw();
+};
+
+// もういちど：しるし（記録）を消して、午前8時にもどす
+$('btnReset').onclick = () => {
+  stop();
+  const n = Worksheet.getRecords().length;
+  if (n && !confirm('しるしと記録をぜんぶ消して、午前8時にもどします。よろしいですか？')) return;
+  for (let i = n - 1; i >= 0; i--) Worksheet.removeRecord(i);
+  $('msg').textContent = 'しるしは、ちょうどの時こく（9時、10時…）につけるよ';
+  setTime(480);
+};
+
+// ワークシートの記録を消したときも、しるしが消えるように少しずつかき直す
+setInterval(() => { if (!playing) drawTop(); }, 500);
+window.addEventListener('resize', draw);
+new ResizeObserver(draw).observe(topCv);
+setTime(480);
+</script>
+</body>
+</html>
