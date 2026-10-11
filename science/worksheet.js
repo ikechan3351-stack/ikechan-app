@@ -31,6 +31,8 @@
    【そのほかのオプション】（書かなくてもよい）
      experimentNote: '②実験に出す説明文'
      mount: '#ここに入れたい場所'  … 書くと、右に固定せず、その場所の中に表示する
+     chart.sortBy: 'h'  … 横じくが文字（例：'正午'）のとき、記録の中の h の小さい順にならべる
+                          （h は表に出さない記録の項目でもよい）
 
    【そのほかの命令】
      Worksheet.getRecords()      … 記録の一覧（配列）を返す
@@ -373,6 +375,7 @@
     const rows = recs.slice();
     const allNumX = rows.length && rows.every(r => num(r[c.x]) !== null);
     if (allNumX) rows.sort((a, b) => num(a[c.x]) - num(b[c.x])); // 横じくの小さい順にならべる
+    else if (c.sortBy) rows.sort((a, b) => (num(a[c.sortBy]) ?? 0) - (num(b[c.sortBy]) ?? 0)); // 横じくが文字のときは sortBy の順
     const yvals = [];
     rows.forEach(r => ycs.forEach(yc => { const v = num(r[yc.key]); if (v !== null) yvals.push(v); }));
 
