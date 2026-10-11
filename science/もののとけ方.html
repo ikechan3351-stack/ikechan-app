@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>もののとけ方</title>
+<!--
+  もののとけ方（小学5年 理科「もののとけ方」）
+  ・① とかす：食塩・ミョウバン・ホウ酸・砂糖を、水の量（50/100/200mL）と水温（10〜60℃）を決めて、
+      さじで1ぱいずつ入れる。とけたものは「つぶ」で見える化（ON/OFF）。とける限りをこえると、とけ残りが底にたまる。
+      「記録する」で、とけた量がワークシート（worksheet.js）の表と、温度ととける量のグラフに入る。
+  ・② 重さはかわる？：電子てんびんで、とかす前ととかした後の重さが同じことを確かめる。
+  ・③ 取り出す：60℃でとけるだけとかした水よう液を、ろ過する → 冷やす／蒸発させる。出てきたつぶ（結晶）を Canvas で描く。
+  ・④ つぶのモデル：食塩（色なし）・コーヒーシュガー（色つき）・でんぷん（とけない）を水に入れたときのつぶのようす。
+  ・先生モード（?teacher=1）：先生用のメモが出る。
+  ・しくみ：とける量は SUBS の sol（水100mLにとける量の目安・g）から、温度で間をつないで計算する（sol()・cap()）。
+      数を変えたいときは SUBS を書きかえる。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 8px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+  .hidden { display: none !important; }
+
+  /* タブ（①〜④） */
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tabs .chip { padding: 4px 6px; }
+  @media (max-width: 560px) { .tabs { grid-template-columns: 1fr 1fr; } }
+
+  /* 条件をえらぶところ */
+  .set-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
+  .set-grid .lbl { font-weight: bold; color: #33691e; white-space: nowrap; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    min-height: 48px; border: 3px solid #c5e1a5; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 4px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .chip:disabled { opacity: 0.4; cursor: default; }
+  @media (max-width: 560px) { .set-grid { grid-template-columns: 1fr; } }
+
+  /* 水温のスライダー */
+  .slider { display: flex; align-items: center; gap: 10px; }
+  .slider input[type=range] { flex: 1; min-width: 140px; height: 44px; accent-color: #558b2f; }
+  .slider b { font-size: 1.3rem; color: #c62828; min-width: 3.4em; text-align: right; }
+
+  .btn-row { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .go-btn {
+    min-height: 48px; border: none; background: #558b2f; color: #fff; border-radius: 12px;
+    padding: 8px 18px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.blue { background: #1565c0; }
+  .go-btn:disabled { opacity: 0.4; cursor: default; }
+  .btn-row label { font-size: 17px; display: flex; align-items: center; gap: 4px; cursor: pointer; min-height: 44px; }
+  .btn-row input[type=checkbox] { width: 24px; height: 24px; }
+  .btn-row .lbl { font-weight: bold; color: #33691e; }
+
+  .scene-card { border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); background: #fff; }
+  canvas#cv { width: 100%; height: auto; display: block; }
+
+  .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 150px; border-radius: 12px; padding: 6px 10px; font-weight: bold; text-align: center; line-height: 1.5; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .stat .big { font-size: 1.3rem; color: #33691e; }
+
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #558b2f; line-height: 1.6; }
+  .help { line-height: 1.7; }
+  .help h2 { font-size: 1.1rem; margin: 0 0 4px; color: #33691e; }
+  .help ul { margin: 0; padding-left: 1.3em; }
+  .diff-note { font-size: 15px; color: #666; margin: 0; line-height: 1.6; }
+  .teacher-note { background: #f3e5f5; border: 2px solid #ab47bc; border-radius: 10px; padding: 8px 10px; font-size: 15px; line-height: 1.6; margin: 0; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1 data-j>🧂 もののとけ方</h1>
+<p class="subtitle" data-j>水にとけたものは、どうなるのだろうか？</p>
+
+<div class="panel" data-j>
+
+  <!-- タブ -->
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button class="chip active" data-tab="dis">① とかす</button>
+      <button class="chip" data-tab="wt">② 重さはかわる？</button>
+      <button class="chip" data-tab="out">③ 取り出す</button>
+      <button class="chip" data-tab="model">④ つぶのモデル</button>
+    </div>
+  </div>
+
+  <!-- ① とかす -->
+  <div class="card" id="pDis">
+    <div class="set-grid">
+      <span class="lbl">とかすもの</span>
+      <span class="chips" id="cSub">
+        <button class="chip active" data-sub="salt">食塩</button>
+        <button class="chip" data-sub="alum">ミョウバン</button>
+        <button class="chip" data-sub="boric">ホウ酸</button>
+        <button class="chip" data-sub="sugar">砂糖</button>
+      </span>
+      <span class="lbl">水の量</span>
+      <span class="chips" id="cWater">
+        <button class="chip" data-water="50">50mL</button>
+        <button class="chip active" data-water="100">100mL</button>
+        <button class="chip" data-water="200">200mL</button>
+      </span>
+      <span class="lbl">水温</span>
+      <span class="slider"><input type="range" id="rTemp" min="10" max="60" step="10" value="20" aria-label="水温"><b id="tTemp">20℃</b></span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn" id="btnAdd1">🥄 1ぱい入れる</button>
+      <button class="go-btn" id="btnAdd5">🥄 5はい入れる</button>
+      <button class="go-btn blue" id="btnStir">🌀 かきまぜる</button>
+      <button class="go-btn orange" id="btnRec">📝 記録する</button>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+  </div>
+
+  <!-- ② 重さはかわる？ -->
+  <div class="card hidden" id="pWt">
+    <div class="set-grid">
+      <span class="lbl">とかすもの</span>
+      <span class="chips" id="cSubW">
+        <button class="chip active" data-sub="salt">食塩</button>
+        <button class="chip" data-sub="alum">ミョウバン</button>
+        <button class="chip" data-sub="boric">ホウ酸</button>
+        <button class="chip" data-sub="sugar">砂糖</button>
+      </span>
+      <span class="lbl">入れる量</span>
+      <span class="chips" id="cAmtW">
+        <button class="chip" data-amt="5">5g</button>
+        <button class="chip active" data-amt="10">10g</button>
+        <button class="chip" data-amt="20">20g</button>
+      </span>
+      <span class="lbl">予想</span>
+      <span class="chips" id="cPred">
+        <span>とかした後の重さは…</span>
+        <button class="chip" data-pred="up">ふえる</button>
+        <button class="chip" data-pred="same">同じ</button>
+        <button class="chip" data-pred="down">へる</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn" id="btnPour">🥄 入れてとかす</button>
+      <button class="go-btn sub" id="btnResetW">もういちど</button>
+    </div>
+  </div>
+
+  <!-- ③ 取り出す -->
+  <div class="card hidden" id="pOut">
+    <div class="set-grid">
+      <span class="lbl">水よう液</span>
+      <span class="chips" id="cSubO">
+        <button class="chip active" data-sub="salt">食塩</button>
+        <button class="chip" data-sub="alum">ミョウバン</button>
+        <button class="chip" data-sub="boric">ホウ酸</button>
+        <button class="chip" data-sub="sugar">砂糖</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn" id="btnFilter">① ろ過する</button>
+      <button class="go-btn blue" id="btnCool">② 氷水で冷やす</button>
+      <button class="go-btn orange" id="btnEvap">② 蒸発させる</button>
+      <button class="go-btn sub" id="btnResetO">もういちど</button>
+    </div>
+  </div>
+
+  <!-- ④ つぶのモデル -->
+  <div class="card hidden" id="pModel">
+    <div class="set-grid">
+      <span class="lbl">入れるもの</span>
+      <span class="chips" id="cSubM">
+        <button class="chip active" data-m="salt">食塩</button>
+        <button class="chip" data-m="coffee">コーヒーシュガー</button>
+        <button class="chip" data-m="starch">でんぷん</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn" id="btnDrop">💧 水に入れる</button>
+      <button class="go-btn sub" id="btnResetM">もういちど</button>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <canvas id="cv" width="800" height="440" aria-label="実験の図"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="btn-row" style="margin-top:0">
+      <span class="lbl">はやさ</span>
+      <span class="chips" id="cSpeed">
+        <button class="chip" data-speed="fast">はやおくり</button>
+        <button class="chip active" data-speed="normal">ふつう</button>
+        <button class="chip" data-speed="slow">ゆっくり</button>
+      </span>
+      <label id="lblDots"><input type="checkbox" id="chkDots" checked> とけたもののつぶを見る</label>
+    </div>
+  </div>
+
+  <div class="status-row">
+    <div class="stat"><span id="lA"></span><br><span class="big" id="sA"></span></div>
+    <div class="stat"><span id="lB"></span><br><span class="big" id="sB"></span></div>
+    <div class="stat"><span id="lC"></span><br><span class="big" id="sC"></span></div>
+  </div>
+  <div class="msg" id="msg"></div>
+
+  <div class="card help" id="help"></div>
+
+  <p class="teacher-note hidden" id="tNote"></p>
+
+  <div class="card">
+    <p class="diff-note">※じっさいとのちがい：とける量は、水100mLにとける量の目安（10℃ごとの値）を使い、その間は直線でつないで計算しています。本物では、ミョウバンやホウ酸の種類・はかり方で数が少しちがいます。とけるまでの時間・水温が変わる時間・ろ過や蒸発の時間は、本物より短くしています。冷やしたときのつぶは、本物ではゆっくり冷やすほど大きくなります。砂糖は、本物では冷やしてもつぶが出にくく、熱しすぎるとこげます。つぶ（●■◆▲）は、とけたもののイメージで、本物のつぶはけんび鏡でも見えないくらい小さいです。</p>
+  </div>
+
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// =====================================================================
+// ふりがな辞書：{漢字|よみ} の形で書いておくと、画面の文字に自動でふりがなが付きます。
+// （長いことばから先に当てはめます。足りないことばは、ここに足してください）
+// =====================================================================
+const DICT_SRC = [
+  '{水|すい}よう{液|えき}', '{食塩|しょくえん}', '{砂糖|さとう}', 'ホウ{酸|さん}', '{電子|でんし}てんびん', '{薬包紙|やくほうし}',
+  '{蒸発皿|じょうはつざら}', '{蒸発|じょうはつ}', '{結晶|けっしょう}', '{実験|じっけん}', '{記録|きろく}', '{予想|よそう}', '{結果|けっか}',
+  '{温度計|おんどけい}', '{温度|おんど}', '{水温|すいおん}', '{氷水|こおりみず}', '{氷|こおり}', '{水|みず}', '{重|おも}さ', '{重|おも}く', '{量|りょう}',
+  '{限|かぎ}り', '{冷|ひ}や', '{温|あたた}め', '{熱|ねっ}する', '{熱|ねっ}し', '{熱|あつ}い', '{熱|あつ}く', '{熱|ねつ}', '{入|い}れ', '{入|はい}',
+  '{出|で}て', '{出|で}る', '{出|で}た', '{出|で}き', '{出|で}にく', '{取|と}り', '{取|と}る', '{取|と}っ', '{残|のこ}', '{底|そこ}', '{全体|ぜんたい}', '{全部|ぜんぶ}',
+  '{同|おな}じ', '{変|か}わ', '{変|か}え', '{見|み}', '{広|ひろ}が', '{上|あ}げ', '{下|さ}が', '{上|うえ}', '{下|さ}げ', '{下|した}', '{色|いろ}', '{形|かたち}',
+  '{虫|むし}めがね', '{本物|ほんもの}', '{時間|じかん}', '{何|なん}', '{数|かず}', '{火|ひ}', '{使|つか}', '{用意|ようい}', '{条件|じょうけん}',
+  '{少|すこ}し', '{多|おお}く', '{多|おお}い', '{大|おお}き', '{小|ちい}さ', '{次|つぎ}', '{右|みぎ}', '{左|ひだり}', '{中|なか}', '{前|まえ}',
+  '{後|あと}', '{注|そそ}', '{白|しろ}い', '{茶色|ちゃいろ}', '{分|わ}か', '{分|ふん}', '{見分|みわ}け', '{目|め}', '{明|あ}か', '{正|ただ}し',
+  '{光|ひかり}', '{通|とお}', '{近|ちか}く', '{遠|とお}く', '{進|すす}め', '{紙|かみ}', '{台|だい}', '{皿|さら}', '{気|き}を', '{安全|あんぜん}',
+  '{一番|いちばん}', '{回|かい}', '{性質|せいしつ}', '{石|いし}', '{倍|ばい}', '{場所|ばしょ}', '{形|かたち}', '{合|あ}わせ', '{答|こた}え',
+  '{食塩水|しょくえんすい}', '{出|だ}す', '{出|だ}せ', '{以上|いじょう}', '{ろ過|ろか}', '{ろ紙|ろし}', '{保護|ほご}めがね', '{三脚|さんきゃく}', '{冷|ひ}え',
+  '{指|ゆび}', '{伝|つた}わ', '{注目|ちゅうもく}', '{注意|ちゅうい}', '{方法|ほうほう}', '{液|えき}', '{何|なに}も', '{先|さき}', '{長|なが}い', '{新|あたら}し', '{一度|いちど}',
+  '{動|うご}', '{止|と}め', '{止|と}ま', '{持|も}ち', '{手|て}', '{道具|どうぐ}', '{表|ひょう}', '{選|えら}'
+];
+const DICT = {};
+DICT_SRC.forEach(s => {
+  DICT[s.replace(/\{([^|}]+)\|[^}]+\}/g, '$1')] = s.replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>');
+});
+const DICT_RE = new RegExp(Object.keys(DICT).sort((a, b) => b.length - a.length)
+  .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+// 文字列にふりがなを付ける（タグの入っていない文字列に使う）
+const J = s => String(s).replace(DICT_RE, m => DICT[m]);
+// 画面の中の文字（data-j を付けたところ）に、まとめてふりがなを付ける
+function rubyfy(root) {
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const list = [];
+  while (w.nextNode()) {
+    const n = w.currentNode;
+    if (n.parentElement.closest('ruby, script, style, canvas, .teacher-note')) continue;
+    if (J(n.nodeValue) !== n.nodeValue) list.push(n);
+  }
+  list.forEach(n => {
+    const t = document.createElement('template');
+    t.innerHTML = J(n.nodeValue);
+    n.replaceWith(t.content);
+  });
+}
+document.querySelectorAll('[data-j]').forEach(rubyfy);
+
+// =====================================================================
+// とかすもののデータ（ここを書きかえると、とける量が変わる）
+//   sol：水100mLに、その温度でとける量の目安（g）。[温度, 量] の表。間は直線でつなぐ。
+//        （理科年表などの値を丸めた教育用の目安。ミョウバンは「焼きミョウバン」でない、ふつうのミョウバンの値）
+//   spoon：さじ1ぱいの量（g）。砂糖はとてもたくさんとけるので、大きいさじ（10g）にしている。
+//   color・shape：見える化のつぶの色と形（色だけで見分けなくてよいように、形も変える）
+//   cry：出てきたつぶ（結晶）の形　cube＝立方体・octa＝正八面体・plate＝うすい板・prism＝はしら
+//   rate：かきまぜたときに、1秒でとける量の目安（g）
+// =====================================================================
+const SUBS = {
+  salt:  { name: '食塩',       kana: '食塩',     spoon: 1,  color: '#0072B2', shape: 'square',   cry: 'cube',  rate: 2.5,
+           sol: [[10, 35.8], [20, 35.8], [30, 36.1], [40, 36.3], [50, 36.7], [60, 37.1]] },
+  alum:  { name: 'ミョウバン', kana: 'ミョウバン', spoon: 1,  color: '#D55E00', shape: 'diamond',  cry: 'octa',  rate: 2.5,
+           sol: [[10, 7.6], [20, 11.4], [30, 16.6], [40, 23.8], [50, 36.4], [60, 57.4]] },
+  boric: { name: 'ホウ酸',     kana: 'ホウさん',  spoon: 1,  color: '#009E73', shape: 'triangle', cry: 'plate', rate: 1.5,
+           sol: [[10, 3.6], [20, 4.9], [30, 6.8], [40, 8.9], [50, 11.4], [60, 14.9]] },
+  sugar: { name: '砂糖',       kana: 'さとう',   spoon: 10, color: '#CC79A7', shape: 'circle',   cry: 'prism', rate: 20,
+           sol: [[10, 191], [20, 204], [30, 220], [40, 238], [50, 260], [60, 287]] }
+};
+// 水100mLに、温度 T℃でとける量（g）
+function sol(sub, T) {
+  const t = SUBS[sub].sol;
+  if (T <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) {
+    if (T <= t[i][0]) { const a = t[i - 1], b = t[i]; return a[1] + (b[1] - a[1]) * (T - a[0]) / (b[0] - a[0]); }
+  }
+  return t[t.length - 1][1];
+}
+// 水 ml mL に、温度 T℃でとける量（g）＝ とける量は水の量に比例する
+const cap = (sub, T, ml) => sol(sub, T) * ml / 100;
+// 見える化のつぶの数：1gあたり何こ（200mL・60℃でいっぱいにとかしたとき、約360こになるように）
+const DPG = {};
+Object.keys(SUBS).forEach(k => { DPG[k] = 360 / cap(k, 60, 200); });
+
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: J('もののとけ方'),
+  question: J('水の温度を上げると、食塩はたくさんとけるだろうか？'),
+  predictionChoices: [J('たくさんとけるようになる'), J('あまり変わらない'), J('とける量がへる')],
+  experimentNote: J('水の量を同じにして、水温だけを変える（10℃・30℃・60℃など）。とけ残りが出たら「記録する」をおすと、表と、温度ととける量のグラフに入るよ。ミョウバンでも調べて、くらべよう。'),
+  columns: [
+    { key: 'mono', label: J('とかしたもの') },
+    { key: 'water', label: J('水の量'), unit: 'mL' },
+    { key: 'temp', label: J('水温'), unit: '℃' },
+    { key: 'amt', label: J('とけた量'), unit: 'g' }
+  ],
+  chart: { type: 'line', x: 'temp', y: ['食塩', 'ミョウバン', 'ホウ酸', '砂糖'] },
+  hint: '水の量を50mLか100mLに決めて、まず食塩を10℃・30℃・60℃でとかし、とけ残りが出たら記録します。グラフの線がほとんど横にまっすぐになることに気づかせます。次に同じ水の量でミョウバンを調べ、温度が上がるほどグラフが大きく上がることとくらべます。グラフは、水の量が同じ記録どうしでくらべるようにしてください（水の量がちがう記録がまざると線がぎざぎざになります）。さじ1ぱいは1g（砂糖だけ10g）です。',
+  answer: '食塩は、水の温度を上げても、とける量はほとんど変わらない（水100mLに約36g）。ミョウバンは、水の温度を上げると、とける量が大きくふえる（水100mLに、20℃で約11g、60℃で約57g）。とける量には限りがあり、ものによってちがう。水の量をふやすと、とける量もふえる（水の量が2倍なら、とける量も約2倍）。'
+});
+
+const $ = (id) => document.getElementById(id);
+const TEACHER = Worksheet.isTeacher();
+const cv = $('cv'), ctx = cv.getContext('2d');
+const W = 800, H = 440;
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+const SPEEDS = { slow: 0.4, normal: 1, fast: 3 };   // はやさ（時間の進み方の倍率）
+let speed = 1, showDots = true, tab = 'dis', clock = 0;
+const setMsg = s => { $('msg').innerHTML = s ? J(s) : ''; };
+const fmtG = v => (Math.round(v * 10) / 10).toFixed(1);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const hash = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }; // いつも同じになる「ばらばら」の数
+
+// ===== Canvas の大きさ（高解像度の画面でもくっきり） =====
+function fitCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+fitCanvas();
+
+// =====================================================================
+// 絵をかく道具
+// =====================================================================
+function text(s, x, y, size, color, align, bold) {
+  ctx.font = (bold === false ? '' : 'bold ') + size + 'px ' + FONT;
+  ctx.fillStyle = color || '#333'; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(s, x, y);
+}
+// 字のまわりを白くふちどって、何の上でも読めるようにする
+function labelText(s, x, y, size, color, align) {
+  ctx.font = 'bold ' + size + 'px ' + FONT; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineJoin = 'round'; ctx.strokeText(s, x, y);
+  ctx.fillStyle = color || '#333'; ctx.fillText(s, x, y);
+}
+function drawTable(y) {
+  ctx.fillStyle = '#d7ccc8'; ctx.fillRect(0, y, W, H - y);
+  ctx.fillStyle = '#a1887f'; ctx.fillRect(0, y, W, 3);
+}
+// つぶ1こ（形で見分けられるように、もののちがいで形を変える）
+function glyph(x, y, r, shape, color) {
+  ctx.fillStyle = color; ctx.beginPath();
+  if (shape === 'square') ctx.rect(x - r * 0.85, y - r * 0.85, r * 1.7, r * 1.7);
+  else if (shape === 'diamond') { ctx.moveTo(x, y - r * 1.2); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r * 1.2); ctx.lineTo(x - r, y); ctx.closePath(); }
+  else if (shape === 'triangle') { ctx.moveTo(x, y - r * 1.15); ctx.lineTo(x + r * 1.1, y + r * 0.8); ctx.lineTo(x - r * 1.1, y + r * 0.8); ctx.closePath(); }
+  else ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+// 出てきたつぶ（結晶）を1こかく。kind：cube・octa・plate・prism、s：大きさ
+function crystal(kind, x, y, s, rot, brown) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0);
+  ctx.lineJoin = 'round'; ctx.strokeStyle = brown ? '#6d4c41' : 'rgba(70,100,140,0.9)'; ctx.lineWidth = Math.max(0.7, s / 16);
+  const L = brown ? '#d7a86e' : '#ffffff', M = brown ? '#b9844a' : '#dce9f7', D = brown ? '#8d6e63' : '#b3c8e0';
+  const face = (pts, fill) => {
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0] * s, p[1] * s) : ctx.moveTo(p[0] * s, p[1] * s));
+    ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.stroke();
+  };
+  if (kind === 'cube') {            // 食塩：さいころの形（立方体）
+    face([[-0.5, -0.25], [0, -0.5], [0.5, -0.25], [0, 0]], L);
+    face([[-0.5, -0.25], [0, 0], [0, 0.55], [-0.5, 0.3]], M);
+    face([[0, 0], [0.5, -0.25], [0.5, 0.3], [0, 0.55]], D);
+  } else if (kind === 'octa') {     // ミョウバン：ピラミッドを2つ合わせた形（正八面体）
+    const T = [0, -0.72], B = [0, 0.72], Lp = [-0.62, 0.03], Rp = [0.62, -0.03], F = [0.13, 0.1];
+    face([T, Lp, F], L); face([T, F, Rp], M); face([Lp, B, F], M); face([F, B, Rp], D);
+  } else if (kind === 'plate') {    // ホウ酸：うすい六角形の板
+    const hex = dy => Array.from({ length: 6 }, (_, k) => [Math.cos(k * Math.PI / 3) * 0.62, Math.sin(k * Math.PI / 3) * 0.3 + dy]);
+    face(hex(0.1), D); face(hex(0), L);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.moveTo(-0.3 * s, -0.08 * s); ctx.lineTo(0.15 * s, -0.16 * s); ctx.stroke();
+  } else {                          // 砂糖：はしらの形
+    face([[-0.62, -0.18], [-0.48, -0.04], [0.48, -0.04], [0.62, -0.18], [0.62, 0.18], [0.48, 0.32], [-0.48, 0.32], [-0.62, 0.18]], M);
+    face([[-0.62, -0.18], [-0.48, -0.32], [0.48, -0.32], [0.62, -0.18], [0.48, -0.04], [-0.48, -0.04]], L);
+  }
+  ctx.restore();
+}
+
+// ----- ビーカー -----
+// B = { x：まん中, yb：底の位置, w：はば, h：高さ, max：いちばん上の目もり（mL） }
+function beakerGeo(B, ml) {
+  const x0 = B.x - B.w / 2 + 5, x1 = B.x + B.w / 2 - 5, yBot = B.yb - 5, ppm = (B.h - 26) / B.max;
+  return { x0, x1, yBot, yTop: yBot - ml * ppm, ppm };
+}
+function bottomRoundPath(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.closePath();
+}
+// 中の水（tint：色、cloud：にごり 0〜1）
+function drawWater(B, ml, tint) {
+  const g = beakerGeo(B, ml);
+  if (ml <= 0.05) return g;
+  bottomRoundPath(g.x0, g.yTop, g.x1 - g.x0, g.yBot - g.yTop, 9);
+  ctx.fillStyle = tint || 'rgba(150,205,255,0.33)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(40,120,200,0.55)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(g.x0, g.yTop); ctx.lineTo(g.x1, g.yTop); ctx.stroke();
+  return g;
+}
+// ガラス（水やつぶをかいた後で、上からかく）
+function drawGlass(B, step) {
+  const l = B.x - B.w / 2, r = B.x + B.w / 2, t = B.yb - B.h, b = B.yb;
+  ctx.strokeStyle = 'rgba(70,100,130,0.9)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(l - 8, t - 4); ctx.lineTo(l, t + 8); ctx.lineTo(l, b - 12); ctx.quadraticCurveTo(l, b, l + 12, b);
+  ctx.lineTo(r - 12, b); ctx.quadraticCurveTo(r, b, r, b - 12); ctx.lineTo(r, t); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 4;   // ガラスの光
+  ctx.beginPath(); ctx.moveTo(l + 9, t + 20); ctx.lineTo(l + 9, b - 30); ctx.stroke();
+  // 目もり
+  const g = beakerGeo(B, 0);
+  step = step || 50;
+  ctx.strokeStyle = 'rgba(70,100,130,0.7)'; ctx.lineWidth = 1.5;
+  for (let ml = step; ml <= B.max; ml += step) {
+    const y = g.yBot - ml * g.ppm, major = ml % (step * 2) === 0;
+    ctx.beginPath(); ctx.moveTo(r - 4, y); ctx.lineTo(r - (major ? 22 : 13), y); ctx.stroke();
+    if (major) text(String(ml), r - 26, y, 11, 'rgba(60,90,120,0.85)', 'right', false);
+  }
+}
+// 底にたまったもの（g：量、cryFrac：結晶の割合、spoonG：さじ1ぱいの量）
+function drawPile(cx, yBot, g, cryFrac, sub, maxW) {
+  if (g < 0.03) return 0;
+  const s = Math.sqrt(g / SUBS[sub].spoon);
+  const w = Math.min(maxW, 16 + s * 22), h = Math.min(60, 3 + s * 4.5);
+  ctx.beginPath(); ctx.moveTo(cx - w / 2, yBot); ctx.quadraticCurveTo(cx, yBot - h * 2, cx + w / 2, yBot); ctx.closePath();
+  ctx.fillStyle = '#f5f7fa'; ctx.fill(); ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 1.5; ctx.stroke();
+  // つぶつぶのもよう
+  const n = Math.min(40, Math.round(w / 3));
+  for (let i = 0; i < n; i++) {
+    const fx = hash(i) - 0.5, px = cx + fx * w * 0.9;
+    const top = yBot - h * (1 - (2 * fx) * (2 * fx));
+    const py = top + (yBot - top) * hash(i + 50) * 0.9 + 1;
+    if (cryFrac > 0.3 && i % 3 === 0) crystal(SUBS[sub].cry, px, py, 7, hash(i + 9) * 3);
+    else { ctx.fillStyle = '#b0bec5'; ctx.fillRect(px, py, 1.6, 1.6); }
+  }
+  return h;
+}
+// とけているときに見える「もやもや」
+function drawSchlieren(cx, yFrom, yTo, k) {
+  ctx.strokeStyle = 'rgba(90,140,190,0.35)'; ctx.lineWidth = 3;
+  for (let j = 0; j < 3; j++) {
+    ctx.beginPath();
+    for (let y = yFrom; y > Math.max(yTo, yFrom - 120); y -= 4) {
+      const x = cx + (j - 1) * 14 + Math.sin(y * 0.08 + clock * 3 + j * 2) * 6 * k;
+      y === yFrom ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+}
+// ガラス棒
+function drawRod(x, yTop, yBot) {
+  ctx.strokeStyle = 'rgba(120,150,180,0.9)'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x + 18, yTop); ctx.lineTo(x, yBot); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x + 16, yTop + 4); ctx.lineTo(x - 1, yBot - 6); ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+// 温度計（大きく見せる）
+function drawThermo(x, top, bot, T, label) {
+  const y = v => bot - 18 - (v / 80) * (bot - top - 30);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#78909c'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(x - 9, top, 18, bot - top - 10, 9); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, bot - 6, 15, 0, Math.PI * 2); ctx.fillStyle = '#d32f2f'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#d32f2f'; ctx.fillRect(x - 4, y(T), 8, bot - 6 - y(T));
+  for (let v = 0; v <= 80; v += 10) {
+    ctx.strokeStyle = '#546e7a'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x + 9, y(v)); ctx.lineTo(x + 18, y(v)); ctx.stroke();
+    text(String(v), x + 34, y(v), 13, '#546e7a', 'center', false);
+  }
+  text(label, x + 8, top - 30, 16, '#33691e');
+  text(Math.round(T) + '℃', x + 8, top - 10, 22, '#c62828');
+}
+
+// =====================================================================
+// 見える化のつぶ（とけたもの）：u＝横の位置（0〜1）、v＝高さ（0＝底、1＝水面）
+// 水の中を、ゆらゆらと動きながら広がっていく（かきまぜると速く広がる）
+// =====================================================================
+function newLiq() { return { dots: [] }; }
+function stepDots(L, n, sdt, stir, spawnU, spawnW) {
+  let alive = 0;
+  L.dots.forEach(d => { if (!d.fall) alive++; });
+  while (alive < n) { L.dots.push({ u: spawnU + (Math.random() - 0.5) * spawnW, v: Math.random() * 0.05 + 0.01, vx: 0, vy: 0, fall: false }); alive++; }
+  while (alive > n) {            // とけていられなくなった分は、底へもどっていく
+    const cand = L.dots.filter(d => !d.fall);
+    cand[Math.floor(Math.random() * cand.length)].fall = true; alive--;
+  }
+  const a = stir ? 2.4 : 0.75, k = 2, sq = Math.sqrt(Math.max(sdt, 0));
+  const flow = stir ? Math.sin(clock * 5) * 1.2 : 0;
+  for (let i = L.dots.length - 1; i >= 0; i--) {
+    const d = L.dots[i];
+    if (d.fall) { d.v -= 0.6 * sdt; d.u += (0.5 - d.u) * sdt; if (d.v <= 0.02) L.dots.splice(i, 1); continue; }
+    d.vx += -k * d.vx * sdt + gauss() * a * sq;
+    d.vy += -k * d.vy * sdt + gauss() * a * sq;
+    d.u += (d.vx + flow * (d.v - 0.5)) * sdt; d.v += d.vy * sdt;
+    if (d.u < 0.01) { d.u = 0.02 - d.u; d.vx = Math.abs(d.vx); }
+    if (d.u > 0.99) { d.u = 1.98 - d.u; d.vx = -Math.abs(d.vx); }
+    if (d.v < 0.02) { d.v = 0.04 - d.v; d.vy = Math.abs(d.vy); }
+    if (d.v > 0.97) { d.v = 1.94 - d.v; d.vy = -Math.abs(d.vy); }
+    d.u = clamp(d.u, 0.01, 0.99); d.v = clamp(d.v, 0.02, 0.97);
+  }
+}
+function drawDots(L, g, sub, r) {
+  if (!showDots) return;
+  const S = SUBS[sub];
+  L.dots.forEach(d => glyph(g.x0 + 4 + d.u * (g.x1 - g.x0 - 8), g.yBot - d.v * (g.yBot - g.yTop), r || 3.4, S.shape, S.color));
+}
+
+// =====================================================================
+// ① とかす
+// =====================================================================
+const BK1 = { x: 380, yb: 405, w: 250, h: 300, max: 300 };
+const D = {
+  sub: 'salt', water: 100, T: 20,
+  added: 0,      // 入れた量（g）
+  dis: 0,        // とけている量（g）
+  cry: 0,        // 底にあるもののうち、温度を下げて出てきたつぶ（g）
+  spoons: 0,     // 入れたさじの数
+  pending: [],   // さじから落ちているとちゅうの分 { g, t }
+  grains: [],    // 落ちていくつぶの絵
+  liq: newLiq(),
+  stirT: 0, rod: null, spoonT: 0, satShown: false, lastRec: ''
+};
+const und1 = () => Math.max(0, D.added - D.dis);   // とけずに底にある量
+function addSpoons(n) {
+  const S = SUBS[D.sub];
+  if (D.pending.length) return;
+  D.spoons += n;
+  D.pending.push({ g: n * S.spoon, t: 0.7 });
+  D.spoonT = 1;
+  const g = beakerGeo(BK1, D.water);
+  for (let i = 0; i < 8 + n * 4; i++) {
+    D.grains.push({ x: BK1.x + 52 + gauss() * 5, y: BK1.yb - BK1.h - 18 + Math.random() * 6, vy: 40 + Math.random() * 60, delay: 0.25 + Math.random() * 0.25 + i * 0.02, top: g.yTop });
+  }
+  setMsg('');
+}
+function resetDis() {
+  Object.assign(D, { added: 0, dis: 0, cry: 0, spoons: 0, pending: [], grains: [], stirT: 0, rod: null, spoonT: 0, satShown: false });
+  D.liq = newLiq();
+}
+function stepDis(dt, sdt) {
+  const S = SUBS[D.sub];
+  D.pending.forEach(p => { p.t -= sdt; if (p.t <= 0) D.added += p.g; });
+  D.pending = D.pending.filter(p => p.t > 0);
+  D.spoonT = Math.max(0, D.spoonT - sdt * 1.4);
+  D.stirT = Math.max(0, D.stirT - dt);
+  const stir = D.stirT > 0 || !!D.rod;
+  const c = cap(D.sub, D.T, D.water);
+  const und = und1();
+  if (D.dis < c && und > 1e-6) {
+    // とける：かきまぜると速い。温度が高いと少し速い。
+    const r = S.rate * (stir ? 1 : 0.25) * (0.6 + D.T / 60) * sdt;
+    const d = Math.min(r, und, c - D.dis);
+    D.dis += d; D.cry = Math.min(D.cry, D.added - D.dis);
+  } else if (D.dis > c) {
+    // 温度を下げたり…：とけていられなくなった分が、つぶになって出てくる
+    const p = Math.min(D.dis - c, Math.max(D.dis - c, 1) * 0.5 * sdt + S.rate * 0.5 * sdt);
+    D.dis -= p; D.cry += p;
+  }
+  // 落ちていくつぶ
+  const g = beakerGeo(BK1, D.water);
+  D.grains.forEach(q => {
+    if (q.delay > 0) { q.delay -= sdt; return; }
+    q.vy += (q.y > g.yTop ? 0 : 900) * sdt; if (q.y > g.yTop) q.vy = Math.min(q.vy, 110);
+    q.y += q.vy * sdt;
+  });
+  D.grains = D.grains.filter(q => q.y < g.yBot - 4);
+  // 見える化のつぶ
+  const pileW = Math.min(g.x1 - g.x0 - 10, 16 + Math.sqrt(Math.max(und, 0.1) / S.spoon) * 22) / (g.x1 - g.x0);
+  stepDots(D.liq, Math.round(D.dis * DPG[D.sub]), sdt, stir, 0.5, pileW);
+  // とけ残りが出たことを知らせる
+  const settled = und > 0.05 && Math.abs(D.dis - c) < 0.02 && !D.pending.length;
+  if (settled && !D.satShown) {
+    D.satShown = true;
+    setMsg('とけ残りが出た！ これ以上はとけないよ。「記録する」をおして、とけた量を記録しよう。');
+  }
+  if (und < 0.02) D.satShown = false;
+}
+function drawDis() {
+  const S = SUBS[D.sub];
+  drawTable(BK1.yb);
+  drawThermo(90, 100, 400, D.T, '水温');
+  // さじの入れ物（右）
+  const jx = 665, jb = BK1.yb;
+  ctx.fillStyle = 'rgba(230,240,250,0.8)'; ctx.strokeStyle = '#78909c'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.roundRect(jx - 50, jb - 120, 100, 120, 10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#f5f7fa'; ctx.beginPath(); ctx.roundRect(jx - 46, jb - 70, 92, 66, 8); ctx.fill();
+  for (let i = 0; i < 30; i++) { ctx.fillStyle = '#b0bec5'; ctx.fillRect(jx - 42 + hash(i) * 84, jb - 66 + hash(i + 7) * 58, 2, 2); }
+  ctx.fillStyle = '#8d6e63'; ctx.fillRect(jx - 54, jb - 130, 108, 12);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#558b2f'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(jx - 44, jb - 112, 88, 38, 6); ctx.fill(); ctx.stroke();
+  text(S.kana, jx, jb - 99, 16, '#33691e');
+  text('1ぱい ' + S.spoon + 'g', jx, jb - 82, 12, '#555', 'center', false);
+
+  // ビーカーと中身
+  const g = drawWater(BK1, D.water);
+  const und = und1();
+  const ph = drawPile(BK1.x, g.yBot, und, und > 0 ? D.cry / und : 0, D.sub, g.x1 - g.x0 - 10);
+  if (und > 0.03 && D.dis < cap(D.sub, D.T, D.water) - 0.01) drawSchlieren(BK1.x, g.yBot - ph - 2, g.yTop + 6, 1);
+  drawDots(D.liq, g, D.sub);
+  D.grains.forEach(q => { if (q.delay <= 0) { ctx.fillStyle = '#eceff1'; ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 1; ctx.fillRect(q.x - 2, q.y - 2, 4, 4); ctx.strokeRect(q.x - 2, q.y - 2, 4, 4); } });
+  // ガラス棒（ゆびでなぞっているとき・かきまぜボタン）
+  if (D.rod) drawRod(clamp(D.rod.x, g.x0 + 10, g.x1 - 10), BK1.yb - BK1.h - 40, clamp(D.rod.y, g.yTop + 10, g.yBot - 6));
+  else if (D.stirT > 0) drawRod(BK1.x + Math.sin(clock * 7) * (g.x1 - g.x0) * 0.32, BK1.yb - BK1.h - 40, g.yBot - 30 - Math.cos(clock * 7) * 8);
+  drawGlass(BK1);
+  // さじ
+  const tilt = Math.sin(Math.min(1, (1 - D.spoonT) * 1.3) * Math.PI) * (D.spoonT > 0 ? 0.9 : 0);
+  ctx.save(); ctx.translate(BK1.x + 60, BK1.yb - BK1.h - 22); ctx.rotate(tilt);
+  ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(80, -18); ctx.stroke(); ctx.lineCap = 'butt';
+  ctx.fillStyle = '#cfd8dc'; ctx.strokeStyle = '#78909c'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(-10, 2, 16, 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  if (D.spoonT === 0) { ctx.fillStyle = '#f5f7fa'; ctx.beginPath(); ctx.ellipse(-10, -1, 12, 5, 0, Math.PI, 0); ctx.fill(); }
+  ctx.restore();
+  // 文字
+  labelText('水 ' + D.water + 'mL', BK1.x, BK1.yb + 18, 17, '#1565c0');
+  if (und > 0.05 && D.dis >= cap(D.sub, D.T, D.water) - 0.02 && !D.pending.length) {
+    const px = BK1.x + 30, py = g.yBot - 8;
+    ctx.strokeStyle = '#e65100'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(BK1.x + BK1.w / 2 + 12, py - 26); ctx.lineTo(px + 10, py - 4); ctx.stroke();
+    labelText('とけ残り', BK1.x + BK1.w / 2 + 50, py - 34, 17, '#e65100');
+  }
+  if (!showDots && D.dis > 0.05) labelText('すき通っていて、とけたものは見えない', BK1.x, g.yTop + 24, 15, '#1565c0');
+  if (D.added === 0 && !D.pending.length) labelText('「1ぱい入れる」をおしてね', BK1.x, g.yTop + 40, 18, '#558b2f');
+  else if (D.added > 0 && und > 0.03 && !D.rod && D.stirT <= 0 && D.dis < cap(D.sub, D.T, D.water) - 0.01) labelText('ビーカーの中を指でなぞると、かきまぜられるよ', BK1.x, 26, 16, '#558b2f');
+}
+function recordDis() {
+  const S = SUBS[D.sub];
+  const c = cap(D.sub, D.T, D.water), und = und1();
+  if (D.added === 0) { setMsg('まだ何も入れていないよ。'); return; }
+  if (und < 0.05) { setMsg('まだ全部とけているよ。とけ残りが出るまで入れてみよう。'); return; }
+  if (D.dis < c - 0.02) { setMsg('まだとけているとちゅうだよ。かきまぜてみよう。'); return; }
+  if (D.dis > c + 0.05) { setMsg('まだつぶが出てきているとちゅうだよ。少し待ってね。'); return; }
+  // とけた量 ＝ とけ残りが出る前までに入れた、さじの数 × 1ぱいの量
+  const amt = Math.floor(c / S.spoon + 1e-9) * S.spoon;
+  const key = D.sub + D.water + '-' + D.T;
+  if (key === D.lastRec) { setMsg('この条件は、もう記録したよ。条件を変えてみよう。'); return; }
+  D.lastRec = key;
+  const rec = { mono: S.name, water: D.water, temp: D.T, amt };
+  rec[S.name] = amt;
+  Worksheet.addRecord(rec);
+  setMsg('記録したよ：' + S.name + '・水' + D.water + 'mL・' + D.T + '℃で、約' + amt + 'gまでとけた（' + (amt / S.spoon) + 'はい）。');
+}
+
+// =====================================================================
+// ② 重さはかわる？（電子てんびん）
+// =====================================================================
+const POS_ON = { bx: 450, by: 350, px: 625, py: 350 }, POS_OFF = { bx: 150, by: 412, px: 285, py: 412 };
+const Wt = { sub: 'salt', amt: 10, phase: 'ready', t: 0, paperG: 10, beakerG: 0, dis: 0, liq: newLiq(), pred: null, pos: { ...POS_ON }, tilt: 0, lift: 0, grains: [] };
+const B2 = () => ({ x: Wt.pos.bx, yb: Wt.pos.by, w: 150, h: 190, max: 200 });
+function resetWt() {
+  Object.assign(Wt, { phase: 'ready', t: 0, paperG: Wt.amt, beakerG: 0, dis: 0, liq: newLiq(), pos: { ...POS_ON }, tilt: 0, lift: 0, grains: [] });
+}
+const lerpPos = (a, b, k) => ({ bx: a.bx + (b.bx - a.bx) * k, by: a.by + (b.by - a.by) * k, px: a.px + (b.px - a.px) * k, py: a.py + (b.py - a.py) * k });
+const ease = k => k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+function stepWt(dt, sdt) {
+  const S = SUBS[Wt.sub];
+  if (Wt.phase === 'off') {             // はかりからおろす
+    Wt.t += dt / 0.9; Wt.pos = lerpPos(POS_ON, POS_OFF, ease(Math.min(1, Wt.t)));
+    if (Wt.t >= 1) { Wt.phase = 'pour'; Wt.t = 0; }
+  } else if (Wt.phase === 'pour') {     // 薬包紙を持ち上げて、ビーカーに入れる
+    Wt.t += sdt / 1.6;
+    const k = Math.min(1, Wt.t);
+    Wt.lift = Math.min(1, k * 3);
+    Wt.tilt = Math.min(1, Math.max(0, (k - 0.25) * 4));
+    if (k > 0.35) {
+      const move = Math.min(Wt.paperG, Wt.amt * sdt / 1.6 * 1.6);
+      Wt.paperG -= move; Wt.beakerG += move;
+      if (Math.random() < 0.8) Wt.grains.push({ x: paperXY().x - 26, y: paperXY().y + 4, vy: 30 });
+    }
+    if (Wt.t >= 1) { Wt.beakerG += Wt.paperG; Wt.paperG = 0; Wt.phase = 'mix'; Wt.t = 0; }
+  } else if (Wt.phase === 'mix') {      // かきまぜる
+    Wt.t += sdt;
+    Wt.lift = Math.max(0, Wt.lift - sdt * 2); Wt.tilt = Math.max(0, Wt.tilt - sdt * 2);
+    const c = cap(Wt.sub, 20, 100);
+    const d = Math.min(S.rate * 1.6 * sdt, Wt.beakerG - Wt.dis, c - Wt.dis);
+    if (d > 0) Wt.dis += d;
+    if (Wt.t > 2.5 && (Wt.beakerG - Wt.dis < 0.01 || Wt.dis >= c - 0.01)) { Wt.phase = 'back'; Wt.t = 0; }
+  } else if (Wt.phase === 'back') {     // はかりにもどす
+    Wt.t += dt / 0.9; Wt.pos = lerpPos(POS_OFF, POS_ON, ease(Math.min(1, Wt.t)));
+    if (Wt.t >= 1) { Wt.phase = 'done'; finishWt(); }
+  }
+  const g = beakerGeo(B2(), 100);
+  Wt.grains.forEach(q => { q.vy += (q.y > g.yTop ? 0 : 900) * sdt; if (q.y > g.yTop) q.vy = Math.min(q.vy, 110); q.y += q.vy * sdt; });
+  Wt.grains = Wt.grains.filter(q => q.y < g.yBot - 4);
+  const und = Wt.beakerG - Wt.dis;
+  stepDots(Wt.liq, Math.round(Wt.dis * DPG[Wt.sub] * 1.4), sdt, Wt.phase === 'mix', 0.5, Math.min(0.9, 0.12 + Math.sqrt(Math.max(und, 0.2) / S.spoon) * 0.15));
+}
+function paperXY() {
+  // 薬包紙の位置：持ち上げると、ビーカーの右上へ動く
+  const b = B2();
+  const ox = Wt.pos.px, oy = Wt.pos.py - 2;
+  const tx = b.x + 70, ty = b.yb - b.h - 20;
+  return { x: ox + (tx - ox) * Wt.lift, y: oy + (ty - oy) * Wt.lift };
+}
+// はかりの数字（はかりにのっているときだけ）
+function scaleReading() {
+  if (Wt.phase === 'ready' || Wt.phase === 'done') return 100 + Wt.paperG + Wt.beakerG;
+  return 0;
+}
+function finishWt() {
+  const S = SUBS[Wt.sub], v = 100 + Wt.amt;
+  let s = 'とかす前も、とかした後も ' + fmtG(v) + 'g。重さは変わらない！ とけて見えなくなっても、' + S.name + 'は水の中にあるんだね。';
+  if (Wt.beakerG - Wt.dis > 0.05) s += '（とけ残りもふくめて同じ重さ）';
+  if (Wt.pred) s = (Wt.pred === 'same' ? '予想どおり！ ' : '予想とちがったね。') + s;
+  setMsg(s);
+}
+function drawWt() {
+  const S = SUBS[Wt.sub];
+  drawTable(412);
+  // 電子てんびん
+  ctx.fillStyle = '#eceff1'; ctx.strokeStyle = '#78909c'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(335, 362, 380, 50, 10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#cfd8dc'; ctx.beginPath(); ctx.roundRect(345, 350, 360, 12, 4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#263238'; ctx.beginPath(); ctx.roundRect(455, 368, 150, 38, 6); ctx.fill();
+  const on = Wt.phase === 'ready' || Wt.phase === 'done';
+  text(on ? fmtG(scaleReading()) + ' g' : '0.0 g', 530, 388, 24, '#76ff03');
+  text('電子てんびん', 395, 388, 14, '#455a64');
+  text('0', 640, 388, 13, '#455a64'); ctx.beginPath(); ctx.arc(640, 388, 11, 0, Math.PI * 2); ctx.stroke();
+  // ビーカー
+  const b = B2();
+  const g = drawWater(b, 100);
+  const und = Wt.beakerG - Wt.dis;
+  const ph = drawPile(b.x, g.yBot, und, 0, Wt.sub, g.x1 - g.x0 - 8);
+  if (Wt.phase === 'mix' && und > 0.03) drawSchlieren(b.x, g.yBot - ph - 2, g.yTop + 6, 1);
+  drawDots(Wt.liq, g, Wt.sub, 3);
+  Wt.grains.forEach(q => { ctx.fillStyle = '#eceff1'; ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 1; ctx.fillRect(q.x - 2, q.y - 2, 4, 4); ctx.strokeRect(q.x - 2, q.y - 2, 4, 4); });
+  if (Wt.phase === 'mix') drawRod(b.x + Math.sin(clock * 7) * 40, b.yb - b.h - 30, g.yBot - 22);
+  drawGlass(b);
+  // 薬包紙と、のせたもの
+  const p = paperXY();
+  ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(-Wt.tilt * 0.7);
+  ctx.fillStyle = '#fffde7'; ctx.strokeStyle = '#bdbdbd'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(-40, 0); ctx.lineTo(0, -8); ctx.lineTo(40, 0); ctx.lineTo(0, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+  drawPile(0, -2, Wt.paperG, 0, Wt.sub, 56);
+  ctx.restore();
+  text('薬包紙', Wt.pos.px, Wt.pos.py - 30, 13, '#795548', 'center', false);
+  // 上の説明
+  if (Wt.phase === 'ready') {
+    labelText('水 100g と ' + S.kana + ' ' + Wt.amt + 'g を、はかりにのせたよ（ビーカーと薬包紙の分は0にしてある）', W / 2, 28, 16, '#33691e');
+    labelText('とかす前：' + fmtG(100 + Wt.amt) + 'g', 530, 320, 22, '#1565c0');
+  } else if (Wt.phase === 'done') {
+    ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.strokeStyle = '#558b2f'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.roundRect(150, 14, 500, 78, 12); ctx.fill(); ctx.stroke();
+    text('とかす前 ' + fmtG(100 + Wt.amt) + 'g　→　とかした後 ' + fmtG(scaleReading()) + 'g', W / 2, 38, 20, '#1565c0');
+    text('水 100g ＋ ' + S.kana + ' ' + Wt.amt + 'g ＝ 水よう液 ' + fmtG(100 + Wt.amt) + 'g', W / 2, 70, 20, '#c62828');
+  } else {
+    labelText(Wt.phase === 'mix' ? 'かきまぜてとかしているよ' : Wt.phase === 'back' ? 'はかりにもどすよ' : 'はかりからおろして、入れるよ', W / 2, 28, 18, '#33691e');
+  }
+}
+
+// =====================================================================
+// ③ 取り出す（ろ過 → 冷やす／蒸発させる）
+// =====================================================================
+const O = {
+  sub: 'salt',
+  aW: 50, aS: 0, aRes: 0,          // ビーカーA：水（mL）・とけているもの（g）・とけ残り（g）
+  f: 0, filtering: false, filtered: false, paperRes: 0,
+  bW: 0, bS: 0, bT: 60, bx: 335,   // ビーカーB（ろ過した液）：水・中のもの全部（g）・温度・位置
+  cooling: false, moving: 0,
+  dW: 0, dS: 0, heat: false, evapOn: false,   // 蒸発皿：水・中のもの・火
+  liq: newLiq(), shownCool: false, shownEvap: false
+};
+const A3 = { x: 110, yb: 405, w: 140, h: 180, max: 150 };
+const B3 = () => ({ x: O.bx, yb: 405, w: 140, h: 180, max: 150 });
+const FUN = { x: 300, top: 150, r: 58, cone: 64, stem: 268 };  // ろうと
+const BATH = { x: 560, yb: 405, w: 200, h: 110 };
+const DISH = { x: 718, y: 292 };
+function resetOut() {
+  const S = SUBS[O.sub];
+  Object.assign(O, {
+    aW: 50, aS: cap(O.sub, 60, 50), aRes: S.spoon * 3,
+    f: 0, filtering: false, filtered: false, paperRes: 0,
+    bW: 0, bS: 0, bT: 60, bx: 335, cooling: false, moving: 0,
+    dW: 0, dS: 0, heat: false, evapOn: false, liq: newLiq(), shownCool: false, shownEvap: false
+  });
+}
+const crystB = () => Math.max(0, O.bS - cap(O.sub, O.bT, O.bW));     // ビーカーBに出てきたつぶ（g）
+const crystD = () => Math.max(0, O.dS - cap(O.sub, 60, O.dW));       // 蒸発皿に出てきたつぶ（g）
+function stepOut(dt, sdt) {
+  const S = SUBS[O.sub];
+  if (O.filtering) {
+    const tot = cap(O.sub, 60, 50);
+    O.f = Math.min(1, O.f + sdt / 4);
+    O.aW = 50 * (1 - O.f); O.aS = tot * (1 - O.f);
+    const fb = clamp(O.f * 1.15 - 0.15, 0, 1);
+    O.bW = 50 * fb; O.bS = tot * fb;
+    O.paperRes = S.spoon * 3 * Math.min(1, O.f * 1.6); O.aRes = S.spoon * 3 - O.paperRes;
+    if (O.f >= 1) { O.filtering = false; O.filtered = true; O.bW = 50; O.bS = tot; setMsg('ろ過できた！ ろ紙の上にとけ残りが残り、下のビーカーにはすき通った水よう液がたまったよ。次は「冷やす」か「蒸発させる」をためそう。'); }
+  }
+  // ビーカーBを氷水へ動かす → 冷やす
+  if (O.moving > 0) {
+    O.moving = Math.max(0, O.moving - dt / 0.9);
+    O.bx = 560 + (335 - 560) * ease(O.moving);
+    if (O.moving === 0) O.cooling = true;
+  }
+  if (O.cooling && O.bT > 10) {
+    O.bT = Math.max(10, O.bT - 3 * sdt);
+    if (O.bT === 10 && !O.shownCool) {
+      O.shownCool = true;
+      const c = crystB();
+      setMsg(O.sub === 'salt' ? '食塩は、冷やしてもほとんど出てこない（' + fmtG(c) + 'gだけ）。温度でとける量があまり変わらないからだね。蒸発させるとどうなるかな？'
+        : O.sub === 'sugar' ? '砂糖のつぶが出てきた（約' + Math.round(c) + 'g）。※本物の砂糖は、冷やしてもなかなか出てこないことが多いよ。'
+        : SUBS[O.sub].name + 'のつぶがたくさん出てきた！（約' + fmtG(c) + 'g） 温度が下がると、とけていられる量がへるからだね。虫めがねで形を見てみよう。');
+    }
+  }
+  // 蒸発させる
+  if (O.evapOn && O.dW > 0) {
+    if (O.heat) { O.dW = Math.max(0, O.dW - 0.55 * sdt); if (O.dW <= 1.5) { O.heat = false; setMsg('少し水が残っているうちに火を止めたよ。あとは、のこった熱で水が蒸発するよ（液がはねるのをふせぐため）。'); } }
+    else O.dW = Math.max(0, O.dW - 0.18 * sdt);
+    if (O.dW === 0 && !O.shownEvap) {
+      O.shownEvap = true;
+      setMsg(O.sub === 'sugar' ? '水がなくなると、砂糖はこげて茶色くなってしまった。本物でも、砂糖を強く熱するとこげるよ。'
+        : '水がなくなると、白いつぶが出てきた！ とけていた' + SUBS[O.sub].name + 'を取り出せたね。食塩も、この方法なら取り出せるよ。');
+    }
+  }
+  const bDis = O.bS - crystB();
+  stepDots(O.liq, Math.round(bDis * DPG[O.sub] * 1.6), sdt, false, 0.5, 0.9);
+}
+// ビーカーの中の結晶をならべてかく
+function drawCrystals(cx, yBot, wid, g, kind, spoon, seed, brown) {
+  if (g < 0.02) return;
+  const n = Math.min(60, Math.max(1, Math.round(g / spoon * 5)));
+  const size = clamp(4 + Math.sqrt(g / spoon) * 1.6, 4, 14);
+  for (let i = 0; i < n; i++) {
+    const x = cx + (hash(i + seed) - 0.5) * wid, y = yBot - 4 - hash(i + seed + 40) * Math.min(26, 4 + n * 0.5);
+    crystal(kind, x, y, size * (0.7 + hash(i + seed + 80) * 0.6), hash(i + seed + 120) * 6, brown);
+  }
+}
+function drawOut() {
+  const S = SUBS[O.sub];
+  drawTable(405);
+  // ビーカーA（はじめの液：60℃でとけるだけとかし、とけ残りがある）
+  const gA = drawWater(A3, O.aW, 'rgba(150,205,255,0.33)');
+  drawPile(A3.x, gA.yBot, O.aRes, 0, O.sub, 100);
+  drawGlass(A3, 25);
+  text('A　60℃', A3.x, A3.yb + 18, 15, '#33691e');
+  // ろうと台・ろうと・ろ紙
+  ctx.fillStyle = '#8d6e63'; ctx.fillRect(196, 397, 80, 8); ctx.fillRect(206, 120, 8, 280);
+  ctx.fillRect(206, FUN.top + 4, FUN.x - 206 - 40, 7);
+  ctx.strokeStyle = '#78909c'; ctx.lineWidth = 3; ctx.fillStyle = 'rgba(230,240,250,0.6)';
+  ctx.beginPath(); ctx.moveTo(FUN.x - FUN.r, FUN.top); ctx.lineTo(FUN.x + FUN.r, FUN.top); ctx.lineTo(FUN.x + 6, FUN.top + FUN.cone); ctx.lineTo(FUN.x - 6, FUN.top + FUN.cone); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(FUN.x - 6, FUN.top + FUN.cone); ctx.lineTo(FUN.x - 6, FUN.stem); ctx.lineTo(FUN.x + 6, FUN.stem + 6); ctx.lineTo(FUN.x + 6, FUN.top + FUN.cone); ctx.stroke();
+  ctx.fillStyle = '#fffde7'; ctx.strokeStyle = '#bdbdbd'; ctx.lineWidth = 1.5;   // ろ紙
+  ctx.beginPath(); ctx.moveTo(FUN.x - FUN.r + 8, FUN.top + 4); ctx.lineTo(FUN.x + FUN.r - 8, FUN.top + 4); ctx.lineTo(FUN.x, FUN.top + FUN.cone - 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+  if (O.filtering) {   // ろうとの中の液
+    ctx.fillStyle = 'rgba(150,205,255,0.5)'; ctx.beginPath(); ctx.moveTo(FUN.x - 30, FUN.top + 30); ctx.lineTo(FUN.x + 30, FUN.top + 30); ctx.lineTo(FUN.x, FUN.top + FUN.cone - 8); ctx.closePath(); ctx.fill();
+  }
+  if (O.paperRes > 0.03) drawPile(FUN.x, FUN.top + FUN.cone - 10, O.paperRes, 0, O.sub, 30);
+  text('ろ紙', FUN.x + FUN.r + 22, FUN.top + 10, 13, '#795548', 'center', false);
+  // ビーカーB
+  const b = B3();
+  if (O.cooling || O.moving > 0) {     // 氷水
+    ctx.fillStyle = 'rgba(180,220,255,0.55)'; ctx.fillRect(BATH.x - BATH.w / 2, BATH.yb - BATH.h + 20, BATH.w, BATH.h - 20);
+    for (let i = 0; i < 9; i++) { const ix = BATH.x - BATH.w / 2 + 12 + hash(i) * (BATH.w - 30); const iy = BATH.yb - BATH.h + 24 + hash(i + 3) * 60; if (Math.abs(ix - BATH.x) < 78) continue;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.strokeStyle = '#90caf9'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(ix, iy, 16, 14, 3); ctx.fill(); ctx.stroke(); }
+  }
+  const gB = drawWater(b, O.bW, 'rgba(150,205,255,0.33)');
+  const cb = crystB();
+  drawCrystals(b.x, gB.yBot, b.w - 30, cb, S.cry, S.spoon, 0);
+  if (O.bW > 0.5) drawDots(O.liq, gB, O.sub, 3);
+  drawGlass(b, 25);
+  if (O.cooling || O.moving > 0) {
+    ctx.strokeStyle = '#64b5f6'; ctx.lineWidth = 3; ctx.strokeRect(BATH.x - BATH.w / 2, BATH.yb - BATH.h, BATH.w, BATH.h);
+    text('氷水', BATH.x + BATH.w / 2 - 26, BATH.yb - BATH.h + 10, 14, '#1565c0');
+  }
+  text('B　' + Math.round(O.bT) + '℃', b.x, b.yb + 18, 15, '#33691e');
+  // ろ過のときのガラス棒と、注ぐ液
+  if (O.filtering) {
+    drawRod(FUN.x - 34, FUN.top - 70, FUN.top + 18);
+    ctx.strokeStyle = 'rgba(100,170,240,0.75)'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(A3.x + A3.w / 2 - 4, A3.yb - A3.h - 2); ctx.quadraticCurveTo(FUN.x - 60, FUN.top - 90, FUN.x - 26, FUN.top - 50); ctx.lineTo(FUN.x - 18, FUN.top + 14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(FUN.x + 2, FUN.stem); ctx.lineTo(FUN.x + 2, gB.yTop); ctx.stroke();
+  }
+  // 蒸発皿・三脚・アルコールランプ
+  const dx = DISH.x, dy = DISH.y;
+  ctx.strokeStyle = '#616161'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(dx - 50, 405); ctx.lineTo(dx - 40, dy + 14); ctx.moveTo(dx + 50, 405); ctx.lineTo(dx + 40, dy + 14); ctx.moveTo(dx - 52, dy + 14); ctx.lineTo(dx + 52, dy + 14); ctx.stroke();
+  ctx.fillStyle = 'rgba(220,235,245,0.9)'; ctx.strokeStyle = '#78909c'; ctx.lineWidth = 2;   // ランプ
+  ctx.beginPath(); ctx.ellipse(dx, 388, 26, 18, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#9e9e9e'; ctx.fillRect(dx - 3, 360, 6, 12);
+  if (O.heat) {
+    const fl = 1 + Math.sin(clock * 20) * 0.08;
+    ctx.fillStyle = 'rgba(255,152,0,0.85)'; ctx.beginPath(); ctx.ellipse(dx, 350, 7, 14 * fl, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(66,133,244,0.7)'; ctx.beginPath(); ctx.ellipse(dx, 356, 4, 6, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = '#fafafa'; ctx.strokeStyle = '#78909c'; ctx.lineWidth = 2.5;     // 皿
+  ctx.beginPath(); ctx.moveTo(dx - 50, dy - 6); ctx.quadraticCurveTo(dx, dy + 34, dx + 50, dy - 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+  if (O.dW > 0.02) {
+    const k = Math.min(1, O.dW / 10);
+    ctx.fillStyle = 'rgba(150,205,255,0.6)'; ctx.beginPath(); ctx.ellipse(dx, dy + 6, 40 * Math.sqrt(k) + 4, 4 + 5 * k, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  const cd = crystD();
+  if (O.evapOn) {
+    const brown = O.sub === 'sugar' && O.dW === 0;
+    for (let i = 0; i < Math.min(30, Math.round(cd / S.spoon * 10)); i++)
+      crystal(S.cry, dx + (hash(i + 200) - 0.5) * 66, dy + 6 + (hash(i + 230) - 0.5) * 8, 6 + hash(i + 260) * 3, hash(i + 290) * 6, brown);
+  }
+  if (O.heat) {   // 湯気
+    ctx.strokeStyle = 'rgba(150,150,150,0.5)'; ctx.lineWidth = 2;
+    for (let j = 0; j < 3; j++) { ctx.beginPath(); for (let y = dy - 8; y > dy - 60; y -= 4) { const x = dx + (j - 1) * 18 + Math.sin(y * 0.15 + clock * 4 + j) * 4; y === dy - 8 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke(); }
+  }
+  text('蒸発皿', dx, dy - 20 - (O.heat ? 44 : 0), 13, '#795548', 'center', false);
+  // 虫めがね（つぶの形を大きく見る）
+  if (cb > 0.05 || (O.evapOn && cd > 0.05)) {
+    const mx = 610, my = 92, r = 70;
+    ctx.fillStyle = '#e3f2fd'; ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill();
+    const brown = O.sub === 'sugar' && O.dW === 0 && cb < 0.05;
+    crystal(S.cry, mx - 18, my + 10, 52, 0.15, brown); crystal(S.cry, mx + 30, my - 18, 34, -0.4, brown); crystal(S.cry, mx + 32, my + 34, 24, 0.8, brown);
+    ctx.strokeStyle = '#5d4037'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(mx - r * 0.72, my + r * 0.72); ctx.lineTo(mx - r * 1.1, my + r * 1.1); ctx.stroke(); ctx.lineCap = 'butt';
+    labelText('虫めがねで見ると', mx + 90, my - 56, 14, '#5d4037');
+  }
+  if (!O.filtered && !O.filtering) labelText('Aは、60℃の水50mLに' + S.kana + 'をとけるだけとかした液（とけ残りあり）', W / 2, 24, 16, '#33691e');
+}
+
+// =====================================================================
+// ④ つぶのモデル
+// =====================================================================
+const ML = { x: 200, yb: 405, w: 220, h: 270, max: 250 }, MR = { x: 570, yb: 405, w: 220, h: 270, max: 250 };
+const M = { sub: 'salt', phase: 'empty', time: 0, parts: [] };
+const MSUB = {
+  salt:   { name: '食塩', color: '#0072B2', shape: 'square' },
+  coffee: { name: 'コーヒーシュガー', color: '#8B4513', shape: 'circle' },
+  starch: { name: 'でんぷん', color: '#9e9e9e', shape: 'blob' }
+};
+function dropModel() {
+  M.phase = 'in'; M.time = 0; M.parts = []; M.prof = null;
+  if (M.sub === 'starch') {
+    // でんぷん：かきまぜた直後は全体に広がっているが、とけていないので、だんだん底にしずむ
+    for (let i = 0; i < 46; i++) M.parts.push({ u: 0.05 + Math.random() * 0.9, v: 0.05 + Math.random() * 0.9, vy: -(0.02 + Math.random() * 0.02), rest: false });
+  } else {
+    for (let i = 0; i < 160; i++) M.parts.push({ u: clamp(0.5 + gauss() * 0.06, 0.3, 0.7), v: Math.abs(gauss()) * 0.035 + 0.02, vx: 0, vy: 0, bound: true });
+  }
+}
+function stepModel(sdt) {
+  if (M.phase !== 'in') return;
+  M.time += sdt;
+  const sq = Math.sqrt(sdt);
+  M.parts.forEach(p => {
+    if (M.sub === 'starch') {
+      if (p.rest) return;
+      p.v += p.vy * sdt; p.u += gauss() * 0.01 * sq;
+      if (p.v <= 0.03) { p.v = 0.025 + Math.random() * 0.02; p.rest = true; }
+      return;
+    }
+    if (p.bound) { if (Math.random() < (0.2 + M.time * 0.03) * sdt) p.bound = false; return; }   // かたまりの表面から、少しずつはなれていく
+    p.vx += -2 * p.vx * sdt + gauss() * 0.55 * sq; p.vy += -2 * p.vy * sdt + gauss() * 0.55 * sq;
+    p.u += p.vx * sdt; p.v += p.vy * sdt;
+    if (p.u < 0.02 || p.u > 0.98) { p.vx = -p.vx; p.u = clamp(p.u, 0.02, 0.98); }
+    if (p.v < 0.02 || p.v > 0.97) { p.vy = -p.vy; p.v = clamp(p.v, 0.02, 0.97); }
+  });
+}
+const modelBound = () => M.parts.filter(p => p.bound).length;
+function drawModel() {
+  drawTable(405);
+  const ms = MSUB[M.sub];
+  // 左：見たようす
+  const gL = beakerGeo(ML, 200);
+  drawWater(ML, 200);
+  if (M.phase === 'in') {
+    const bands = 20, hh = (gL.yBot - gL.yTop) / bands;
+    if (M.sub === 'coffee' || M.sub === 'starch') {
+      // 色のこさ・にごり：その高さにあるつぶの数で決まる（なめらかに見えるよう、となりの高さとならす）
+      const cnt = new Array(bands).fill(0);
+      M.parts.forEach(p => { if (M.sub === 'coffee' ? !p.bound : !p.rest) cnt[Math.min(bands - 1, Math.floor(p.v * bands))]++; });
+      const K = [1, 2, 3, 4, 3, 2, 1];
+      if (!M.prof || M.prof.length !== bands) M.prof = new Array(bands).fill(0);
+      for (let i = 0; i < bands; i++) {
+        let a = 0, w = 0;
+        K.forEach((k, j) => { const b = i + j - 3; if (b >= 0 && b < bands) { a += cnt[b] * k; w += k; } });
+        M.prof[i] += (a / w - M.prof[i]) * 0.1;
+      }
+      const tot = M.parts.length;
+      for (let i = 0; i < bands; i++) {
+        const k = M.prof[i] / tot * bands;   // 全体に同じこさで広がったとき 1
+        ctx.fillStyle = M.sub === 'coffee' ? 'rgba(150,80,30,' + Math.min(0.75, k * 0.4) + ')' : 'rgba(250,250,245,' + Math.min(0.95, k * 0.85) + ')';
+        const y0 = Math.round(gL.yBot - (i + 1) * hh), y1 = Math.round(gL.yBot - i * hh);   // すき間・重なりができないように
+        ctx.fillRect(gL.x0, y0, gL.x1 - gL.x0, y1 - y0);
+      }
+    }
+    if (M.sub === 'starch') {          // 底にたまったでんぷん
+      const rest = M.parts.filter(p => p.rest).length;
+      if (rest) { ctx.fillStyle = '#f5f5f0'; ctx.strokeStyle = '#bdbdbd'; ctx.lineWidth = 1; ctx.fillRect(gL.x0, gL.yBot - rest * 0.35 - 2, gL.x1 - gL.x0, rest * 0.35 + 2); }
+    } else {
+      const nb = modelBound();
+      if (nb > 0) {
+        const s = Math.sqrt(nb / 160);
+        ctx.fillStyle = M.sub === 'coffee' ? '#a0522d' : '#f5f7fa'; ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(ML.x - 40 * s, gL.yBot); ctx.quadraticCurveTo(ML.x, gL.yBot - 40 * s, ML.x + 40 * s, gL.yBot); ctx.closePath(); ctx.fill(); ctx.stroke();
+        if (M.sub === 'salt') drawSchlieren(ML.x, gL.yBot - 12 * s, gL.yTop + 6, 1);
+      }
+    }
+  }
+  drawGlass(ML);
+  text('見たようす', ML.x, 24, 18, '#33691e');
+  // 右：つぶで考えると
+  const gR = drawWater(MR, 200, 'rgba(235,245,255,0.7)');
+  M.parts.forEach(p => {
+    const x = gR.x0 + 6 + p.u * (gR.x1 - gR.x0 - 12), y = gR.yBot - 4 - p.v * (gR.yBot - gR.yTop - 8);
+    if (M.sub === 'starch') {
+      ctx.fillStyle = '#e0e0e0'; ctx.strokeStyle = '#757575'; ctx.lineWidth = 1;
+      for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(x + Math.cos(k * 1.7) * 5, y + Math.sin(k * 1.7) * 4, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    } else glyph(x, y, 3.6, ms.shape, ms.color);
+  });
+  drawGlass(MR);
+  text('つぶで考えると（モデル）', MR.x, 24, 18, '#33691e');
+  if (M.phase === 'empty') labelText('「水に入れる」をおしてね', W / 2, 200, 20, '#558b2f');
+  // まとめ
+  if (M.phase === 'in' && M.time > 6) {
+    const done = M.sub === 'starch' ? M.parts.every(p => p.rest) : modelBound() === 0;
+    if (done) {
+      const s = M.sub === 'starch' ? 'にごっていて、底にたまった → 水よう液ではない' : 'すき通っていて、どこも同じこさ → 水よう液';
+      labelText(s, W / 2, 56, 18, M.sub === 'starch' ? '#c62828' : '#1565c0');
+    }
+  }
+}
+
+// =====================================================================
+// 下の数字（タブごとに中身を変える）
+// =====================================================================
+const statCache = {};
+function setStat(id, html) { if (statCache[id] !== html) { statCache[id] = html; $(id).innerHTML = J(html); } }
+function updateStats() {
+  if (tab === 'dis') {
+    const S = SUBS[D.sub], u = und1();
+    setStat('lA', '水温'); setStat('sA', D.T + '℃');
+    setStat('lB', '入れた量'); setStat('sB', D.spoons + 'はい（' + (D.spoons * S.spoon) + 'g）');
+    setStat('lC', 'とけ残り'); setStat('sC', u > 0.05 ? '▲ あり' : '○ なし');
+  } else if (tab === 'wt') {
+    const on = Wt.phase === 'ready' || Wt.phase === 'done';
+    setStat('lA', 'とかす前'); setStat('sA', fmtG(100 + Wt.amt) + 'g');
+    setStat('lB', 'とかした後'); setStat('sB', Wt.phase === 'done' ? fmtG(scaleReading()) + 'g' : '？');
+    setStat('lC', 'てんびんの表示'); setStat('sC', on ? fmtG(scaleReading()) + 'g' : '（おろしている）');
+  } else if (tab === 'out') {
+    setStat('lA', 'ビーカーBの温度'); setStat('sA', O.bW > 0 ? Math.round(O.bT) + '℃' : '－');
+    setStat('lB', 'Bに出てきたつぶ'); setStat('sB', O.filtered ? '約' + fmtG(crystB()) + 'g' : '－');
+    setStat('lC', '蒸発皿に出てきたつぶ'); setStat('sC', O.evapOn ? '約' + fmtG(crystD()) + 'g' : '－');
+  } else {
+    setStat('lA', '入れてからの時間'); setStat('sA', M.phase === 'in' ? '約' + Math.floor(M.time) + '分' : '－');
+    const look = M.sub !== 'starch' ? 'すき通っている' : M.parts.every(p => p.rest) ? '上はすき通った' : 'にごっている';
+    setStat('lB', '見たようす'); setStat('sB', M.phase === 'in' ? look : '－');
+    const bottom = M.sub === 'starch' ? M.parts.some(p => p.rest) : modelBound() > 0;
+    setStat('lC', '底に'); setStat('sC', M.phase === 'in' ? (bottom ? 'たまっている' : 'たまっていない') : '－');
+  }
+}
+
+// =====================================================================
+// 実験のしかた（タブごと）
+// =====================================================================
+const HELP = {
+  dis: '<h2>実験のしかた（変える条件は1つだけ！）</h2><ul>' +
+    '<li>さじで1ぱいずつ入れて、かきまぜる。とけ残りが出るまでに何ばい入ったかを調べよう。</li>' +
+    '<li><b>水温だけ</b>を変えて（10℃・30℃・60℃など）、とける量をくらべよう。水の量は同じにするよ。</li>' +
+    '<li><b>水の量だけ</b>を変えて（50mL → 100mL）、とける量をくらべよう。とけ残りがあるときに水をふやすと、どうなるかな？</li>' +
+    '<li>とけ残りがあるときに水温を上げたり、とけた後に水温を下げたりすると、どうなるかな？</li>' +
+    '<li>「とけたもののつぶを見る」を消すと、本物のように見えるよ。とけたものは、すき通って見えなくなる。</li></ul>',
+  wt: '<h2>実験のしかた</h2><ul>' +
+    '<li>はじめに、ビーカーと薬包紙をのせて、電子てんびんを「0」にしておく（この画面ではしてあるよ）。</li>' +
+    '<li>水と、とかすものをのせて、重さをはかる（とかす前）。</li>' +
+    '<li>はかりからおろして、とかすものを水に入れてかきまぜる。薬包紙も、もう一度はかりにのせて重さをはかる（とかした後）。</li>' +
+    '<li>予想をえらんでから「入れてとかす」をおそう。</li></ul>',
+  out: '<h2>実験のしかた</h2><ul>' +
+    '<li>① ろ過：ろ紙をろうとにぴったりつけ、ろうとの先をビーカーのかべにつける。液は、ガラス棒に伝わらせて少しずつ注ぐ。</li>' +
+    '<li>② 冷やす：ろ過した液（B）を氷水で冷やす。食塩とミョウバンで、出てくるつぶの量をくらべよう。</li>' +
+    '<li>② 蒸発させる：Bの液を少し蒸発皿にとって熱する。液がはねるので、少し残っているうちに火を止める。</li>' +
+    '<li>⚠ 本物の実験では、保護めがねをかける。熱した蒸発皿や三脚は、冷えるまでさわらない。</li></ul>',
+  model: '<h2>見てみよう</h2><ul>' +
+    '<li>水に入れると、つぶはどう広がっていくかな？ かきまぜなくても、時間がたつと全体に広がるよ（はやおくりで見てみよう）。</li>' +
+    '<li>コーヒーシュガーの水よう液は、色がついていても、すき通っている。</li>' +
+    '<li>でんぷんは水にとけない。にごっていて、時間がたつと底にたまる。これは水よう液ではない。</li>' +
+    '<li><b>水よう液</b>：ものが水にとけた、すき通った液。どこも同じこさで、時間がたっても、とけたものは底にたまらない。</li></ul>'
+};
+function setHelp() { $('help').innerHTML = HELP[tab]; rubyfy($('help')); }
+
+// =====================================================================
+// ボタン
+// =====================================================================
+function chipSelect(group, btn) { group.querySelectorAll('.chip').forEach(b => b.classList.toggle('active', b === btn)); }
+$('tabs').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  tab = b.dataset.tab; chipSelect($('tabs'), b);
+  $('pDis').classList.toggle('hidden', tab !== 'dis');
+  $('pWt').classList.toggle('hidden', tab !== 'wt');
+  $('pOut').classList.toggle('hidden', tab !== 'out');
+  $('pModel').classList.toggle('hidden', tab !== 'model');
+  $('lblDots').classList.toggle('hidden', tab === 'model');
+  cv.style.touchAction = tab === 'dis' ? 'none' : 'manipulation';   // ①ではビーカーを指でかきまぜるので、画面が動かないようにする
+  setHelp(); setMsg('');
+});
+$('cSpeed').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  speed = SPEEDS[b.dataset.speed]; chipSelect($('cSpeed'), b);
+});
+$('chkDots').addEventListener('change', e => { showDots = e.target.checked; });
+
+// ----- ① -----
+$('cSub').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b || b.dataset.sub === D.sub) return;
+  D.sub = b.dataset.sub; chipSelect($('cSub'), b);
+  const had = D.added > 0;
+  resetDis();
+  setMsg(had ? '新しい水にとりかえて、' + SUBS[D.sub].name + 'にしたよ。' : (D.sub === 'sugar' ? '砂糖は、とてもたくさんとけるので、大きいさじ（1ぱい10g）を使うよ。' : ''));
+});
+$('cWater').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  const w = +b.dataset.water; if (w === D.water) return;
+  if (D.added > 0 && w < D.water) { setMsg('水をへらすことはできないよ。「もういちど」で、新しい水からはじめよう。'); return; }
+  const before = und1() > 0.05;
+  D.water = w; chipSelect($('cWater'), b);
+  if (before) setMsg('水をふやしたよ。とけ残りはどうなるかな？ かきまぜてみよう。');
+});
+$('rTemp').addEventListener('input', e => {
+  const T = +e.target.value, old = D.T;
+  D.T = T; $('tTemp').textContent = T + '℃';
+  if (D.added > 0) {
+    if (T > old && und1() > 0.05) setMsg('水温を上げたよ。とけ残りはどうなるかな？ かきまぜてみよう。');
+    else if (T < old && D.dis > cap(D.sub, T, D.water) + 0.05) setMsg('水温を下げたら、とけていたものが、つぶになって出てきた！');
+  }
+});
+$('btnAdd1').addEventListener('click', () => addSpoons(1));
+$('btnAdd5').addEventListener('click', () => addSpoons(5));
+$('btnStir').addEventListener('click', () => { D.stirT = 3; });
+$('btnRec').addEventListener('click', recordDis);
+$('btnReset').addEventListener('click', () => { resetDis(); D.lastRec = ''; setMsg('新しい水にとりかえたよ。'); });
+// ビーカーを指（マウス）でなぞると、ガラス棒でかきまぜる
+function canvasXY(ev) { const r = cv.getBoundingClientRect(); return { x: (ev.clientX - r.left) * W / r.width, y: (ev.clientY - r.top) * H / r.height }; }
+cv.addEventListener('pointerdown', ev => {
+  if (tab !== 'dis') return;
+  const p = canvasXY(ev), g = beakerGeo(BK1, D.water);
+  if (p.x > g.x0 && p.x < g.x1 && p.y > g.yTop - 40 && p.y < g.yBot) { D.rod = p; cv.setPointerCapture(ev.pointerId); }
+});
+cv.addEventListener('pointermove', ev => {
+  if (!D.rod) return;
+  const p = canvasXY(ev);
+  if (Math.hypot(p.x - D.rod.x, p.y - D.rod.y) > 2) D.stirT = Math.max(D.stirT, 0.4);
+  D.rod = p;
+});
+['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { D.rod = null; }));
+
+// ----- ② -----
+$('cSubW').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b || Wt.phase !== 'ready' && Wt.phase !== 'done') return;
+  Wt.sub = b.dataset.sub; chipSelect($('cSubW'), b); resetWt(); setMsg('');
+});
+$('cAmtW').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b || Wt.phase !== 'ready' && Wt.phase !== 'done') return;
+  Wt.amt = +b.dataset.amt; chipSelect($('cAmtW'), b); resetWt(); setMsg('');
+});
+$('cPred').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  Wt.pred = b.dataset.pred; chipSelect($('cPred'), b);
+});
+$('btnPour').addEventListener('click', () => {
+  if (Wt.phase === 'done') resetWt();
+  if (Wt.phase !== 'ready') return;
+  if (!Wt.pred) setMsg('予想をえらんでから、ためしてみよう。（えらばなくても、ためせるよ）');
+  else setMsg('');
+  Wt.phase = 'off'; Wt.t = 0;
+});
+$('btnResetW').addEventListener('click', () => { resetWt(); Wt.pred = null; chipSelect($('cPred'), null); setMsg(''); });
+
+// ----- ③ -----
+$('cSubO').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  O.sub = b.dataset.sub; chipSelect($('cSubO'), b); resetOut(); setMsg('');
+});
+$('btnFilter').addEventListener('click', () => {
+  if (O.filtered || O.filtering) { setMsg('もうろ過したよ。次は「冷やす」か「蒸発させる」をためそう。'); return; }
+  O.filtering = true; setMsg('とけ残りがあるので、ろ過して、すき通った液だけにするよ。');
+});
+$('btnCool').addEventListener('click', () => {
+  if (!O.filtered) { setMsg('先に「ろ過する」をしよう。とけ残りがあると、出てきたつぶと見分けられないよ。'); return; }
+  if (O.cooling || O.moving > 0) return;
+  O.moving = 1; setMsg('ビーカーBを氷水につけて冷やすよ。温度計の温度に注目！');
+});
+$('btnEvap').addEventListener('click', () => {
+  if (!O.filtered) { setMsg('先に「ろ過する」をしよう。'); return; }
+  if (O.evapOn) { setMsg('もう蒸発させているよ。「もういちど」でやり直せるよ。'); return; }
+  // Bのとけている液を 10mL、蒸発皿にとる
+  const take = Math.min(10, O.bW), dis = O.bS - crystB();
+  const s = dis * take / O.bW;
+  O.bW -= take; O.bS -= s;
+  O.dW = take; O.dS = s; O.evapOn = true; O.heat = true;
+  setMsg('Bの液を少し（10mL）蒸発皿にとって、熱するよ。');
+});
+$('btnResetO').addEventListener('click', () => { resetOut(); setMsg(''); });
+
+// ----- ④ -----
+$('cSubM').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  M.sub = b.dataset.m; chipSelect($('cSubM'), b); M.phase = 'empty'; M.parts = []; setMsg('');
+});
+$('btnDrop').addEventListener('click', () => {
+  dropModel();
+  setMsg(M.sub === 'starch' ? 'でんぷんを入れて、かきまぜたよ。時間がたつとどうなるかな？' : MSUB[M.sub].name + 'を、そっと水に入れたよ（かきまぜない）。つぶはどうなるかな？');
+});
+$('btnResetM').addEventListener('click', () => { M.phase = 'empty'; M.parts = []; setMsg(''); });
+
+// =====================================================================
+// アニメーション（いつも動かしておく）
+// =====================================================================
+let last = performance.now();
+function frame(now) {
+  const dt = clamp((now - last) / 1000, 0, 0.05);   // マイナスにならないように（つぶの位置がこわれるのをふせぐ）
+  last = now; clock += dt;
+  const sdt = dt * speed;
+  // 見えていないタブも、とちゅうのものは進めておく
+  stepDis(dt, sdt); stepWt(dt, sdt); stepOut(dt, sdt); stepModel(sdt);
+  ctx.fillStyle = '#fbfdff'; ctx.fillRect(0, 0, W, H);
+  if (tab === 'dis') drawDis(); else if (tab === 'wt') drawWt(); else if (tab === 'out') drawOut(); else drawModel();
+  updateStats();
+  requestAnimationFrame(frame);
+}
+
+// ===== 先生モード =====
+if (TEACHER) {
+  $('tNote').classList.remove('hidden');
+  $('tNote').innerHTML = '👩‍🏫 <b>先生へ</b>：とける量の目安（水100mL）は、食塩 約36g（温度によらずほぼ同じ）、ミョウバン 10℃ 約8g・20℃ 約11g・40℃ 約24g・60℃ 約57g、ホウ酸 20℃ 約5g・60℃ 約15g、砂糖 20℃ 約200g です。ミョウバンは、焼きミョウバンではなく結晶のミョウバン（カリウムミョウバン）の値です。教科書によって数がちがうので、使っている教科書に合わせて説明してください（数はコードの SUBS で変えられます）。<br>' +
+    '・②では、薬包紙もいっしょにはかることがポイントです。とかした後に薬包紙をのせわすれると、軽くなったように見えてしまいます。<br>' +
+    '・③のろ過では、ろ紙を水でぬらしてろうとにつけること、ろうとの長い方の先をビーカーのかべにつけることを指導してください。蒸発では、保護めがねをかけ、液が少し残ったところで火を止めます。ホウ酸は口に入れたり目に入ったりしないよう、取りあつかいに注意してください。<br>' +
+    '・④の「つぶ」は中学校の粒子モデルにつながるイメージです。小学校では「とけたものは見えなくなっても水の中にある」「水よう液はどこも同じこさ」をおさえる程度にしてください。';
+}
+
+// ===== はじめ =====
+resetWt(); resetOut(); setHelp();
+cv.style.touchAction = 'none';
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
