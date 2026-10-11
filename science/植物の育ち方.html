@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>植物の育ち方</title>
+<!--
+  植物の育ち方（小学3年 理科「植物の育ち方」）
+  ・ホウセンカ・ヒマワリ・アサガオから選んで、たねまきから実・たねまで、日数を進めて観察する。
+  ・たね → 発芽 → 子葉 → 葉がふえる → くきが太く高くなる → つぼみ → 花 → 実 → たね
+  ・根・くき・葉・花などをタップすると、名前とはたらきが出る。
+  ・水やり・日当たりの世話をしないと、元気がなくなり、育ちがおそくなる（かれきらず、回復できる）。
+  ・「観察カード」で好きな日のようすを記録し、絵日記のようにならべる。
+  ・育つ日数などは、下の PLANTS（植物のデータ）でかえられます。
+  ・ワークシート部品（worksheet.js）を使っています。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 860px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+
+  /* 植物をえらぶタブ */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .tab {
+    min-height: 48px; border: 3px solid #aed581; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 4px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .tab.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+
+  .main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; }
+  .side { display: flex; flex-direction: column; gap: 10px; }
+  .fig-title { margin: 0 0 4px; font-size: 16px; font-weight: bold; color: #33691e; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #scene { aspect-ratio: 600 / 560; border-radius: 8px; cursor: pointer; }
+  #graph { aspect-ratio: 400 / 230; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .chip.small { min-height: 44px; font-size: 16px; padding: 2px 10px; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 18px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.blue { background: #0072b2; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn:disabled, .chip:disabled { opacity: 0.4; cursor: default; }
+  .lbl { font-size: 16px; color: #555; font-weight: bold; }
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #1565c0; margin-top: 4px; }
+  .diff { font-size: 15px; color: #666; margin: 4px 0 0; }
+  .hidden { display: none !important; }
+
+  /* いまのようす */
+  .now { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; font-size: 16px; }
+  .now b { font-size: 1.3rem; color: #bf360c; }
+  .stage { grid-column: 1 / -1; font-weight: bold; color: #33691e; font-size: 17px; margin-top: 2px; }
+
+  /* 世話：メーター（色だけでなく、しまもようと文字でも表す） */
+  .meter { display: flex; align-items: center; gap: 8px; font-size: 16px; margin-top: 6px; }
+  .meter .name { width: 4.2em; font-weight: bold; color: #555; }
+  .meter .tube { position: relative; flex: 1; height: 22px; background: #eee; border: 2px solid #999; border-radius: 11px; overflow: hidden; }
+  .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; transition: width .2s; }
+  #waterFill { background: repeating-linear-gradient(45deg, #0072b2 0 6px, #56b4e9 6px 12px); }
+  #healthFill { background: repeating-linear-gradient(-45deg, #009e73 0 6px, #66c2a5 6px 12px); }
+  .meter .val { width: 6.6em; font-weight: bold; color: #333; white-space: nowrap; }
+
+  /* 名前とはたらき */
+  .info { margin-top: 6px; background: #fffde7; border: 3px solid #fbc02d; border-radius: 12px; padding: 6px 10px; font-size: 17px; min-height: 3.2em; }
+  .info .pname { font-size: 1.2rem; font-weight: bold; color: #6d4c41; margin-right: 6px; }
+
+  /* 日数スライダー */
+  .day-wrap { position: relative; padding: 0 4px; }
+  input[type=range] { width: 100%; height: 44px; accent-color: #e65100; margin: 0; }
+  .ticks { position: relative; height: 22px; margin: 0 14px; font-size: 13px; color: #666; }
+  .ticks span { position: absolute; transform: translateX(-50%); top: 0; white-space: nowrap; }
+  .ticks span::before { content: ''; position: absolute; left: 50%; top: -6px; width: 1px; height: 6px; background: #999; }
+  .marks { position: relative; height: 22px; margin: 0 14px; font-size: 14px; }
+  .marks span { position: absolute; transform: translateX(-50%); bottom: 0; white-space: nowrap; font-weight: bold; color: #ad1457; }
+
+  /* 観察カード */
+  .cards { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; margin-top: 6px; }
+  .ocard { width: 190px; border: 3px solid #c5e1a5; border-radius: 12px; padding: 6px; background: #fbfff5; position: relative; font-size: 14px; }
+  .ocard img { width: 100%; display: block; border-radius: 8px; border: 1px solid #ddd; }
+  .ocard .ttl { font-weight: bold; color: #33691e; font-size: 15px; margin: 2px 0; padding-right: 30px; }
+  .ocard textarea { width: 100%; font-family: inherit; font-size: 14px; border: 2px solid #ddd; border-radius: 8px; padding: 4px; resize: vertical; min-height: 3.2em; }
+  .ocard .del { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; border-radius: 50%; border: 2px solid #e57373; background: #fff; color: #c62828; font-weight: bold; cursor: pointer; font-size: 16px; }
+  .empty { color: #888; font-size: 15px; }
+
+  @media (max-width: 680px) {
+    .main { grid-template-columns: 1fr; }
+    .ocard { width: calc(50% - 5px); }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🌻 <ruby>植物<rt>しょくぶつ</rt></ruby>の<ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby></h1>
+<p class="subtitle">たねをまいて、<ruby>日<rt>ひ</rt></ruby>にちを<ruby>進<rt>すす</rt></ruby>めよう。どんな<ruby>順<rt>じゅん</rt></ruby>に<ruby>育<rt>そだ</rt></ruby>つかな？</p>
+
+<div class="panel">
+  <div class="tabs">
+    <button class="tab active" data-plant="hosenka">🌺 ホウセンカ</button>
+    <button class="tab" data-plant="himawari">🌻 ヒマワリ</button>
+    <button class="tab" data-plant="asagao">🪻 アサガオ</button>
+  </div>
+
+  <div class="main">
+    <!-- ===== 左：植物の絵 ===== -->
+    <div class="card">
+      <canvas id="scene" aria-label="植物を横から見た図。根・くき・葉などをタップすると名前とはたらきが出る"></canvas>
+      <div class="info" id="info">👆 <ruby>根<rt>ね</rt></ruby>・くき・<ruby>葉<rt>は</rt></ruby>・<ruby>花<rt>はな</rt></ruby>などをタップすると、<ruby>名前<rt>なまえ</rt></ruby>とはたらきが<ruby>出<rt>で</rt></ruby>るよ</div>
+      <div class="row">
+        <button class="chip small active" id="btnSoil">🟫 <ruby>土<rt>つち</rt></ruby>の<ruby>中<rt>なか</rt></ruby>を<ruby>見<rt>み</rt></ruby>る ON</button>
+      </div>
+    </div>
+
+    <!-- ===== 右：ようす・世話・グラフ ===== -->
+    <div class="side">
+      <div class="card">
+        <div class="now">
+          <span>たねまきから</span><span><b id="nDay">0</b> <ruby>日<rt>にち</rt></ruby><ruby>目<rt>め</rt></ruby></span>
+          <span id="hName"><ruby>草<rt>くさ</rt></ruby>たけ</span><span><b id="nH">0</b> cm</span>
+          <span><ruby>葉<rt>は</rt></ruby>の<ruby>数<rt>かず</rt></ruby></span><span><b id="nL">0</b> まい</span>
+          <div class="stage" id="nStage">-</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="fig-title"><ruby>世話<rt>せわ</rt></ruby>をしよう</p>
+        <div class="row" style="margin-top:0">
+          <button class="go-btn blue" id="btnWater">💧 <ruby>水<rt>みず</rt></ruby>やり</button>
+          <button class="chip small active" data-sun="1">☀ <ruby>日<rt>ひ</rt></ruby>なた</button>
+          <button class="chip small" data-sun="0">🌥 <ruby>日<rt>ひ</rt></ruby>かげ</button>
+        </div>
+        <div class="meter"><span class="name"><ruby>土<rt>つち</rt></ruby>の<ruby>水<rt>みず</rt></ruby></span><div class="tube"><div class="fill" id="waterFill"></div></div><span class="val" id="waterText">-</span></div>
+        <div class="meter"><span class="name"><ruby>元気<rt>げんき</rt></ruby></span><div class="tube"><div class="fill" id="healthFill"></div></div><span class="val" id="healthText">-</span></div>
+        <div class="row">
+          <button class="chip small" id="btnAuto">🤖 おまかせ<ruby>世話<rt>せわ</rt></ruby> OFF</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="fig-title">そだちグラフ（<ruby>毎日<rt>まいにち</rt></ruby><ruby>自動<rt>じどう</rt></ruby>で<ruby>記録<rt>きろく</rt></ruby>）</p>
+        <div class="row" style="margin-top:0">
+          <button class="chip small active" data-g="h" id="gH"><ruby>草<rt>くさ</rt></ruby>たけ</button>
+          <button class="chip small" data-g="n"><ruby>葉<rt>は</rt></ruby>の<ruby>数<rt>かず</rt></ruby></button>
+        </div>
+        <canvas id="graph" aria-label="日数と草たけ（または葉の数）の折れ線グラフ"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 日数 ===== -->
+  <div class="card">
+    <div class="marks" id="marks"></div>
+    <div class="day-wrap"><input type="range" id="day" min="0" max="120" step="1" value="0" aria-label="たねまきからの日数"></div>
+    <div class="ticks" id="ticks"></div>
+    <div class="row">
+      <button class="go-btn orange" id="btnPlay">▶ さいせい</button>
+      <span>
+        <button class="chip" data-speed="1.2">ゆっくり</button>
+        <button class="chip active" data-speed="0.5">ふつう</button>
+        <button class="chip" data-speed="0.12">はやおくり</button>
+      </span>
+      <button class="go-btn" id="btnCard">📝 この<ruby>日<rt>ひ</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby>する</button>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+    <div class="msg" id="msg">&nbsp;</div>
+  </div>
+
+  <!-- ===== 観察カード ===== -->
+  <div class="card">
+    <p class="fig-title">📒 <ruby>観察<rt>かんさつ</rt></ruby>カード（<ruby>記録<rt>きろく</rt></ruby>した<ruby>日<rt>ひ</rt></ruby>のようす）</p>
+    <div class="cards" id="cards"></div>
+  </div>
+
+  <div class="card">
+    <p class="diff">※じっさいとのちがい：<ruby>日数<rt>にっすう</rt></ruby>は、5<ruby>月<rt>がつ</rt></ruby>のはじめにたねをまいたときの<ruby>目安<rt>めやす</rt></ruby>です。<ruby>気温<rt>きおん</rt></ruby>や<ruby>地<rt>ち</rt></ruby>いき、<ruby>年<rt>とし</rt></ruby>によってかわります。<ruby>葉<rt>は</rt></ruby>の<ruby>数<rt>かず</rt></ruby>は<ruby>子葉<rt>しよう</rt></ruby>を<ruby>入<rt>い</rt></ruby>れずに<ruby>数<rt>かぞ</rt></ruby>えています。<ruby>絵<rt>え</rt></ruby>は、<ruby>植物<rt>しょくぶつ</rt></ruby>が<ruby>大<rt>おお</rt></ruby>きくなると<ruby>目<rt>め</rt></ruby>もりが<ruby>小<rt>ちい</rt></ruby>さくなります（<ruby>左<rt>ひだり</rt></ruby>のものさしを<ruby>見<rt>み</rt></ruby>てね）。ホウセンカの<ruby>枝分<rt>えだわ</rt></ruby>かれなどは、かんたんにしています。</p>
+  </div>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: '<ruby>植物<rt>しょくぶつ</rt></ruby>の<ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby>',
+  question: 'たねをまいてから、いつごろ<ruby>花<rt>はな</rt></ruby>がさくだろうか？',
+  predictionChoices: ['1か<ruby>月<rt>げつ</rt></ruby><ruby>後<rt>ご</rt></ruby>ごろ（30<ruby>日<rt>にち</rt></ruby>ごろ）', '2か<ruby>月<rt>げつ</rt></ruby><ruby>後<rt>ご</rt></ruby>ごろ（60<ruby>日<rt>にち</rt></ruby>ごろ）', '3か<ruby>月<rt>げつ</rt></ruby><ruby>後<rt>ご</rt></ruby>ごろ（90<ruby>日<rt>にち</rt></ruby>ごろ）'],
+  experimentNote: '<ruby>水<rt>みず</rt></ruby>やりと<ruby>日<rt>ひ</rt></ruby>当たりの<ruby>世話<rt>せわ</rt></ruby>をしながら<ruby>日<rt>ひ</rt></ruby>にちを<ruby>進<rt>すす</rt></ruby>め、ようすがかわった<ruby>日<rt>ひ</rt></ruby>に「📝 この<ruby>日<rt>ひ</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby>する」をおそう。<ruby>花<rt>はな</rt></ruby>がさいた<ruby>日<rt>ひ</rt></ruby>も<ruby>記録<rt>きろく</rt></ruby>しよう。',
+  columns: [
+    { key: 'plant', label: '<ruby>植物<rt>しょくぶつ</rt></ruby>' },
+    { key: 'day', label: '<ruby>日数<rt>にっすう</rt></ruby>', unit: '<ruby>日<rt>にち</rt></ruby><ruby>目<rt>め</rt></ruby>' },
+    { key: 'h', label: '<ruby>草<rt>くさ</rt></ruby>たけ', unit: 'cm' },
+    { key: 'n', label: '<ruby>葉<rt>は</rt></ruby>の<ruby>数<rt>かず</rt></ruby>', unit: 'まい' },
+    { key: 'stage', label: 'ようす' }
+  ],
+  chart: { type: 'bar', x: 'dayLabel', y: 'h', sortBy: 'day' },
+  hint: 'たね→芽が出る→子葉→葉がふえる→くきがのびる→つぼみ→花→実→たね の順を、観察カードをならべて確かめさせましょう。世話（水・日光）をしないと育ちがおそくなり、花がさく日もおくれることにも気づかせます。最後に、どの植物も「根・くき・葉」からできていることをまとめます。',
+  answer: 'ホウセンカは約2か月（60日ごろ）、ヒマワリは約2か月半（75日ごろ）、アサガオは約2か月（60日ごろ）で花がさいた。植物は、たね→芽が出る→子葉が開く→葉がふえ、くきがのびて太くなる→つぼみ→花→実→たね の順に育つ。植物の体は、根・くき・葉からできている。'
+});
+
+// ===== 植物のデータ（日数は「よく世話をしたとき」の目安） =====
+// germ：芽が出る日　leafStart：本葉が出る日　bud：つぼみ　flower：花　fruit：実　seed：たね
+// hMax：いちばん高くなったときの草たけ（cm。アサガオはつるの長さ）　leafMax：葉の数のいちばん多いとき
+const PLANTS = {
+  hosenka: {
+    name: 'ホウセンカ', germ: 5, leafStart: 10, leafMax: 36, leafMid: 38, leafS: 7,
+    hMax: 50, hMid: 38, hS: 8, early: 0.6, earlyMax: 4,
+    bud: 50, flower: 57, fruit: 70, seed: 85,
+    thick: [0.25, 0.025], cotyH: 3, cotyLen: 1.2, coty: 'round', leaf: 'lance', leafLen: 7, rootMax: 20,
+    seedSize: 0.3, seedColor: '#6d4c41'
+  },
+  himawari: {
+    name: 'ヒマワリ', germ: 8, leafStart: 13, leafMax: 28, leafMid: 45, leafS: 9,
+    hMax: 170, hMid: 46, hS: 9, early: 1.0, earlyMax: 8,
+    bud: 60, flower: 74, fruit: 88, seed: 102,
+    thick: [0.3, 0.016], cotyH: 6, cotyLen: 2.2, coty: 'oval', leaf: 'heart', leafLen: 26, rootMax: 40,
+    seedSize: 1.0, seedColor: '#424242'
+  },
+  asagao: {
+    name: 'アサガオ', germ: 6, leafStart: 11, leafMax: 40, leafMid: 46, leafS: 8,
+    hMax: 220, hMid: 50, hS: 9, early: 0.5, earlyMax: 4,
+    bud: 55, flower: 62, fruit: 74, seed: 90,
+    thick: [0.25, 0.002], cotyH: 3, cotyLen: 1.8, coty: 'butterfly', leaf: 'heart3', leafLen: 11, rootMax: 20,
+    seedSize: 0.5, seedColor: '#212121', vine: true
+  }
+};
+const MAX_DAY = 120;
+const POLE = 150;        // アサガオの支柱の高さ（cm）
+
+// ===== 小さな道具 =====
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const sig = x => 1 / (1 + Math.exp(-x));
+const lerp = (a, b, t) => a + (b - a) * t;
+// 色を [赤, 緑, 青] にする（'#rrggbb' と 'rgb(r,g,b)' のどちらでもよい）
+function rgbOf(c) {
+  if (c[0] === '#') { const v = parseInt(c.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; }
+  return c.match(/\d+/g).map(Number);
+}
+function mix(c1, c2, t) {   // 2つの色をまぜる
+  t = clamp(t, 0, 1);
+  const a = rgbOf(c1), b = rgbOf(c2);
+  return 'rgb(' + a.map((v, i) => Math.round(lerp(v, b[i], t))).join(',') + ')';
+}
+const R = (k, y) => '<ruby>' + k + '<rt>' + y + '</rt></ruby>';
+
+// ===== 育ち方の計算 =====
+// g は「育った日数」。よく世話をすると1日に1ずつふえ、世話が足りないと少ししかふえない。
+function metrics(P, g) {
+  let h = 0, n = 0;
+  if (g >= P.germ) {
+    const s0 = sig((P.germ - P.hMid) / P.hS);
+    const S = clamp((sig((g - P.hMid) / P.hS) - s0) / (1 - s0), 0, 1);
+    const early = Math.min(P.earlyMax, (g - P.germ) * P.early + 0.5);
+    h = early * (1 - S) + P.hMax * S;
+  }
+  if (g >= P.leafStart) {
+    const l0 = sig((P.leafStart - P.leafMid) / P.leafS);
+    const SL = clamp((sig((g - P.leafMid) / P.leafS) - l0) / (1 - l0), 0, 1);
+    n = Math.round(2 + (P.leafMax - 2) * SL);
+    if (g > P.seed) n = Math.round(n * (1 - 0.35 * clamp((g - P.seed) / 20, 0, 1)));  // たねができると、下の葉からかれて落ちる
+  }
+  let stage = 0;
+  if (g >= P.germ) stage = 1;
+  if (g >= P.germ + 2) stage = 2;
+  if (g >= P.leafStart) stage = 3;
+  if (g >= P.leafStart + 8) stage = 4;
+  if (g >= P.bud) stage = 5;
+  if (g >= P.flower) stage = 6;
+  if (g >= P.fruit) stage = 7;
+  if (g >= P.seed) stage = 8;
+  return { h, n, stage };
+}
+function stageText(P, st) {
+  return [
+    'たね（まだ' + R('芽', 'め') + 'が' + R('出', 'で') + 'ていない）',
+    R('芽', 'め') + 'が' + R('出', 'で') + 'た（' + R('発芽', 'はつが') + '）',
+    R('子葉', 'しよう') + 'が' + R('開', 'ひら') + 'いた',
+    R('子葉', 'しよう') + 'とはちがう形の' + R('葉', 'は') + 'が' + R('出', 'で') + 'てきた',
+    P.vine ? R('葉', 'は') + 'がふえて、つるがのびている' : R('葉', 'は') + 'がふえて、くきが' + R('太', 'ふと') + 'く' + R('高', 'たか') + 'くなっている',
+    'つぼみができた',
+    R('花', 'はな') + 'がさいた',
+    R('実', 'み') + 'ができた',
+    R('実', 'み') + 'の' + R('中', 'なか') + 'に、たねができた'
+  ][st];
+}
+const plainText = html => html.replace(/<rt>.*?<\/rt>/g, '').replace(/<[^>]+>/g, '');
+
+// 1日分すすめる（e：きのうの記録）。auto＝おまかせ世話
+function nextEntry(P, e, auto) {
+  let water = e.water, sun = e.sun, health = e.health;
+  if (auto) { sun = true; if (water < 40) water = 100; }
+  water = Math.max(0, water - (sun ? 9 : 5));    // 日なたのほうが、土がはやくかわく
+  const dry = water <= 0;
+  let rate;
+  if (e.g < P.germ) {
+    // 発芽までは、水があれば進む（日光がなくても芽は出る）
+    rate = dry ? 0 : 1;
+    health = clamp(health + (dry ? -8 : 10), 20, 100);
+  } else {
+    health = clamp(health + (dry ? -18 : !sun ? -4 : 15), 20, 100);   // 元気は 20 より下がらない（かれきらない）
+    rate = (health / 100) * (sun ? 1 : 0.55) * (dry ? 0.15 : 1);
+  }
+  return { day: e.day + 1, g: e.g + rate, health, water, sun };
+}
+
+// ===== 植物ごとの「育てている記録」 =====
+function newSim() { return { hist: [{ day: 0, g: 0, health: 100, water: 100, sun: true }], view: 0, dryWarned: false }; }
+const sims = { hosenka: newSim(), himawari: newSim(), asagao: newSim() };
+let plantKey = 'hosenka';
+const P = () => PLANTS[plantKey];
+const sim = () => sims[plantKey];
+let auto = false, playing = false, secPerDay = 0.5, frac = 0;
+let showRoots = true, graphMode = 'h';
+let selected = null;   // タップした部分 {part, x, y}
+let hits = [];         // タップできる部分の場所
+
+// 前の日を見ているときに世話・再生をしたら、その日から先を消して育て直す
+function cutAhead() { const s = sim(); s.hist.length = s.view + 1; }
+function lastDay() { return sim().hist.length - 1; }
+function ensureNext() {
+  const s = sim();
+  if (s.view + 1 >= s.hist.length && s.view < MAX_DAY) s.hist.push(nextEntry(P(), s.hist[s.view], auto));
+}
+// いま絵にかくようす（再生中は、きょうとあしたの間をなめらかにつなぐ）
+function shownEntry() {
+  const s = sim(), e = s.hist[s.view];
+  if (playing && s.hist[s.view + 1]) {
+    const f = s.hist[s.view + 1];
+    return Object.assign({}, e, { g: lerp(e.g, f.g, frac), health: lerp(e.health, f.health, frac), water: lerp(e.water, f.water, frac) });
+  }
+  return e;
+}
+function flowerDay(key) {
+  const s = sims[key], Pk = PLANTS[key];
+  const e = s.hist.find(x => x.g >= Pk.flower);
+  return e ? e.day : null;
+}
+
+// ===== 絵をかく道具 =====
+const W = 600, H = 560, GROUND = 420, BX = 330;
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+let kNow = 30;   // いまの目もり（1cm が何ピクセルか）。なめらかに変える
+function label(ctx, text, x, y, color, size, align) {
+  ctx.font = 'bold ' + size + 'px ' + FONT;
+  ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+}
+function targetK(Pp, h) {
+  let vis = Math.max(h * 1.12, 10);
+  if (Pp.vine) vis = Math.max(Math.min(vineTop(Pp, h) * 1.12, POLE * 1.12), h > 12 ? POLE * 1.08 : 10);
+  return 350 / vis;
+}
+
+// 葉をかく（x,y：つけね、a：向き、len：長さ px）
+function drawLeaf(ctx, x, y, a, len, shape, color) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  ctx.fillStyle = color; ctx.strokeStyle = 'rgba(27,94,32,0.8)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (shape === 'lance') {           // ホウセンカ：細長い葉（ふちがぎざぎざ）
+    const w = len * 0.17;
+    ctx.moveTo(0, 0);
+    for (let i = 0; i <= 8; i++) { const t = i / 8; ctx.lineTo(len * t, -w * Math.sin(Math.PI * t) - (i % 2) * 1.2); }
+    for (let i = 8; i >= 0; i--) { const t = i / 8; ctx.lineTo(len * t, w * Math.sin(Math.PI * t) + (i % 2) * 1.2); }
+  } else {                           // ヒマワリ・アサガオ：葉柄のあるハート形の葉
+    const pl = len * 0.3, bl = len - pl, w = bl * (shape === 'heart3' ? 0.6 : 0.45);
+    ctx.moveTo(0, 0); ctx.lineTo(pl, 0);
+    ctx.bezierCurveTo(pl - bl * 0.15, -w, pl + bl * 0.55, -w * 1.15, pl + bl, 0);
+    ctx.bezierCurveTo(pl + bl * 0.55, w * 1.15, pl - bl * 0.15, w, pl, 0);
+  }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  // 葉のすじ
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath(); ctx.moveTo(shape === 'lance' ? 0 : len * 0.3, 0); ctx.lineTo(len * 0.92, 0); ctx.stroke();
+  if (shape !== 'lance') { ctx.strokeStyle = 'rgba(27,94,32,0.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len * 0.3, 0); ctx.stroke(); }
+  ctx.restore();
+}
+// 子葉をかく（左右1まいずつ）
+function drawCoty(ctx, x, y, len, shape, color, open) {
+  [-1, 1].forEach(sd => {
+    ctx.save(); ctx.translate(x, y);
+    ctx.rotate(sd > 0 ? -0.15 - (1 - open) * 1.3 : Math.PI + 0.15 + (1 - open) * 1.3);
+    ctx.fillStyle = color; ctx.strokeStyle = 'rgba(27,94,32,0.8)'; ctx.lineWidth = 1;
+    if (shape === 'butterfly') {      // アサガオ：先が2つに分かれた子葉
+      ctx.beginPath(); ctx.ellipse(len * 0.55, -len * 0.22, len * 0.38, len * 0.26, -0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(len * 0.55, len * 0.22, len * 0.38, len * 0.26, 0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    } else {
+      const r = shape === 'round' ? 0.34 : 0.26;   // ホウセンカは丸い、ヒマワリは細長い
+      ctx.beginPath(); ctx.ellipse(len * 0.5, 0, len * 0.5, len * r, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  });
+}
+function drawSmallFlower(ctx, x, y, r, petal, center) {   // 上から見た5まいの花びら
+  ctx.fillStyle = petal;
+  for (let i = 0; i < 5; i++) { const a = i * Math.PI * 2 / 5 - Math.PI / 2; ctx.beginPath(); ctx.arc(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55, r * 0.5, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = center; ctx.beginPath(); ctx.arc(x, y, r * 0.28, 0, Math.PI * 2); ctx.fill();
+}
+
+// アサガオのつる：根もとから s cm のところの位置（cm）。支柱のまわりを左まき（上から見て反時計回り）にまく
+function vinePoint(s) {
+  if (s <= 12) return { x: -0.5 * s / 12, y: s, front: true };
+  const t = s - 12, ph = t * 0.42;
+  return { x: Math.sin(ph) * 2.0, y: Math.min(POLE - 3, 12 + t * 0.78), front: Math.cos(ph) > 0 };
+}
+function vineTop(Pp, h) { return vinePoint(h).y; }
+
+// ===== 場面をかく =====
+// e：かくようす　k：1cm のピクセル数　opt.roots：土の中を見るか　opt.hits：タップ用の場所を集めるか
+function drawScene(ctx, Pp, e, k, opt) {
+  const m = metrics(Pp, e.g), h = m.h, st = m.stage, g = e.g;
+  const wilt = clamp((70 - e.health) / 50, 0, 1) + (e.water <= 0 ? 0.25 : 0);   // しおれぐあい
+  const leafCol = mix('#43a047', '#c0ca33', wilt);
+  const addHit = (part, x, y, r) => { if (opt.hits) hits.push({ part, x, y, r }); };
+  const X = cm => BX + cm * k, Y = cm => GROUND - cm * k;
+
+  // 空（日なた／日かげ）
+  const sky = ctx.createLinearGradient(0, 0, 0, GROUND);
+  sky.addColorStop(0, e.sun ? '#bbdefb' : '#b0bec5'); sky.addColorStop(1, e.sun ? '#e3f2fd' : '#cfd8dc');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, GROUND);
+  if (e.sun) {
+    ctx.fillStyle = '#ffca28'; ctx.beginPath(); ctx.arc(545, 52, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffa000'; ctx.lineWidth = 3;
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; ctx.beginPath(); ctx.moveTo(545 + Math.cos(a) * 32, 52 + Math.sin(a) * 32); ctx.lineTo(545 + Math.cos(a) * 42, 52 + Math.sin(a) * 42); ctx.stroke(); }
+    label(ctx, '日なた', 545, 104, '#e65100', 16);
+  } else {
+    // 日かげ：たてもののかげ
+    ctx.fillStyle = 'rgba(55,71,79,0.35)'; ctx.fillRect(470, 0, 130, GROUND);
+    ctx.fillStyle = '#90a4ae'; ctx.beginPath(); ctx.ellipse(520, 50, 44, 20, 0, 0, Math.PI * 2); ctx.fill();
+    label(ctx, '日かげ', 535, 104, '#37474f', 16);
+  }
+
+  // 土（しめっているほど、こい色）
+  const soilTop = mix('#bcaaa4', '#6d4c41', e.water / 100);
+  ctx.fillStyle = soilTop; ctx.fillRect(0, GROUND, W, H - GROUND);
+  if (opt.roots) {
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(0, GROUND + 6, W, H - GROUND);
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, GROUND + 6); ctx.lineTo(W, GROUND + 6); ctx.stroke(); ctx.setLineDash([]);
+    label(ctx, '土の中', W - 50, H - 18, '#4e342e', 15);
+  }
+  ctx.fillStyle = '#5d4037'; ctx.fillRect(0, GROUND, W, 5);
+
+  // ものさし（左）
+  const step = [1, 2, 5, 10, 20, 50].find(s => s * k >= 34) || 50;
+  ctx.fillStyle = '#fffde7'; ctx.fillRect(22, 20, 34, GROUND - 20);
+  ctx.strokeStyle = '#5d4037'; ctx.lineWidth = 1;
+  ctx.strokeRect(22, 20, 34, GROUND - 20);
+  for (let c = 0; Y(c) >= 24; c += step / 5) {
+    const big = Math.abs(c / step - Math.round(c / step)) < 1e-6;
+    ctx.lineWidth = big ? 2 : 1;
+    ctx.beginPath(); ctx.moveTo(56, Y(c)); ctx.lineTo(56 - (big ? 14 : 6), Y(c)); ctx.stroke();
+    if (big && c > 0) label(ctx, Math.round(c) + '', 36, Y(c), '#4e342e', 13);
+  }
+  label(ctx, 'cm', 39, 12, '#4e342e', 13);
+  // 草たけの線
+  if (h > 0.3) {
+    const top = Pp.vine ? vineTop(Pp, h) : h;
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = '#d55e00'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(58, Y(top)); ctx.lineTo(BX - 10, Y(top)); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // 根（土の中を見るときだけ）
+  if (opt.roots && g >= Pp.germ * 0.5) {
+    const rootLen = g < Pp.germ ? (g - Pp.germ * 0.5) / (Pp.germ * 0.5) * 1.5 : Math.min(Pp.rootMax, 1.5 + h * 0.45);
+    const rpx = Math.min(rootLen * k, H - GROUND - 22);
+    const rw = Math.max(1.5, Math.min(6, (Pp.thick[0] + h * Pp.thick[1]) * k * 0.6));
+    ctx.strokeStyle = '#fff8e1'; ctx.lineCap = 'round';
+    ctx.lineWidth = rw;
+    ctx.beginPath(); ctx.moveTo(BX, GROUND + 4); ctx.quadraticCurveTo(BX + 4, GROUND + rpx * 0.5, BX - 2, GROUND + 4 + rpx); ctx.stroke();
+    const nl = Math.min(8, Math.floor(rpx / 14));
+    ctx.lineWidth = Math.max(1, rw * 0.45);
+    for (let i = 0; i < nl; i++) {
+      const yy = GROUND + 12 + i * (rpx - 10) / Math.max(1, nl), sd = i % 2 ? 1 : -1;
+      const ll = Math.min(rpx * 0.5, 14 + rpx * 0.35) * (1 - i / (nl + 2));
+      ctx.beginPath(); ctx.moveTo(BX, yy); ctx.quadraticCurveTo(BX + sd * ll * 0.6, yy + 4, BX + sd * ll, yy + ll * 0.5); ctx.stroke();
+      if (i % 2 === 0) addHit('root', BX + sd * ll * 0.6, yy + ll * 0.25, 14);
+    }
+    for (let t = 0.2; t <= 1; t += 0.2) addHit('root', BX, GROUND + 4 + rpx * t, 14);
+    ctx.lineCap = 'butt';
+  }
+
+  // たね（芽が出るまで）
+  if (g < Pp.germ + 2) {
+    const sz = Math.max(5, Pp.seedSize * k), sy = GROUND + Math.min(1.5 * k, 26);
+    ctx.fillStyle = Pp.seedColor;
+    ctx.beginPath(); ctx.ellipse(BX, sy, sz, sz * 0.65, -0.3, 0, Math.PI * 2); ctx.fill();
+    if (Pp.name === 'ヒマワリ') { ctx.strokeStyle = '#eee'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(BX - sz * 0.8, sy); ctx.lineTo(BX + sz * 0.8, sy - 2); ctx.stroke(); }
+    addHit('seed', BX, sy, Math.max(16, sz + 6));
+    if (!opt.roots && g < Pp.germ) label(ctx, '（土の中にたねがある）', BX, GROUND + 40, '#fff', 14);
+  }
+  if (g < Pp.germ) return m;
+
+  // ---- ここから地上 ----
+  const thick = Math.max(2, (Pp.thick[0] + h * Pp.thick[1]) * k);
+  const open = clamp((g - Pp.germ) / 2.5, 0, 1);                      // 子葉の開きぐあい
+  const cotyAge = clamp((g - (Pp.leafStart + 28)) / 14, 0, 1);         // 子葉がかれていくぐあい
+  const age = clamp((g - Pp.seed) / 20, 0, 1);                         // たねができたあと、かれていくぐあい
+  const flowerCol = Pp.name === 'ホウセンカ' ? '#e91e63' : '#5e35b1';
+  const nodes = [];   // 葉のつくところ {x, y, side, i}
+
+  if (!Pp.vine) {
+    // くき（まっすぐ上へ。しおれると少し曲がる）
+    const topX = X(wilt * 1.5), topY = Y(h);
+    ctx.strokeStyle = mix('#558b2f', '#8d6e63', age * 0.8); ctx.lineWidth = thick; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(BX, GROUND); ctx.quadraticCurveTo(BX, (GROUND + topY) / 2, topX, topY); ctx.stroke(); ctx.lineCap = 'butt';
+    for (let t = 0.15; t <= 1; t += 0.15) addHit('stem', lerp(BX, topX, t * t), lerp(GROUND, topY, t), Math.max(12, thick));
+    const cH = Math.min(h, Pp.cotyH);
+    for (let i = 0; i < m.n; i++) {
+      const t = (i + 1) / (m.n + 0.6);
+      const yy = cH + (h - cH) * t;
+      nodes.push({ x: lerp(BX, topX, (yy / h) * (yy / h)), y: Y(yy), side: i % 2 ? 1 : -1, i });
+    }
+    // 子葉
+    if (cotyAge < 1) {
+      drawCoty(ctx, X(0), Y(cH), Pp.cotyLen * k * (0.6 + 0.4 * open) * (1 + 0.3 * clamp((g - Pp.germ) / 15, 0, 1)), Pp.coty, mix(leafCol, '#fdd835', cotyAge), open);
+      addHit('coty', BX - Pp.cotyLen * k * 0.5, Y(cH), Math.max(14, Pp.cotyLen * k * 0.4));
+      addHit('coty', BX + Pp.cotyLen * k * 0.5, Y(cH), Math.max(14, Pp.cotyLen * k * 0.4));
+    }
+  } else {
+    // アサガオ：支柱とつる
+    if (h > 10) {
+      ctx.fillStyle = '#a1887f'; ctx.fillRect(BX - 3, Y(POLE), 6, GROUND - Y(POLE));
+      label(ctx, '支柱', BX + 30, Y(POLE) + 10, '#6d4c41', 14);
+    }
+    const pts = [];
+    for (let s = 0; s <= h; s += 0.5) pts.push(vinePoint(s));
+    pts.push(vinePoint(h));
+    ctx.lineCap = 'round';
+    const vineCol = mix('#7cb342', '#8d6e63', age * 0.8);
+    for (let pass = 0; pass < 2; pass++) {   // うしろ側 → 前側の順にかく
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        if ((pass === 0) === b.front && b.y > 12) continue;
+        if (pass === 0 && b.y <= 12) continue;
+        ctx.strokeStyle = b.front || b.y <= 12 ? vineCol : mix('#558b2f', '#33691e', 0.5);
+        ctx.lineWidth = Math.max(2, 0.3 * k);
+        ctx.beginPath(); ctx.moveTo(X(a.x), Y(a.y)); ctx.lineTo(X(b.x), Y(b.y)); ctx.stroke();
+      }
+    }
+    ctx.lineCap = 'butt';
+    for (let i = 0; i < pts.length; i += 6) addHit('vine', X(pts[i].x), Y(pts[i].y), 13);
+    const cP = vinePoint(Math.min(h, Pp.cotyH));
+    for (let i = 0; i < m.n; i++) {
+      const s = Math.min(h, Pp.cotyH) + (h - Pp.cotyH) * (i + 1) / (m.n + 0.6);
+      const p = vinePoint(Math.max(0, s));
+      nodes.push({ x: X(p.x), y: Y(p.y), side: i % 2 ? 1 : -1, i });
+    }
+    if (cotyAge < 1) {
+      drawCoty(ctx, X(cP.x), Y(cP.y), Pp.cotyLen * k * (0.6 + 0.4 * open), Pp.coty, mix(leafCol, '#fdd835', cotyAge), open);
+      addHit('coty', X(cP.x) - Pp.cotyLen * k * 0.5, Y(cP.y), Math.max(14, Pp.cotyLen * k * 0.4));
+      addHit('coty', X(cP.x) + Pp.cotyLen * k * 0.5, Y(cP.y), Math.max(14, Pp.cotyLen * k * 0.4));
+    }
+  }
+
+  // 葉（上の葉ほど小さい・わかい）
+  nodes.forEach(nd => {
+    const young = clamp((m.n - nd.i) / 4, 0, 1);
+    const grown = 0.3 + 0.7 * clamp(h / (Pp.hMax * 0.5), 0, 1);           // 小さいうちは葉も小さい
+    let len = Pp.leafLen * k * grown * (0.45 + 0.55 * young);
+    if (Pp.name === 'ヒマワリ') len *= 1.15 - 0.4 * (nd.i / Math.max(1, m.n));
+    len = Math.max(8, len);
+    const rel = nd.i / Math.max(1, m.n);                                  // 0＝いちばん下、1＝いちばん上
+    const up = (Pp.leaf === 'lance' ? 0.15 + 0.6 * rel : 0.1 + 0.4 * rel) + ((nd.i * 7) % 5 - 2) * 0.06;  // 下の葉は横、上の葉は上向き
+    let a = nd.side > 0 ? -up : Math.PI + up;
+    a += nd.side * wilt * 1.1;                                            // しおれると葉が下がる
+    const old = clamp(age * 1.3 - nd.i / Math.max(1, m.n), 0, 1);          // たねができたら、下の葉から黄色く
+    drawLeaf(ctx, nd.x, nd.y, a, len, Pp.leaf, mix(leafCol, '#d4a017', old));
+    addHit('leaf', nd.x + Math.cos(a) * len * 0.6, nd.y + Math.sin(a) * len * 0.6, Math.max(12, len * 0.3));
+  });
+
+  // 花・つぼみ・実
+  if (st >= 5) {
+    if (Pp.name === 'ヒマワリ') {
+      const tx = X(wilt * 1.5), ty = Y(h);
+      const prog = clamp((g - Pp.bud) / (Pp.flower - Pp.bud), 0, 1);
+      const tilt = st >= 7 ? lerp(0.5, 1.3, clamp((g - Pp.fruit) / (Pp.seed - Pp.fruit + 10), 0, 1)) : 0.1;
+      const r = st === 5 ? (2 + 5 * prog) * k : 11 * k;   // 花の大きさ：直径20cmくらい
+      ctx.save(); ctx.translate(tx + r * 0.3 * Math.sin(tilt), ty - r * 0.6 * Math.cos(tilt)); ctx.rotate(tilt);
+      if (st === 5) {
+        ctx.fillStyle = '#7cb342'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#33691e'; ctx.lineWidth = 1;
+        for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); ctx.stroke(); }
+      } else {
+        // 花びら（実ができると、かれて落ちる）
+        const petals = st === 6 ? 22 : st === 7 ? 10 : 0;
+        for (let i = 0; i < petals; i++) {
+          const a = i * Math.PI * 2 / 22;
+          ctx.save(); ctx.rotate(a);
+          ctx.fillStyle = st === 6 ? '#fdd835' : '#c8a415';
+          ctx.beginPath(); ctx.ellipse(r * 1.35, 0, r * 0.5, r * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.fillStyle = st >= 8 ? '#4e342e' : '#6d4c41';
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+        // たねのならび（つぶつぶ）
+        ctx.fillStyle = st >= 8 ? '#bdbdbd' : '#8d6e63';
+        for (let i = 0; i < 60; i++) { const a = i * 2.4, rr = r * 0.92 * Math.sqrt(i / 60); ctx.beginPath(); ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr, Math.max(1, r * 0.05), 0, Math.PI * 2); ctx.fill(); }
+      }
+      ctx.restore();
+      addHit(st === 5 ? 'bud' : st === 6 ? 'flower' : st === 7 ? 'fruit' : 'seed', tx, ty - r * 0.6, Math.max(18, r * 1.2));
+    } else {
+      // ホウセンカ・アサガオ：上のほうの葉のつけねに、つぼみ・花・実がつく
+      const fl = nodes.filter(nd => nd.i >= m.n * 0.3 && nd.i < m.n * 0.92 && nd.i % 3 === 0);
+      fl.forEach((nd, j) => {
+        const pos = j / Math.max(1, fl.length);                        // 下ほど早く咲いて、早く実になる
+        const x = nd.x + nd.side * Math.max(10, 1.4 * k), y = nd.y - 2;   // 葉のつけねの少し外がわ
+        let kind = 'bud';
+        if (st >= 6) kind = 'flower';
+        if (st >= 7 && pos < clamp((g - Pp.fruit) / (Pp.seed - Pp.fruit), 0, 1) + 0.25) kind = 'fruit';
+        if (st >= 8 && pos < clamp((g - Pp.seed) / 15, 0, 1) + 0.3) kind = 'seed';
+        if (kind === 'bud') {
+          ctx.fillStyle = Pp.name === 'ホウセンカ' ? '#f48fb1' : '#9575cd';
+          ctx.beginPath(); ctx.ellipse(x, y - 4, Math.max(3, 0.4 * k), Math.max(6, 1.1 * k), 0.2 * nd.side, 0, Math.PI * 2); ctx.fill();
+        } else if (kind === 'flower') {
+          const r = Math.max(8, (Pp.name === 'ホウセンカ' ? 1.6 : 5) * k);   // アサガオの花：直径10cmくらい
+          if (Pp.name === 'ホウセンカ') drawSmallFlower(ctx, x, y, r, flowerCol, '#fff59d');
+          else {   // アサガオ：ラッパの形を正面から見た花
+            ctx.fillStyle = flowerCol; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2;
+            for (let i = 0; i < 5; i++) { const a = i * Math.PI * 2 / 5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * r * 0.9, y + Math.sin(a) * r * 0.9); ctx.stroke(); }
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, r * 0.28, 0, Math.PI * 2); ctx.fill();
+          }
+        } else {
+          const r = Math.max(9, (Pp.name === 'ホウセンカ' ? 1.2 : 0.9) * k);
+          const ripe = kind === 'seed';
+          ctx.fillStyle = ripe ? (Pp.name === 'ホウセンカ' ? '#e6ee9c' : '#a1887f') : '#dce775';   // 葉と見分けやすい、明るい色＋こいふち
+          ctx.strokeStyle = ripe ? '#5d4037' : '#33691e'; ctx.lineWidth = 2;
+          ctx.beginPath();
+          if (Pp.name === 'ホウセンカ') ctx.ellipse(x, y + r * 0.4, r * 0.6, r * 1.1, 0, 0, Math.PI * 2);   // ホウセンカの実：毛の生えただ円形
+          else ctx.arc(x, y, r, 0, Math.PI * 2);                                                             // アサガオの実：丸い
+          ctx.fill(); ctx.stroke();
+          if (ripe) {   // 中のたね
+            ctx.fillStyle = Pp.seedColor;
+            for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(x - r * 0.35 + i * r * 0.35, y + r * 0.2, Math.max(1.5, r * 0.22), 0, Math.PI * 2); ctx.fill(); }
+          }
+        }
+        addHit(kind === 'seed' ? 'fruit' : kind, x, y, 14);   // たねが入った実は「実」
+      });
+      // ホウセンカは、じゅくした実がはじけて、たねが飛ぶ
+      if (st >= 8 && Pp.name === 'ホウセンカ') {
+        ctx.fillStyle = Pp.seedColor;
+        const ns = Math.round(clamp((g - Pp.seed) / 15, 0, 1) * 10);
+        for (let i = 0; i < ns; i++) {
+          const sx = BX + (i % 2 ? 1 : -1) * (30 + i * 13), sy = GROUND - 3;
+          ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, Math.PI * 2); ctx.fill();
+          addHit('seed', sx, sy, 12);
+        }
+        if (ns > 0) label(ctx, 'はじけて とんだ たね', BX + 120, GROUND - 22, '#4e342e', 13);
+      }
+    }
+  }
+  return m;
+}
+
+// ===== タップしたときの名前とはたらき =====
+const PARTS = {
+  root: () => [R('根', 'ね'), '土の' + R('中', 'なか') + 'に広がって、' + R('植物', 'しょくぶつ') + 'の' + R('体', 'からだ') + 'をささえる。土の' + R('中', 'なか') + 'から、' + R('水', 'みず') + 'などをすい上げる。'],
+  stem: () => ['くき', R('葉', 'は') + 'や' + R('花', 'はな') + 'をささえる。' + R('根', 'ね') + 'からすい上げた' + R('水', 'みず') + 'などの' + R('通', 'とお') + 'り' + R('道', 'みち') + 'になる。' + R('育', 'そだ') + 'つにつれて、' + R('太', 'ふと') + 'く' + R('高', 'たか') + 'くなる。'],
+  vine: () => ['くき（つる）', 'アサガオのくきは「つる」になって、' + R('支柱', 'しちゅう') + 'にまきつきながら上へのびる。' + R('葉', 'は') + 'や' + R('花', 'はな') + 'をささえ、' + R('水', 'みず') + 'などの' + R('通', 'とお') + 'り' + R('道', 'みち') + 'になる。'],
+  leaf: () => [R('葉', 'は'), R('日光', 'にっこう') + 'を' + R('受', 'う') + 'けて、' + R('植物', 'しょくぶつ') + 'が' + R('育', 'そだ') + 'つのに' + R('役立', 'やくだ') + 'つはたらきをする（くわしくは6' + R('年', 'ねん') + 'で' + R('学習', 'がくしゅう') + '）。' + R('育', 'そだ') + 'つにつれて、' + R('数', 'かず') + 'がふえる。'],
+  coty: () => [R('子葉', 'しよう'), 'たねから' + R('芽', 'め') + 'が' + R('出', 'で') + 'て、さいしょに' + R('開', 'ひら') + 'く' + R('葉', 'は') + '。そのあとに' + R('出', 'で') + 'る' + R('葉', 'は') + 'とは、形がちがう。' + R('育', 'そだ') + 'つと、やがてかれて' + R('落', 'お') + 'ちる。'],
+  bud: () => ['つぼみ', R('花', 'はな') + 'になる' + R('前', 'まえ') + 'のすがた。やがて' + R('開', 'ひら') + 'いて' + R('花', 'はな') + 'になる。'],
+  flower: () => [R('花', 'はな'), R('花', 'はな') + 'がさいたあと、' + R('実', 'み') + 'ができる。'],
+  fruit: () => [R('実', 'み'), R('花', 'はな') + 'のあとにできる。' + R('中', 'なか') + 'に、たねができる。'],
+  seed: () => ['たね', R('植物', 'しょくぶつ') + 'の' + R('命', 'いのち') + 'のもと。たねをまくと、また' + R('芽', 'め') + 'が' + R('出', 'で') + 'て、' + R('同', 'おな') + 'じように' + R('育', 'そだ') + 'つ。']
+};
+function showInfo(part) {
+  if (!part) { $('info').innerHTML = '👆 ' + R('根', 'ね') + '・くき・' + R('葉', 'は') + '・' + R('花', 'はな') + 'などをタップすると、' + R('名前', 'なまえ') + 'とはたらきが' + R('出', 'で') + 'るよ'; return; }
+  const [nm, tx] = PARTS[part]();
+  $('info').innerHTML = '<span class="pname">' + nm + '</span>' + tx;
+}
+
+// ===== 画面をかきなおす =====
+const cv = $('scene'), gcv = $('graph');
+function fit(c, LW) {
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr * r.width / LW, 0, 0, dpr * r.width / LW, 0, 0);
+  return ctx;
+}
+function draw() {
+  const Pp = P(), e = shownEntry();
+  const m0 = metrics(Pp, e.g);
+  kNow += (targetK(Pp, m0.h) - kNow) * 0.15;
+  const ctx = fit(cv, W);
+  hits = [];
+  drawScene(ctx, Pp, e, kNow, { roots: showRoots, hits: true });
+  label(ctx, e.day + '日目', 80, 22, '#33691e', 20, 'left');
+  // タップした部分に、点線の丸
+  if (selected) {
+    const hh = hits.filter(x => x.part === selected.part).sort((a, b) => Math.hypot(a.x - selected.x, a.y - selected.y) - Math.hypot(b.x - selected.x, b.y - selected.y))[0];
+    if (hh) { ctx.setLineDash([6, 4]); ctx.strokeStyle = '#d55e00'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(hh.x, hh.y, hh.r + 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+  }
+  drawGraph();
+}
+
+// そだちグラフ（毎日の記録の折れ線）
+function drawGraph() {
+  const GW = 400, GH = 230, ctx = fit(gcv, GW);
+  const Pp = P(), s = sim();
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, GW, GH);
+  const L = 46, T = 14, Rr = 10, B = 40, PW = GW - L - Rr, PH = GH - T - B;
+  const ymax = graphMode === 'h' ? Math.ceil(Pp.hMax / 50) * 50 : Math.ceil(Pp.leafMax / 10) * 10;
+  const ystep = graphMode === 'h' ? (ymax > 100 ? 50 : 10) : 10;
+  const px = d => L + d / MAX_DAY * PW, py = v => T + PH - v / ymax * PH;
+  ctx.font = '13px ' + FONT; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1; ctx.fillStyle = '#555';
+  for (let v = 0; v <= ymax; v += ystep) { ctx.beginPath(); ctx.moveTo(L, py(v)); ctx.lineTo(L + PW, py(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillText(v, L - 4, py(v)); }
+  for (let d = 0; d <= MAX_DAY; d += 20) { ctx.textAlign = 'center'; ctx.fillText(d, px(d), T + PH + 12); }
+  ctx.fillText('たねまきからの日数（日）', L + PW / 2, GH - 10);
+  ctx.save(); ctx.translate(12, T + PH / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center';
+  ctx.fillText(graphMode === 'h' ? (Pp.vine ? 'つるの長さ(cm)' : '草たけ(cm)') : '葉の数(まい)', 0, 0); ctx.restore();
+  ctx.strokeStyle = '#555'; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + PH); ctx.lineTo(L + PW, T + PH); ctx.stroke();
+  // 花がさいた日
+  const fd = flowerDay(plantKey);
+  if (fd !== null) {
+    ctx.strokeStyle = '#ad1457'; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(px(fd), T); ctx.lineTo(px(fd), T + PH); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#ad1457'; ctx.textAlign = 'left'; ctx.fillText('花 ' + fd + '日', px(fd) + 3, T + 8);
+  }
+  // 記録の線
+  ctx.strokeStyle = '#0072b2'; ctx.lineWidth = 2.5; ctx.beginPath();
+  s.hist.forEach((e, i) => { const m = metrics(Pp, e.g), v = graphMode === 'h' ? m.h : m.n; i ? ctx.lineTo(px(e.day), py(v)) : ctx.moveTo(px(e.day), py(v)); });
+  ctx.stroke();
+  // いま見ている日
+  const ev = s.hist[s.view], mv = metrics(Pp, ev.g), vv = graphMode === 'h' ? mv.h : mv.n;
+  ctx.fillStyle = '#d55e00'; ctx.beginPath(); ctx.rect(px(ev.day) - 5, py(vv) - 5, 10, 10); ctx.fill();
+}
+
+// いまのようす・世話の表示
+function updateUI() {
+  const Pp = P(), s = sim(), e = s.hist[s.view], m = metrics(Pp, e.g);
+  $('nDay').textContent = e.day;
+  $('nH').textContent = m.h < 10 ? m.h.toFixed(1) : Math.round(m.h);
+  $('nL').textContent = m.n;
+  $('nStage').innerHTML = '🌱 ' + stageText(Pp, m.stage);
+  $('hName').innerHTML = Pp.vine ? 'つるの' + R('長', 'なが') + 'さ' : R('草', 'くさ') + 'たけ';
+  $('waterFill').style.width = e.water + '%';
+  $('waterText').textContent = e.water > 60 ? 'たっぷり' : e.water > 25 ? 'へってきた' : e.water > 0 ? '少し' : 'からから！';
+  $('healthFill').style.width = e.health + '%';
+  $('healthText').textContent = e.health >= 80 ? '◎ 元気' : e.health >= 50 ? '○ 少しよわい' : '△ 元気がない';
+  document.querySelectorAll('[data-sun]').forEach(b => b.classList.toggle('active', (b.dataset.sun === '1') === e.sun));
+  $('day').value = e.day;
+  $('btnPlay').textContent = playing ? '⏸ とめる' : '▶ さいせい';
+  // 日数のしるし（花がさいた日）
+  const fd = flowerDay(plantKey);
+  $('marks').innerHTML = fd !== null ? '<span style="left:' + (fd / MAX_DAY * 100) + '%">🌸 ' + fd + '日</span>' : '';
+}
+
+// ===== うごかす =====
+let lastT = 0;
+function loop(t) {
+  const dt = Math.min(0.1, (t - lastT) / 1000 || 0);
+  lastT = t;
+  if (playing) {
+    const s = sim();
+    ensureNext();
+    frac += dt / secPerDay;
+    while (frac >= 1 && playing) {
+      frac -= 1;
+      const before = metrics(P(), s.hist[s.view].g).stage;
+      s.view++;
+      ensureNext();
+      const e = s.hist[s.view], after = metrics(P(), e.g).stage;
+      if (after !== before && after >= 1) say('🌱 ' + e.day + '日目：' + stageText(P(), after) + (after === 6 ? '！「📝 この日を記録する」で記録しよう' : ''));
+      if (!auto && e.water <= 0 && !s.dryWarned) { s.dryWarned = true; stop(); say('💧 土がかわいて、元気がなくなってきたよ。水やりをしよう！'); }
+      if (s.view >= MAX_DAY) { stop(); say('120日目まで育てたよ。観察カードをならべて、育ち方の順をたしかめよう'); }
+    }
+    updateUI();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+function play() {
+  if (sim().view >= MAX_DAY) { say('もう120日目だよ。スライダーで前の日にもどるか、「もういちど」をおそう'); return; }
+  if (sim().view < lastDay()) { cutAhead(); say(sim().view + '日目から、育て直すよ'); }
+  playing = true; frac = 0; updateUI();
+}
+function stop() { playing = false; frac = 0; cutAhead(); updateUI(); }
+function say(t) { $('msg').innerHTML = t || '&nbsp;'; }
+
+// ===== ボタン =====
+$('btnPlay').addEventListener('click', () => { if (playing) stop(); else play(); });
+document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => {
+  secPerDay = +b.dataset.speed;
+  document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('active', x === b));
+}));
+// 世話をしたら、その日から先は育て直し（再生中なら、あしたの分を計算しなおす）
+function care(fn) {
+  const s = sim();
+  const wasPast = !playing && s.view < lastDay();
+  cutAhead();
+  fn(s.hist[s.view]);
+  if (wasPast) say(s.view + '日目から、育て直すよ');
+  updateUI();
+}
+$('btnWater').addEventListener('click', () => care(e => {
+  e.water = 100; sim().dryWarned = false;
+  say('💧 水をやったよ。土がしめった' + (e.health < 80 ? '。だんだん元気がもどるよ' : ''));
+}));
+document.querySelectorAll('[data-sun]').forEach(b => b.addEventListener('click', () => care(e => {
+  e.sun = b.dataset.sun === '1';
+  say(e.sun ? '☀ 日なたに出したよ' : '🌥 日かげにうつしたよ。育ち方はどうなるかな？');
+})));
+$('btnAuto').addEventListener('click', e => {
+  auto = !auto;
+  e.currentTarget.classList.toggle('active', auto);
+  e.currentTarget.innerHTML = '🤖 おまかせ' + R('世話', 'せわ') + ' ' + (auto ? 'ON' : 'OFF');
+  if (playing) { cutAhead(); }
+  say(auto ? 'おまかせ世話：水やりと日当たりを自動でするよ' : '自分で世話をしよう');
+});
+$('btnSoil').addEventListener('click', e => {
+  showRoots = !showRoots;
+  e.currentTarget.classList.toggle('active', showRoots);
+  e.currentTarget.innerHTML = '🟫 ' + R('土', 'つち') + 'の' + R('中', 'なか') + 'を' + R('見', 'み') + 'る ' + (showRoots ? 'ON' : 'OFF');
+});
+document.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => {
+  graphMode = b.dataset.g;
+  document.querySelectorAll('[data-g]').forEach(x => x.classList.toggle('active', x === b));
+}));
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+  if (playing) stop();
+  plantKey = b.dataset.plant;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  selected = null; showInfo(null);
+  kNow = targetK(P(), metrics(P(), sim().hist[sim().view].g).h);
+  updateUI();
+  say(P().name + 'を育てよう（ほかの植物の育ち方は、そのままのこっているよ）');
+}));
+$('btnReset').addEventListener('click', () => {
+  if (playing) stop();
+  sims[plantKey] = newSim();
+  selected = null; showInfo(null);
+  updateUI();
+  say(P().name + 'のたねを、もういちどまいたよ（観察カードはのこっているよ）');
+});
+
+// 日数スライダー：前の日にもどると、そのときのようすが見られる。先へ進めた日は、おまかせで世話をする
+$('day').addEventListener('input', e => {
+  if (playing) { playing = false; frac = 0; }
+  const s = sim(), t = +e.target.value;
+  if (t <= lastDay()) { s.view = t; }
+  else {
+    s.view = lastDay();
+    while (s.view < t) { s.hist.push(nextEntry(P(), s.hist[s.view], true)); s.view++; }
+    say('スライダーで進めた日は、おまかせで世話をしたよ');
+  }
+  updateUI();
+});
+
+// 日数の目もり
+(function () {
+  let h = '';
+  for (let d = 0; d <= MAX_DAY; d += 10) h += '<span style="left:' + (d / MAX_DAY * 100) + '%">' + (d % 20 === 0 ? d + '日' : '') + '</span>';
+  $('ticks').innerHTML = h;
+})();
+
+// 絵をタップ → いちばん近い部分の名前とはたらき（マウス・タッチ両方）
+cv.addEventListener('pointerdown', ev => {
+  const r = cv.getBoundingClientRect();
+  const x = (ev.clientX - r.left) * W / r.width, y = (ev.clientY - r.top) * W / r.width;
+  let best = null, bd = Infinity;
+  hits.forEach(hh => { const d = Math.hypot(hh.x - x, hh.y - y) - hh.r; if (d < bd) { bd = d; best = hh; } });
+  if (best && bd < 10) { selected = { part: best.part, x, y }; showInfo(best.part); }
+  else { selected = null; showInfo(null); }
+});
+
+// ===== 観察カード（localStorage に保存） =====
+const CARD_KEY = 'ikechan-science-植物の育ち方-cards';
+let cards = [];
+try { cards = JSON.parse(localStorage.getItem(CARD_KEY) || '[]'); } catch (e) { cards = []; }
+function saveCards() { try { localStorage.setItem(CARD_KEY, JSON.stringify(cards)); } catch (e) { say('（このブラウザでは観察カードを保存できませんでした）'); } }
+function renderCards() {
+  const box = $('cards');
+  if (!cards.length) { box.innerHTML = '<p class="empty">「📝 この日を記録する」をおすと、ここにカードがならぶよ。</p>'; return; }
+  box.innerHTML = '';
+  cards.forEach((c, i) => {
+    const d = document.createElement('div');
+    d.className = 'ocard';
+    d.innerHTML = '<button class="del" aria-label="このカードをけす">×</button>' +
+      '<div class="ttl">' + c.plant + '　' + c.day + '日目</div>' +
+      '<img alt="' + c.plant + 'の' + c.day + '日目のようす" src="' + c.img + '">' +
+      '<div>' + (c.vine ? 'つるの長さ' : '草たけ') + ' ' + c.h + 'cm／葉 ' + c.n + 'まい</div>' +
+      '<div style="color:#33691e;font-weight:bold">' + c.stage + '</div>' +
+      '<textarea placeholder="気づいたこと"></textarea>';
+    d.querySelector('textarea').value = c.note || '';
+    d.querySelector('textarea').addEventListener('input', ev => { c.note = ev.target.value; saveCards(); });
+    d.querySelector('.del').addEventListener('click', () => {
+      if (!confirm(c.plant + 'の' + c.day + '日目のカードをけしますか？')) return;
+      cards.splice(i, 1); saveCards(); renderCards();
+    });
+    box.appendChild(d);
+  });
+}
+$('btnCard').addEventListener('click', () => {
+  const Pp = P(), s = sim(), e = s.hist[s.view], m = metrics(Pp, e.g);
+  // 小さな絵を作る
+  const tc = document.createElement('canvas'); tc.width = 300; tc.height = 280;
+  const tctx = tc.getContext('2d'); tctx.scale(0.5, 0.5);
+  drawScene(tctx, Pp, e, targetK(Pp, m.h), { roots: showRoots, hits: false });
+  const h = m.h < 10 ? Math.round(m.h * 10) / 10 : Math.round(m.h);
+  const stage = plainText(stageText(Pp, m.stage));
+  cards.push({ plant: Pp.name, day: e.day, h, n: m.n, stage, vine: !!Pp.vine, img: tc.toDataURL('image/jpeg', 0.75), note: '' });
+  // 植物ごと、日数の順にならべる
+  const order = { 'ホウセンカ': 0, 'ヒマワリ': 1, 'アサガオ': 2 };
+  cards.sort((a, b) => order[a.plant] - order[b.plant] || a.day - b.day);
+  saveCards(); renderCards();
+  Worksheet.addRecord({ plant: Pp.name, day: e.day, dayLabel: e.day + '日', h, n: m.n, stage });
+  say('📝 ' + e.day + '日目のようすを、観察カードとワークシートに記録したよ');
+});
+
+window.addEventListener('resize', draw);
+renderCards();
+updateUI();
+say('▶ さいせい をおすか、スライダーを動かして日にちを進めよう');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
