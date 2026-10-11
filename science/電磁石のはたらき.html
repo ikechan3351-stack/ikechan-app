@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>電磁石のはたらき</title>
+<!--
+  電磁石のはたらき（小学5年 理科「電流がつくる磁力」）
+  ・鉄しんにエナメル線をまいたコイルに電流を流すと、鉄しんが磁石になる（電磁石）。
+  ・まき数（50/100/200回）・かん電池の数（1個/2個の直列）・鉄しん（あり/なし）・電流の向きを変えて、
+    引きつけるクリップの数と、方位磁針のふれ方を調べる。
+  ・スイッチを切ると、クリップが落ちる（電流が流れているときだけ磁石になる）。
+  ・「記録する」で、ワークシート（worksheet.js）の表と棒グラフに入る。
+  ・下の「電磁石の利用」：リサイクル工場のクレーン・モーター・IH調理器のミニアニメ。
+  ・先生モード（?teacher=1）：先生用のメモが出る。
+  ・しくみ：クリップの数は「まき数 × 電流」に比例する計算（clipBase()）。少しだけばらつきを入れている。
+      電流の大きさは AMP（電池1個・2個）で決めている。数を変えたいときは、そこを書きかえる。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 8px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+  .hidden { display: none !important; }
+
+  /* 安全のメッセージ */
+  .safety { background: #fff8e1; border: 3px solid #ffa000; border-radius: 10px; padding: 6px 10px; font-weight: bold; color: #8d4b00; line-height: 1.6; text-align: center; }
+  .safety.hot { background: #ffebee; border-color: #d32f2f; color: #b71c1c; animation: blink 1s ease-in-out infinite alternate; }
+  @keyframes blink { from { opacity: 1; } to { opacity: 0.7; } }
+
+  /* 条件をえらぶところ */
+  .set-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; margin-top: 8px; }
+  .set-grid .lbl { font-weight: bold; color: #33691e; white-space: nowrap; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    min-height: 48px; border: 3px solid #c5e1a5; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 4px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .chip:disabled { opacity: 0.4; cursor: default; }
+  @media (max-width: 560px) { .set-grid { grid-template-columns: 1fr; } }
+
+  .btn-row { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .go-btn {
+    min-height: 48px; border: none; background: #558b2f; color: #fff; border-radius: 12px;
+    padding: 8px 20px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.sw { min-width: 210px; font-size: 20px; }
+  .go-btn.sw.on { background: #c62828; }
+  .go-btn:disabled { opacity: 0.4; cursor: default; }
+  .btn-row label { font-size: 17px; display: flex; align-items: center; gap: 4px; cursor: pointer; min-height: 44px; }
+  .btn-row input[type=checkbox] { width: 24px; height: 24px; }
+
+  .scene-card { border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); background: #fff; }
+  svg#scene { width: 100%; height: auto; display: block; touch-action: manipulation; }
+
+  .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 150px; border-radius: 12px; padding: 6px 10px; font-weight: bold; text-align: center; line-height: 1.5; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .stat .big { font-size: 1.4rem; color: #33691e; }
+
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #558b2f; line-height: 1.6; }
+  .help { line-height: 1.7; }
+  .help h2, .uses h2 { font-size: 1.1rem; margin: 0 0 4px; color: #33691e; }
+  .help ul { margin: 0; padding-left: 1.3em; }
+  .diff-note { font-size: 15px; color: #666; margin: 0; line-height: 1.6; }
+  .teacher-note { background: #f3e5f5; border: 2px solid #ab47bc; border-radius: 10px; padding: 8px 10px; font-size: 15px; line-height: 1.6; margin: 0; }
+
+  /* 電磁石の利用 */
+  .uses svg { width: 100%; height: auto; display: block; border-radius: 10px; background: #f5f9ff; margin-top: 6px; }
+  .use-text { line-height: 1.7; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1 data-j>🧲 電磁石のはたらき</h1>
+<p class="subtitle" data-j>コイルに電流を流すと、どんなはたらきをするのだろうか？</p>
+
+<div class="panel" data-j>
+
+  <div class="safety" id="safety">⚠ 本物の実験では、電池が熱くなるので、スイッチを長い時間入れたままにしないでね。</div>
+
+  <div class="card">
+    <div class="set-grid">
+      <span class="lbl">まき数</span>
+      <span class="chips" id="cTurns">
+        <button class="chip" data-turns="50">50回</button>
+        <button class="chip active" data-turns="100">100回</button>
+        <button class="chip" data-turns="200">200回</button>
+      </span>
+      <span class="lbl">かん電池</span>
+      <span class="chips" id="cCells">
+        <button class="chip active" data-cells="1">1個</button>
+        <button class="chip" data-cells="2">2個（直列）</button>
+      </span>
+      <span class="lbl">鉄しん</span>
+      <span class="chips" id="cCore">
+        <button class="chip active" data-core="1">あり</button>
+        <button class="chip" data-core="0">なし</button>
+      </span>
+      <span class="lbl">電流の向き</span>
+      <span class="chips">
+        <button class="chip" id="btnDir">⇄ 電池の向きを逆にする</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn sw" id="btnSw">🔌 スイッチを入れる</button>
+      <button class="go-btn orange" id="btnRec" disabled>📝 記録する</button>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+    <div class="btn-row">
+      <label><input type="checkbox" id="chkFlow" checked> 電流の流れ（つぶ）</label>
+      <label><input type="checkbox" id="chkPole" checked> N極・S極の表示</label>
+      <label><input type="checkbox" id="chkField"> 磁石の力の見える化</label>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <svg id="scene" viewBox="0 0 800 460" xmlns="http://www.w3.org/2000/svg" aria-label="電磁石の実験の図"></svg>
+  </div>
+
+  <div class="status-row">
+    <div class="stat">電流<br><span class="big" id="sAmp">0 A</span></div>
+    <div class="stat">引きつけたクリップ<br><span class="big" id="sClip">0 個</span></div>
+    <div class="stat">右はしの極<br><span class="big" id="sPole">－</span></div>
+  </div>
+  <div class="msg" id="msg"></div>
+
+  <div class="card help">
+    <h2>実験のしかた（変える条件は1つだけ！）</h2>
+    <ul>
+      <li><b>まき数だけ</b>を変えて、クリップの数をくらべよう（電池の数・鉄しんは同じに）。導線の長さも同じにするので、あまった導線は切らずにまとめておくよ。</li>
+      <li><b>電池の数だけ</b>を変えて（1個 → 2個の直列）、電流を大きくするとどうなるか調べよう。電流の大きさは電流計で測るよ。</li>
+      <li>電池の向きを逆にして、方位磁針の針のふれ方を見よう。N極とS極はどうなるかな？</li>
+      <li>スイッチを切るとどうなるかな？ ふつうの磁石とくらべてみよう。</li>
+      <li>電流計は、回路に直列につなぐよ。＋たんしは、電池の＋極側につなごう。</li>
+    </ul>
+  </div>
+
+  <div class="card uses">
+    <h2>電磁石の利用</h2>
+    <div class="chips" id="useTabs">
+      <button class="chip active" data-use="crane">🏗 リサイクル工場のクレーン</button>
+      <button class="chip" data-use="motor">⚙ モーター</button>
+      <button class="chip" data-use="ih">🍳 IH調理器</button>
+    </div>
+    <svg id="useSvg" viewBox="0 0 640 260" aria-label="電磁石の利用のアニメーション"></svg>
+    <div class="btn-row" id="useBtns"></div>
+    <p class="use-text" id="useText"></p>
+  </div>
+
+  <p class="teacher-note hidden" id="tNote"></p>
+
+  <div class="card">
+    <p class="diff-note">※じっさいとのちがい：この教材では、引きつけるクリップの数を「まき数 × 電流の大きさ」に比例する計算で決め、少しだけばらつきを入れています。本物では、クリップのつき方などで数が大きく変わり、ぴったり2倍にはなりません。電池2個（直列）の電流は、電池の中のていこうのため、2倍より少し小さくしています。導線の長さを同じにしているので、まき数を変えても電流は変わらないことにしています。方位磁針は地球の磁石の力も受けるので、弱い電磁石では、ふれが小さくなります。</p>
+  </div>
+
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// =====================================================================
+// ふりがな辞書：{漢字|よみ} の形で書いておくと、画面の文字に自動でふりがなが付きます。
+// （長いことばから先に当てはめます。足りないことばは、ここに足してください）
+// =====================================================================
+const DICT_SRC = [
+  '{電磁石|でんじしゃく}', '{方位磁針|ほういじしん}', '{磁石|じしゃく}', '{電流計|でんりゅうけい}', '{電流|でんりゅう}', '{電池|でんち}',
+  '{電気|でんき}', '{鉄|てつ}', '{導線|どうせん}', '{極|きょく}', '{直列|ちょくれつ}', '{回路|かいろ}', '{回|まわ}る', '{回|まわ}り', '{回|まわ}って', '{回|まわ}し',
+  '{回|かい}', '{何個|なんこ}', '{個|こ}', '{倍|ばい}', '{本物|ほんもの}', '{実験|じっけん}', '{記録|きろく}', '{予想|よそう}', '{結果|けっか}', '{条件|じょうけん}',
+  '{熱|あつ}く', '{熱|ねつ}', '{長|なが}い', '{長|なが}さ', '{時間|じかん}', '{入|い}れ', '{入|はい}る', '{入|はい}っ', '{切|き}る', '{切|き}ら', '{切|き}っ', '{切|き}ろう', '{切|き}れ', '{切|き}り',
+  '{引|ひ}きつけ', '{引|ひ}き', '{向|む}き', '{逆|ぎゃく}', '{変|か}わ', '{変|か}え', '{同|おな}じ', '{数|かず}', '{数|かぞ}え', '{大|おお}きい', '{大|おお}きく', '{大|おお}きさ',
+  '{小|ちい}さい', '{小|ちい}さく', '{少|すこ}し', '{多|おお}く', '{多|おお}い', '{強|つよ}い', '{強|つよ}く', '{強|つよ}さ', '{弱|よわ}い', '{弱|よわ}く', '{流|なが}れ', '{流|なが}す',
+  '{流|なが}し', '{落|お}ち', '{落|お}と', '{動|うご}', '{見|み}', '{針|はり}', '{利用|りよう}', '{工場|こうじょう}', '{調理器|ちょうりき}', '{運|はこ}', '{分|わ}け', '{使|つか}',
+  '{中|なか}', '{上|うえ}', '{下|した}', '{右|みぎ}', '{左|ひだり}', '{北|きた}', '{地球|ちきゅう}', '{力|ちから}', '{計算|けいさん}', '{測|はか}', '{近|ちか}づ', '{次|つぎ}',
+  '{安全|あんぜん}', '{全部|ぜんぶ}', '{金属|きんぞく}', '{温度|おんど}', '{速|はや}く', '{自体|じたい}', '{板|いた}', '{内側|うちがわ}', '{外側|そとがわ}', '{置|お}き', '{場|ば}'
+];
+const DICT = {};
+DICT_SRC.forEach(s => {
+  DICT[s.replace(/\{([^|}]+)\|[^}]+\}/g, '$1')] = s.replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>');
+});
+const DICT_RE = new RegExp(Object.keys(DICT).sort((a, b) => b.length - a.length)
+  .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+// 文字列にふりがなを付ける（タグの入っていない文字列に使う）
+const J = s => String(s).replace(DICT_RE, m => DICT[m]);
+// 画面の中の文字（data-j を付けたところ）に、まとめてふりがなを付ける
+function rubyfy(root) {
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const list = [];
+  while (w.nextNode()) {
+    const n = w.currentNode;
+    if (n.parentElement.closest('ruby, script, style, svg, .teacher-note')) continue;
+    if (J(n.nodeValue) !== n.nodeValue) list.push(n);
+  }
+  list.forEach(n => {
+    const t = document.createElement('template');
+    t.innerHTML = J(n.nodeValue);
+    n.replaceWith(t.content);
+  });
+}
+document.querySelectorAll('[data-j]').forEach(rubyfy);
+
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: J('電磁石のはたらき'),
+  question: J('コイルのまき数を2倍にすると、引きつけるクリップの数は何個になるだろうか？'),
+  predictionChoices: [J('少なくなる'), J('かわらない'), J('2倍くらいにふえる'), J('2倍よりもっとふえる')],
+  experimentNote: J('まき数だけを変え、電池の数・鉄しんは同じにする（導線の長さも同じ）。スイッチを入れて「記録する」をおすと、表と棒グラフに入るよ。電池の数（電流の大きさ）を変えたときも調べよう。'),
+  columns: [
+    { key: 'cond', label: J('条件') },
+    { key: 'n', label: J('まき数'), unit: '回' },
+    { key: 'cells', label: J('電池'), unit: '個' },
+    { key: 'core', label: J('鉄しん') },
+    { key: 'amp', label: J('電流'), unit: 'A', digits: 1 },
+    { key: 'clips', label: 'クリップ', unit: '個' },
+    { key: 'pole', label: J('右はしの極') }
+  ],
+  chart: { type: 'bar', x: 'cond', y: 'clips' },
+  hint: 'はじめに「100回・電池1個」で記録し、まき数だけを「200回」に変えて記録すると、クリップの数がおよそ2倍になることが棒グラフで見えます。次に「50回」も記録し、50→100→200回と順にふえることを確かめます。電池の数を変えるときは、まき数を同じにしていることを確かめさせてください。電流計の値（1個で約0.9A、2個で約1.7A）から、電池を2個直列にすると電流が大きくなることをおさえます。鉄しん「なし」では、ほとんどクリップがつかないことから、鉄しんのはたらきにも気づかせます。数は毎回少しばらつくので、何回か記録して平均を考えるのもよいです。',
+  answer: '電磁石は、コイルのまき数を多くすると強くなる（まき数を2倍にすると、引きつけるクリップの数もおよそ2倍になる）。また、コイルに流れる電流を大きくすると強くなる。電流の向きを逆にすると、電磁石のN極とS極が入れかわる。電流を流すのをやめると、電磁石は磁石のはたらきをなくす。'
+});
+
+const $ = (id) => document.getElementById(id);
+const TEACHER = Worksheet.isTeacher();
+const NS = 'http://www.w3.org/2000/svg';
+
+// ===== 実験の数（ここを変えると、ふるまいが変わる） =====
+const AMP = { 1: 0.9, 2: 1.7 };          // 電流の大きさ（A）：電池1個・2個（直列）
+const CLIP_PER = 5;                       // 50回・電池1個・鉄しんありで引きつけるクリップの数（めやす）
+const HOT_SEC = 8;                        // スイッチを入れたまま、この秒数をこえると「熱くなるよ」と出す
+const POOL = 50;                          // 皿の中のクリップの数
+
+const st = {
+  turns: 100, cells: 1, core: true, dir: 1,  // dir：1＝右はしがN極、-1＝右はしがS極
+  on: false, onTime: 0, settled: false,
+  clips: 0, amp: 0,
+  windShown: 100, windFrom: 100, windT: 1,    // まき数のアニメーション
+  needle: 0, needleV: 0, meter: 0,            // 方位磁針・電流計の針
+  flowT: 0
+};
+
+// 電磁石の強さのめやす（鉄しんありのときのクリップ数）＝ まき数 × 電流 に比例
+const clipBase = () => CLIP_PER * (st.turns / 50) * (AMP[st.cells] / AMP[1]);
+// 磁石の力の強さ（方位磁針のふれ方に使う）。鉄しんがないと、とても弱い
+const strength = () => st.core ? clipBase() : clipBase() * 0.08;
+const fmt1 = v => (Math.round(v * 10) / 10).toFixed(1);
+const setMsg = s => { $('msg').innerHTML = s ? J(s) : ''; };
+
+// ===== 図の位置 =====
+const CY = 200;                              // コイルのたての中心
+const COIL_L = 300, COIL_R = 560;            // コイルの左はし・右はし
+const coreL = () => st.core ? 270 : 300;     // 磁石のはし（鉄しんがあれば、鉄しんのはし）
+const coreR = () => st.core ? 590 : 560;
+const coilH = () => st.turns >= 200 ? 32 : st.turns >= 100 ? 26 : 22;   // まき数が多いほど、コイルが太くなる
+const COMP = { x: 712, y: 200, r: 46 };      // 方位磁針
+const DISH = { x: 430, y: 404 };             // クリップの皿
+
+// ===== クリップ（皿の中の50個） =====
+const clips = [];
+for (let i = 0; i < POOL; i++) {
+  const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random());
+  const home = { x: DISH.x + Math.cos(a) * r * 105, y: DISH.y - 4 + Math.sin(a) * r * 11, rot: Math.random() * 180 };
+  clips.push({ home, x: home.x, y: home.y, rot: home.rot, tx: home.x, ty: home.y, trot: home.rot, stuck: false });
+}
+// 引きつけたクリップを、両はしにぶら下げる位置を決める
+function placeClips(n) {
+  const left = Math.ceil(n / 2), right = n - left;
+  let k = 0;
+  const side = (m, ex) => {
+    const cols = Math.max(1, Math.ceil(m / 5));
+    const yTop = st.core ? CY + 16 : CY + coilH() - 4;
+    for (let i = 0; i < m; i++, k++) {
+      const col = i % cols, row = Math.floor(i / cols);
+      const c = clips[k];
+      c.tx = ex + (col - (cols - 1) / 2) * 11;
+      c.ty = yTop + 2 + row * 15;
+      c.trot = (row % 2 ? 8 : -8) + (col % 2 ? 4 : -4);
+      c.stuck = true;
+    }
+  };
+  side(left, coreL());
+  side(right, coreR());
+  for (; k < POOL; k++) { const c = clips[k]; c.tx = c.home.x; c.ty = c.home.y; c.trot = c.home.rot; c.stuck = false; }
+}
+function dropClips() {
+  clips.forEach(c => { c.tx = c.home.x; c.ty = c.home.y; c.trot = c.home.rot; c.stuck = false; });
+}
+
+// ===== 回路の道すじ（電流のつぶが動く道） =====
+// 右はしがN極（dir=1）のとき：電池の＋極（右）→ スイッチ → コイルの右はし → コイル → 左はし → 電流計 → 電池の－極（左）
+function batW() { return st.cells === 2 ? 140 : 70; }
+function circuitPath() {
+  const bl = 400 - batW() / 2, br = 400 + batW() / 2, top = CY - coilH();
+  return [[br, 40], [740, 40], [740, 110], [COIL_R, 110], [COIL_R, top], [COIL_L, top], [COIL_L, 110], [70, 110], [70, 40], [bl, 40]];
+}
+const COIL_SEG = 4;   // コイルの中を通る区間（つぶは、コイルの中ではまき線の上に出す）
+
+// ===== 絵をかく道具 =====
+function svgClip(x, y, rot, color) {
+  return `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${rot.toFixed(0)})">
+    <rect x="-4" y="0" width="8" height="15" rx="4" fill="none" stroke="${color}" stroke-width="2"/>
+    <rect x="-1.6" y="3" width="3.2" height="9" rx="1.6" fill="none" stroke="${color}" stroke-width="1.5"/></g>`;
+}
+// 極のしるし：N極は四角に「N」、S極は丸に「S」（色だけで区別しない）
+function poleMark(x, y, p) {
+  return p === 'N'
+    ? `<rect x="${x - 15}" y="${y - 15}" width="30" height="30" rx="4" fill="#d32f2f" stroke="#fff" stroke-width="2"/><text x="${x}" y="${y + 7}" text-anchor="middle" font-size="20" font-weight="bold" fill="#fff">N</text>`
+    : `<circle cx="${x}" cy="${y}" r="16" fill="#1565c0" stroke="#fff" stroke-width="2"/><text x="${x}" y="${y + 7}" text-anchor="middle" font-size="20" font-weight="bold" fill="#fff">S</text>`;
+}
+function battery(x, plusRight, hot) {
+  // かん電池1個（はば70）。plusRight＝＋極が右
+  const body = `<rect x="${x}" y="27" width="62" height="26" rx="4" fill="#37474f"/>
+    <rect x="${plusRight ? x + 40 : x}" y="27" width="22" height="26" rx="4" fill="#fbc02d"/>`;
+  const nub = plusRight ? `<rect x="${x + 62}" y="34" width="6" height="12" rx="2" fill="#9e9e9e"/>` : `<rect x="${x - 6}" y="34" width="6" height="12" rx="2" fill="#9e9e9e"/>`;
+  const lab = `<text x="${plusRight ? x + 51 : x + 11}" y="46" text-anchor="middle" font-size="17" font-weight="bold" fill="#333">＋</text>
+    <text x="${plusRight ? x + 18 : x + 44}" y="46" text-anchor="middle" font-size="17" font-weight="bold" fill="#fff">－</text>`;
+  const heat = hot ? `<path d="M${x + 14} 22 q4 -6 0 -12 q-4 -6 0 -12 M${x + 31} 22 q4 -6 0 -12 q-4 -6 0 -12 M${x + 48} 22 q4 -6 0 -12 q-4 -6 0 -12" fill="none" stroke="#e53935" stroke-width="2.5"/>` : '';
+  return body + nub + lab + heat;
+}
+
+// ===== 実験の図 =====
+function drawScene() {
+  const top = CY - coilH(), bot = CY + coilH();
+  const rightN = st.dir === 1;
+  const hot = st.on && st.onTime > HOT_SEC;
+  let o = `<rect width="800" height="460" fill="#fafcf7"/>`;
+
+  // --- 導線（回路） ---
+  const wire = (pts) => `<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="#b5651d" stroke-width="4" stroke-linejoin="round"/>`;
+  o += wire([[70, 40], [590, 40]]) + wire([[660, 40], [740, 40], [740, 110], [COIL_R, 110], [COIL_R, top + 4]]);
+  o += wire([[COIL_L, top + 4], [COIL_L, 110], [70, 110], [70, 40]]);
+
+  // --- あまった導線（まき数が少ないほど多い。導線の長さを同じにするため） ---
+  const extra = (200 - st.turns) / 25;
+  for (let i = 0; i < extra; i++) o += `<ellipse cx="185" cy="${128 + i * 3}" rx="${20 - i}" ry="9" fill="none" stroke="#b5651d" stroke-width="3"/>`;
+  if (extra > 0) o += `<text x="185" y="${160 + extra * 3}" text-anchor="middle" font-size="14" fill="#795548">あまった導線</text>`;
+
+  // --- かん電池（直列） ---
+  const bl = 400 - batW() / 2;
+  for (let i = 0; i < st.cells; i++) o += battery(bl + 4 + i * 70, rightN, hot);
+  o += `<text x="400" y="80" text-anchor="middle" font-size="15" fill="#555">かん電池 ${st.cells}個${st.cells === 2 ? '（直列）' : ''}</text>`;
+
+  // --- スイッチ ---
+  const ang = st.on ? 0 : -35;
+  o += `<g id="swHit" style="cursor:pointer">
+    <rect x="575" y="5" width="100" height="70" fill="transparent"/>
+    <rect x="585" y="44" width="90" height="10" rx="3" fill="#8d6e63"/>
+    <circle cx="595" cy="40" r="6" fill="#455a64"/><rect x="649" y="30" width="6" height="14" fill="#455a64"/>
+    <line x1="595" y1="40" x2="${595 + 62 * Math.cos(ang * Math.PI / 180)}" y2="${40 + 62 * Math.sin(ang * Math.PI / 180)}" stroke="#607d8b" stroke-width="7" stroke-linecap="round"/>
+    <text x="625" y="72" text-anchor="middle" font-size="15" font-weight="bold" fill="${st.on ? '#c62828' : '#555'}">スイッチ ${st.on ? 'ON' : 'OFF'}</text></g>`;
+
+  // --- 電流計（0〜3A のめもり） ---
+  o += `<circle cx="170" cy="40" r="32" fill="#fff" stroke="#455a64" stroke-width="3"/>`;
+  for (let v = 0; v <= 3; v++) {
+    const a = (-60 + v * 40) * Math.PI / 180;
+    o += `<line x1="${170 + 22 * Math.sin(a)}" y1="${46 - 22 * Math.cos(a)}" x2="${170 + 27 * Math.sin(a)}" y2="${46 - 27 * Math.cos(a)}" stroke="#333" stroke-width="2"/>`;
+  }
+  const ma = (-60 + st.meter * 40) * Math.PI / 180;
+  o += `<line x1="170" y1="46" x2="${170 + 25 * Math.sin(ma)}" y2="${46 - 25 * Math.cos(ma)}" stroke="#d32f2f" stroke-width="2.5"/>
+    <circle cx="170" cy="46" r="3" fill="#333"/><text x="170" y="64" text-anchor="middle" font-size="12" font-weight="bold" fill="#333">A</text>
+    <text x="${rightN ? 128 : 212}" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">＋</text>
+    <text x="${rightN ? 212 : 128}" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">－</text>
+    <text x="170" y="94" text-anchor="middle" font-size="15" fill="#555">電流計 ${st.on ? fmt1(st.amp) : '0'} A</text>`;
+
+  // --- 鉄しん（なしのときはストロー） ---
+  if (st.core) o += `<rect x="270" y="${CY - 14}" width="320" height="28" rx="3" fill="#90a4ae" stroke="#546e7a" stroke-width="2"/>
+    <text x="${coreL() + 15}" y="${CY + 5}" text-anchor="middle" font-size="12" fill="#263238">鉄</text>`;
+  else o += `<rect x="290" y="${CY - 14}" width="280" height="28" rx="3" fill="#fff" fill-opacity="0.5" stroke="#bdbdbd" stroke-width="2" stroke-dasharray="5 3"/>`;
+
+  // --- コイル（エナメル線）：見えているまき線は まき数÷5本 ---
+  const shown = Math.round(st.windShown / 5);
+  const gap = (COIL_R - COIL_L) / Math.max(1, st.turns / 5);
+  o += `<rect x="${COIL_L}" y="${top}" width="${COIL_R - COIL_L}" height="${bot - top}" rx="6" fill="#6d3b12" opacity="${shown ? 0.35 : 0}"/>`;
+  for (let i = 0; i < shown; i++) {
+    const x = COIL_L + gap * (i + 0.5);
+    o += `<line x1="${(x + 4).toFixed(1)}" y1="${top}" x2="${(x - 4).toFixed(1)}" y2="${bot}" stroke="#d2862e" stroke-width="${Math.min(gap * 0.8, 9).toFixed(1)}" stroke-linecap="round"/>`;
+  }
+  // 文字は、磁石の力の線より上にかく（下の「文字」のところ）
+  const coilLabel = `<rect x="335" y="${top - 30}" width="190" height="24" rx="6" fill="#fff" opacity="0.85"/>
+    <text x="430" y="${top - 12}" text-anchor="middle" font-size="17" font-weight="bold" fill="#6d3b12">コイル　まき数 ${Math.round(st.windShown)}回</text>` +
+    (st.core ? '' : `<rect x="340" y="${bot + 30}" width="180" height="22" rx="6" fill="#fff" opacity="0.85"/>
+    <text x="430" y="${bot + 46}" text-anchor="middle" font-size="15" fill="#757575">鉄しんなし（中は からっぽ）</text>`);
+
+  // --- 磁石の力の見える化（N極から出てS極に入る線） ---
+  if (st.on && $('chkField').checked) {
+    const s = strength(), lines = Math.max(1, Math.min(4, Math.round(s / 6) + 1));
+    const xN = rightN ? coreR() : coreL(), xS = rightN ? coreL() : coreR();
+    for (let i = 1; i <= lines; i++) {
+      for (const sg of [-1, 1]) {
+        const h = 40 + i * 26;
+        const y0 = CY + sg * 8;
+        o += `<path d="M${xN} ${y0} C ${xN + (rightN ? 1 : -1) * (30 + i * 25)} ${CY + sg * h}, ${xS - (rightN ? 1 : -1) * (30 + i * 25)} ${CY + sg * h}, ${xS} ${y0}" fill="none" stroke="#7b1fa2" stroke-width="2" stroke-dasharray="6 5" opacity="${0.75 - i * 0.12}"/>`;
+        // 矢印（N→S の向き）
+        const mx = 430, my = CY + sg * (h * 0.75 + 2), d = rightN ? -1 : 1;
+        o += `<path d="M${mx + d * 8} ${my} l${-d * 14} -6 l0 12 z" fill="#7b1fa2" opacity="${0.8 - i * 0.12}"/>`;
+      }
+    }
+  }
+
+  // --- 電流のつぶ ---
+  if (st.on && $('chkFlow').checked) {
+    const pts = circuitPath();
+    const segs = [];
+    let total = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const len = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+      segs.push({ a: pts[i], b: pts[i + 1], len, s: total }); total += len;
+    }
+    const step = 34;
+    for (let d = (st.flowT % step); d < total; d += step) {
+      const pos = st.dir === 1 ? d : total - d;   // 電池の向きが逆なら、道すじを逆にたどる
+      const sg = segs.find(g => pos >= g.s && pos <= g.s + g.len);
+      if (!sg || segs.indexOf(sg) === COIL_SEG) continue;
+      const f = (pos - sg.s) / sg.len;
+      o += `<circle cx="${(sg.a[0] + (sg.b[0] - sg.a[0]) * f).toFixed(1)}" cy="${(sg.a[1] + (sg.b[1] - sg.a[1]) * f).toFixed(1)}" r="5" fill="#ffd600" stroke="#f57f17" stroke-width="1.5"/>`;
+    }
+    // コイルの手前のまき線を流れるつぶ（右はしがN極のとき、手前は上から下へ）
+    const down = rightN;
+    for (let i = 1; i < shown; i += Math.max(1, Math.round(shown / 8))) {
+      const x = COIL_L + gap * (i + 0.5);
+      const f = ((st.flowT / 60 + i * 0.37) % 1);
+      const ff = down ? f : 1 - f;
+      o += `<circle cx="${(x + 4 - 8 * ff).toFixed(1)}" cy="${(top + (bot - top) * ff).toFixed(1)}" r="3.5" fill="#ffd600" stroke="#f57f17"/>`;
+    }
+    // コイルの手前の電流の向きの矢印
+    const ax = COIL_L - 22, ay = CY;
+    o += `<path d="M${ax} ${ay + (down ? 14 : -14)} l-7 ${down ? -12 : 12} l14 0 z" fill="#f57f17"/><line x1="${ax}" y1="${ay - 14}" x2="${ax}" y2="${ay + 14}" stroke="#f57f17" stroke-width="3"/>`;
+  }
+
+  o += coilLabel;
+
+  // --- 皿とクリップ ---
+  o += `<ellipse cx="${DISH.x}" cy="${DISH.y + 8}" rx="135" ry="26" fill="#cfd8dc" stroke="#90a4ae" stroke-width="2"/>
+    <ellipse cx="${DISH.x}" cy="${DISH.y}" rx="122" ry="18" fill="#eceff1"/>
+    <text x="${DISH.x + 150}" y="${DISH.y + 34}" font-size="15" fill="#555">クリップの皿</text>`;
+  clips.forEach(c => { o += svgClip(c.x, c.y, c.rot, c.stuck ? '#455a64' : '#78909c'); });
+
+  // --- N極・S極 ---
+  if (st.on && $('chkPole').checked) {
+    const pr = rightN ? 'N' : 'S', pl = rightN ? 'S' : 'N';
+    // 鉄しんありは鉄しんのはしの上、なしはコイルのはしの外に出す
+    if (st.core) { o += poleMark(coreL(), CY - 34, pl) + poleMark(coreR(), CY - 34, pr); }
+    else { o += poleMark(COIL_L - 24, CY, pl) + poleMark(COIL_R + 24, CY, pr); }
+  }
+
+  // --- 方位磁針 ---
+  const cx = COMP.x, cy = COMP.y, r = COMP.r;
+  o += `<circle cx="${cx}" cy="${cy}" r="${r + 6}" fill="#eceff1" stroke="#607d8b" stroke-width="3"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff"/>
+    <text x="${cx}" y="${cy - r + 16}" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">北</text>
+    <text x="${cx}" y="${cy + r - 5}" text-anchor="middle" font-size="14" fill="#777">南</text>
+    <g transform="rotate(${st.needle.toFixed(1)} ${cx} ${cy})">
+      <path d="M${cx} ${cy - 38} L${cx + 8} ${cy} L${cx - 8} ${cy} z" fill="#d32f2f"/>
+      <path d="M${cx} ${cy + 38} L${cx + 8} ${cy} L${cx - 8} ${cy} z" fill="#b0bec5"/>
+      <text x="${cx}" y="${cy - 12}" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">N</text>
+      <circle cx="${cx}" cy="${cy}" r="3.5" fill="#333"/></g>
+    <text x="${cx}" y="${cy + r + 26}" text-anchor="middle" font-size="15" fill="#555">方位磁針</text>`;
+
+  $('scene').innerHTML = o;
+}
+// 図の中のスイッチをおしても、入れたり切ったりできる
+$('scene').addEventListener('pointerdown', (e) => {
+  if (e.target.closest('#swHit')) { e.preventDefault(); toggleSwitch(); }
+});
+
+// ===== 表示の数 =====
+function updateStats() {
+  $('sAmp').textContent = st.on ? fmt1(st.amp) + ' A' : '0 A';
+  $('sClip').innerHTML = J((st.on ? st.clips : 0) + ' 個');
+  $('sPole').innerHTML = st.on ? J(st.dir === 1 ? 'N極' : 'S極') : '－';
+}
+
+// ===== スイッチ =====
+function toggleSwitch() {
+  if (st.windT < 1) return;   // まいているとちゅうは入れない
+  st.on ? switchOff(true) : switchOn();
+}
+function switchOn() {
+  st.on = true; st.onTime = 0; st.settled = false;
+  st.amp = AMP[st.cells];
+  const f = 0.9 + Math.random() * 0.2;        // 毎回少しだけばらつく
+  st.clips = Math.min(POOL, st.core ? Math.round(clipBase() * f) : Math.floor(clipBase() * f / 12));
+  placeClips(st.clips);
+  $('btnSw').innerHTML = '🔌 ' + J('スイッチを切る'); $('btnSw').classList.add('on');
+  updateStats();
+  setTimeout(() => {
+    if (!st.on) return;
+    st.settled = true; $('btnRec').disabled = false;
+    setMsg(st.clips === 0
+      ? 'クリップは1個もつかなかった。でも、方位磁針の針は少し動いたね。'
+      : 'クリップが' + st.clips + '個ついた！ 方位磁針の針も動いたね。「記録する」をおそう。');
+  }, 900);
+}
+function switchOff(withMsg) {
+  const was = st.on;
+  st.on = false; st.settled = false; st.onTime = 0;
+  dropClips();
+  $('btnSw').innerHTML = '🔌 ' + J('スイッチを入れる'); $('btnSw').classList.remove('on');
+  $('btnRec').disabled = true;
+  updateSafety();
+  updateStats();
+  if (withMsg && was) setMsg('スイッチを切ったら、クリップが落ちた！ 電磁石は、電流が流れているときだけ磁石になるよ（ふつうの磁石とのちがい）。');
+}
+$('btnSw').addEventListener('click', toggleSwitch);
+
+// ===== 安全のメッセージ =====
+let hotShown = false;
+function updateSafety() {
+  const hot = st.on && st.onTime > HOT_SEC;
+  if (hot === hotShown) return;
+  hotShown = hot;
+  $('safety').classList.toggle('hot', hot);
+  $('safety').innerHTML = hot
+    ? J('🔥 電池が熱くなってきたよ！ 記録したら、すぐにスイッチを切ろう。')
+    : J('⚠ 本物の実験では、電池が熱くなるので、スイッチを長い時間入れたままにしないでね。');
+}
+
+// ===== 記録（ワークシートへ） =====
+$('btnRec').addEventListener('click', () => {
+  if (!st.on || !st.settled) return;
+  const cond = st.turns + '回・' + st.cells + '個' + (st.core ? '' : '・しんなし');
+  Worksheet.addRecord({ cond, n: st.turns, cells: st.cells, core: st.core ? 'あり' : 'なし', amp: st.amp, clips: st.clips, pole: st.dir === 1 ? 'N極' : 'S極' });
+  $('btnRec').disabled = true;
+  setMsg('記録したよ。スイッチを切ってから、条件を1つだけ変えて、もういちどやってみよう。');
+});
+
+// ===== 条件を変える（変えるときは、スイッチを切る） =====
+function chipGroup(boxId, attr, fn) {
+  $(boxId).addEventListener('click', (ev) => {
+    const b = ev.target.closest('.chip');
+    if (!b) return;
+    $(boxId).querySelectorAll('.chip').forEach(x => x.classList.toggle('active', x === b));
+    const wasOn = st.on;
+    switchOff(false);
+    fn(b.dataset[attr]);
+    setMsg((wasOn ? 'スイッチを切って、条件を変えたよ。' : '') + 'スイッチを入れて、たしかめよう。');
+  });
+}
+chipGroup('cTurns', 'turns', v => {
+  st.windFrom = 0; st.windT = 0; st.turns = +v;   // まき直すアニメーション
+  $('btnSw').disabled = true;
+});
+chipGroup('cCells', 'cells', v => { st.cells = +v; });
+chipGroup('cCore', 'core', v => { st.core = v === '1'; });
+$('btnDir').addEventListener('click', () => {
+  const wasOn = st.on;
+  switchOff(false);
+  st.dir = -st.dir;
+  setMsg((wasOn ? 'スイッチを切って、' : '') + '電池の向きを逆にしたよ（電流計も、＋たんしが電池の＋極側になるように、つなぎかえた）。スイッチを入れて、方位磁針の針を見てみよう。');
+});
+
+// ===== もういちど =====
+function resetAll() {
+  switchOff(false);
+  st.turns = 100; st.cells = 1; st.core = true; st.dir = 1;
+  st.windShown = 100; st.windT = 1; $('btnSw').disabled = false;
+  document.querySelectorAll('[data-turns]').forEach(x => x.classList.toggle('active', x.dataset.turns === '100'));
+  document.querySelectorAll('[data-cells]').forEach(x => x.classList.toggle('active', x.dataset.cells === '1'));
+  document.querySelectorAll('[data-core]').forEach(x => x.classList.toggle('active', x.dataset.core === '1'));
+  clips.forEach(c => { c.x = c.tx = c.home.x; c.y = c.ty = c.home.y; c.rot = c.trot = c.home.rot; c.stuck = false; });
+  st.needle = 0; st.needleV = 0; st.meter = 0;
+  setMsg('');
+}
+$('btnReset').addEventListener('click', resetAll);
+
+// =====================================================================
+// 電磁石の利用（ミニアニメ）
+// =====================================================================
+const U = { tab: 'crane', on: false, dir: 1,
+  crane: { mx: 190, tx: 190, items: [] },
+  motor: { ang: -90, spd: 0 },
+  ih: { temp: 20, t: 0 } };
+// クレーンの下の山：鉄（もようのある四角）とアルミかん（つつ）
+(function initCrane() {
+  const seed = [[135, 'fe'], [160, 'al'], [185, 'fe'], [210, 'fe'], [235, 'al'], [150, 'fe'], [200, 'al'], [225, 'fe']];
+  seed.forEach(([x, k], i) => {
+    const y = i < 5 ? 222 : 204;
+    U.crane.items.push({ k, x, y, hx: x, hy: y, stuck: false, rot: (i * 37) % 30 - 15 });
+  });
+})();
+const USE_TEXT = {
+  crane: 'リサイクル工場では、大きな電磁石のついたクレーンで、鉄だけを引きつけて運ぶよ。電流を流すと鉄がつき、運んだ先で電流を切ると、鉄がはなれて落ちる。アルミかんは磁石につかないので、鉄とアルミを分けることができるんだ。',
+  motor: 'モーターの中には電磁石が入っているよ。まわりの磁石と、引き合ったり、しりぞけ合ったりして回るんだ。回るとちゅうで電磁石のN極とS極が入れかわるので、回り続けるよ。電池の向きを逆にすると、回る向きも逆になる。',
+  ih: 'IH調理器の中にはコイルが入っているよ。コイルに、向きがとても速く入れかわる電流を流すと、磁石の力が変わり続けて、なべの底に電流が流れ、なべ自体が熱くなる。上の板は、ほとんど熱くならないよ（なべの熱で温まることはある）。'
+};
+function useButtons() {
+  const t = U.tab;
+  let h = `<button class="go-btn${U.on ? ' orange' : ''}" id="uOn">⚡ ${J(U.on ? '電流を切る' : '電流を流す')}</button>`;
+  if (t === 'crane') h += `<button class="go-btn sub" id="uMove">${U.crane.tx < 300 ? '→ 右へ運ぶ' : '← 左へもどす'}</button>`;
+  if (t === 'motor') h += `<button class="go-btn sub" id="uDir">⇄ ${J('電池の向きを逆にする')}</button>`;
+  h += `<button class="go-btn sub" id="uReset">もういちど</button>`;
+  $('useBtns').innerHTML = h;
+  $('uOn').onclick = () => { U.on = !U.on; craneCatchDrop(); useButtons(); };
+  if ($('uMove')) $('uMove').onclick = () => { U.crane.tx = U.crane.tx < 300 ? 510 : 190; useButtons(); };
+  if ($('uDir')) $('uDir').onclick = () => { U.dir = -U.dir; };
+  $('uReset').onclick = () => { resetUse(); useButtons(); };
+  $('useText').innerHTML = J(USE_TEXT[t]);
+}
+function resetUse() {
+  U.on = false; U.dir = 1;
+  U.crane.mx = U.crane.tx = 190;
+  U.crane.items.forEach(it => { it.x = it.hx; it.y = it.hy; it.stuck = false; it.inBin = false; });
+  U.motor.ang = -90; U.motor.spd = 0;
+  U.ih.temp = 20;
+}
+// クレーン：電流を流したら、真下の鉄を引きつける。切ったら落とす
+function craneCatchDrop() {
+  if (U.tab !== 'crane') return;
+  const c = U.crane;
+  if (U.on) {
+    let n = 0;
+    c.items.forEach(it => { if (it.k === 'fe' && !it.inBin && Math.abs(it.x - c.mx) < 70 && Math.abs(c.mx - c.tx) < 2) { it.stuck = true; it.off = (n++ - 2) * 16; } });
+  } else {
+    let n = 0;
+    c.items.forEach(it => {
+      if (!it.stuck) return;
+      it.stuck = false;
+      if (c.mx > 300) { it.inBin = true; it.hx = 470 + (n % 5) * 18; it.hy = 214 - Math.floor(n / 5) * 12; n++; }
+      else { it.hx = c.mx + it.off; it.hy = 222; }
+    });
+  }
+}
+function drawCrane() {
+  const c = U.crane;
+  let o = `<rect width="640" height="260" fill="#eef5fb"/><rect y="236" width="640" height="24" fill="#a1887f"/>`;
+  // クレーンのうで
+  o += `<rect x="40" y="20" width="16" height="216" fill="#ffa000"/><rect x="40" y="20" width="560" height="14" fill="#ffa000"/>
+    <rect x="${c.mx - 14}" y="30" width="28" height="12" fill="#5d4037"/><line x1="${c.mx}" y1="42" x2="${c.mx}" y2="78" stroke="#333" stroke-width="3"/>`;
+  // 電磁石
+  o += `<rect x="${c.mx - 48}" y="78" width="96" height="26" rx="6" fill="#546e7a" stroke="#263238" stroke-width="2"/>
+    <text x="${c.mx}" y="96" text-anchor="middle" font-size="13" font-weight="bold" fill="#fff">電磁石 ${U.on ? 'ON' : 'OFF'}</text>`;
+  if (U.on) o += `<path d="M${c.mx - 40} 108 q10 6 20 0 q10 -6 20 0 q10 6 20 0 q10 -6 20 0" fill="none" stroke="#7b1fa2" stroke-width="2" stroke-dasharray="4 3"/>`;
+  // 右の置き場
+  o += `<rect x="455" y="190" width="120" height="46" fill="none" stroke="#5d4037" stroke-width="4"/><text x="515" y="254" text-anchor="middle" font-size="14" fill="#fff" font-weight="bold">鉄の置き場</text>
+    <text x="190" y="254" text-anchor="middle" font-size="14" fill="#fff" font-weight="bold">鉄とアルミがまざった山</text>`;
+  c.items.forEach(it => {
+    if (it.k === 'fe') o += `<g transform="translate(${it.x.toFixed(1)},${it.y.toFixed(1)}) rotate(${it.rot})"><rect x="-11" y="-8" width="22" height="16" fill="#78909c" stroke="#37474f" stroke-width="2"/><line x1="-11" y1="0" x2="11" y2="0" stroke="#37474f"/><text y="5" text-anchor="middle" font-size="10" font-weight="bold" fill="#fff">鉄</text></g>`;
+    else o += `<g transform="translate(${it.x.toFixed(1)},${it.y.toFixed(1)}) rotate(${it.rot})"><rect x="-7" y="-11" width="14" height="22" rx="4" fill="#e0e0e0" stroke="#9e9e9e" stroke-width="2"/><text y="4" text-anchor="middle" font-size="7" fill="#555">アルミ</text></g>`;
+  });
+  return o;
+}
+function drawMotor() {
+  const m = U.motor, cx = 320, cy = 125, R = 90;
+  let o = `<rect width="640" height="260" fill="#eef5fb"/>`;
+  // まわりの磁石（左N・右S）
+  o += `<rect x="110" y="70" width="80" height="110" rx="6" fill="#d32f2f"/><text x="150" y="135" text-anchor="middle" font-size="30" font-weight="bold" fill="#fff">N</text>
+    <rect x="450" y="70" width="80" height="110" rx="6" fill="#1565c0"/><text x="490" y="135" text-anchor="middle" font-size="30" font-weight="bold" fill="#fff">S</text>
+    <text x="150" y="200" text-anchor="middle" font-size="13" fill="#555">ふつうの磁石</text><text x="490" y="200" text-anchor="middle" font-size="13" fill="#555">ふつうの磁石</text>`;
+  // 回る電磁石（両はしの極は、上半分にあるはしがN／下半分がS。逆回りなら反対）
+  const a = m.ang * Math.PI / 180;
+  const ends = [[cx + R * Math.cos(a), cy + R * Math.sin(a)], [cx - R * Math.cos(a), cy - R * Math.sin(a)]];
+  o += `<g transform="rotate(${m.ang.toFixed(1)} ${cx} ${cy})"><rect x="${cx - R}" y="${cy - 11}" width="${2 * R}" height="22" rx="4" fill="#90a4ae" stroke="#546e7a" stroke-width="2"/>`;
+  for (let i = -6; i <= 6; i++) o += `<line x1="${cx + i * 9 + 3}" y1="${cy - 16}" x2="${cx + i * 9 - 3}" y2="${cy + 16}" stroke="#d2862e" stroke-width="5"/>`;
+  o += `</g><circle cx="${cx}" cy="${cy}" r="6" fill="#333"/>`;
+  if (U.on) ends.forEach(([x, y]) => {
+    const upper = y < cy;
+    const p = (U.dir === 1) === upper ? 'N' : 'S';
+    o += p === 'N'
+      ? `<rect x="${x - 12}" y="${y - 12}" width="24" height="24" rx="3" fill="#d32f2f" stroke="#fff" stroke-width="2"/><text x="${x}" y="${y + 6}" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">N</text>`
+      : `<circle cx="${x}" cy="${y}" r="13" fill="#1565c0" stroke="#fff" stroke-width="2"/><text x="${x}" y="${y + 6}" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">S</text>`;
+  });
+  o += `<text x="${cx}" y="246" text-anchor="middle" font-size="15" fill="#333">${U.on ? (U.dir === 1 ? '右回り（時計回り）に回る' : '左回り（反時計回り）に回る') : '電流を流すと回るよ'}</text>`;
+  return o;
+}
+function drawIH() {
+  const h = U.ih, k = Math.min(1, (h.temp - 20) / 80);
+  const pan = `rgb(${Math.round(120 + 135 * k)},${Math.round(120 - 40 * k)},${Math.round(130 - 100 * k)})`;
+  let o = `<rect width="640" height="260" fill="#eef5fb"/>`;
+  // なべと水
+  o += `<rect x="210" y="70" width="220" height="80" rx="8" fill="#b3e5fc" stroke="#546e7a" stroke-width="3"/>
+    <rect x="200" y="142" width="240" height="14" rx="4" fill="${pan}" stroke="#37474f" stroke-width="2"/>
+    <rect x="180" y="74" width="30" height="8" rx="3" fill="#37474f"/><rect x="430" y="74" width="30" height="8" rx="3" fill="#37474f"/>`;
+  if (h.temp > 60) for (let i = 0; i < 6; i++) { const yy = 140 - ((h.t * 40 + i * 23) % 60); o += `<circle cx="${240 + i * 32}" cy="${yy}" r="${3 + (i % 3)}" fill="#fff" opacity="0.8"/>`; }
+  if (h.temp >= 99) o += `<path d="M260 60 q8 -12 0 -24 q-8 -12 0 -24 M320 60 q8 -12 0 -24 q-8 -12 0 -24 M380 60 q8 -12 0 -24 q-8 -12 0 -24" fill="none" stroke="#90a4ae" stroke-width="3"/>`;
+  // 上の板
+  o += `<rect x="120" y="158" width="400" height="16" rx="4" fill="#263238"/><text x="540" y="171" font-size="13" fill="#555">上の板</text>`;
+  // コイル（うずまき）
+  for (let i = 0; i < 5; i++) o += `<ellipse cx="320" cy="196" rx="${30 + i * 22}" ry="${6 + i * 2.5}" fill="none" stroke="#d2862e" stroke-width="4"/>`;
+  o += `<text x="540" y="200" font-size="13" fill="#555">コイル</text>`;
+  // 変わり続ける磁石の力（上向き・下向きが速く入れかわる）
+  if (U.on) {
+    const up = Math.floor(h.t * 6) % 2 === 0;
+    for (const x of [250, 320, 390]) o += `<path d="M${x} ${up ? 186 : 120} L${x} ${up ? 126 : 180}" stroke="#7b1fa2" stroke-width="3" stroke-dasharray="5 4"/><path d="M${x - 7} ${up ? 132 : 174} l7 ${up ? -12 : 12} l7 ${up ? 12 : -12} z" fill="#7b1fa2"/>`;
+  }
+  o += `<text x="320" y="246" text-anchor="middle" font-size="16" font-weight="bold" fill="#bf360c">なべの温度 ${Math.round(h.temp)}℃</text>`;
+  return o;
+}
+function useFrame(dt) {
+  const c = U.crane;
+  if (U.tab === 'crane') {
+    c.mx += (c.tx - c.mx) * Math.min(1, dt * 2.5);
+    if (Math.abs(c.tx - c.mx) < 0.5) c.mx = c.tx;
+    c.items.forEach(it => {
+      const tx = it.stuck ? c.mx + it.off : it.hx, ty = it.stuck ? 114 : it.hy;
+      it.x += (tx - it.x) * Math.min(1, dt * 7); it.y += (ty - it.y) * Math.min(1, dt * 7);
+    });
+    $('useSvg').innerHTML = drawCrane();
+  } else if (U.tab === 'motor') {
+    const target = U.on ? 220 * U.dir : 0;     // 1秒に何度回るか
+    U.motor.spd += (target - U.motor.spd) * Math.min(1, dt * 1.5);
+    U.motor.ang = (U.motor.ang + U.motor.spd * dt) % 360;
+    $('useSvg').innerHTML = drawMotor();
+  } else {
+    U.ih.t += dt;
+    U.ih.temp += U.on ? (100 - U.ih.temp) * dt * 0.25 : (20 - U.ih.temp) * dt * 0.05;
+    U.ih.temp = Math.min(100, U.ih.temp);
+    $('useSvg').innerHTML = drawIH();
+  }
+}
+$('useTabs').addEventListener('click', (ev) => {
+  const b = ev.target.closest('.chip');
+  if (!b) return;
+  U.tab = b.dataset.use;
+  $('useTabs').querySelectorAll('.chip').forEach(x => x.classList.toggle('active', x === b));
+  resetUse(); useButtons();
+});
+
+// =====================================================================
+// アニメーション（いつも動かしておく）
+// =====================================================================
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+
+  // まき数のアニメーション（0回からまいていく）
+  if (st.windT < 1) {
+    st.windT = Math.min(1, st.windT + dt / 1.2);
+    st.windShown = st.windFrom + (st.turns - st.windFrom) * st.windT;
+    if (st.windT >= 1) { st.windShown = st.turns; $('btnSw').disabled = false; }
+  }
+  // スイッチを入れている時間
+  if (st.on) { st.onTime += dt; updateSafety(); }
+  st.flowT += dt * 40 * (st.on ? st.amp : 0);
+
+  // クリップを目的の位置へ動かす
+  clips.forEach(c => {
+    const k = Math.min(1, dt * (c.stuck ? 9 : 6));
+    c.x += (c.tx - c.x) * k; c.y += (c.ty - c.y) * k; c.rot += (c.trot - c.rot) * k;
+  });
+  // 方位磁針：地球の磁石の力（北）と電磁石の力の合わせた向き。ばねのようにゆれて止まる
+  const target = st.on ? (st.dir === 1 ? 1 : -1) * Math.atan(strength() * 0.35) * 180 / Math.PI : 0;
+  st.needleV += ((target - st.needle) * 30 - st.needleV * 5) * dt;
+  st.needle += st.needleV * dt;
+  // 電流計の針
+  st.meter += ((st.on ? st.amp : 0) - st.meter) * Math.min(1, dt * 6);
+
+  drawScene();
+  useFrame(dt);
+  requestAnimationFrame(frame);
+}
+
+// ===== 先生モード =====
+if (TEACHER) {
+  $('tNote').classList.remove('hidden');
+  $('tNote').innerHTML = '👩‍🏫 <b>先生へ</b>：まき数を変えるときは、導線全体の長さを同じにする（あまりは切らずにまとめておく）ことで、電流の大きさを変えずにくらべられます。図の「あまった導線」がそのことを表しています。電池の向きを逆にしたとき、本物の実験では電流計の＋たんし・－たんしもつなぎかえる必要があります。また、エナメル線のはしは紙やすりで皮まくをはがしてからつなぐこと、ショート回路に近いので電池が熱くなりやすく、長い時間電流を流さないことを指導してください。「磁石の力の見える化」（磁力線）は中学校の内容です。N極から出てS極に入る向きを示していますが、小学校では「磁石の力がはたらいている」ことのイメージとして使う程度にしてください。';
+}
+
+// ===== はじめ =====
+updateStats();
+useButtons();
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
