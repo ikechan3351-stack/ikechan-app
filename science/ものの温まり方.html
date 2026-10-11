@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ものの温まり方</title>
+<!--
+  ものの温まり方（小学4年 理科「ものの温まり方」）
+  ・① 金属：銅のぼう・正方形の板・円形の板の一部をアルコールランプで熱する。
+      熱したところから順に、まわりへ温まっていく（熱の伝わり方の計算）。ろうがとけるようすも見られる。
+      板に切れ目を入れると、熱は切れ目を回りこんで伝わる。
+  ・② 水：ビーカーの下（中央・はし）を熱する。温まった水が上へ動き、上から順に全体が温まる。
+      示温インクの色・おがくず（つぶ）・水の流れの矢印で見える化。
+  ・③ 空気：部屋の中のストーブ・エアコン（だんぼう・冷ぼう）。温まった空気は上へ、冷えた空気は下へ動く。
+      線香のけむり（つぶ）と、部屋の温度の色で見える化。
+  ・共通：温度計をドラッグして置くと、その場所の温度が出る。
+  ・しくみ：金属は、マス目ごとに温度がとなりへ伝わる計算（銅の伝わりやすさを使っています）。
+      水と空気は、温まったところが上がる「回る流れ」をつくって、その流れで温度とつぶを運んでいます。
+      数字は下の「しくみの数字」でかえられます。
+  ・ワークシート部品（worksheet.js）を使っています。① で印のろうがとけると、自動で記録します。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+
+  .safety {
+    background: #fff8e1; border: 3px solid #f9a825; border-radius: 12px;
+    padding: 4px 12px; font-size: 16px; font-weight: bold; color: #6d4c00; text-align: center;
+  }
+
+  /* タブ */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .tab {
+    min-height: 48px; border: 3px solid #aed581; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 4px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .tab.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+
+  canvas { display: block; width: 100%; touch-action: none; }
+  #cv { aspect-ratio: 640 / 400; border-radius: 8px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 18px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.stop { background: #455a64; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn:disabled, .chip:disabled { opacity: 0.4; cursor: default; }
+  .lbl { font-size: 16px; color: #555; font-weight: bold; }
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #1565c0; margin-top: 4px; }
+  .diff { font-size: 15px; color: #666; margin: 4px 0 0; }
+  .hint { font-size: 15px; color: #777; text-align: center; margin: 2px 0 0; }
+  .clock { font-size: 1.3rem; font-weight: bold; color: #bf360c; min-width: 6em; text-align: center; }
+  .readout { font-size: 17px; font-weight: bold; color: #333; }
+  .readout b { color: #bf360c; font-size: 1.2rem; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🔥 ものの<ruby>温<rt>あたた</rt></ruby>まり<ruby>方<rt>かた</rt></ruby></h1>
+<p class="subtitle"><ruby>金属<rt>きんぞく</rt></ruby>・<ruby>水<rt>みず</rt></ruby>・<ruby>空気<rt>くうき</rt></ruby>は、どのように<ruby>温<rt>あたた</rt></ruby>まるのかな</p>
+
+<div class="panel">
+  <div class="tabs">
+    <button class="tab active" data-tab="metal">🥄 ① <ruby>金属<rt>きんぞく</rt></ruby></button>
+    <button class="tab" data-tab="water">🧪 ② <ruby>水<rt>みず</rt></ruby></button>
+    <button class="tab" data-tab="air">🌬 ③ <ruby>空気<rt>くうき</rt></ruby></button>
+  </div>
+
+  <div class="safety" id="safety"></div>
+
+  <div class="card">
+    <canvas id="cv" aria-label="温まり方のシミュレーション。温度を色で表す"></canvas>
+
+    <!-- ① 金属の操作 -->
+    <div id="ctlMetal">
+      <div class="row">
+        <span class="lbl"><ruby>形<rt>かたち</rt></ruby></span>
+        <button class="chip" data-shape="rod">━ ぼう</button>
+        <button class="chip active" data-shape="square">■ <ruby>正方形<rt>せいほうけい</rt></ruby>の<ruby>板<rt>いた</rt></ruby></button>
+        <button class="chip" data-shape="circle">● <ruby>円形<rt>えんけい</rt></ruby>の<ruby>板<rt>いた</rt></ruby></button>
+      </div>
+      <div class="row">
+        <button class="chip" id="btnCut">✂ <ruby>切<rt>き</rt></ruby>れ<ruby>目<rt>め</rt></ruby> なし</button>
+        <span class="lbl"><ruby>見<rt>み</rt></ruby>え<ruby>方<rt>かた</rt></ruby></span>
+        <button class="chip active" data-mview="wax">ろう</button>
+        <button class="chip" data-mview="color"><ruby>温度<rt>おんど</rt></ruby>の<ruby>色<rt>いろ</rt></ruby></button>
+      </div>
+      <p class="hint"><ruby>金属<rt>きんぞく</rt></ruby>をタップすると、そこを<ruby>熱<rt>ねっ</rt></ruby>するようにランプが<ruby>動<rt>うご</rt></ruby>くよ</p>
+    </div>
+
+    <!-- ② 水の操作 -->
+    <div id="ctlWater" class="hidden">
+      <div class="row">
+        <span class="lbl"><ruby>熱<rt>ねっ</rt></ruby>する<ruby>場所<rt>ばしょ</rt></ruby></span>
+        <button class="chip active" data-wpos="center"><ruby>中央<rt>ちゅうおう</rt></ruby></button>
+        <button class="chip" data-wpos="edge">はし</button>
+        <span class="lbl"><ruby>見<rt>み</rt></ruby>え<ruby>方<rt>かた</rt></ruby></span>
+        <button class="chip active" data-wview="ink"><ruby>示温<rt>じおん</rt></ruby>インク</button>
+        <button class="chip" data-wview="color"><ruby>温度<rt>おんど</rt></ruby>の<ruby>色<rt>いろ</rt></ruby></button>
+      </div>
+      <div class="row readout">
+        <span><ruby>上<rt>うえ</rt></ruby>のほう <b id="wTop">20℃</b></span>
+        <span><ruby>下<rt>した</rt></ruby>のほう <b id="wBot">20℃</b></span>
+      </div>
+    </div>
+
+    <!-- ③ 空気の操作 -->
+    <div id="ctlAir" class="hidden">
+      <div class="row">
+        <button class="chip active" data-amode="stove">🔥 ストーブ</button>
+        <button class="chip" data-amode="warm">♨ エアコン だんぼう</button>
+        <button class="chip" data-amode="cool">❄ エアコン <ruby>冷<rt>れい</rt></ruby>ぼう</button>
+      </div>
+      <div class="row">
+        <span class="lbl"><ruby>風<rt>かぜ</rt></ruby>の<ruby>向<rt>む</rt></ruby>き</span>
+        <button class="chip active" data-adir="side">➡ <ruby>横<rt>よこ</rt></ruby><ruby>向<rt>む</rt></ruby>き</button>
+        <button class="chip" data-adir="down">↘ <ruby>下<rt>した</rt></ruby><ruby>向<rt>む</rt></ruby>き</button>
+      </div>
+      <div class="row readout">
+        <span><ruby>天井<rt>てんじょう</rt></ruby><ruby>近<rt>ちか</rt></ruby>く <b id="aTop">10℃</b></span>
+        <span>ゆか<ruby>近<rt>ちか</rt></ruby>く <b id="aBot">10℃</b></span>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="go-btn orange" id="btnHeat">🔥 <ruby>熱<rt>ねっ</rt></ruby>する</button>
+      <span class="clock" id="clock">⏱ 0<ruby>秒<rt>びょう</rt></ruby></span>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+    <div class="row">
+      <span class="lbl">ようす</span>
+      <button class="chip" data-speed="0.5">ゆっくり</button>
+      <button class="chip active" data-speed="1">ふつう</button>
+      <button class="chip" data-speed="5">はやおくり</button>
+      <button class="chip active" id="btnDots">● つぶ ON</button>
+      <button class="chip active" id="btnArrow">➡ <ruby>矢印<rt>やじるし</rt></ruby> ON</button>
+    </div>
+    <p class="hint">🌡 <ruby>温度計<rt>おんどけい</rt></ruby>をドラッグして<ruby>置<rt>お</rt></ruby>くと、その<ruby>場所<rt>ばしょ</rt></ruby>の<ruby>温度<rt>おんど</rt></ruby>が<ruby>分<rt>わ</rt></ruby>かるよ</p>
+    <div class="msg" id="msg">&nbsp;</div>
+  </div>
+
+  <div class="card">
+    <p class="diff">※じっさいとのちがい：<ruby>金属<rt>きんぞく</rt></ruby>は<ruby>銅<rt>どう</rt></ruby>として<ruby>計算<rt>けいさん</rt></ruby>しています（ぼうは見やすいように太くかいています）。ろうは60℃でとけるとしています。<ruby>水<rt>みず</rt></ruby>と<ruby>空気<rt>くうき</rt></ruby>の<ruby>流<rt>なが</rt></ruby>れは、<ruby>本当<rt>ほんとう</rt></ruby>の<ruby>動<rt>うご</rt></ruby>きをかんたんにした<ruby>形<rt>かたち</rt></ruby>で<ruby>計算<rt>けいさん</rt></ruby>しています。ランプの<ruby>火<rt>ひ</rt></ruby>の<ruby>強<rt>つよ</rt></ruby>さ・<ruby>部屋<rt>へや</rt></ruby>の<ruby>広<rt>ひろ</rt></ruby>さなどで、<ruby>時間<rt>じかん</rt></ruby>は<ruby>本当<rt>ほんとう</rt></ruby>の<ruby>実験<rt>じっけん</rt></ruby>とかわります（<ruby>時間<rt>じかん</rt></ruby>は<ruby>目安<rt>めやす</rt></ruby>です）。</p>
+  </div>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: 'ものの<ruby>温<rt>あたた</rt></ruby>まり<ruby>方<rt>かた</rt></ruby>',
+  question: '<ruby>熱<rt>ねっ</rt></ruby>した<ruby>場所<rt>ばしょ</rt></ruby>から<ruby>遠<rt>とお</rt></ruby>いところのろうは、<ruby>何秒<rt>なんびょう</rt></ruby>でとけるだろうか？',
+  predictionChoices: ['<ruby>近<rt>ちか</rt></ruby>いところと<ruby>同<rt>おな</rt></ruby>じころにとける', '<ruby>近<rt>ちか</rt></ruby>いところより、あとでとける', '<ruby>近<rt>ちか</rt></ruby>いところより、<ruby>先<rt>さき</rt></ruby>にとける'],
+  experimentNote: '「① <ruby>金属<rt>きんぞく</rt></ruby>」で「<ruby>熱<rt>ねっ</rt></ruby>する」をおす。●▲■ の<ruby>印<rt>しるし</rt></ruby>のろうがとけると、<ruby>熱<rt>ねっ</rt></ruby>した<ruby>場所<rt>ばしょ</rt></ruby>からのきょりと、とけた<ruby>時間<rt>じかん</rt></ruby>が<ruby>自動<rt>じどう</rt></ruby>で<ruby>記録<rt>きろく</rt></ruby>されるよ。<ruby>何秒<rt>なんびょう</rt></ruby>でとけると<ruby>思<rt>おも</rt></ruby>うか、<ruby>理由<rt>りゆう</rt></ruby>のところに<ruby>書<rt>か</rt></ruby>いておこう。<ruby>切<rt>き</rt></ruby>れ<ruby>目<rt>め</rt></ruby>を<ruby>入<rt>い</rt></ruby>れても、ためしてみよう。',
+  columns: [
+    { key: 'shape', label: '<ruby>形<rt>かたち</rt></ruby>' },
+    { key: 'cut', label: '<ruby>切<rt>き</rt></ruby>れ<ruby>目<rt>め</rt></ruby>' },
+    { key: 'mark', label: '<ruby>印<rt>しるし</rt></ruby>' },
+    { key: 'dist', label: 'きょり', unit: 'cm', digits: 1 },
+    { key: 'time', label: 'とけた<ruby>時間<rt>じかん</rt></ruby>', unit: '<ruby>秒<rt>びょう</rt></ruby>' }
+  ],
+  // グラフは「切れ目なし」「切れ目あり」の2つの点にする（表には出さない項目に、とけた時間を入れる）
+  chart: { type: 'scatter', x: 'dist', y: ['切れ目なし', '切れ目あり'], yLabel: 'とけた時間（秒）' },
+  hint: '熱したところ（ランプ）からのきょりと、ろうがとけた時間の関係に目を向けさせましょう。近いところから順にとけていき、遠いところほど時間がかかります。板に切れ目を入れると、▲の印はまっすぐのきょりは近いのに、熱が切れ目を回りこむので、とけるのがおそくなります。熱は「熱したところから順に伝わる」ことにつなげます。水・空気のタブでは、金属とのちがい（温まったものが上へ動く）をくらべさせます。',
+  answer: '金属は、熱したところから近い順に温まっていく。熱したところから遠いところほど、ろうがとけるまでに時間がかかる。切れ目があると、熱は切れ目を回りこんで伝わるので、まっすぐのきょりが近くても、とけるのがおそくなる。水や空気は、温められたところが上へ動き、上のほうから順に、やがて全体が温まる。'
+});
+
+// ===== しくみの数字（ここをかえると、温まり方がかわります） =====
+const DX = 0.2;            // 金属のマス目の大きさ（cm）
+const ALPHA = 1.1;         // 銅の熱の伝わりやすさ（cm²／秒）。アルミなら 0.97、鉄なら 0.23
+const LAMP_R = 0.6;        // ランプの火が当たるところの半径（cm）
+const LAMP_Q = 160;        // ランプが温める強さ（℃／秒）
+const FLAME_T = 600;       // ほのおの温度（℃）。これより熱くはならない
+const METAL_LOSS = 0.004;  // 金属のまわりの空気に、熱がにげていくはやさ
+const MELT = 60;           // ろうがとける温度（℃）
+const ROOM = 20;           // 実験室の温度（℃）
+const WATER_V = 1.2;       // 水の流れのいちばん速いところ（cm／秒）
+const WATER_Q = 14;        // ビーカーの底を温める強さ（℃／秒）
+const INK_T = 40;          // 示温インクの色がかわる温度（℃）
+const AIR_V = 12;          // 部屋の空気の回る流れ（cm／秒）
+const JET_V = 140;         // エアコンの風の速さ（cm／秒）
+const BUOY = 3;            // 温度のちがいで空気が上下に動く強さ（cm／秒／℃）
+const STOVE_P = 5;         // ストーブが真上の空気を温める強さ（℃／秒）
+
+// ===== 小さな道具 =====
+const $ = id => document.getElementById(id);
+const CW = 640, CH = 400;
+const cv = $('cv');
+const dpr = Math.min(2, window.devicePixelRatio || 1);
+cv.width = CW * dpr; cv.height = CH * dpr;
+const ctx = cv.getContext('2d');
+ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+let tab = 'metal', speed = 1, showDots = true, showArrow = true;
+
+// 温度 → 色（青 → 水色 → 黄 → オレンジ → 赤。色覚のちがいがあっても明るさで見分けやすい色）
+const STOPS = [[44, 123, 182], [171, 217, 233], [255, 255, 191], [253, 174, 97], [215, 25, 28]];
+function tempRGB(T, lo, hi) {
+  const f = clamp((T - lo) / (hi - lo), 0, 1) * (STOPS.length - 1);
+  const i = Math.min(STOPS.length - 2, Math.floor(f)), k = f - i;
+  const a = STOPS[i], b = STOPS[i + 1];
+  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+}
+// 文字をかく（白いふちどり付き）
+function label(text, x, y, color, size, align) {
+  ctx.save();
+  ctx.font = 'bold ' + (size || 15) + 'px ' + FONT;
+  ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = color || '#333'; ctx.fillText(text, x, y);
+  ctx.restore();
+}
+function arrow(x1, y1, x2, y2, w, color) {
+  const a = Math.atan2(y2 - y1, x2 - x1), hl = Math.max(7, w * 2.6);
+  ctx.save();
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - Math.cos(a) * hl * 0.7, y2 - Math.sin(a) * hl * 0.7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - Math.cos(a - 0.5) * hl, y2 - Math.sin(a - 0.5) * hl);
+  ctx.lineTo(x2 - Math.cos(a + 0.5) * hl, y2 - Math.sin(a + 0.5) * hl);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+// 温度の色の見本（色の帯と目もり）
+function legend(x, y, w, lo, hi, step, title) {
+  for (let i = 0; i < w; i++) {
+    const c = tempRGB(lo + (hi - lo) * i / w, lo, hi);
+    ctx.fillStyle = 'rgb(' + c.map(Math.round) + ')';
+    ctx.fillRect(x + i, y, 1, 14);
+  }
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, 14);
+  ctx.font = '12px ' + FONT; ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let v = lo; v <= hi + 0.1; v += step) ctx.fillText(v + '℃', x + (v - lo) / (hi - lo) * w, y + 17);
+  if (title) label(title, x + w / 2, y - 10, '#555', 13);
+}
+// 時計の表示
+function clockText(t) {
+  const s = Math.floor(t);
+  return '⏱ ' + (s >= 60 ? Math.floor(s / 60) + '<ruby>分<rt>ふん</rt></ruby>' : '') + (s % 60) + '<ruby>秒<rt>びょう</rt></ruby>';
+}
+// マス目の温度を、なめらかに読みとる（x, y はマス目の単位。マスの中心が i+0.5）
+function sampleGrid(A, nx, ny, x, y) {
+  x = clamp(x - 0.5, 0, nx - 1.001); y = clamp(y - 0.5, 0, ny - 1.001);
+  const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j;
+  const k = j * nx + i;
+  return A[k] * (1 - fx) * (1 - fy) + A[k + 1] * fx * (1 - fy) + A[k + nx] * (1 - fx) * fy + A[k + nx + 1] * fx * fy;
+}
+// マス目の色を画像にして、なめらかに引きのばしてかく
+const off = document.createElement('canvas');
+const offCtx = off.getContext('2d');
+function drawGrid(nx, ny, colorOf, x, y, w, h) {
+  if (off.width !== nx || off.height !== ny) { off.width = nx; off.height = ny; }
+  const img = offCtx.createImageData(nx, ny);
+  for (let k = 0; k < nx * ny; k++) {
+    const c = colorOf(k);
+    img.data[k * 4] = c[0]; img.data[k * 4 + 1] = c[1]; img.data[k * 4 + 2] = c[2]; img.data[k * 4 + 3] = c[3] == null ? 255 : c[3];
+  }
+  offCtx.putImageData(img, 0, 0);
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.drawImage(off, x, y, w, h); ctx.restore();
+}
+
+/* =====================================================================
+   温度計（どのタブにも1本。ドラッグして置く）
+   ===================================================================== */
+const PARK = { metal: { x: 600, y: 330 }, water: { x: 560, y: 330 }, air: { x: 600, y: 320 } };
+const therm = { metal: { ...PARK.metal }, water: { ...PARK.water }, air: { ...PARK.air } };
+function drawThermometer(th, T) {
+  const x = th.x, y = th.y;
+  ctx.save();
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#455a64'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(x - 5, y - 70, 10, 66, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#d32f2f';
+  const lvl = T == null ? 10 : clamp((T + 10) / 130, 0.05, 1) * 56;
+  ctx.fillRect(x - 2, y - 6 - lvl, 4, lvl);
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#455a64'; ctx.stroke();
+  ctx.restore();
+  const txt = T == null ? '🌡 ここに置く' : Math.round(T) + '℃';
+  ctx.save();
+  ctx.font = 'bold 16px ' + FONT;
+  const w = ctx.measureText(txt).width + 12;
+  let bx = x + 12; if (bx + w > CW - 2) bx = x - 12 - w;
+  ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.strokeStyle = '#455a64'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(bx, y - 52, w, 24, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#b71c1c'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 6, y - 40);
+  ctx.restore();
+}
+const nearTherm = (th, p) => Math.abs(p.x - th.x) < 24 && p.y > th.y - 78 && p.y < th.y + 14;
+
+/* =====================================================================
+   ① 金属（銅）：熱したところから順に温まる
+   ===================================================================== */
+const SHAPES = {
+  rod:    { name: 'ぼう', nx: 120, ny: 3, ox: 56, oy: 150, sx: 4.4, sy: 40 / 3, lamp: { x: 2, y: 0.3 },
+            marks: [{ x: 5, y: 0.3, s: '●' }, { x: 10, y: 0.3, s: '▲' }, { x: 15, y: 0.3, s: '■' }] },
+  square: { name: '正方形', nx: 60, ny: 60, ox: 40, oy: 40, sx: 5.2, sy: 5.2, lamp: { x: 2.5, y: 6 },
+            marks: [{ x: 4.5, y: 3.5, s: '●' }, { x: 8, y: 3, s: '▲' }, { x: 10, y: 9.5, s: '■' }] },
+  circle: { name: '円形', nx: 60, ny: 60, ox: 40, oy: 40, sx: 5.2, sy: 5.2, lamp: { x: 2.5, y: 6 },
+            marks: [{ x: 4.5, y: 3.5, s: '●' }, { x: 8, y: 3, s: '▲' }, { x: 10, y: 9.5, s: '■' }] }
+};
+const CUT = { i: 30, j1: 0, j2: 40 };   // 切れ目：まん中の列を、上のはしから 8cm まで
+const M = { shape: 'square', cut: false, view: 'wax', heating: false, t: 0, acc: 0 };
+const DT_M = 0.2 * DX * DX / ALPHA;     // 1回の計算で進む時間（秒）。こまかくしないと計算がくるう
+
+function metalSetup() {
+  const g = SHAPES[M.shape];
+  Object.assign(M, { g, nx: g.nx, ny: g.ny, heating: false, t: 0, acc: 0 });
+  const n = g.nx * g.ny;
+  M.T = new Float32Array(n).fill(ROOM); M.Tn = new Float32Array(n);
+  M.mask = new Uint8Array(n);
+  for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) {
+    let ok = 1;
+    if (M.shape === 'circle') ok = (i + 0.5 - 30) ** 2 + (j + 0.5 - 30) ** 2 <= 900 ? 1 : 0;
+    if (M.cut && M.shape !== 'rod' && i === CUT.i && j < CUT.j2) ok = 0;
+    M.mask[j * g.nx + i] = ok;
+  }
+  M.lamp = { ...g.lamp };
+  M.marks = g.marks.map(m => ({ ...m, melted: null }));
+  setLamp();
+  updateHeatBtn();
+}
+// ランプの火が当たるマスを決める
+function setLamp() {
+  const g = M.g;
+  M.src = new Uint8Array(g.nx * g.ny);
+  for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) {
+    const x = (i + 0.5) * DX, y = (j + 0.5) * DX;
+    const d = M.shape === 'rod' ? Math.abs(x - M.lamp.x) : Math.hypot(x - M.lamp.x, y - M.lamp.y);
+    if (d <= LAMP_R && M.mask[j * g.nx + i]) M.src[j * g.nx + i] = 1;
+  }
+}
+const metalDist = m => M.shape === 'rod' ? Math.abs(m.x - M.lamp.x) : Math.hypot(m.x - M.lamp.x, m.y - M.lamp.y);
+function metalTempAt(xcm, ycm) {
+  const g = M.g, i = Math.floor(xcm / DX), j = Math.floor(ycm / DX);
+  if (i < 0 || j < 0 || i >= g.nx || j >= g.ny || !M.mask[j * g.nx + i]) return null;
+  return M.T[j * g.nx + i];
+}
+
+function metalStep(dt) {
+  const { nx, ny, mask, src } = M;
+  let T = M.T, Tn = M.Tn;
+  M.acc += dt;
+  const r = 0.2;
+  while (M.acc >= DT_M) {
+    M.acc -= DT_M;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      if (!mask[k]) { Tn[k] = ROOM; continue; }
+      const t = T[k];
+      let lap = 0;
+      // となりのマスとの温度の差だけ、熱が流れる（金属でないところ・切れ目へは流れない）
+      if (i > 0 && mask[k - 1]) lap += T[k - 1] - t;
+      if (i < nx - 1 && mask[k + 1]) lap += T[k + 1] - t;
+      if (j > 0 && mask[k - nx]) lap += T[k - nx] - t;
+      if (j < ny - 1 && mask[k + nx]) lap += T[k + nx] - t;
+      let v = t + r * lap - METAL_LOSS * DT_M * (t - ROOM);
+      if (M.heating && src[k]) v += LAMP_Q * DT_M * (1 - t / FLAME_T);
+      Tn[k] = v;
+    }
+    const s = T; T = Tn; Tn = s;
+    M.t += DT_M;
+  }
+  M.T = T; M.Tn = Tn;
+  // 印のろうがとけたか調べる
+  M.marks.forEach(m => {
+    if (m.melted != null) return;
+    const T0 = metalTempAt(m.x, m.y);
+    if (T0 != null && T0 >= MELT) {
+      m.melted = Math.round(M.t);
+      const cutName = M.cut && M.shape !== 'rod' ? '切れ目あり' : '切れ目なし';
+      const rec = { shape: M.g.name, cut: cutName === '切れ目あり' ? 'あり' : 'なし', mark: m.s, dist: +metalDist(m).toFixed(1), time: m.melted };
+      rec[cutName] = m.melted;
+      Worksheet.addRecord(rec);
+    }
+  });
+}
+
+// 等温線（同じ温度のところを結んだ線）をかく：マス目の4すみの温度から線を引く（マーチングスクエア）
+function contour(level, toXY, style) {
+  const { nx, ny, T, mask } = M;
+  ctx.save();
+  ctx.strokeStyle = style.color; ctx.lineWidth = style.w; ctx.setLineDash(style.dash || []);
+  ctx.beginPath();
+  for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const k = j * nx + i;
+    if (!mask[k] || !mask[k + 1] || !mask[k + nx] || !mask[k + nx + 1]) continue;
+    const a = T[k], b = T[k + 1], c = T[k + nx + 1], d = T[k + nx];
+    const pts = [];
+    const e = (p, q, x1, y1, x2, y2) => { if ((p < level) !== (q < level)) { const f = (level - p) / (q - p); pts.push([x1 + (x2 - x1) * f, y1 + (y2 - y1) * f]); } };
+    e(a, b, i, j, i + 1, j); e(b, c, i + 1, j, i + 1, j + 1); e(d, c, i, j + 1, i + 1, j + 1); e(a, d, i, j, i, j + 1);
+    for (let p = 0; p + 1 < pts.length; p += 2) {
+      const [x1, y1] = toXY(pts[p][0] + 0.5, pts[p][1] + 0.5), [x2, y2] = toXY(pts[p + 1][0] + 0.5, pts[p + 1][1] + 0.5);
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMetal(time) {
+  const g = M.g, W = g.nx * g.sx, H = g.ny * g.sy;
+  const toXY = (ci, cj) => [g.ox + ci * g.sx, g.oy + cj * g.sy];   // マス目の単位 → 画面
+  const cm2XY = (x, y) => [g.ox + x / DX * g.sx, g.oy + y / DX * g.sy];
+  ctx.fillStyle = '#f5f5f5'; ctx.fillRect(0, 0, CW, CH);
+
+  // 金属のかたち（円形は丸く切りぬく）
+  ctx.save();
+  ctx.beginPath();
+  if (M.shape === 'circle') ctx.arc(g.ox + W / 2, g.oy + H / 2, W / 2, 0, Math.PI * 2);
+  else ctx.rect(g.ox, g.oy, W, H);
+  ctx.clip();
+  const WAX = [250, 243, 214], COPPER = [200, 117, 51];
+  drawGrid(g.nx, g.ny, k => {
+    const T = M.T[k];
+    if (M.view === 'color') return tempRGB(T, 20, 120);
+    // ろう：とけていないところはうすい黄色、とけたところは銅の色が見える
+    const f = clamp((T - (MELT - 4)) / 4, 0, 1);
+    return [WAX[0] + (COPPER[0] - WAX[0]) * f, WAX[1] + (COPPER[1] - WAX[1]) * f, WAX[2] + (COPPER[2] - WAX[2]) * f];
+  }, g.ox, g.oy, W, H);
+  // ろうのつぶつぶもよう（とけていないところだけ。色だけで区別しないため）
+  if (M.view === 'wax') {
+    ctx.fillStyle = 'rgba(160,140,90,0.45)';
+    for (let j = 1; j < g.ny; j += 3) for (let i = 1 + (j % 2) * 1.5; i < g.nx; i += 3) {
+      const T = M.T[Math.floor(j) * g.nx + Math.floor(i)];
+      if (T >= MELT || !M.mask[Math.floor(j) * g.nx + Math.floor(i)]) continue;
+      const [x, y] = toXY(i + 0.5, j + 0.5);
+      ctx.fillRect(x - 1, y - 1, 2, 2);
+    }
+  }
+  // 等温線
+  if (M.view === 'color') [40, 80, 100].forEach(L => contour(L, toXY, { color: 'rgba(40,40,40,0.55)', w: 1.2 }));
+  contour(MELT, toXY, { color: '#4e342e', w: 2.5, dash: [6, 4] });
+  ctx.restore();
+
+  // ふちどり
+  ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  if (M.shape === 'circle') ctx.arc(g.ox + W / 2, g.oy + H / 2, W / 2, 0, Math.PI * 2);
+  else ctx.rect(g.ox, g.oy, W, H);
+  ctx.stroke();
+  // 切れ目
+  if (M.cut && M.shape !== 'rod') {
+    const [x, y1] = toXY(CUT.i + 0.5, 0), [, y2] = toXY(0, CUT.j2);
+    ctx.strokeStyle = '#f5f5f5'; ctx.lineWidth = g.sx; ctx.beginPath(); ctx.moveTo(x, y1 - 2); ctx.lineTo(x, y2); ctx.stroke();
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5; ctx.beginPath();
+    ctx.moveTo(x - g.sx / 2, y1); ctx.lineTo(x - g.sx / 2, y2); ctx.lineTo(x + g.sx / 2, y2); ctx.lineTo(x + g.sx / 2, y1); ctx.stroke();
+    label('✂ 切れ目', x, y2 + 14, '#333', 14);
+  }
+  // ものさし（ぼうのとき）
+  if (M.shape === 'rod') {
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.font = '12px ' + FONT; ctx.fillStyle = '#444'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let c = 0; c <= 24; c += 2) {
+      const [x] = cm2XY(c, 0), y = g.oy + H + 4;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (c % 4 === 0 ? 10 : 6)); ctx.stroke();
+      if (c % 4 === 0) ctx.fillText(c + 'cm', x, y + 12);
+    }
+  }
+
+  // 印（●▲■）。とけたら中をぬって、時間を出す
+  M.marks.forEach(m => {
+    const [x, y] = cm2XY(m.x, m.y);
+    const done = m.melted != null;
+    ctx.save();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#212121'; ctx.fillStyle = done ? '#212121' : '#fff';
+    ctx.beginPath();
+    if (m.s === '●') ctx.arc(x, y, 8, 0, Math.PI * 2);
+    else if (m.s === '▲') { ctx.moveTo(x, y - 9); ctx.lineTo(x + 9, y + 7); ctx.lineTo(x - 9, y + 7); ctx.closePath(); }
+    else ctx.rect(x - 7.5, y - 7.5, 15, 15);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    const dy = M.shape === 'rod' ? -30 : -20;
+    label(done ? 'とけた ' + m.melted + '秒' : metalDist(m).toFixed(1) + 'cm', x, y + dy, done ? '#b71c1c' : '#37474f', 14);
+  });
+
+  // ランプ（火が当たるところ）
+  const [lx, ly] = cm2XY(M.lamp.x, M.lamp.y);
+  ctx.save();
+  ctx.setLineDash([4, 3]); ctx.strokeStyle = M.heating ? '#d84315' : '#90a4ae'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(lx, ly, LAMP_R / DX * g.sx, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+  if (M.heating) {
+    const fl = 1 + Math.sin(time * 18) * 0.08;
+    ctx.save(); ctx.translate(lx, ly + (M.shape === 'rod' ? 34 : 0)); ctx.scale(fl, fl);
+    ctx.globalAlpha = M.shape === 'rod' ? 1 : 0.85;
+    flame(0, 0, 13);
+    ctx.restore();
+  }
+  if (M.shape === 'rod') drawLampBody(lx, ly + 48);
+  label(M.heating ? '熱している' : 'ランプ', lx, ly + (M.shape === 'rod' ? 100 : 22), M.heating ? '#d84315' : '#607d8b', 14);
+
+  // 色の見本
+  if (M.view === 'color') {
+    if (M.shape === 'rod') legend(170, 330, 300, 20, 120, 20, '温度の色');
+    else legend(390, 70, 230, 20, 120, 20, '温度の色');
+    label('線＝同じ温度', M.shape === 'rod' ? 320 : 505, M.shape === 'rod' ? 375 : 115, '#555', 13);
+  } else {
+    const lx2 = M.shape === 'rod' ? 140 : 395, ly2 = M.shape === 'rod' ? 340 : 70;
+    ctx.fillStyle = 'rgb(250,243,214)'; ctx.fillRect(lx2, ly2, 22, 16); ctx.strokeStyle = '#999'; ctx.strokeRect(lx2, ly2, 22, 16);
+    label('ろう（60℃より低い）', lx2 + 28, ly2 + 8, '#555', 13, 'left');
+    const bx = M.shape === 'rod' ? lx2 + 180 : lx2, by = M.shape === 'rod' ? ly2 : ly2 + 26;
+    ctx.fillStyle = 'rgb(200,117,51)'; ctx.fillRect(bx, by, 22, 16); ctx.strokeRect(bx, by, 22, 16);
+    label('とけた（銅の色）', bx + 28, by + 8, '#555', 13, 'left');
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = '#4e342e'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(bx, by + 34); ctx.lineTo(bx + 22, by + 34); ctx.stroke(); ctx.setLineDash([]);
+    label('とけたさかい目', bx + 28, by + 34, '#555', 13, 'left');
+  }
+  const th = therm.metal;
+  const [ci, cj] = [(th.x - g.ox) / g.sx * DX, (th.y - g.oy) / g.sy * DX];
+  let tv = metalTempAt(ci, cj);
+  if (M.shape === 'circle' && tv != null && Math.hypot(th.x - g.ox - W / 2, th.y - g.oy - H / 2) > W / 2) tv = null;
+  drawThermometer(th, tv);
+}
+// ほのお（しずくの形）
+function flame(x, y, s) {
+  ctx.fillStyle = '#ff9800';
+  ctx.beginPath(); ctx.moveTo(x, y - s * 1.6); ctx.quadraticCurveTo(x + s, y - s * 0.2, x, y + s * 0.7); ctx.quadraticCurveTo(x - s, y - s * 0.2, x, y - s * 1.6); ctx.fill();
+  ctx.fillStyle = '#ffeb3b';
+  ctx.beginPath(); ctx.moveTo(x, y - s * 0.8); ctx.quadraticCurveTo(x + s * 0.5, y, x, y + s * 0.5); ctx.quadraticCurveTo(x - s * 0.5, y, x, y - s * 0.8); ctx.fill();
+}
+// アルコールランプの本体（横から見た絵）
+function drawLampBody(x, y) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(200,230,255,0.7)'; ctx.strokeStyle = '#607d8b'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x - 6, y); ctx.lineTo(x + 6, y); ctx.lineTo(x + 24, y + 26); ctx.lineTo(x + 24, y + 40); ctx.lineTo(x - 24, y + 40); ctx.lineTo(x - 24, y + 26); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#b0bec5'; ctx.fillRect(x - 6, y - 6, 12, 7);
+  ctx.restore();
+}
+
+/* =====================================================================
+   水と空気で使う「流れ」の計算
+   マス目ごとの温度 T を、流れ (u, v) で運び、となりと少しずつまぜる。
+   温まったところは上へ、冷えたところは下へ動く（BUOY・浮力のはたらき）。
+   ===================================================================== */
+function makeFluid(nx, ny, dx, T0) {
+  const n = nx * ny;
+  return { nx, ny, dx, T: new Float32Array(n).fill(T0), Tn: new Float32Array(n),
+           u0: new Float32Array(n), v0: new Float32Array(n), u: new Float32Array(n), v: new Float32Array(n),
+           ua: new Float32Array(n), va: new Float32Array(n), t: 0, acc: 0, h: 0, parts: [] };
+}
+// 回る流れ（流れ関数 ψ から作る。水があふれたり、へったりしない流れになる）
+function loopFlow(F, psi) {
+  const { nx, ny } = F, W = nx, H = ny, e = 0.01;
+  let max = 0;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const x = i + 0.5, y = j + 0.5, k = j * nx + i;
+    F.u0[k] = (psi(x, y + e, W, H) - psi(x, y - e, W, H)) / (2 * e);
+    F.v0[k] = -(psi(x + e, y, W, H) - psi(x - e, y, W, H)) / (2 * e);
+    max = Math.max(max, Math.hypot(F.u0[k], F.v0[k]));
+  }
+  for (let k = 0; k < nx * ny; k++) { F.u0[k] /= max; F.v0[k] /= max; }   // いちばん速いところを 1 にそろえる
+}
+// 1回分すすめる（dt 秒）。opts: flowV（回る流れの速さ）, buoy（つぶが上下する強さ）, rise（温かいものが上へ入れかわるはやさ）,
+//   kdiff（まざりやすさ）, source(i,j,T,dt), extra(k) → [u,v]（エアコンの風など）
+function fluidStep(F, dt, opts) {
+  const { nx, ny, dx } = F;
+  for (let j = 0; j < ny; j++) {
+    // 同じ高さの平均の温度。それより温かいと上へ、冷たいと下へ動く（つぶ・矢印用）
+    let m = 0;
+    for (let i = 0; i < nx; i++) m += F.T[j * nx + i];
+    m /= nx;
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      let u = F.u0[k] * opts.flowV, v = F.v0[k] * opts.flowV;
+      if (opts.extra) { const x = opts.extra(k); u += x[0]; v += x[1]; }
+      F.ua[k] = u; F.va[k] = v;
+      F.u[k] = u; F.v[k] = v + clamp(-opts.buoy * (F.T[k] - m), -opts.buoyMax, opts.buoyMax);  // 画面の上はマイナス
+    }
+  }
+  // 流れで運ぶ（流れの上流の温度をもってくる）
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i;
+    F.Tn[k] = sampleGrid(F.T, nx, ny, i + 0.5 - F.ua[k] * dt / dx, j + 0.5 - F.va[k] * dt / dx);
+  }
+  // 下のマスが上のマスより温かいときは、少しずつ入れかわる（温かいものは上へ、冷たいものは下へ）。熱の量はかわらない
+  const c = clamp(opts.rise * dt, 0, 0.45);
+  for (let j = ny - 1; j > 0; j--) for (let i = 0; i < nx; i++) {
+    const lo = j * nx + i, up = lo - nx, d = F.Tn[lo] - F.Tn[up];
+    if (d > 0) { F.Tn[lo] -= c * d; F.Tn[up] += c * d; }
+  }
+  // となりとまざる・温める・冷える
+  const r = clamp(opts.kdiff * dt / (dx * dx), 0, 0.24);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i, t = F.Tn[k];
+    let lap = 0;
+    if (i > 0) lap += F.Tn[k - 1] - t;
+    if (i < nx - 1) lap += F.Tn[k + 1] - t;
+    if (j > 0) lap += F.Tn[k - nx] - t;
+    if (j < ny - 1) lap += F.Tn[k + nx] - t;
+    F.T[k] = opts.source(i, j, t + r * lap, dt);
+  }
+  F.t += dt;
+}
+// つぶ（おがくず・けむり）を流れにのせて動かす。x, y は cm
+function moveParts(F, dt, sink) {
+  const { nx, ny, dx } = F;
+  F.parts.forEach(p => {
+    const gx = p.x / dx, gy = p.y / dx;
+    const u = sampleGrid(F.u, nx, ny, gx, gy), v = sampleGrid(F.v, nx, ny, gx, gy);
+    p.x += (u + (Math.random() - 0.5) * p.jit) * dt;
+    p.y += (v + sink + (Math.random() - 0.5) * p.jit) * dt;
+    p.x = clamp(p.x, dx * 0.3, nx * dx - dx * 0.3); p.y = clamp(p.y, dx * 0.3, ny * dx - dx * 0.3);
+    p.age += dt;
+  });
+}
+// 流れの矢印をかく
+function drawFlowArrows(F, ox, oy, px, every, scale, color) {
+  const { nx, ny } = F;
+  for (let j = Math.floor(every / 2); j < ny; j += every) for (let i = Math.floor(every / 2); i < nx; i += every) {
+    const k = j * nx + i, u = F.u[k], v = F.v[k], sp = Math.hypot(u, v);
+    if (sp * scale < 4) continue;
+    const L = Math.min(every * px * 0.9, sp * scale);
+    const x = ox + (i + 0.5) * px, y = oy + (j + 0.5) * px;
+    arrow(x - u / sp * L / 2, y - v / sp * L / 2, x + u / sp * L / 2, y + v / sp * L / 2, 2.5, color);
+  }
+}
+
+/* =====================================================================
+   ② 水：ビーカーの下を熱する
+   ===================================================================== */
+const WB = { ox: 70, oy: 70, px: 6 };           // ビーカーの水の左上・1マスの大きさ（画面の点）
+const WTR = { pos: 'center', view: 'ink', heating: false };
+function waterSetup() {
+  WTR.F = makeFluid(50, 40, 0.2, ROOM);         // 横10cm・深さ8cm
+  WTR.heating = false;
+  const F = WTR.F;
+  // 中央を熱する：まん中で上がり、両がわで下がる2つのうず。はし：左で上がり、右で下がる1つのうず
+  if (WTR.pos === 'center') loopFlow(F, (x, y, W, H) => -Math.sin(2 * Math.PI * x / W) * Math.sin(Math.PI * y / H) * Math.pow(Math.sin(Math.PI * x / W), 2));
+  else loopFlow(F, (x, y, W, H) => Math.sin(Math.PI * x / W) * Math.sin(Math.PI * y / H) * Math.pow(1 - x / W, 1.5));
+  for (let i = 0; i < 110; i++) F.parts.push({ x: Math.random() * 10, y: 6.5 + Math.random() * 1.4, jit: 0.15, age: 0 }); // おがくずは底にしずんでいる
+  updateHeatBtn();
+}
+const waterHeatX = () => WTR.pos === 'center' ? 5 : 1.4;   // 火が当たるところ（cm）
+function waterStep(dt) {
+  const F = WTR.F;
+  F.acc += dt;
+  while (F.acc >= 0.1) {
+    F.acc -= 0.1;
+    const d = 0.1;
+    F.h += ((WTR.heating ? 1 : 0) - F.h) * d / 8;   // 熱しはじめると、だんだん流れが強くなる
+    const hx = waterHeatX();
+    fluidStep(F, d, {
+      flowV: WATER_V * F.h, buoy: 0.08, buoyMax: 0.8, rise: 1.5, kdiff: 0.03,
+      source: (i, j, t, dt) => {
+        const x = (i + 0.5) * 0.2;
+        if (WTR.heating && j >= F.ny - 2 && Math.abs(x - hx) < 1.0) t += WATER_Q * dt * (1 - t / 100);
+        if (j === 0) t -= 0.004 * dt * (t - ROOM) * 10;   // 水面から少しずつ熱がにげる
+        return Math.min(t, 100);
+      }
+    });
+    moveParts(F, d, F.h > 0.2 ? 0.02 : 0.08);
+  }
+}
+function waterTempAt(px, py) {
+  const gx = (px - WB.ox) / WB.px, gy = (py - WB.oy) / WB.px;
+  if (gx < 0 || gy < 0 || gx > WTR.F.nx || gy > WTR.F.ny) return null;
+  return sampleGrid(WTR.F.T, WTR.F.nx, WTR.F.ny, gx, gy);
+}
+function drawWater(time) {
+  const F = WTR.F, W = F.nx * WB.px, H = F.ny * WB.px;
+  ctx.fillStyle = '#f5f5f5'; ctx.fillRect(0, 0, CW, CH);
+  // 水
+  drawGrid(F.nx, F.ny, k => {
+    const T = F.T[k];
+    if (WTR.view === 'color') return tempRGB(T, 20, 60);
+    // 示温インク：40℃より低いと青、高いとピンク
+    const f = clamp((T - (INK_T - 3)) / 6, 0, 1);
+    return [70 + (236 - 70) * f, 120 + (112 - 120) * f, 210 + (170 - 210) * f];
+  }, WB.ox, WB.oy, W, H);
+  // ビーカー
+  ctx.strokeStyle = '#78909c'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(WB.ox - 2, WB.oy - 40); ctx.lineTo(WB.ox - 2, WB.oy + H + 2); ctx.lineTo(WB.ox + W + 2, WB.oy + H + 2); ctx.lineTo(WB.ox + W + 2, WB.oy - 40); ctx.stroke();
+  ctx.strokeStyle = '#90caf9'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(WB.ox, WB.oy); ctx.lineTo(WB.ox + W, WB.oy); ctx.stroke();
+  label('水面', WB.ox + W + 26, WB.oy, '#1565c0', 13);
+  // 金あみと三脚
+  const gy = WB.oy + H + 6;
+  ctx.strokeStyle = '#757575'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(WB.ox - 30, gy); ctx.lineTo(WB.ox + W + 30, gy); ctx.stroke();
+  ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(WB.ox - 20, gy); ctx.lineTo(WB.ox - 34, CH - 4); ctx.moveTo(WB.ox + W + 20, gy); ctx.lineTo(WB.ox + W + 34, CH - 4); ctx.stroke();
+  // ランプ
+  const lx = WB.ox + waterHeatX() / 0.2 * WB.px;
+  if (WTR.heating) { const fl = 1 + Math.sin(time * 18) * 0.08; ctx.save(); ctx.translate(lx, gy + 24); ctx.scale(fl, fl); flame(0, 0, 13); ctx.restore(); }
+  drawLampBody(lx, gy + 40);
+  // おがくず
+  if (showDots) {
+    F.parts.forEach(p => {
+      const x = WB.ox + p.x / 0.2 * WB.px, y = WB.oy + p.y / 0.2 * WB.px;
+      ctx.fillStyle = '#6d4c41'; ctx.fillRect(x - 2.5, y - 1.5, 5, 3);
+    });
+  }
+  if (showArrow && F.h > 0.05) drawFlowArrows(F, WB.ox, WB.oy, WB.px, 7, 26, 'rgba(33,33,33,0.75)');
+  // 色の見本
+  if (WTR.view === 'color') legend(425, 70, 195, 20, 60, 10, '温度の色');
+  else {
+    ctx.fillStyle = 'rgb(70,120,210)'; ctx.fillRect(430, 60, 22, 16);
+    label('40℃より低い', 458, 68, '#555', 13, 'left');
+    ctx.fillStyle = 'rgb(236,112,170)'; ctx.fillRect(430, 86, 22, 16);
+    label('40℃より高い', 458, 94, '#555', 13, 'left');
+    label('示温インク', 480, 44, '#555', 13);
+  }
+  if (showDots) { ctx.fillStyle = '#6d4c41'; ctx.fillRect(432, 130, 10, 5); label('おがくず', 450, 133, '#555', 13, 'left'); }
+  drawThermometer(therm.water, waterTempAt(therm.water.x, therm.water.y));
+}
+
+/* =====================================================================
+   ③ 空気：部屋の中（横6m・高さ3m）
+   ===================================================================== */
+const RB = { ox: 20, oy: 40, px: 9 };           // 部屋の左上・1マス（10cm）の大きさ（画面の点）
+const AIR = { mode: 'stove', dir: 'side', on: false };
+const STOVE = { i1: 12, i2: 18, h: 6 };          // ストーブ：ゆかの 1.2m〜1.8m、高さ 60cm
+const AC = { x: 60, y: 45 };                     // エアコンのふき出し口（左の天井近く。cm）
+let jetU, jetV;
+function airSetup() {
+  const T0 = AIR.mode === 'cool' ? 32 : 10;      // 冬の朝の部屋（10℃）／夏の部屋（32℃）
+  AIR.F = makeFluid(60, 30, 10, T0);
+  AIR.on = false;
+  const F = AIR.F;
+  // 大きく回る流れ。ストーブ：左で上がる。エアコン：風の向きで回り方がかわる
+  let sign = 1;
+  if (AIR.mode !== 'stove' && AIR.dir === 'down') sign = -1;
+  loopFlow(F, (x, y, W, H) => sign * Math.sin(Math.PI * x / W) * Math.sin(Math.PI * y / H));
+  // エアコンの風（ふき出し口からまっすぐ進み、だんだん広がって弱くなる）
+  jetU = new Float32Array(60 * 30); jetV = new Float32Array(60 * 30);
+  if (AIR.mode !== 'stove') {
+    const d = AIR.dir === 'down' ? [0.55, 0.835] : [0.995, 0.1];
+    for (let j = 0; j < 30; j++) for (let i = 0; i < 60; i++) {
+      const px = (i + 0.5) * 10 - AC.x, py = (j + 0.5) * 10 - AC.y;
+      const s = px * d[0] + py * d[1], n = Math.abs(-px * d[1] + py * d[0]);
+      if (s < -5) continue;
+      const w = 18 + 0.22 * Math.max(0, s);
+      const sp = JET_V * Math.exp(-Math.max(0, s) / 260) * Math.exp(-((n / w) ** 2));
+      jetU[j * 60 + i] = sp * d[0]; jetV[j * 60 + i] = sp * d[1];
+    }
+  }
+  updateHeatBtn();
+}
+function airStep(dt) {
+  const F = AIR.F;
+  F.acc += dt;
+  const outside = AIR.mode === 'cool' ? 33 : 5;
+  while (F.acc >= 0.2) {
+    F.acc -= 0.2;
+    const d = 0.2;
+    F.h += ((AIR.on ? 1 : 0) - F.h) * d / 4;
+    const acT = AIR.mode === 'warm' ? 38 : 15;   // エアコンから出る風の温度（℃）
+    fluidStep(F, d, {
+      flowV: AIR_V * F.h, buoy: BUOY, buoyMax: 40, rise: 2, kdiff: 40,
+      extra: AIR.mode === 'stove' ? null : k => [jetU[k] * F.h, jetV[k] * F.h],
+      source: (i, j, t, dt) => {
+        if (AIR.on && AIR.mode === 'stove' && i >= STOVE.i1 && i < STOVE.i2 && j >= F.ny - STOVE.h - 2 && j < F.ny - STOVE.h) t = Math.min(80, t + STOVE_P * dt);
+        if (AIR.on && AIR.mode !== 'stove' && Math.hypot((i + 0.5) * 10 - AC.x, (j + 0.5) * 10 - AC.y) < 20) t += (acT - t) * dt * 1.5;
+        if (i === 0 || i === F.nx - 1 || j === 0 || j === F.ny - 1) t += (outside - t) * dt * 0.01;  // かべ・まどから熱が出入りする
+        return t;
+      }
+    });
+    // けむり（線香・エアコンの風）を出す
+    if (AIR.on || AIR.mode === 'stove') {
+      for (let n = 0; n < 2; n++) {
+        if (AIR.mode === 'stove') F.parts.push({ x: 222 + Math.random() * 4, y: 245, jit: 6, age: 0 });
+        else if (AIR.on) F.parts.push({ x: AC.x + 5, y: AC.y + (Math.random() - 0.5) * 8, jit: 8, age: 0 });
+      }
+    }
+    moveParts(F, d, 0);
+    F.parts = F.parts.filter(p => p.age < 16);
+  }
+}
+function airTempAt(px, py) {
+  const gx = (px - RB.ox) / RB.px, gy = (py - RB.oy) / RB.px;
+  if (gx < 0 || gy < 0 || gx > AIR.F.nx || gy > AIR.F.ny) return null;
+  return sampleGrid(AIR.F.T, AIR.F.nx, AIR.F.ny, gx, gy);
+}
+function rowAvg(F, j1, j2) {
+  let s = 0, n = 0;
+  for (let j = j1; j < j2; j++) for (let i = 0; i < F.nx; i++) { s += F.T[j * F.nx + i]; n++; }
+  return s / n;
+}
+function drawAir(time) {
+  const F = AIR.F, W = F.nx * RB.px, H = F.ny * RB.px;
+  ctx.fillStyle = '#f5f5f5'; ctx.fillRect(0, 0, CW, CH);
+  drawGrid(F.nx, F.ny, k => tempRGB(F.T[k], 5, 40), RB.ox, RB.oy, W, H);
+  ctx.strokeStyle = '#5d4037'; ctx.lineWidth = 4; ctx.strokeRect(RB.ox, RB.oy, W, H);
+  label('天井', RB.ox + W / 2, RB.oy - 12, '#5d4037', 14);
+  label('ゆか', RB.ox + W / 2, RB.oy + H + 12, '#5d4037', 14);
+  // ストーブまたはエアコン
+  if (AIR.mode === 'stove') {
+    const x1 = RB.ox + STOVE.i1 * RB.px, x2 = RB.ox + STOVE.i2 * RB.px, y1 = RB.oy + H - STOVE.h * RB.px;
+    ctx.fillStyle = '#546e7a'; ctx.fillRect(x1, y1, x2 - x1, RB.oy + H - y1);
+    ctx.fillStyle = AIR.on ? '#ff7043' : '#90a4ae'; ctx.fillRect(x1 + 8, y1 + 14, x2 - x1 - 16, 22);
+    label('ストーブ', (x1 + x2) / 2, y1 - 12, '#37474f', 14);
+    // 線香
+    const sx = RB.ox + 22.4 * RB.px, sy = RB.oy + 24.5 * RB.px;
+    ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, RB.oy + H - 6); ctx.stroke();
+    ctx.fillStyle = '#ef6c00'; ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8d6e63'; ctx.fillRect(sx - 10, RB.oy + H - 8, 20, 8);
+    label('線香', sx + 30, RB.oy + H - 14, '#5d4037', 13);
+  } else {
+    const x = RB.ox + 2, y = RB.oy + 10;
+    ctx.fillStyle = '#eceff1'; ctx.strokeStyle = '#607d8b'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(x, y, 70, 30, 6); ctx.fill(); ctx.stroke();
+    label(AIR.mode === 'warm' ? 'だんぼう' : '冷ぼう', x + 35, y + 15, AIR.mode === 'warm' ? '#d84315' : '#1565c0', 13);
+    // ふき出し口の板（ルーバー）の向き
+    const ax = RB.ox + AC.x / 10 * RB.px, ay = RB.oy + AC.y / 10 * RB.px;
+    const d = AIR.dir === 'down' ? [0.55, 0.835] : [0.995, 0.1];
+    if (AIR.on && showArrow) arrow(ax, ay, ax + d[0] * 60, ay + d[1] * 60, 5, AIR.mode === 'warm' ? '#d84315' : '#0d47a1');
+  }
+  // けむり
+  if (showDots) {
+    F.parts.forEach(p => {
+      const x = RB.ox + p.x / 10 * RB.px, y = RB.oy + p.y / 10 * RB.px;
+      ctx.fillStyle = 'rgba(66,66,66,' + (0.6 * (1 - p.age / 16)).toFixed(2) + ')';
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  if (showArrow && F.h > 0.05) drawFlowArrows(F, RB.ox, RB.oy, RB.px, 6, 0.9, 'rgba(33,33,33,0.7)');
+  legend(150, 352, 300, 5, 40, 5, '');
+  label('温度の色', 110, 359, '#555', 13);
+  drawThermometer(therm.air, airTempAt(therm.air.x, therm.air.y));
+}
+
+/* =====================================================================
+   ボタン・タッチ・うごかしつづける部分
+   ===================================================================== */
+const SAFETY = {
+  metal: '⚠ アルコールランプは、<ruby>使<rt>つか</rt></ruby>う<ruby>前<rt>まえ</rt></ruby>にひびや<ruby>中<rt>なか</rt></ruby>みの<ruby>量<rt>りょう</rt></ruby>を<ruby>調<rt>しら</rt></ruby>べ、<ruby>火<rt>ひ</rt></ruby>はマッチでつける。<ruby>熱<rt>ねっ</rt></ruby>した<ruby>金属<rt>きんぞく</rt></ruby>はすぐにさわらない（やけど）。<ruby>消<rt>け</rt></ruby>すときは、ふたを<ruby>横<rt>よこ</rt></ruby>からかぶせる。',
+  water: '⚠ ビーカーは<ruby>金<rt>かな</rt></ruby>あみの上にのせ、ふっとう<ruby>石<rt>いし</rt></ruby>を<ruby>入<rt>い</rt></ruby>れる。<ruby>熱<rt>あつ</rt></ruby>い<ruby>水<rt>みず</rt></ruby>・ビーカー・三<ruby>脚<rt>きゃく</rt></ruby>にさわらない。ランプの<ruby>火<rt>ひ</rt></ruby>の<ruby>近<rt>ちか</rt></ruby>くに<ruby>顔<rt>かお</rt></ruby>や<ruby>手<rt>て</rt></ruby>を<ruby>近<rt>ちか</rt></ruby>づけない。',
+  air: '⚠ <ruby>線香<rt>せんこう</rt></ruby>の<ruby>火<rt>ひ</rt></ruby>やストーブのまわりに、もえやすい<ruby>物<rt>もの</rt></ruby>を<ruby>置<rt>お</rt></ruby>かない。ストーブにはさわらない。<ruby>実験<rt>じっけん</rt></ruby>のあとは、<ruby>線香<rt>せんこう</rt></ruby>の<ruby>火<rt>ひ</rt></ruby>を<ruby>水<rt>みず</rt></ruby>で<ruby>消<rt>け</rt></ruby>す。'
+};
+function isOn() { return tab === 'metal' ? M.heating : tab === 'water' ? WTR.heating : AIR.on; }
+function updateHeatBtn() {
+  const on = isOn(), b = $('btnHeat');
+  if (tab === 'air') b.innerHTML = on ? '■ スイッチ OFF' : '▶ スイッチ ON';
+  else b.innerHTML = on ? '■ <ruby>止<rt>と</rt></ruby>める' : '🔥 <ruby>熱<rt>ねっ</rt></ruby>する';
+  b.classList.toggle('stop', on); b.classList.toggle('orange', !on);
+}
+$('btnHeat').addEventListener('click', () => {
+  if (tab === 'metal') M.heating = !M.heating;
+  else if (tab === 'water') WTR.heating = !WTR.heating;
+  else AIR.on = !AIR.on;
+  updateHeatBtn();
+});
+$('btnReset').addEventListener('click', () => {
+  if (tab === 'metal') metalSetup(); else if (tab === 'water') waterSetup(); else airSetup();
+  therm[tab] = { ...PARK[tab] };
+});
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  $('ctlMetal').classList.toggle('hidden', tab !== 'metal');
+  $('ctlWater').classList.toggle('hidden', tab !== 'water');
+  $('ctlAir').classList.toggle('hidden', tab !== 'air');
+  $('safety').innerHTML = SAFETY[tab];
+  updateHeatBtn();
+}));
+// 選ぶボタンのまとまり（どれか1つだけ active にする）
+function chips(attr, fn) {
+  document.querySelectorAll('[' + attr + ']').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('[' + attr + ']').forEach(x => x.classList.toggle('active', x === b));
+    fn(b.getAttribute(attr));
+  }));
+}
+chips('data-shape', v => { M.shape = v; $('btnCut').disabled = v === 'rod'; metalSetup(); });
+chips('data-mview', v => { M.view = v; });
+chips('data-wpos', v => { WTR.pos = v; waterSetup(); });
+chips('data-wview', v => { WTR.view = v; });
+chips('data-amode', v => { AIR.mode = v; document.querySelectorAll('[data-adir]').forEach(x => { x.disabled = v === 'stove'; }); airSetup(); });
+chips('data-adir', v => { AIR.dir = v; const on = AIR.on; airSetup(); AIR.on = on; AIR.F.h = on ? 1 : 0; updateHeatBtn(); });
+chips('data-speed', v => { speed = +v; });
+document.querySelectorAll('[data-adir]').forEach(x => { x.disabled = true; });
+$('btnCut').addEventListener('click', () => {
+  M.cut = !M.cut;
+  $('btnCut').classList.toggle('active', M.cut);
+  $('btnCut').innerHTML = '✂ <ruby>切<rt>き</rt></ruby>れ<ruby>目<rt>め</rt></ruby> ' + (M.cut ? 'あり' : 'なし');
+  metalSetup();
+});
+$('btnDots').addEventListener('click', () => {
+  showDots = !showDots;
+  $('btnDots').classList.toggle('active', showDots);
+  $('btnDots').textContent = showDots ? '● つぶ ON' : '○ つぶ OFF';
+});
+$('btnArrow').addEventListener('click', () => {
+  showArrow = !showArrow;
+  $('btnArrow').classList.toggle('active', showArrow);
+  $('btnArrow').innerHTML = '➡ <ruby>矢印<rt>やじるし</rt></ruby> ' + (showArrow ? 'ON' : 'OFF');
+});
+
+// タッチ：温度計をつかむ／金属をタップしてランプを動かす
+let dragTh = null;
+let msgHold = 0;   // この時刻までは、メッセージを書きかえない
+const toCanvas = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * CW, y: (e.clientY - r.top) / r.height * CH }; };
+cv.addEventListener('pointerdown', e => {
+  const p = toCanvas(e), th = therm[tab];
+  if (nearTherm(th, p)) { dragTh = { dx: th.x - p.x, dy: th.y - p.y }; cv.setPointerCapture(e.pointerId); return; }
+  if (tab === 'metal') {
+    const g = M.g, x = (p.x - g.ox) / g.sx * DX, y = (p.y - g.oy) / g.sy * DX;
+    if (metalTempAt(x, y) == null) return;
+    if (M.shape === 'circle' && Math.hypot(p.x - g.ox - g.nx * g.sx / 2, p.y - g.oy - g.ny * g.sy / 2) > g.nx * g.sx / 2) return;
+    const was = M.t > 0;
+    const heating = M.heating;
+    metalSetup();
+    M.lamp = { x, y: M.shape === 'rod' ? 0.3 : y };
+    setLamp();
+    M.heating = heating; updateHeatBtn();
+    if (was) { $('msg').innerHTML = 'ランプを<ruby>動<rt>うご</rt></ruby>かしたので、はじめからにしたよ'; msgHold = performance.now() + 3000; }
+  }
+});
+cv.addEventListener('pointermove', e => {
+  if (!dragTh) return;
+  const p = toCanvas(e);
+  therm[tab].x = clamp(p.x + dragTh.dx, 8, CW - 8); therm[tab].y = clamp(p.y + dragTh.dy, 74, CH - 8);
+});
+const endDrag = () => { dragTh = null; };
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+// その時のようすを、ことばで知らせる
+function updateText() {
+  let t = 0, m = '&nbsp;';
+  if (tab === 'metal') {
+    t = M.t;
+    const n = M.marks.filter(x => x.melted != null).length;
+    if (M.heating && n === 0) m = '熱したところから、まわりへ順に温まっていく…';
+    else if (n > 0 && n < 3) m = '熱したところに近い印から、ろうがとけていくね';
+    else if (n === 3) m = 'ぜんぶの印のろうがとけた！ワークシートの表を見てみよう';
+  } else if (tab === 'water') {
+    const F = WTR.F; t = F.t;
+    const top = rowAvg(F, 0, 5), bot = rowAvg(F, F.ny - 5, F.ny);
+    $('wTop').textContent = Math.round(top) + '℃'; $('wBot').textContent = Math.round(bot) + '℃';
+    if (WTR.heating && F.t > 3) m = top > bot + 0.5 ? '温められた水は上へ動き、上のほうから温まっていくね' : '温められた水が上へ動きはじめた…';
+    if (WTR.heating && bot > INK_T) m = '水全体が温まってきた！';
+  } else {
+    const F = AIR.F; t = F.t;
+    const top = rowAvg(F, 0, 4), bot = rowAvg(F, F.ny - 4, F.ny);
+    $('aTop').textContent = Math.round(top) + '℃'; $('aBot').textContent = Math.round(bot) + '℃';
+    if (AIR.on) {
+      if (AIR.mode === 'stove') m = '温められた空気は上へ動く。けむりの動きを見てみよう';
+      else if (AIR.mode === 'warm') m = AIR.dir === 'down' ? '温かい風を下へ向けると、ゆかから温まり、上へ動いて部屋全体が温まる' : '温かい空気は上にたまって、足もとがなかなか温まらない…';
+      else m = AIR.dir === 'side' ? '冷たい空気は下へ動くので、横向きでも部屋全体がすずしくなる' : '冷たい風を下へ向けると、冷たい空気がゆかにたまって、天井近くは暑いまま…';
+    }
+  }
+  $('clock').innerHTML = clockText(t);
+  if (performance.now() > msgHold) $('msg').innerHTML = m;
+}
+
+let lastT = performance.now(), textT = 0;
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000) * speed;
+  lastT = now;
+  const time = now / 1000;
+  if (tab === 'metal') { metalStep(dt); drawMetal(time); }
+  else if (tab === 'water') { waterStep(dt); drawWater(time); }
+  else { airStep(dt); drawAir(time); }
+  if (now - textT > 250) { textT = now; updateText(); }
+  requestAnimationFrame(loop);
+}
+metalSetup(); waterSetup(); airSetup();
+$('safety').innerHTML = SAFETY.metal;
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
