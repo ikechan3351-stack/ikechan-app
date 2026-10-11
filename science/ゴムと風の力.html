@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ゴムと風の力</title>
+<!--
+  ゴムと風の力（小学3年 理科「風とゴムの力のはたらき」）
+  ・①ゴム：ゴムをのばして手をはなすと、車が走る。のばす長さを変えて、走ったきょりをくらべる。
+  ・②風：ほ付きの車に、送風機で風を当てる。風の強さ（弱・中・強）を変えて、きょりをくらべる。
+  ・おまけ：車におもりをのせる（重いほど、きょりは短くなる）。
+  ・しくみ：かんたんな力学（ゴムの力＝のびに比例、風の力＝風と車の速さの差の2乗に比例、まさつは重さに比例）。
+    数字は下の「しくみの数字」でかえられます。
+  ・ワークシート部品（worksheet.js）を使っています。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+
+  /* タブ */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .tab {
+    min-height: 48px; border: 3px solid #aed581; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 4px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .tab.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .tab:disabled { opacity: 0.5; cursor: default; }
+
+  canvas { display: block; width: 100%; touch-action: none; }
+  #course { aspect-ratio: 1000 / 300; border-radius: 8px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 18px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn:disabled, .chip:disabled { opacity: 0.4; cursor: default; }
+  .lbl { font-size: 16px; color: #555; font-weight: bold; }
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #1565c0; margin-top: 4px; }
+  .diff { font-size: 15px; color: #666; margin: 4px 0 0; }
+  input[type=range] { flex: 1; height: 44px; accent-color: #e65100; }
+  .slide-row { display: flex; align-items: center; gap: 10px; }
+  .slide-row span { font-size: 16px; color: #555; white-space: nowrap; }
+  .big { font-size: 1.5rem; font-weight: bold; color: #bf360c; min-width: 3.2em; text-align: center; }
+  .hint { font-size: 15px; color: #777; text-align: center; margin: 2px 0 0; }
+  .omake { border: 3px dashed #ce93d8; }
+  .omake .lbl { color: #6a1b9a; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🚗 ゴムと<ruby>風<rt>かぜ</rt></ruby>の<ruby>力<rt>ちから</rt></ruby></h1>
+<p class="subtitle">ゴムや<ruby>風<rt>かぜ</rt></ruby>の<ruby>強<rt>つよ</rt></ruby>さを<ruby>変<rt>か</rt></ruby>えて、<ruby>車<rt>くるま</rt></ruby>を<ruby>走<rt>はし</rt></ruby>らせよう</p>
+
+<div class="panel">
+  <div class="tabs">
+    <button class="tab active" data-tab="rubber">🟤 ① ゴムの<ruby>力<rt>ちから</rt></ruby></button>
+    <button class="tab" data-tab="wind">🌀 ② <ruby>風<rt>かぜ</rt></ruby>の<ruby>力<rt>ちから</rt></ruby></button>
+  </div>
+
+  <!-- ===== コース ===== -->
+  <div class="card">
+    <canvas id="course" aria-label="ものさし付きのコース。車が左から右へ走る"></canvas>
+
+    <!-- ① ゴムの操作 -->
+    <div id="rubberCtrl">
+      <div class="slide-row" style="margin-top:6px">
+        <span>ゴムをのばす<ruby>長<rt>なが</rt></ruby>さ</span>
+        <input type="range" id="stretch" min="1" max="15" step="1" value="5" aria-label="ゴムをのばす長さ">
+        <span class="big" id="stretchText">5cm</span>
+      </div>
+      <div class="row">
+        <button class="go-btn orange" id="btnRubber">✋ 手をはなす</button>
+      </div>
+      <p class="hint">車を<ruby>左<rt>ひだり</rt></ruby>へドラッグしてのばし、指をはなしても<ruby>走<rt>はし</rt></ruby>るよ</p>
+    </div>
+
+    <!-- ② 風の操作 -->
+    <div id="windCtrl" class="hidden">
+      <div class="row">
+        <span class="lbl"><ruby>風<rt>かぜ</rt></ruby>の<ruby>強<rt>つよ</rt></ruby>さ</span>
+        <button class="chip" data-wind="1"><ruby>弱<rt>よわ</rt></ruby> 〜</button>
+        <button class="chip active" data-wind="2"><ruby>中<rt>ちゅう</rt></ruby> 〜〜</button>
+        <button class="chip" data-wind="3"><ruby>強<rt>きょう</rt></ruby> 〜〜〜</button>
+        <button class="go-btn orange" id="btnWind">🌀 スイッチ ON</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="lbl">ようす</span>
+      <button class="chip" data-speed="0.4">ゆっくり</button>
+      <button class="chip active" data-speed="1">ふつう</button>
+      <button class="chip" data-speed="3">はやおくり</button>
+    </div>
+    <div class="row">
+      <button class="chip" id="btnGhost">🎞 コマ<ruby>送<rt>おく</rt></ruby>り OFF</button>
+      <button class="chip active" id="btnForce">➡ <ruby>力<rt>ちから</rt></ruby>の<ruby>矢印<rt>やじるし</rt></ruby> ON</button>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+    <div class="msg" id="msg">&nbsp;</div>
+  </div>
+
+  <!-- ===== おまけ：おもり ===== -->
+  <div class="card omake">
+    <div class="row" style="margin-top:0">
+      <span class="lbl">おまけ：<ruby>車<rt>くるま</rt></ruby>におもりをのせる</span>
+      <button class="chip active" data-w="0">なし</button>
+      <button class="chip" data-w="1">■ 1こ</button>
+      <button class="chip" data-w="2">■■ 2こ</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="diff">※じっさいとのちがい：ゴムの力は、のばした<ruby>長<rt>なが</rt></ruby>さに<ruby>比例<rt>ひれい</rt></ruby>する（2<ruby>倍<rt>ばい</rt></ruby>のばすと<ruby>力<rt>ちから</rt></ruby>も2<ruby>倍<rt>ばい</rt></ruby>）として<ruby>計算<rt>けいさん</rt></ruby>しています。ゴムののびと<ruby>車<rt>くるま</rt></ruby>は、<ruby>見<rt>み</rt></ruby>やすいように大きくかいています。<ruby>空気<rt>くうき</rt></ruby>のていこうは<ruby>考<rt>かんが</rt></ruby>えていません。じっさいの<ruby>実験<rt>じっけん</rt></ruby>では、同じじょうけんでも、きょりが少しずつかわるので、何回かやってくらべます。</p>
+  </div>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: 'ゴムと<ruby>風<rt>かぜ</rt></ruby>の<ruby>力<rt>ちから</rt></ruby>',
+  question: 'ゴムを2<ruby>倍<rt>ばい</rt></ruby>のばすと、<ruby>車<rt>くるま</rt></ruby>の<ruby>走<rt>はし</rt></ruby>るきょりも2<ruby>倍<rt>ばい</rt></ruby>になるだろうか？',
+  predictionChoices: ['2<ruby>倍<rt>ばい</rt></ruby>より<ruby>短<rt>みじか</rt></ruby>い', 'ちょうど2<ruby>倍<rt>ばい</rt></ruby>', '2<ruby>倍<rt>ばい</rt></ruby>より<ruby>遠<rt>とお</rt></ruby>い'],
+  experimentNote: '「① ゴムの<ruby>力<rt>ちから</rt></ruby>」で、ゴムを5cm と10cm（または、6cm と12cm など2<ruby>倍<rt>ばい</rt></ruby>の<ruby>組<rt>くみ</rt></ruby>）にして<ruby>走<rt>はし</rt></ruby>らせる。おもりは「なし」にそろえる。<ruby>風<rt>かぜ</rt></ruby>の<ruby>強<rt>つよ</rt></ruby>さでもためしてみよう。',
+  columns: [
+    { key: 'cond', label: 'ゴムの<ruby>長<rt>なが</rt></ruby>さ／<ruby>風<rt>かぜ</rt></ruby>の<ruby>強<rt>つよ</rt></ruby>さ' },
+    { key: 'w', label: 'おもり', unit: 'こ' },
+    { key: 'dist', label: '<ruby>走<rt>はし</rt></ruby>ったきょり', unit: 'cm' }
+  ],
+  chart: { type: 'bar', x: 'cond', y: 'dist', sortBy: 'ord' },
+  hint: 'ゴムの長さだけをかえて、おもりなど、ほかのじょうけんはそろえていることを確かめさせましょう。5cmと10cmのように「2倍の組」でくらべると、予想と見くらべやすくなります。風の強さ（弱・中・強）でも、力が大きいほど遠くまで進むことを確かめさせます。',
+  answer: 'ゴムを長くのばすほど、ゴムが車をおす力が大きくなり、車は遠くまで走る。風も強いほど、遠くまで進む。このシミュレーションでは、ゴムを2倍のばすと、きょりは2倍より遠く（約4倍）になった。おもりをのせて重くすると、きょりは短くなる。'
+});
+
+// ===== しくみの数字（ここをかえると、走り方がかわります） =====
+const G = 9.8;          // 重力の強さ
+const MU = 0.02;        // ころがるときのまさつ（車の重さに比例してブレーキがかかる）
+const CAR_M = 0.2;      // 車の重さ（kg）
+const W_M = 0.1;        // おもり1こ分の重さ（kg）
+const K = 31;           // ゴムの強さ：1mのばしたときの力（N）。のびに比例する
+const CW = 0.03;        // 風の力の強さ（ほの大きさで決まる数）
+const WIND_U = [0, 3, 5, 7];   // 送風機の出口の風の速さ（m/秒）：弱・中・強
+const WIND_L = 1.5;     // 風が弱まっていく長さ（m）。送風機から遠いほど風は弱い
+const FAN_GAP = 0.3;    // 送風機の出口から、車のスタートまでのきょり（m）
+const COURSE_M = 10;    // コースの長さ（m）
+const GHOST_DT = 0.5;   // コマ送り：何秒ごとに車のいちを残すか
+
+// ===== 画面の座標（横1000×たて300） =====
+const W = 1000, H = 300;
+const X0 = 210;                          // スタートの線
+const PX_M = (W - 40 - X0) / COURSE_M;   // コースの1m（ピクセル）
+const PX_STRETCH = 500;                  // ゴムののびの1m（見やすく大きくかく。15cm → 75px）
+const ROAD_Y = 190;                      // 地面の高さ
+const CAR_L = 80;                        // 車の長さ（絵の大きさ）
+
+const $ = id => document.getElementById(id);
+const cv = $('course');
+let tab = 'rubber';
+let stretchCm = 5;
+let windLv = 2;
+let weights = 0;
+let speed = 1;
+let showGhost = false;
+let showForce = true;
+// 車のようす：pos＝車の前のはしのいち（m）、v＝速さ（m/秒）
+let car = { pos: 0, v: 0, state: 'ready', force: 0 };   // state: ready（まち）／run（走っている）／done（止まった）
+let simT = 0, nextGhost = 0;
+let run = null;                           // 走らせたときのじょうけん
+let ghosts = [];                          // コマ送りの車のいち（m）
+let flags = { rubber: [], wind: [] };     // これまでに止まったところ
+let windParts = [];                       // 風のつぶ
+let fanAngle = 0;
+let dragging = null;
+
+const mass = () => CAR_M + W_M * weights;
+const fmtDist = cm => (cm >= 100 ? Math.floor(cm / 100) + 'm' + (cm % 100) + 'cm' : cm + 'cm');
+// 送風機からの風の速さ（m/秒）：はなれるほど弱くなる
+const windAt = pos => WIND_U[windLv] * Math.exp(-(pos + FAN_GAP) / WIND_L);
+// コースのいち（m）→ 画面の横のいち。スタートより左（ゴムをのばしたところ）は大きくかく
+const toX = pos => X0 + pos * (pos < 0 ? PX_STRETCH : PX_M);
+
+// ===== 力の計算 =====
+function driveForce(pos, v) {
+  if (tab === 'rubber') return pos < 0 ? -K * pos : 0;          // ゴムがのびている間だけ、のびに比例しておす
+  return CW * Math.pow(Math.max(0, windAt(pos) - v), 2);         // 風と車の速さの差が大きいほど強くおす
+}
+
+// 少しずつ時間を進める（dt 秒）
+function step(dt) {
+  const m = mass(), brake = MU * m * G;
+  const F = driveForce(car.pos, car.v);
+  car.force = F;
+  if (car.v <= 0 && F <= brake) { finish(); return; }   // 止まっていて、おす力がまさつに負けたら止まる
+  car.v = Math.max(0, car.v + (F - brake) / m * dt);
+  car.pos += car.v * dt;
+  simT += dt;
+  if (car.v === 0 && car.pos >= 0 && driveForce(car.pos, 0) <= brake) { finish(); return; }
+  if (car.pos >= COURSE_M) { car.pos = COURSE_M; finish(); return; }
+  if (simT >= nextGhost) { ghosts.push(car.pos); nextGhost += GHOST_DT; }
+}
+
+function start() {
+  if (car.state === 'run') return;
+  car = { pos: tab === 'rubber' ? -stretchCm / 100 : 0, v: 0, state: 'run', force: 0 };
+  simT = 0; nextGhost = 0; ghosts = [];
+  windParts = [];
+  run = { stretch: stretchCm, wind: windLv, w: weights };   // このときのじょうけんを、記録用におぼえておく
+  setBusy(true);
+  say(tab === 'rubber' ? 'ゴムがちぢんで、車をおしているよ…' : '風が、ほをおしているよ…');
+}
+
+function finish() {
+  car.state = 'done'; car.v = 0; car.force = 0;
+  const cm = Math.max(0, Math.round(car.pos * 100));
+  // グラフの横じくに入るよう、みじかく書く（例：10cm、風・強、おもりは ■ の数）
+  const cond = (tab === 'rubber' ? run.stretch + 'cm' : '風・' + '　弱中強'[run.wind]) + '■'.repeat(run.w);
+  const ord = tab === 'rubber' ? run.stretch * 10 + run.w : 1000 + run.wind * 10 + run.w;
+  flags[tab].push({ pos: car.pos, label: fmtDist(cm), w: run.w });
+  Worksheet.addRecord({ cond, w: run.w, dist: cm, ord });
+  setBusy(false);
+  say('🚩 ' + fmtDist(cm) + ' 走ったよ！（<ruby>記録<rt>きろく</rt></ruby>したよ）' + (car.pos >= COURSE_M ? '　コースのさいごまで行った！' : ''));
+}
+
+// ===== 絵をかく =====
+function fit() {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d');
+  const s = r.width / W;
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, 0, 0);
+  return { ctx, s };
+}
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+let FS = 1;   // 文字の大きさの倍率（スマホで小さくなりすぎないように）
+function label(ctx, text, x, y, color, size, align) {
+  ctx.font = 'bold ' + Math.round(size * FS) + 'px ' + FONT;
+  ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+}
+function arrow(ctx, x1, y, x2, color, text) {
+  if (x2 - x1 < 4) return;
+  ctx.strokeStyle = color; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 10, y); ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(x2 + 6, y); ctx.lineTo(x2 - 14, y - 12); ctx.lineTo(x2 - 14, y + 12); ctx.closePath(); ctx.fill();
+  if (text) label(ctx, text, (x1 + x2) / 2, y - 20, color, 17);
+}
+
+// 車をかく（fx＝車の前のはしの画面のいち）
+function drawCar(ctx, fx) {
+  const x = fx - CAR_L, y = ROAD_Y;
+  ctx.save();
+  // 車体
+  ctx.fillStyle = '#1e88e5';
+  ctx.strokeStyle = '#0d47a1'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(x, y - 34, CAR_L, 22, 6); ctx.fill(); ctx.stroke();
+  // 車輪
+  [x + 16, x + CAR_L - 16].forEach(cx => {
+    ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(cx, y - 10, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#bbb'; ctx.beginPath(); ctx.arc(cx, y - 10, 4, 0, Math.PI * 2); ctx.fill();
+  });
+  {
+    // 風の車には「ほ」
+    if (tab === 'wind') {
+      ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x + 20, y - 34); ctx.lineTo(x + 20, y - 96); ctx.stroke();
+      ctx.fillStyle = '#fff3e0'; ctx.strokeStyle = '#e65100'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x + 22, y - 94); ctx.quadraticCurveTo(x + 48, y - 66, x + 22, y - 38); ctx.closePath(); ctx.fill(); ctx.stroke();
+      label(ctx, 'ほ', x + 32, y - 66, '#bf360c', 14);
+    } else {
+      // ゴムをかけるフック
+      ctx.fillStyle = '#6d4c41'; ctx.fillRect(x - 6, y - 28, 8, 10);
+    }
+    // おもり（■）
+    for (let i = 0; i < weights; i++) {
+      const bx = x + CAR_L - 30 - i * 26;
+      ctx.fillStyle = '#616161'; ctx.fillRect(bx, y - 56, 22, 22);
+      ctx.strokeStyle = '#212121'; ctx.strokeRect(bx, y - 56, 22, 22);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('おも', bx + 11, y - 45);
+    }
+  }
+  ctx.restore();
+}
+
+function drawLauncher(ctx) {
+  // ゴムをかける台（スタートの左がわ）
+  const px = X0 - CAR_L - 30;
+  ctx.fillStyle = '#8d6e63'; ctx.fillRect(px - 14, ROAD_Y - 60, 14, 60);
+  ctx.fillStyle = '#5d4037'; ctx.fillRect(px - 20, ROAD_Y - 4, 26, 6);
+  // わゴム：台のフック → 車のフック
+  const carBack = toX(car.state === 'ready' ? -stretchCm / 100 : car.pos) - CAR_L - 6;
+  const attached = car.state !== 'done' && (car.state === 'ready' || car.pos < 0);
+  ctx.strokeStyle = '#a1887f'; ctx.lineWidth = 4;
+  if (attached) {
+    const sx = carBack;
+    // のびているほど細く・こく
+    const st = Math.max(0, px - sx);
+    ctx.lineWidth = Math.max(2, 5 - st / 30);
+    ctx.strokeStyle = '#795548';
+    ctx.beginPath(); ctx.moveTo(px, ROAD_Y - 50); ctx.lineTo(sx, ROAD_Y - 23); ctx.lineTo(px, ROAD_Y - 14); ctx.stroke();
+  } else {
+    // 車がはなれたあとのゴム（たるんでいる）
+    ctx.beginPath(); ctx.moveTo(px, ROAD_Y - 50); ctx.quadraticCurveTo(px + 22, ROAD_Y - 30, px, ROAD_Y - 14); ctx.stroke();
+  }
+  // ゴムののびのものさし（cm）
+  const y = ROAD_Y + 62;
+  ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(toX(-0.15), y); ctx.lineTo(X0, y); ctx.stroke();
+  for (let c = 0; c <= 15; c++) {
+    const x = toX(-c / 100), big = c % 5 === 0;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - (big ? 12 : 6)); ctx.stroke();
+    if (big && (FS < 1.3 || c % 15 === 0)) label(ctx, c + '', x, y + 14, '#6d4c41', 14);   // せまい画面では 0 と 15 だけ
+  }
+  label(ctx, 'ゴムののび(cm)', toX(-0.075), y + 34, '#6d4c41', 14);
+}
+
+function drawFan(ctx) {
+  const fx = toX(-FAN_GAP) - 4, cy = ROAD_Y - 62;
+  // 台
+  ctx.fillStyle = '#90a4ae'; ctx.fillRect(fx - 60, ROAD_Y - 6, 70, 6); ctx.fillRect(fx - 30, cy, 10, ROAD_Y - cy);
+  // あみ
+  ctx.fillStyle = '#eceff1'; ctx.strokeStyle = '#546e7a'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.ellipse(fx - 18, cy, 18, 50, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  // はね（回っているときは動く）
+  ctx.save(); ctx.translate(fx - 18, cy); ctx.scale(0.36, 1);
+  ctx.fillStyle = '#78909c';
+  for (let i = 0; i < 3; i++) {
+    const a = fanAngle + i * Math.PI * 2 / 3;
+    ctx.beginPath(); ctx.ellipse(Math.cos(a) * 22, Math.sin(a) * 22, 20, 9, a, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+  label(ctx, 'そうふうき', 8, cy - 66, '#37474f', 15, 'left');
+  label(ctx, '　弱中強'[windLv], fx - 18, cy + 72, '#bf360c', 17);
+}
+
+// 風のつぶ（見える化）：風が強いところほど、こく・速く
+function updateWind(dt) {
+  if (tab !== 'wind' || car.state !== 'run') { windParts = []; return; }
+  const n = windLv * 3;
+  for (let i = 0; i < n; i++) if (Math.random() < dt * 20) windParts.push({ p: -FAN_GAP + 0.05, y: ROAD_Y - 105 + Math.random() * 90 });
+  windParts.forEach(w => { w.p += windAt(w.p) * dt * 0.6; });
+  windParts = windParts.filter(w => windAt(w.p) > 0.6 && w.p < COURSE_M);
+}
+function drawWind(ctx) {
+  const Umax = WIND_U[3];
+  windParts.forEach(w => {
+    const u = windAt(w.p), x = toX(w.p);
+    ctx.strokeStyle = 'rgba(0,114,178,' + Math.min(0.9, u / Umax + 0.15) + ')';
+    ctx.lineWidth = 3;
+    const len = 10 + u * 5;
+    ctx.beginPath(); ctx.moveTo(x - len, w.y); ctx.quadraticCurveTo(x - len / 2, w.y - 5, x, w.y); ctx.stroke();
+  });
+}
+
+function draw() {
+  const { ctx, s } = fit();
+  FS = Math.max(1, 0.6 / s);   // 画面がせまいときは文字を大きめに
+  // 空と地面
+  ctx.fillStyle = '#e3f2fd'; ctx.fillRect(0, 0, W, ROAD_Y);
+  ctx.fillStyle = '#d7ccc8'; ctx.fillRect(0, ROAD_Y, W, H - ROAD_Y);
+  ctx.fillStyle = '#a1887f'; ctx.fillRect(0, ROAD_Y, W, 4);
+
+  // ものさし（コース）
+  const ry = ROAD_Y + 28;
+  ctx.fillStyle = '#fffde7'; ctx.fillRect(X0 - 6, ry - 20, toX(COURSE_M) - X0 + 12, 30);
+  ctx.strokeStyle = '#5d4037'; ctx.lineWidth = 1;
+  for (let c = 0; c <= COURSE_M * 10; c++) {
+    const x = toX(c / 10), big = c % 10 === 0, mid = c % 5 === 0;
+    ctx.lineWidth = big ? 2.5 : 1;
+    ctx.beginPath(); ctx.moveTo(x, ry - 20); ctx.lineTo(x, ry - 20 + (big ? 18 : mid ? 12 : 6)); ctx.stroke();
+  }
+  const every = FS > 1.4 ? 2 : 1;
+  for (let m = 0; m <= COURSE_M; m += every) label(ctx, m + 'm', toX(m), ry + 20, '#4e342e', 16);
+  // スタートの線
+  ctx.strokeStyle = '#2e7d32'; ctx.lineWidth = 3; ctx.setLineDash([8, 5]);
+  ctx.beginPath(); ctx.moveTo(X0, 30); ctx.lineTo(X0, ROAD_Y); ctx.stroke(); ctx.setLineDash([]);
+  label(ctx, 'スタート', X0, 18, '#2e7d32', 15);
+
+  // これまでの旗（止まったところ）
+  flags[tab].forEach((f, i) => {
+    const x = toX(f.pos), last = i === flags[tab].length - 1;
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, ROAD_Y); ctx.lineTo(x, ROAD_Y - 120 + (i % 3) * 22); ctx.stroke();
+    const ty = ROAD_Y - 120 + (i % 3) * 22;
+    ctx.fillStyle = last ? '#d55e00' : '#bdbdbd';
+    ctx.beginPath(); ctx.moveTo(x, ty); ctx.lineTo(x + 18, ty + 7); ctx.lineTo(x, ty + 14); ctx.closePath(); ctx.fill();
+    if (last || FS === 1) label(ctx, f.label + (f.w ? '■'.repeat(f.w) : ''), x + 4, ty - 10, last ? '#bf360c' : '#777', last ? 17 : 13, 'left');
+  });
+
+  if (tab === 'rubber') drawLauncher(ctx); else drawFan(ctx);
+  if (showForce) drawWind(ctx);
+
+  // コマ送り（同じ時間ごとの車のいち）
+  // 車の前のはしのいちに、点とたての線を残す。点の間がひろい＝速い、せまい＝おそい
+  if (showGhost && ghosts.length) {
+    const gy = 58;
+    ctx.strokeStyle = 'rgba(13,71,161,0.35)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 4]);
+    ghosts.forEach(p => { ctx.beginPath(); ctx.moveTo(toX(p), gy); ctx.lineTo(toX(p), ROAD_Y + 8); ctx.stroke(); });
+    ctx.setLineDash([]);
+    ghosts.forEach(p => {
+      ctx.fillStyle = '#0d47a1';
+      ctx.beginPath(); ctx.arc(toX(p), gy, 6, 0, Math.PI * 2); ctx.fill();
+    });
+    label(ctx, GHOST_DT + '秒ごとの車のいち', W - 20, 40, '#0d47a1', 15, 'right');
+  }
+
+  // 車
+  const pos = car.state === 'ready' ? (tab === 'rubber' ? -stretchCm / 100 : 0) : car.pos;
+  drawCar(ctx, toX(pos));
+
+  // 力の矢印（見える化）
+  if (showForce) {
+    // 走っている間はいまの力、まっているとき（ゴム）は、のばしたゴムの力
+    const F = car.state === 'run' ? car.force : (car.state === 'ready' && tab === 'rubber' ? K * stretchCm / 100 : 0);
+    const len = Math.min(220, F * 40);
+    if (len > 4) arrow(ctx, toX(pos) - CAR_L / 2, ROAD_Y - 130, toX(pos) - CAR_L / 2 + len, '#e65100', tab === 'rubber' ? 'ゴムの力' : '風の力');
+  }
+  // 走っている間の速さ・きょり
+  if (car.state === 'run' && car.pos > 0) label(ctx, fmtDist(Math.round(car.pos * 100)), toX(car.pos) - CAR_L / 2, ROAD_Y - 48 - (tab === 'wind' ? 60 : 0), '#0d47a1', 16);
+}
+
+// ===== 動かす =====
+let lastT = 0;
+function loop(t) {
+  const real = Math.min(0.05, (t - lastT) / 1000 || 0);
+  lastT = t;
+  if (car.state === 'run') {
+    const dt = real * speed, n = Math.ceil(dt / 0.002);
+    for (let i = 0; i < n && car.state === 'run'; i++) step(dt / n);
+    if (tab === 'wind') fanAngle += real * WIND_U[windLv] * 4;
+    updateWind(real * speed);
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ===== ボタン =====
+function say(t) { $('msg').innerHTML = t || '&nbsp;'; }
+function setBusy(b) {
+  document.querySelectorAll('.tab, [data-wind], [data-w], #stretch, #btnRubber, #btnWind').forEach(e => { e.disabled = b; });
+}
+function resetCar() {
+  car = { pos: 0, v: 0, state: 'ready', force: 0 };
+  ghosts = []; windParts = [];
+  setBusy(false);
+}
+function setActive(sel, el) { document.querySelectorAll(sel).forEach(b => b.classList.toggle('active', b === el)); }
+
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+  tab = b.dataset.tab;
+  setActive('.tab', b);
+  $('rubberCtrl').classList.toggle('hidden', tab !== 'rubber');
+  $('windCtrl').classList.toggle('hidden', tab !== 'wind');
+  resetCar();
+  say(tab === 'rubber' ? 'ゴムをのばして、手をはなそう' : '風の強さをえらんで、スイッチを入れよう');
+}));
+$('stretch').addEventListener('input', e => {
+  stretchCm = +e.target.value;
+  $('stretchText').textContent = stretchCm + 'cm';
+  if (car.state === 'done') resetCar();
+});
+$('btnRubber').addEventListener('click', () => { if (car.state === 'done') resetCar(); start(); });
+$('btnWind').addEventListener('click', () => { if (car.state === 'done') resetCar(); start(); });
+document.querySelectorAll('[data-wind]').forEach(b => b.addEventListener('click', () => {
+  windLv = +b.dataset.wind; setActive('[data-wind]', b);
+  if (car.state === 'done') resetCar();
+}));
+document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => {
+  speed = +b.dataset.speed; setActive('[data-speed]', b);
+}));
+document.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => {
+  weights = +b.dataset.w; setActive('[data-w]', b);
+  if (car.state === 'done') resetCar();
+  say(weights ? '車におもりを ' + weights + 'こ のせたよ（重くなった）' : 'おもりをおろしたよ');
+}));
+$('btnGhost').addEventListener('click', e => {
+  showGhost = !showGhost;
+  e.currentTarget.classList.toggle('active', showGhost);
+  e.currentTarget.innerHTML = '🎞 コマ<ruby>送<rt>おく</rt></ruby>り ' + (showGhost ? 'ON' : 'OFF');
+});
+$('btnForce').addEventListener('click', e => {
+  showForce = !showForce;
+  e.currentTarget.classList.toggle('active', showForce);
+  e.currentTarget.innerHTML = '➡ <ruby>力<rt>ちから</rt></ruby>の<ruby>矢印<rt>やじるし</rt></ruby> ' + (showForce ? 'ON' : 'OFF');
+});
+$('btnReset').addEventListener('click', () => {
+  resetCar();
+  flags[tab] = [];
+  say('はじめからやりなおそう（ワークシートの<ruby>記録<rt>きろく</rt></ruby>はのこっているよ）');
+});
+
+// ===== 車を左へドラッグして、ゴムをのばす（マウス・タッチ両方） =====
+function toLogical(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+}
+cv.addEventListener('pointerdown', e => {
+  if (tab !== 'rubber' || car.state === 'run') return;
+  const p = toLogical(e);
+  const fx = toX(car.state === 'ready' ? -stretchCm / 100 : car.pos);
+  if (p.x < fx - CAR_L - 20 || p.x > fx + 20 || p.y < ROAD_Y - 80 || p.y > ROAD_Y + 10) return;
+  if (car.state === 'done') resetCar();
+  dragging = { off: p.x - toX(-stretchCm / 100), moved: false };
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const p = toLogical(e);
+  const cm = Math.round((X0 - (p.x - dragging.off)) / PX_STRETCH * 100);
+  const v = Math.max(1, Math.min(15, cm));
+  if (v !== stretchCm) dragging.moved = true;
+  stretchCm = v;
+  $('stretch').value = v; $('stretchText').textContent = v + 'cm';
+});
+function endDrag() {
+  if (!dragging) return;
+  const moved = dragging.moved;
+  dragging = null;
+  if (moved) start();
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', () => { dragging = null; });
+
+say('ゴムをのばして、手をはなそう');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
