@@ -33,6 +33,7 @@
      mount: '#ここに入れたい場所'  … 書くと、右に固定せず、その場所の中に表示する
      chart.sortBy: 'h'  … 横じくが文字（例：'正午'）のとき、記録の中の h の小さい順にならべる
                           （h は表に出さない記録の項目でもよい）
+     chart: false  … グラフを出さない（「つく／つかない」のような、数でない結果の表だけのとき）
 
    【そのほかの命令】
      Worksheet.getRecords()      … 記録の一覧（配列）を返す
@@ -127,6 +128,7 @@
     const columns = (cfg.columns || []).map(c => typeof c === 'string' ? { key: c, label: c } : Object.assign({}, c));
     const chart = Object.assign({ type: 'line', x: columns[0] && columns[0].key, y: columns[1] && columns[1].key }, cfg.chart || {});
     if (!Array.isArray(chart.y)) chart.y = chart.y ? [chart.y] : [];
+    if (cfg.chart === false) chart.off = true; // グラフを出さない
     S.cfg = Object.assign({
       title: 'ワークシート', question: '', predictionChoices: [], hint: '', answer: '', experimentNote: '', mount: null
     }, cfg, { columns, chart });
@@ -187,7 +189,7 @@
       '<section class="ws-step" data-step="3">' +
         '<h3 class="ws-step-h"><span class="ws-num">3</span>' + R('結果', 'けっか') + '</h3>' +
         '<div class="ws-table-wrap"><table class="ws-table"></table></div>' +
-        '<div class="ws-chart-wrap"><canvas class="ws-chart" role="img" aria-label="結果のグラフ"></canvas></div>' +
+        '<div class="ws-chart-wrap"' + (c.chart.off ? ' hidden' : '') + '><canvas class="ws-chart" role="img" aria-label="結果のグラフ"></canvas></div>' +
       '</section>' +
 
       // ④ 考察
@@ -346,7 +348,7 @@
 
   // ③ グラフ（画面のはばに合わせて、くっきりかく）
   function renderChart() {
-    if (!S.cfg) return;
+    if (!S.cfg || S.cfg.chart.off) return;
     const cv = S.el.canvas, w = cv.parentNode.clientWidth;
     if (!w) return;
     const h = Math.round(Math.max(220, Math.min(340, w * 0.7)));
@@ -685,7 +687,7 @@
       cols.forEach((col, j) => cell(j ? fmt(r[col.key], col) : String(i + 1), M + j * cw, y, '#fff', j > 0));
       y += rh;
     });
-    if (d.records.length) {
+    if (d.records.length && !c.chart.off) {
       y += 16;
       ctx.save();
       ctx.translate(M, y);

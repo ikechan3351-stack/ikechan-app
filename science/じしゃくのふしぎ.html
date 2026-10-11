@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>じしゃくのふしぎ</title>
+<!--
+  じしゃくのふしぎ（小学3年 理科「磁石の性質」）
+  ・タブ：① N極とS極（2本の棒磁石を動かす）　② つく物・つかない物（仕分け）
+          ③ はなれていても（紙・下じきをはさむ）　④ 砂鉄のもよう
+  ・磁石の力は「極（はし）に小さなつぶ（N＝＋、S＝−）がある」と考えて計算している（下の poles・fieldAt）。
+    同じ極どうしはしりぞけ合い、ちがう極どうしは引き合う。はなれるほど弱くなる（きょりの2じょうに反比例）。
+  ・ワークシート部品（worksheet.js）を使っています。②で物を調べると、結果が自動で記録されます。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+
+  /* タブ */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .tab {
+    min-height: 48px; border: 3px solid #aed581; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 4px 9px; font-family: inherit; font-size: 16px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .tab.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+
+  .fig-title { margin: 0 0 4px; font-size: 16px; font-weight: bold; color: #33691e; }
+  canvas.sim { display: block; width: 100%; aspect-ratio: 600 / 360; touch-action: none; border-radius: 8px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 16px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .lbl { font-size: 16px; color: #555; font-weight: bold; }
+  .msg { min-height: 1.7em; text-align: center; font-weight: bold; color: #1565c0; margin-top: 4px; }
+  .msg.big { font-size: 1.15rem; }
+  .diff { font-size: 15px; color: #666; margin: 6px 0 0; }
+  .hidden { display: none !important; }
+
+  /* ===== ② 仕分け ===== */
+  .lab {
+    position: relative; display: flex; align-items: center; justify-content: center; gap: 4px;
+    min-height: 150px; border: 3px dashed #aed581; border-radius: 12px; background: #fafff5; padding: 8px 4px 34px;
+  }
+  .lab.over { background: #e8f5e9; border-color: #558b2f; border-style: solid; }
+  .lab .hint { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 15px; color: #689f38; font-weight: bold; }
+  .lab svg.bar { width: 230px; max-width: 46%; min-width: 110px; height: auto; flex: 1 1 auto; }
+  .stick { display: flex; flex-direction: column; gap: 2px; min-width: 10px; align-items: center; }
+  .stick .item { width: 74px; min-height: 74px; }
+  .stick .item svg { width: 50px; height: 40px; }
+  .stick .item .nm { font-size: 13px; }
+  .ph { border: 3px dashed #ccc; border-radius: 12px; background: transparent; }   /* ドラッグ中の物の元の場所 */
+  .tray {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; min-height: 104px;
+    background: #f5f5f5; border-radius: 12px; padding: 8px;
+  }
+  /* 左に「実験台・調べる物」、右に「仕分けの箱」。せまい画面では上下にならぶ */
+  .p2grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 10px; align-items: start; }
+  .boxes { display: flex; flex-direction: column; gap: 8px; }
+  .box { border: 4px solid #558b2f; border-radius: 12px; background: #f1f8e9; padding: 6px; min-height: 130px; }
+  .box.no { border: 4px dashed #78909c; background: #eceff1; }
+  .box h3 { margin: 0 0 4px; font-size: 18px; text-align: center; color: #33691e; }
+  .box.no h3 { color: #455a64; }
+  .box.over { box-shadow: 0 0 0 4px #ffb300 inset; }
+  .box .in { display: flex; flex-wrap: wrap; gap: 14px 10px; justify-content: center; min-height: 88px; padding-top: 12px; }
+  .item {
+    position: relative; width: 82px; min-height: 86px; background: #fff; border: 3px solid #bdbdbd; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px;
+    cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  .item svg { width: 58px; height: 46px; pointer-events: none; }
+  .item .nm { font-size: 15px; font-weight: bold; line-height: 1.25; text-align: center; pointer-events: none; }
+  .item .mat { font-size: 13px; color: #6d4c41; pointer-events: none; }
+  .item.dragging { position: fixed; z-index: 60; pointer-events: none; box-shadow: 0 8px 18px rgba(0,0,0,0.3); margin: 0; }
+  .item.snap { animation: snap 0.5s ease-out; }
+  .item.fall { animation: fall 0.9s ease-in forwards; }
+  @keyframes snap { 0% { transform: scale(1.35) rotate(-8deg); } 55% { transform: scale(0.9); } 100% { transform: scale(1); } }
+  @keyframes fall { 0% { transform: translateY(0); opacity: 1; } 30% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(46px) rotate(12deg); opacity: 0.15; } }
+  .badge { position: absolute; top: -11px; right: -9px; font-size: 12px; font-weight: bold; padding: 1px 6px; border-radius: 10px; pointer-events: none; white-space: nowrap; }
+  .badge.yes { background: #33691e; color: #fff; border: 2px solid #33691e; }
+  .badge.no { background: #fff; color: #546e7a; border: 2px dashed #78909c; }
+  .judge { position: absolute; left: -10px; top: -14px; width: 30px; height: 30px; border-radius: 50%; font-size: 20px; font-weight: bold;
+           display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .judge.ok { background: #fff; color: #2e7d32; border: 3px solid #2e7d32; }
+  .judge.ng { background: #c62828; color: #fff; border: 3px solid #c62828; }
+  .item.is-ng { border: 3px dashed #c62828; }
+
+  /* ===== ③ 力の強さのメーター ===== */
+  .meter { display: flex; gap: 3px; align-items: flex-end; height: 34px; flex: 1; }
+  .meter i { flex: 1; background: #eee; border: 2px solid #ccc; border-radius: 3px; }
+  .meter i:nth-child(1) { height: 30%; } .meter i:nth-child(2) { height: 37%; } .meter i:nth-child(3) { height: 44%; }
+  .meter i:nth-child(4) { height: 51%; } .meter i:nth-child(5) { height: 58%; } .meter i:nth-child(6) { height: 65%; }
+  .meter i:nth-child(7) { height: 72%; } .meter i:nth-child(8) { height: 79%; } .meter i:nth-child(9) { height: 86%; } .meter i:nth-child(10) { height: 100%; }
+  .meter i.on { background: repeating-linear-gradient(45deg, #009e73 0 5px, #33b48f 5px 10px); border-color: #00795a; }
+  .meter-row { display: flex; align-items: center; gap: 10px; }
+  .meter-word { width: 6.5em; font-weight: bold; color: #00795a; text-align: right; }
+
+  @media (max-width: 560px) {
+    .tab { font-size: 15px; padding: 4px 8px; }
+    .item { width: 76px; min-height: 84px; }
+    .item svg { width: 52px; height: 42px; }
+    .item .nm { font-size: 13px; }
+    .chip, .go-btn { font-size: 16px; padding-left: 10px; padding-right: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🧲 じしゃくのふしぎ</h1>
+<p class="subtitle"><ruby>磁石<rt>じしゃく</rt></ruby>の<ruby>極<rt>きょく</rt></ruby>のせいしつや、<ruby>磁石<rt>じしゃく</rt></ruby>につく<ruby>物<rt>もの</rt></ruby>を<ruby>調<rt>しら</rt></ruby>べよう</p>
+
+<div class="panel">
+  <div class="tabs">
+    <button class="tab active" data-tab="p1">① N<ruby>極<rt>きょく</rt></ruby>とS<ruby>極<rt>きょく</rt></ruby></button>
+    <button class="tab" data-tab="p2">② つく？つかない？</button>
+    <button class="tab" data-tab="p3">③ はなれていても</button>
+    <button class="tab" data-tab="p4">④ <ruby>砂鉄<rt>さてつ</rt></ruby></button>
+  </div>
+
+  <!-- ===== ① N極とS極 ===== -->
+  <div id="page-p1" class="page">
+    <div class="card">
+      <p class="fig-title">つくえを上から見た図　（<ruby>磁石<rt>じしゃく</rt></ruby>をドラッグして近づけてみよう）</p>
+      <canvas id="cv1" class="sim" aria-label="2本の棒磁石。ドラッグで動かせる"></canvas>
+      <div class="msg big" id="msg1">&nbsp;</div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <span class="lbl">えらんだ<ruby>磁石<rt>じしゃく</rt></ruby>を</span>
+        <button class="go-btn sub" data-rot="-45" data-p="1" aria-label="左に45度回す">↺ 回す</button>
+        <button class="go-btn sub" data-rot="45" data-p="1" aria-label="右に45度回す">回す ↻</button>
+        <button class="go-btn sub" data-rot="180" data-p="1">N と S を<ruby>入<rt>い</rt></ruby>れかえる</button>
+      </div>
+      <div class="row">
+        <button class="chip active" id="btnArrow">力の<ruby>矢印<rt>やじるし</rt></ruby> ON</button>
+        <button class="go-btn sub" id="reset1">もういちど</button>
+      </div>
+      <p class="diff">※じっさいとのちがい：<ruby>磁石<rt>じしゃく</rt></ruby>は<ruby>台車<rt>だいしゃ</rt></ruby>にのせたように、くるっと回らないようにしています。<ruby>矢印<rt>やじるし</rt></ruby>の太さは、力の強さの<ruby>目安<rt>めやす</rt></ruby>です。</p>
+    </div>
+  </div>
+
+  <!-- ===== ② つく物・つかない物 ===== -->
+  <div id="page-p2" class="page hidden">
+    <div class="card p2grid">
+     <div>
+      <p class="fig-title"><ruby>実験台<rt>じっけんだい</rt></ruby>　（<ruby>物<rt>もの</rt></ruby>を<ruby>磁石<rt>じしゃく</rt></ruby>に<ruby>近<rt>ちか</rt></ruby>づけよう）</p>
+      <div class="lab" id="lab">
+        <div class="stick" id="stickS"></div>
+        <svg class="bar" viewBox="0 0 230 64" aria-label="棒磁石。左がS極、右がN極">
+          <defs>
+            <pattern id="sStripe" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <rect width="10" height="10" fill="#1e64c8"/><rect width="4" height="10" fill="#3f7fd8"/>
+            </pattern>
+          </defs>
+          <rect x="2" y="6" width="113" height="52" fill="url(#sStripe)" stroke="#263238" stroke-width="3"/>
+          <rect x="115" y="6" width="113" height="52" fill="#d62f2f" stroke="#263238" stroke-width="3"/>
+          <text x="58" y="44" font-size="34" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
+          <text x="172" y="44" font-size="34" font-weight="bold" fill="#fff" text-anchor="middle">N</text>
+        </svg>
+        <div class="stick" id="stickN"></div>
+        <div class="hint">ここに<ruby>物<rt>もの</rt></ruby>を<ruby>近<rt>ちか</rt></ruby>づけて、<ruby>手<rt>て</rt></ruby>をはなそう</div>
+      </div>
+      <div class="msg" id="msg2">&nbsp;</div>
+      <p class="fig-title" style="margin-top:4px"><ruby>調<rt>しら</rt></ruby>べる<ruby>物<rt>もの</rt></ruby></p>
+      <div class="tray" id="tray"></div>
+     </div>
+     <div>
+      <p class="fig-title"><ruby>仕分<rt>しわ</rt></ruby>けの<ruby>箱<rt>はこ</rt></ruby>　（<ruby>調<rt>しら</rt></ruby>べた<ruby>物<rt>もの</rt></ruby>を入れよう）</p>
+      <div class="boxes">
+        <div class="box yes" data-box="yes"><h3>🧲 <ruby>磁石<rt>じしゃく</rt></ruby>につく</h3><div class="in" id="boxYes"></div></div>
+        <div class="box no" data-box="no"><h3><ruby>磁石<rt>じしゃく</rt></ruby>につかない</h3><div class="in" id="boxNo"></div></div>
+      </div>
+      <div class="row">
+        <button class="go-btn" id="check2">✔ <ruby>答<rt>こた</rt></ruby>え<ruby>合<rt>あ</rt></ruby>わせ</button>
+        <button class="go-btn sub" id="reset2">もういちど</button>
+      </div>
+      <div class="msg" id="result2">&nbsp;</div>
+      <p class="diff">※10<ruby>円玉<rt>えんだま</rt></ruby>は<ruby>銅<rt>どう</rt></ruby>、1<ruby>円玉<rt>えんだま</rt></ruby>とアルミかんはアルミニウム、スチールかんは<ruby>鉄<rt>てつ</rt></ruby>でできています。<ruby>調<rt>しら</rt></ruby>べた<ruby>物<rt>もの</rt></ruby>は、ワークシートに<ruby>自動<rt>じどう</rt></ruby>で<ruby>記録<rt>きろく</rt></ruby>されます。</p>
+     </div>
+    </div>
+  </div>
+
+  <!-- ===== ③ はなれていてもはたらく力 ===== -->
+  <div id="page-p3" class="page hidden">
+    <div class="card">
+      <p class="fig-title">横から見た図　（<ruby>磁石<rt>じしゃく</rt></ruby>とクリップのあいだに<ruby>物<rt>もの</rt></ruby>をはさもう）</p>
+      <canvas id="cv3" class="sim" aria-label="横から見た図。磁石の下に紙や下じきをはさみ、その下にクリップ"></canvas>
+      <div class="msg" id="msg3">&nbsp;</div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <span class="lbl">はさむ<ruby>物<rt>もの</rt></ruby></span>
+        <button class="chip active" data-mat="paper">📄 紙</button>
+        <button class="chip" data-mat="plastic">プラスチックの<ruby>下<rt>した</rt></ruby>じき</button>
+      </div>
+      <div class="row" id="countRow3">
+        <span class="lbl">まい<ruby>数<rt>すう</rt></ruby></span>
+        <button class="chip active" data-n="0">0</button>
+        <button class="chip" data-n="1">1</button>
+        <button class="chip" data-n="2">2</button>
+        <button class="chip" data-n="3">3</button>
+        <button class="chip" data-n="4">4</button>
+        <button class="chip" data-n="5">5</button>
+      </div>
+      <div class="meter-row" style="margin-top:8px">
+        <span class="lbl" style="white-space:nowrap"><ruby>磁石<rt>じしゃく</rt></ruby>が<ruby>引<rt>ひ</rt></ruby>く力</span>
+        <div class="meter" id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <span class="meter-word" id="meterWord">-</span>
+      </div>
+      <div class="row">
+        <button class="go-btn sub" id="reset3">もういちど</button>
+      </div>
+      <p class="diff">※じっさいとのちがい：紙や<ruby>下<rt>した</rt></ruby>じきのあつさは、<ruby>大<rt>おお</rt></ruby>きくしてかいています（紙1まい<ruby>約<rt>やく</rt></ruby>0.1mm、<ruby>下<rt>した</rt></ruby>じき1まい<ruby>約<rt>やく</rt></ruby>1mm として計算）。力の強さは<ruby>目安<rt>めやす</rt></ruby>で、<ruby>磁石<rt>じしゃく</rt></ruby>の強さによってかわります。</p>
+    </div>
+  </div>
+
+  <!-- ===== ④ 砂鉄のもよう ===== -->
+  <div id="page-p4" class="page hidden">
+    <div class="card">
+      <p class="fig-title"><ruby>磁石<rt>じしゃく</rt></ruby>の上に<ruby>紙<rt>かみ</rt></ruby>をおいて、<ruby>砂鉄<rt>さてつ</rt></ruby>をまいた図　（<ruby>磁石<rt>じしゃく</rt></ruby>はドラッグで動かせる）</p>
+      <canvas id="cv4" class="sim" aria-label="砂鉄のもよう。砂鉄は磁石の極のまわりにたくさん集まる"></canvas>
+      <div class="msg" id="msg4">&nbsp;</div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <span class="lbl"><ruby>磁石<rt>じしゃく</rt></ruby>のおき方</span>
+        <button class="chip active" data-preset="one">1本</button>
+        <button class="chip" data-preset="ns">N と S を<ruby>向<rt>む</rt></ruby>かい<ruby>合<rt>あ</rt></ruby>わせ</button>
+        <button class="chip" data-preset="nn">N と N を<ruby>向<rt>む</rt></ruby>かい<ruby>合<rt>あ</rt></ruby>わせ</button>
+      </div>
+      <div class="row">
+        <button class="go-btn sub" data-rot="-45" data-p="4" aria-label="左に45度回す">↺ 回す</button>
+        <button class="go-btn sub" data-rot="45" data-p="4" aria-label="右に45度回す">回す ↻</button>
+        <button class="go-btn sub" data-rot="180" data-p="4">N と S を<ruby>入<rt>い</rt></ruby>れかえる</button>
+      </div>
+      <div class="row">
+        <button class="chip active" id="btnSand"><ruby>砂鉄<rt>さてつ</rt></ruby> ON</button>
+        <button class="go-btn" id="sprinkle">🧂 <ruby>砂鉄<rt>さてつ</rt></ruby>をまきなおす</button>
+        <button class="go-btn sub" id="reset4">もういちど</button>
+      </div>
+      <p class="diff">※じっさいとのちがい：<ruby>磁石<rt>じしゃく</rt></ruby>のまわりの力の<ruby>向<rt>む</rt></ruby>きに、<ruby>砂鉄<rt>さてつ</rt></ruby>がならぶようすを計算でかいています。じっさいの<ruby>砂鉄<rt>さてつ</rt></ruby>は、<ruby>極<rt>きょく</rt></ruby>（はし）にもっとかたまって<ruby>集<rt>あつ</rt></ruby>まります。</p>
+    </div>
+  </div>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: 'じしゃくのふしぎ',
+  question: 'アルミかんは、<ruby>磁石<rt>じしゃく</rt></ruby>につくだろうか？',
+  predictionChoices: ['つく', 'つかない'],
+  experimentNote: '「② つく？つかない？」で、いろいろな<ruby>物<rt>もの</rt></ruby>を<ruby>磁石<rt>じしゃく</rt></ruby>に<ruby>近<rt>ちか</rt></ruby>づけて<ruby>調<rt>しら</rt></ruby>べよう。<ruby>調<rt>しら</rt></ruby>べると、<ruby>結果<rt>けっか</rt></ruby>が<ruby>自動<rt>じどう</rt></ruby>で<ruby>記録<rt>きろく</rt></ruby>されます。',
+  columns: [
+    { key: 'obj', label: '<ruby>調<rt>しら</rt></ruby>べた<ruby>物<rt>もの</rt></ruby>' },
+    { key: 'mat', label: '何でできているか' },
+    { key: 'res', label: '<ruby>磁石<rt>じしゃく</rt></ruby>に' }
+  ],
+  chart: false,   // 「つく／つかない」の表だけなので、グラフは出さない
+  hint: 'アルミかんもスチールかんも「金属（きんぞく）のかん」です。「金属なら何でもつく」と考える子が多いので、10円玉（銅）・1円玉とアルミかん（アルミニウム）も必ず調べさせ、「鉄」と「金属」のちがいに気づかせましょう。',
+  answer: 'アルミかんは磁石につかない。磁石につくのは鉄でできた物（鉄くぎ・クリップ・スチールかん）である。10円玉（銅）や、アルミかん・1円玉（アルミニウム）のように、金属でも鉄でない物はつかない。紙・木・プラスチック・ガラスもつかない。'
+});
+const TEACHER = Worksheet.isTeacher();
+
+// ===== 小さな道具 =====
+const $ = id => document.getElementById(id);
+const R = (k, y) => '<ruby>' + k + '<rt>' + y + '</rt></ruby>';   // ふりがな付きの文字
+const W = 600, H = 360;                    // Canvas の中の座標（横600×たて360）
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+const RED = '#d62f2f', BLUE = '#1e64c8';   // N極＝赤、S極＝青（文字「N」「S」としまもようでも区別）
+const C_PULL = '#009e73', C_PUSH = '#a0429a';  // 引き合う＝みどり、しりぞけ合う＝むらさき（色覚に配慮した色）
+
+// Canvas を画面の大きさに合わせ、座標を 600×360 にそろえる
+function fit(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr * r.width / W, 0, 0, dpr * r.height / H, 0, 0);
+  return ctx;
+}
+function label(ctx, text, x, y, color, size, align) {
+  ctx.font = 'bold ' + size + 'px ' + FONT;
+  ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+}
+// 太さのある矢印（x1,y1 から x2,y2 へ。w＝太さ）
+function fatArrow(ctx, x1, y1, x2, y2, w, color) {
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+  if (len < 1) return;
+  const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+  const head = Math.min(len * 0.55, 12 + w * 1.1), hw = w / 2 + 7 + w * 0.3;
+  const bx = x2 - ux * head, by = y2 - uy * head;
+  ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1 + nx * w / 2, y1 + ny * w / 2);
+  ctx.lineTo(bx + nx * w / 2, by + ny * w / 2);
+  ctx.lineTo(bx + nx * hw, by + ny * hw);
+  ctx.lineTo(x2, y2);
+  ctx.lineTo(bx - nx * hw, by - ny * hw);
+  ctx.lineTo(bx - nx * w / 2, by - ny * w / 2);
+  ctx.lineTo(x1 - nx * w / 2, y1 - ny * w / 2);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+// Canvas の上の指・マウスの位置（600×360 の座標にする）
+function toLocal(cv, e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+}
+
+// ===== 棒磁石 =====
+// 磁石のデータ：x,y＝まん中　a＝向き（ラジアン。a の向きのはしが N極）　vx,vy＝動く速さ
+const ML = 170, MW = 46;          // 磁石の長さ・太さ
+const PD = ML / 2 - 18;           // まん中から「極のつぶ」までのきょり
+const deg = d => d * Math.PI / 180;
+function poles(m) {
+  const ux = Math.cos(m.a), uy = Math.sin(m.a);
+  return [{ x: m.x + ux * PD, y: m.y + uy * PD, q: 1 },    // N極（＋）
+          { x: m.x - ux * PD, y: m.y - uy * PD, q: -1 }];  // S極（−）
+}
+// 磁石の4つのかど
+function corners(m) {
+  const c = Math.cos(m.a), s = Math.sin(m.a), hx = ML / 2, hy = MW / 2;
+  return [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]].map(([px, py]) => ({ x: m.x + px * c - py * s, y: m.y + px * s + py * c }));
+}
+// 点が磁石の上にあるか（pad＝まわりのゆとり）
+function inMagnet(m, p, pad) {
+  const c = Math.cos(m.a), s = Math.sin(m.a), dx = p.x - m.x, dy = p.y - m.y;
+  const lx = dx * c + dy * s, ly = -dx * s + dy * c;
+  return Math.abs(lx) <= ML / 2 + pad && Math.abs(ly) <= MW / 2 + pad;
+}
+// 2本の磁石が重なっていたら、重なりの深さと向きを返す（分離軸の考え方）
+function overlap(A, B) {
+  const ca = corners(A), cb = corners(B);
+  const axes = [A.a, A.a + Math.PI / 2, B.a, B.a + Math.PI / 2].map(t => ({ x: Math.cos(t), y: Math.sin(t) }));
+  let best = Infinity, n = null;
+  for (const ax of axes) {
+    const pa = ca.map(p => p.x * ax.x + p.y * ax.y), pb = cb.map(p => p.x * ax.x + p.y * ax.y);
+    const o = Math.min(Math.max(...pa), Math.max(...pb)) - Math.max(Math.min(...pa), Math.min(...pb));
+    if (o <= 0) return null;          // すき間がある向きが1つでもあれば、重なっていない
+    if (o < best) { best = o; n = ax; }
+  }
+  if ((B.x - A.x) * n.x + (B.y - A.y) * n.y < 0) n = { x: -n.x, y: -n.y };  // A→B の向きにそろえる
+  return { n, d: best };
+}
+// 磁石が画面の外に出ないようにする
+function keepIn(m) {
+  const c = Math.abs(Math.cos(m.a)), s = Math.abs(Math.sin(m.a));
+  const ex = c * ML / 2 + s * MW / 2 + 4, ey = s * ML / 2 + c * MW / 2 + 4;
+  if (m.x < ex) { m.x = ex; m.vx = 0; } if (m.x > W - ex) { m.x = W - ex; m.vx = 0; }
+  if (m.y < ey) { m.y = ey; m.vy = 0; } if (m.y > H - ey) { m.y = H - ey; m.vy = 0; }
+}
+// 重なりを直す（fixed の磁石は動かさない）
+function separate(A, B, fixed) {
+  const o = overlap(A, B);
+  if (!o) return false;
+  const kA = fixed === A ? 0 : fixed === B ? 1 : 0.5, kB = 1 - kA;
+  A.x -= o.n.x * o.d * kA; A.y -= o.n.y * o.d * kA;
+  B.x += o.n.x * o.d * kB; B.y += o.n.y * o.d * kB;
+  // ぶつかった向きの速さを消す
+  [[A, -1], [B, 1]].forEach(([m, sgn]) => {
+    const vn = (m.vx * o.n.x + m.vy * o.n.y) * sgn;
+    if (vn < 0) { m.vx -= o.n.x * vn * sgn; m.vy -= o.n.y * vn * sgn; }
+  });
+  return true;
+}
+
+// 磁石の絵をかく（N極側は赤、S極側は青＋しまもよう。文字はいつも上向き）
+function drawMagnet(ctx, m, selected) {
+  ctx.save();
+  ctx.translate(m.x, m.y); ctx.rotate(m.a);
+  const hx = ML / 2, hy = MW / 2;
+  ctx.fillStyle = BLUE; ctx.fillRect(-hx, -hy, hx, MW);
+  ctx.save();                                             // S極側のしまもよう
+  ctx.beginPath(); ctx.rect(-hx, -hy, hx, MW); ctx.clip();
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 4;
+  for (let x = -hx - MW; x < 0; x += 11) { ctx.beginPath(); ctx.moveTo(x, hy); ctx.lineTo(x + MW, -hy); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = RED; ctx.fillRect(0, -hy, hx, MW);
+  ctx.strokeStyle = '#263238'; ctx.lineWidth = 3; ctx.strokeRect(-hx, -hy, ML, MW);
+  if (selected) {
+    ctx.strokeStyle = '#ff8f00'; ctx.lineWidth = 3; ctx.setLineDash([7, 5]);
+    ctx.strokeRect(-hx - 7, -hy - 7, ML + 14, MW + 14); ctx.setLineDash([]);
+  }
+  ctx.restore();
+  const ux = Math.cos(m.a), uy = Math.sin(m.a);
+  ctx.font = 'bold 30px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.fillStyle = '#fff';
+  [['N', 1], ['S', -1]].forEach(([t, s]) => {
+    const x = m.x + ux * s * ML * 0.27, y = m.y + uy * s * ML * 0.27 + 1;
+    ctx.strokeText(t, x, y); ctx.fillText(t, x, y);
+  });
+}
+
+// 磁石をドラッグで動かす・タップで選ぶしくみ（①と④で使う）
+function makeDraggable(cv, st) {
+  cv.addEventListener('pointerdown', e => {
+    const p = toLocal(cv, e);
+    for (let i = st.mags.length - 1; i >= 0; i--) {
+      const m = st.mags[i];
+      if (inMagnet(m, p, 10)) {
+        st.sel = i; st.drag = { m, dx: m.x - p.x, dy: m.y - p.y };
+        cv.setPointerCapture(e.pointerId); e.preventDefault();
+        if (st.onChange) st.onChange();
+        return;
+      }
+    }
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!st.drag) { cv.style.cursor = st.mags.some(m => inMagnet(m, toLocal(cv, e), 10)) ? 'grab' : 'default'; return; }
+    const p = toLocal(cv, e), m = st.drag.m;
+    m.x = p.x + st.drag.dx; m.y = p.y + st.drag.dy; m.vx = m.vy = 0;
+    keepIn(m);
+    st.mags.forEach(o => { if (o !== m) { separate(m, o, m); keepIn(o); } });
+    if (st.onChange) st.onChange();
+  });
+  ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { st.drag = null; }));
+}
+// えらんだ磁石を回す
+function rotateSel(st, d) {
+  const m = st.mags[st.sel];
+  if (!m) return;
+  m.a += deg(d);
+  keepIn(m);
+  st.mags.forEach(o => { if (o !== m) { separate(m, o, m); keepIn(o); } });
+  if (st.onChange) st.onChange();
+}
+
+// =====================================================================
+// ① N極とS極：2本の棒磁石
+// =====================================================================
+const K = 6.6e5;        // 極どうしの力の強さ（大きいほど強い）
+const EPS2 = 12 * 12;   // くっついたときに力が大きくなりすぎないためのゆとり
+const STATIC = 60;      // つくえとのまさつ（これより弱い力では動かない）
+const MASS = 220;
+const P1 = { mags: [], sel: 0, drag: null, arrows: true };
+function reset1() {
+  P1.mags = [{ x: 150, y: 180, a: 0, vx: 0, vy: 0 }, { x: 450, y: 180, a: 0, vx: 0, vy: 0 }];
+  P1.sel = 1;
+}
+// 磁石 A が、磁石 B から受ける力
+function forceOn(A, B) {
+  let fx = 0, fy = 0;
+  for (const a of poles(A)) for (const b of poles(B)) {
+    const dx = a.x - b.x, dy = a.y - b.y, r2 = dx * dx + dy * dy + EPS2;
+    const f = K * a.q * b.q / (r2 * Math.sqrt(r2));   // 同じ極（＋×＋、−×−）なら、はなれる向き
+    fx += f * dx; fy += f * dy;
+  }
+  return { x: fx, y: fy };
+}
+// いちばん近い極の組み合わせ
+function nearestPoles(A, B) {
+  let best = null;
+  for (const a of poles(A)) for (const b of poles(B)) {
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (!best || d < best.d) best = { a, b, d };
+  }
+  return best;
+}
+function step1() {
+  const [A, B] = P1.mags;
+  const fA = forceOn(A, B), fB = { x: -fA.x, y: -fA.y };
+  [[A, fA], [B, fB]].forEach(([m, f]) => {
+    if (P1.drag && P1.drag.m === m) return;          // つかんでいる磁石は、手で止めている
+    const fm = Math.hypot(f.x, f.y);
+    if (fm > STATIC) {                                 // まさつより強い力なら動き出す
+      const s = (fm - STATIC) / fm;
+      m.vx = m.vx * 0.8 + f.x * s / MASS; m.vy = m.vy * 0.8 + f.y * s / MASS;
+    } else { m.vx *= 0.6; m.vy *= 0.6; }
+    const sp = Math.hypot(m.vx, m.vy);
+    if (sp > 14) { m.vx *= 14 / sp; m.vy *= 14 / sp; }
+    if (sp < 0.05) m.vx = m.vy = 0;
+    m.x += m.vx; m.y += m.vy;
+  });
+  separate(A, B, P1.drag ? P1.drag.m : null);
+  keepIn(A); keepIn(B);
+  return { fA, fB };
+}
+let msg1Text = '';
+function draw1(fA, fB) {
+  const ctx = fit($('cv1'));
+  // つくえ（木目）
+  ctx.fillStyle = '#f6ead2'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(160,120,60,0.12)'; ctx.lineWidth = 2;
+  for (let y = 20; y < H; y += 34) { ctx.beginPath(); ctx.moveTo(0, y); ctx.bezierCurveTo(200, y + 8, 400, y - 8, W, y); ctx.stroke(); }
+  const [A, B] = P1.mags;
+  P1.mags.forEach((m, i) => drawMagnet(ctx, m, i === P1.sel));
+
+  // 引き合う／しりぞけ合うの判定
+  const np = nearestPoles(A, B);
+  const toB = { x: B.x - A.x, y: B.y - A.y };
+  const pull = fA.x * toB.x + fA.y * toB.y > 0;     // A が受ける力が B の方を向いていれば「引き合う」
+  const fm = Math.hypot(fA.x, fA.y);
+  const near = np.d < 190 && fm > 12;
+  const color = pull ? C_PULL : C_PUSH;
+  if (P1.arrows && near) {
+    const w = Math.max(4, Math.min(22, Math.sqrt(fm) * 1.15));   // 力が強いほど太い
+    // 矢印の長さ（2本が重ならないように、磁石のあいだのきょりでおさえる）
+    const len = Math.max(30, Math.min(46 + Math.min(40, w * 2), Math.hypot(toB.x, toB.y) / 2 - 18));
+    [[A, fA], [B, fB]].forEach(([m, f]) => {
+      const ux = f.x / fm, uy = f.y / fm;
+      fatArrow(ctx, m.x - ux * 6, m.y - uy * 6 - 36, m.x + ux * len, m.y + uy * len - 36, w, color);
+    });
+  }
+  if (near) {
+    const mx = (np.a.x + np.b.x) / 2, my = (np.a.y + np.b.y) / 2;
+    label(ctx, pull ? '引き合う！' : 'しりぞけ合う！', mx, my < 110 ? my + 66 : my - 72, color, 22);
+  }
+  // メッセージ（かわったときだけ書きかえる）
+  const nm = q => q > 0 ? 'N' + R('極', 'きょく') : 'S' + R('極', 'きょく');
+  let t;
+  if (!near) t = 'はなれていると、力は<ruby>弱<rt>よわ</rt></ruby>い。<ruby>磁石<rt>じしゃく</rt></ruby>を<ruby>近<rt>ちか</rt></ruby>づけてみよう。';
+  else if (np.a.q === np.b.q) t = '<span style="color:' + C_PUSH + '">' + nm(np.a.q) + ' と ' + nm(np.b.q) + '（<ruby>同<rt>おな</rt></ruby>じ<ruby>極<rt>きょく</rt></ruby>）→ しりぞけ合う ⇦ ⇨</span>';
+  else t = '<span style="color:' + C_PULL + '">' + nm(np.a.q) + ' と ' + nm(np.b.q) + '（ちがう<ruby>極<rt>きょく</rt></ruby>）→ 引き合う ⇨ ⇦</span>';
+  if (t !== msg1Text) { $('msg1').innerHTML = t; msg1Text = t; }
+}
+makeDraggable($('cv1'), P1);
+$('btnArrow').addEventListener('click', e => {
+  P1.arrows = !P1.arrows;
+  e.currentTarget.classList.toggle('active', P1.arrows);
+  e.currentTarget.innerHTML = '力の' + R('矢印', 'やじるし') + (P1.arrows ? ' ON' : ' OFF');
+});
+$('reset1').addEventListener('click', reset1);
+
+// =====================================================================
+// ② つく物・つかない物（仕分け）
+// =====================================================================
+// 調べる物の一覧。iron＝鉄でできているか（磁石につくか）。
+// 物をふやすときは、ここに1行たして、ICON に絵をかく。
+const ITEMS = [
+  { id: 'nail',   name: R('鉄', 'てつ') + 'くぎ',          text: '鉄くぎ',         mat: '鉄',           matR: R('鉄', 'てつ'),     iron: true },
+  { id: 'yen10',  name: '10' + R('円玉', 'えんだま'),       text: '10円玉',         mat: '銅',           matR: R('銅', 'どう'),     iron: false },
+  { id: 'alumi',  name: 'アルミかん',                       text: 'アルミかん',     mat: 'アルミニウム', matR: 'アルミニウム',      iron: false },
+  { id: 'eraser', name: R('消', 'け') + 'しゴム',           text: '消しゴム',       mat: 'プラスチック', matR: 'プラスチック',      iron: false },
+  { id: 'clip',   name: 'クリップ',                         text: 'クリップ',       mat: '鉄',           matR: R('鉄', 'てつ'),     iron: true },
+  { id: 'steel',  name: 'スチールかん',                     text: 'スチールかん',   mat: '鉄',           matR: R('鉄', 'てつ'),     iron: true },
+  { id: 'glass',  name: 'ガラスのコップ',                   text: 'ガラスのコップ', mat: 'ガラス',       matR: 'ガラス',            iron: false },
+  { id: 'yen1',   name: '1' + R('円玉', 'えんだま'),        text: '1円玉',          mat: 'アルミニウム', matR: 'アルミニウム',      iron: false },
+  { id: 'hashi',  name: 'わりばし',                         text: 'わりばし',       mat: '木',           matR: R('木', 'き'),       iron: false }
+];
+// 物の絵（SVG。横64×たて52）
+const ICON = {
+  nail: '<rect x="11" y="23" width="40" height="7" fill="#90a4ae" stroke="#455a64" stroke-width="2"/><rect x="6" y="15" width="6" height="23" rx="2" fill="#78909c" stroke="#455a64" stroke-width="2"/><polygon points="51,23 61,26.5 51,30" fill="#90a4ae" stroke="#455a64" stroke-width="2"/>',
+  yen10: '<circle cx="32" cy="26" r="21" fill="#c27a3a" stroke="#7a4317" stroke-width="3"/><circle cx="32" cy="26" r="15" fill="none" stroke="#e3a46c" stroke-width="2"/><text x="32" y="33" font-size="19" font-weight="bold" fill="#fff" text-anchor="middle">10</text>',
+  alumi: '<ellipse cx="32" cy="8" rx="13" ry="4" fill="#e0e0e0" stroke="#757575" stroke-width="2"/><rect x="19" y="8" width="26" height="38" fill="#eeeeee" stroke="#757575" stroke-width="2"/><rect x="19" y="18" width="26" height="15" fill="#43a047"/><ellipse cx="32" cy="46" rx="13" ry="4" fill="#bdbdbd" stroke="#757575" stroke-width="2"/>',
+  eraser: '<rect x="8" y="17" width="48" height="20" rx="3" fill="#fff" stroke="#9e9e9e" stroke-width="2"/><rect x="26" y="15" width="31" height="24" rx="2" fill="#1e88e5" stroke="#0d47a1" stroke-width="2"/>',
+  clip: '<path d="M14 18 H46 A8 8 0 0 1 46 34 H18 A5 5 0 0 1 18 24 H44" fill="none" stroke="#607d8b" stroke-width="3.5" stroke-linecap="round"/>',
+  steel: '<ellipse cx="32" cy="8" rx="13" ry="4" fill="#b0bec5" stroke="#455a64" stroke-width="2"/><rect x="19" y="8" width="26" height="38" fill="#cfd8dc" stroke="#455a64" stroke-width="2"/><rect x="19" y="16" width="26" height="20" fill="#6d4c41"/><ellipse cx="32" cy="46" rx="13" ry="4" fill="#90a4ae" stroke="#455a64" stroke-width="2"/>',
+  glass: '<path d="M18 6 H46 L42 47 H22 Z" fill="rgba(178,235,242,0.55)" stroke="#26a69a" stroke-width="2.5"/><path d="M24 12 L26 40" stroke="#fff" stroke-width="3" stroke-linecap="round"/>',
+  yen1: '<circle cx="32" cy="26" r="20" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="3"/><text x="32" y="34" font-size="22" font-weight="bold" fill="#757575" text-anchor="middle">1</text>',
+  hashi: '<path d="M10 40 L56 10 M14 44 L58 16" stroke="#c99a5b" stroke-width="5" stroke-linecap="round"/>'
+};
+const P2 = { tested: {}, drag: null };
+const itemEl = {};
+function buildItems() {
+  ITEMS.forEach(it => {
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.dataset.id = it.id;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', it.text);
+    el.innerHTML = '<svg viewBox="0 0 64 52" aria-hidden="true">' + ICON[it.id] + '</svg><div class="nm">' + it.name + '</div><div class="mat"></div>';
+    itemEl[it.id] = el;
+    el.addEventListener('pointerdown', e => startDrag(e, it, el));
+  });
+}
+function reset2() {
+  P2.tested = {};
+  ITEMS.forEach(it => {
+    const el = itemEl[it.id];
+    el.className = 'item'; el.removeAttribute('style');
+    el.querySelectorAll('.badge, .judge').forEach(b => b.remove());
+    el.querySelector('.mat').innerHTML = TEACHER ? '（' + it.matR + '）' : '';   // 先生モードでは、はじめから材料を見せる
+    $('tray').appendChild(el);
+  });
+  $('msg2').innerHTML = '&nbsp;'; $('result2').innerHTML = '&nbsp;';
+}
+// ---- ドラッグ（マウスでもタッチでも動くように pointer events を使う） ----
+function startDrag(e, it, el) {
+  if (P2.drag || el.classList.contains('fall')) return;
+  e.preventDefault();
+  const r = el.getBoundingClientRect();
+  P2.drag = { it, el, from: el.parentNode, ox: e.clientX - r.left, oy: e.clientY - r.top, sx: e.clientX, sy: e.clientY, moved: false, w: r.width };
+  el.setPointerCapture(e.pointerId);
+}
+function dropTarget(x, y) {
+  const t = document.elementFromPoint(x, y);
+  if (!t) return null;
+  if (t.closest('#lab')) return 'lab';
+  const box = t.closest('.box');
+  return box ? box.dataset.box : (t.closest('#tray') ? 'tray' : null);
+}
+function markOver(where) {
+  $('lab').classList.toggle('over', where === 'lab');
+  document.querySelectorAll('.box').forEach(b => b.classList.toggle('over', b.dataset.box === where));
+}
+document.addEventListener('pointermove', e => {
+  const d = P2.drag;
+  if (!d) return;
+  if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 6) return;
+  if (!d.moved) {
+    d.moved = true;
+    // 元の場所に同じ大きさのわくを残す（まわりの物や箱の位置がずれないように）
+    const r = d.el.getBoundingClientRect();
+    d.ph = document.createElement('div');
+    d.ph.className = 'ph'; d.ph.style.width = r.width + 'px'; d.ph.style.height = r.height + 'px';
+    d.el.parentNode.insertBefore(d.ph, d.el);
+    d.el.style.width = d.w + 'px'; d.el.classList.add('dragging');
+  }
+  d.el.style.left = (e.clientX - d.ox) + 'px';
+  d.el.style.top = (e.clientY - d.oy) + 'px';
+  markOver(dropTarget(e.clientX, e.clientY));
+});
+function endDrag(e) {
+  const d = P2.drag;
+  if (!d) return;
+  P2.drag = null;
+  markOver(null);
+  const where = d.moved ? dropTarget(e.clientX, e.clientY) : null;
+  if (d.ph) d.ph.remove();
+  d.el.classList.remove('dragging'); d.el.removeAttribute('style');
+  d.el.classList.remove('is-ng');
+  const j = d.el.querySelector('.judge'); if (j) j.remove();
+  if (where === 'lab') testItem(d.it, d.el, d.from);
+  else if (where === 'yes') $('boxYes').appendChild(d.el);
+  else if (where === 'no') $('boxNo').appendChild(d.el);
+  else if (where === 'tray') $('tray').appendChild(d.el);
+  else d.from.appendChild(d.el);       // どこでもないところで手をはなしたら、元の場所にもどす
+}
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+
+// ---- 磁石に近づけたとき ----
+function testItem(it, el, from) {
+  const first = !P2.tested[it.id];
+  P2.tested[it.id] = true;
+  // 「つく」「つかない」のしるし（形と文字でも区別）
+  let badge = el.querySelector('.badge');
+  if (!badge) { badge = document.createElement('span'); el.appendChild(badge); }
+  badge.className = 'badge ' + (it.iron ? 'yes' : 'no');
+  badge.textContent = it.iron ? '🧲 つく' : 'つかない';
+  el.querySelector('.mat').innerHTML = '（' + it.matR + '）';
+  if (it.iron) {
+    // N極側とS極側の、すいている方にくっつける
+    const side = $('stickN').children.length <= $('stickS').children.length ? $('stickN') : $('stickS');
+    side.appendChild(el);
+    el.classList.remove('snap'); void el.offsetWidth; el.classList.add('snap');
+    $('msg2').innerHTML = '<span style="color:' + C_PULL + '">カチッ！ ' + it.name + 'は、' + R('磁石', 'じしゃく') + 'に <b>ついた</b>！（' + it.matR + 'でできている）</span>';
+  } else {
+    // 磁石のはしに近づけたけれど、つかずに落ちる
+    $('stickN').appendChild(el);
+    el.classList.add('fall');
+    $('msg2').innerHTML = it.name + 'は、' + R('磁石', 'じしゃく') + 'に <b>つかなかった</b>。（' + it.matR + 'でできている）';
+    setTimeout(() => {
+      el.classList.remove('fall');
+      (from && !from.classList.contains('stick') ? from : $('tray')).appendChild(el);
+    }, 950);
+  }
+  if (first) Worksheet.addRecord({ obj: it.text, mat: it.mat, res: it.iron ? 'つく' : 'つかない' });
+}
+// ---- 答え合わせ ----
+$('check2').addEventListener('click', () => {
+  let ok = 0, ng = 0;
+  ITEMS.forEach(it => {
+    const el = itemEl[it.id], p = el.parentNode.id;
+    const old = el.querySelector('.judge'); if (old) old.remove();
+    el.classList.remove('is-ng');
+    if (p !== 'boxYes' && p !== 'boxNo') return;
+    const good = (p === 'boxYes') === it.iron;
+    const j = document.createElement('span');
+    j.className = 'judge ' + (good ? 'ok' : 'ng');
+    j.textContent = good ? '○' : '×';
+    el.appendChild(j);
+    if (good) ok++; else { ng++; el.classList.add('is-ng'); }
+  });
+  const rest = ITEMS.length - ok - ng;
+  let t;
+  if (ok === ITEMS.length) {
+    t = '<span style="color:#2e7d32">🎉 ぜんぶ正しく' + R('仕分', 'しわ') + 'けられた！ ' + R('磁石', 'じしゃく') + 'につくのは「' + R('鉄', 'てつ') + '」でできた' + R('物', 'もの') + 'だね。10' + R('円玉', 'えんだま') + 'やアルミかんは' + R('金属', 'きんぞく') + 'だけど、つかないよ。</span>';
+  } else {
+    t = '○ ' + ok + 'こ　× ' + ng + 'こ' + (rest ? '　まだ' + R('箱', 'はこ') + 'に入れていない' + R('物', 'もの') + '：' + rest + 'こ' : '') +
+      (ng ? '<br>× の' + R('物', 'もの') + 'は、もういちど' + R('磁石', 'じしゃく') + 'に' + R('近', 'ちか') + 'づけて' + R('調', 'しら') + 'べてみよう。' : '');
+  }
+  $('result2').innerHTML = t;
+});
+$('reset2').addEventListener('click', reset2);
+// 箱やトレーの上でも、テキストがえらばれないように
+['tray', 'lab'].forEach(id => $(id).addEventListener('selectstart', e => e.preventDefault()));
+
+// =====================================================================
+// ③ はなれていてもはたらく力
+// =====================================================================
+const SHEET = {                         // 1まいのあつさ（mm）と、図にかくときのあつさ（px）
+  paper:   { mm: 0.1, px: 5,  fill: '#fffdf0', stroke: '#9e9e9e', name: '紙' },
+  plastic: { mm: 1.0, px: 12, fill: 'rgba(100,181,246,0.55)', stroke: '#1565c0', name: '下じき' }
+};
+const D0 = 2;            // 力の弱まり方を決める長さ（mm）。F ＝ 1 ÷ (1 ＋ きょり÷D0)²
+const WEIGHT = 0.2;      // クリップの重さ（くっついたときの力を1としたとき）
+const MAG3 = { x0: 150, x1: 450, y0: 64, y1: 110 };    // 磁石の位置
+const CLIP_X = 395, FLOOR = 334, CLIP_H = 18;
+const P3 = { mat: 'paper', n: 0, y: 0, vy: 0, state: 'stick', timer: 0 };
+const pullOf = mm => 1 / Math.pow(1 + mm / D0, 2);   // 磁石と鉄のきょり（mm）→ 引く力（くっついたとき＝1）
+function sheetsBottom() { return MAG3.y1 + P3.n * SHEET[P3.mat].px; }
+function gapMM() {                        // いまの、磁石とクリップのきょり（mm）
+  const fallen = Math.max(0, P3.y - sheetsBottom());
+  return P3.n * SHEET[P3.mat].mm + fallen * 0.2;      // 落ちたぶんは 1px＝0.2mm として計算
+}
+function reset3setup() {
+  // まず、クリップを下からぴたっとつけてみる。力が重さより弱ければ、少しして落ちる
+  P3.y = sheetsBottom(); P3.vy = 0; P3.state = 'stick';
+  clearTimeout(P3.timer);
+  if (pullOf(P3.n * SHEET[P3.mat].mm) < WEIGHT) P3.timer = setTimeout(() => { P3.state = 'fall'; }, 500);
+  updateMsg3();
+}
+function updateMsg3() {
+  const s = SHEET[P3.mat], f = pullOf(P3.n * s.mm), name = P3.mat === 'paper' ? '紙' : 'プラスチックの' + R('下', 'した') + 'じき';
+  let t;
+  if (P3.n === 0) t = 'クリップが' + R('磁石', 'じしゃく') + 'に<b>ついている</b>。あいだに' + R('物', 'もの') + 'をはさむと、どうなるかな？';
+  else if (f >= WEIGHT) t = '<span style="color:' + C_PULL + '">' + name + 'を' + P3.n + 'まいはさんでも、クリップは<b>ついたまま</b>！ ' + R('磁石', 'じしゃく') + 'の力は、' + name + 'を通りぬけてはたらく。</span>';
+  else t = '<span style="color:' + C_PUSH + '">' + name + 'を' + P3.n + 'まいはさむと、クリップが<b>落ちた</b>。' + R('磁石', 'じしゃく') + 'からはなれるほど、力は' + R('弱', 'よわ') + 'くなる。</span>';
+  $('msg3').innerHTML = t;
+}
+function step3() {
+  if (P3.state === 'fall') {
+    P3.vy += 0.9; P3.y += P3.vy;
+    if (P3.y >= FLOOR - CLIP_H) { P3.y = FLOOR - CLIP_H; P3.vy = 0; P3.state = 'floor'; }
+  }
+  // メーター
+  const f = pullOf(gapMM()), on = Math.max(f > 0.02 ? 1 : 0, Math.round(f * 10));
+  $('meter').querySelectorAll('i').forEach((c, i) => c.classList.toggle('on', i < on));
+  $('meterWord').textContent = f > 0.8 ? 'とても強い' : f > 0.5 ? '強い' : f > 0.3 ? '少し弱い' : f > 0.1 ? '弱い' : 'とても弱い';
+}
+function draw3() {
+  const ctx = fit($('cv3'));
+  ctx.fillStyle = '#eef6fb'; ctx.fillRect(0, 0, W, H);
+  // つくえ
+  ctx.fillStyle = '#c8a46e'; ctx.fillRect(0, FLOOR, W, H - FLOOR);
+  ctx.fillStyle = '#b08850'; ctx.fillRect(0, FLOOR, W, 5);
+  // スタンド（磁石をささえる）
+  ctx.fillStyle = '#90a4ae'; ctx.strokeStyle = '#546e7a'; ctx.lineWidth = 2;
+  ctx.fillRect(40, 24, 12, FLOOR - 24); ctx.strokeRect(40, 24, 12, FLOOR - 24);
+  ctx.fillRect(20, FLOOR - 12, 60, 12); ctx.strokeRect(20, FLOOR - 12, 60, 12);
+  ctx.fillRect(40, 24, 262, 12); ctx.strokeRect(40, 24, 262, 12);
+  ctx.fillRect(282, 36, 30, MAG3.y0 - 36); ctx.strokeRect(282, 36, 30, MAG3.y0 - 36);
+  // 磁石（左がS、右がN）
+  drawMagnet(ctx, { x: (MAG3.x0 + MAG3.x1) / 2, y: (MAG3.y0 + MAG3.y1) / 2, a: 0 }, false);
+  // はさんだ紙・下じき
+  const s = SHEET[P3.mat];
+  for (let i = 0; i < P3.n; i++) {
+    const y = MAG3.y1 + i * s.px;
+    ctx.fillStyle = s.fill; ctx.fillRect(120, y, 360, s.px);
+    ctx.strokeStyle = s.stroke; ctx.lineWidth = 1.2; ctx.strokeRect(120, y + 0.5, 360, s.px - 1);
+  }
+  if (P3.n) label(ctx, (P3.mat === 'paper' ? '紙' : '下じき') + ' ' + P3.n + 'まい', 120, sheetsBottom() + 20, '#455a64', 16, 'left');
+  // クリップ
+  const cy = P3.y;
+  ctx.strokeStyle = '#546e7a'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(CLIP_X - 26, cy + 3); ctx.lineTo(CLIP_X + 20, cy + 3);
+  ctx.arc(CLIP_X + 20, cy + 9, 6, -Math.PI / 2, Math.PI / 2);
+  ctx.lineTo(CLIP_X - 22, cy + 15);
+  ctx.arc(CLIP_X - 22, cy + 11, 4, Math.PI / 2, Math.PI * 1.5);
+  ctx.lineTo(CLIP_X + 14, cy + 7);
+  ctx.stroke(); ctx.lineCap = 'butt';
+  label(ctx, 'クリップ（鉄）', CLIP_X - 70, cy + 9, '#37474f', 15, 'right');
+  // 力の矢印：じしゃくが引く力（上向き・太さ＝強さ）と、クリップの重さ（下向き）
+  const f = pullOf(gapMM());
+  const wPull = 3 + f * 26, wW = 3 + WEIGHT * 26;
+  const wLen = Math.min(46, H - 6 - (cy + 9));        // 下の矢印が図からはみ出さないように
+  fatArrow(ctx, 500, cy + 9, 500, cy + 9 - 72, wPull, C_PULL);
+  label(ctx, '引く力', 500, Math.max(14, cy - 76), C_PULL, 16);
+  fatArrow(ctx, 540, cy + 9, 540, cy + 9 + wLen, wW, '#757575');
+  label(ctx, '重さ', 556, cy + 9 + wLen / 2, '#555', 16, 'left');
+}
+document.querySelectorAll('[data-mat]').forEach(b => b.addEventListener('click', () => {
+  P3.mat = b.dataset.mat;
+  document.querySelectorAll('[data-mat]').forEach(x => x.classList.toggle('active', x === b));
+  reset3setup();
+}));
+document.querySelectorAll('#countRow3 [data-n]').forEach(b => b.addEventListener('click', () => {
+  P3.n = +b.dataset.n;
+  document.querySelectorAll('#countRow3 [data-n]').forEach(x => x.classList.toggle('active', x === b));
+  reset3setup();
+}));
+$('reset3').addEventListener('click', () => {
+  P3.mat = 'paper'; P3.n = 0;
+  document.querySelectorAll('[data-mat]').forEach(x => x.classList.toggle('active', x.dataset.mat === 'paper'));
+  document.querySelectorAll('#countRow3 [data-n]').forEach(x => x.classList.toggle('active', x.dataset.n === '0'));
+  reset3setup();
+});
+
+// =====================================================================
+// ④ 砂鉄のもよう
+// =====================================================================
+const P4 = { mags: [], sel: 0, drag: null, sand: true, preset: 'one', grains: [], t0: 0 };
+const PRESET = {
+  one: () => [{ x: 300, y: 180, a: 0 }],
+  ns:  () => [{ x: 160, y: 180, a: 0 }, { x: 440, y: 180, a: 0 }],          // 左の磁石のN と 右の磁石のS が向かい合う
+  nn:  () => [{ x: 160, y: 180, a: 0 }, { x: 440, y: 180, a: Math.PI }]     // N と N が向かい合う
+};
+function setPreset(p) {
+  P4.preset = p; P4.mags = PRESET[p](); P4.sel = 0;
+  document.querySelectorAll('[data-preset]').forEach(x => x.classList.toggle('active', x.dataset.preset === p));
+  sprinkle();
+}
+// 砂鉄のつぶの位置を、少しずつずらしながら全体にまく
+function sprinkle() {
+  P4.grains = [];
+  for (let y = 4; y < H; y += 8) for (let x = 4; x < W; x += 8) {
+    P4.grains.push({ x: x + (Math.random() - 0.5) * 7, y: y + (Math.random() - 0.5) * 7, a0: Math.random() * Math.PI });
+  }
+  P4.t0 = performance.now();
+}
+// ある点での磁石の力の向きと強さ（N極から出て、S極に入る向き）
+function fieldAt(x, y, mags) {
+  let bx = 0, by = 0;
+  for (const m of mags) for (const p of poles(m)) {
+    const dx = x - p.x, dy = y - p.y, r2 = dx * dx + dy * dy + 25;
+    const f = p.q / (r2 * Math.sqrt(r2));
+    bx += f * dx; by += f * dy;
+  }
+  return { x: bx, y: by };
+}
+function draw4() {
+  const ctx = fit($('cv4'));
+  ctx.fillStyle = '#fbfbf6'; ctx.fillRect(0, 0, W, H);
+  const k = Math.min(1, (performance.now() - P4.t0) / 1200);   // まいてから、ならぶまで（0→1）
+  const ease = 1 - Math.pow(1 - k, 3);
+  if (P4.sand) {
+    ctx.lineCap = 'round';
+    for (const g of P4.grains) {
+      if (P4.mags.some(m => inMagnet(m, g, 3))) continue;      // 磁石の上にはかかない
+      const b = fieldAt(g.x, g.y, P4.mags), s = Math.hypot(b.x, b.y) * 3.5e3;
+      const strong = Math.min(1, s);
+      const ta = Math.atan2(b.y, b.x);
+      // まいたばかりはばらばらの向き → だんだん力の向きにならぶ
+      let da = ((ta - g.a0) % Math.PI + Math.PI * 1.5) % Math.PI - Math.PI / 2;
+      const ang = g.a0 + da * ease * Math.min(1, strong * 3);
+      const len = 3 + 5 * Math.sqrt(strong);
+      const alpha = 0.12 + 0.88 * Math.pow(strong, 0.6);
+      ctx.strokeStyle = 'rgba(40,44,52,' + alpha.toFixed(3) + ')';
+      ctx.lineWidth = 1.3 + strong * 1.4;
+      const cx = Math.cos(ang) * len / 2, cy = Math.sin(ang) * len / 2;
+      ctx.beginPath(); ctx.moveTo(g.x - cx, g.y - cy); ctx.lineTo(g.x + cx, g.y + cy); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+  P4.mags.forEach((m, i) => drawMagnet(ctx, m, P4.mags.length > 1 && i === P4.sel));
+}
+function updateMsg4() {
+  const t = {
+    one: R('砂鉄', 'さてつ') + 'は、' + R('磁石', 'じしゃく') + 'の<b>' + R('両', 'りょう') + 'はし（N' + R('極', 'きょく') + 'とS' + R('極', 'きょく') + '）</b>にたくさん' + R('集', 'あつ') + 'まり、N から S へつながるもようになる。',
+    ns: 'N と S のあいだでは、' + R('砂鉄', 'さてつ') + 'が<b>' + R('橋', 'はし') + 'のようにつながる</b>（引き合う）。',
+    nn: 'N と N のあいだでは、' + R('砂鉄', 'さてつ') + 'が<b>おし合うように' + R('外', 'そと') + 'へ曲がる</b>（しりぞけ合う）。'
+  }[P4.preset];
+  $('msg4').innerHTML = t;
+}
+P4.onChange = () => {};
+makeDraggable($('cv4'), P4);
+document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => { setPreset(b.dataset.preset); updateMsg4(); }));
+$('btnSand').addEventListener('click', e => {
+  P4.sand = !P4.sand;
+  e.currentTarget.classList.toggle('active', P4.sand);
+  e.currentTarget.innerHTML = R('砂鉄', 'さてつ') + (P4.sand ? ' ON' : ' OFF');
+});
+$('sprinkle').addEventListener('click', () => { P4.sand = true; $('btnSand').classList.add('active'); $('btnSand').innerHTML = R('砂鉄', 'さてつ') + ' ON'; sprinkle(); });
+$('reset4').addEventListener('click', () => { setPreset('one'); updateMsg4(); });
+
+// ===== 回すボタン（①と④） =====
+document.querySelectorAll('[data-rot]').forEach(b => b.addEventListener('click', () => {
+  rotateSel(b.dataset.p === '1' ? P1 : P4, +b.dataset.rot);
+}));
+
+// ===== タブの切りかえ =====
+let tab = 'p1';
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('hidden', p.id !== 'page-' + tab));
+  if (tab === 'p3') reset3setup();
+  if (tab === 'p4') sprinkle();
+}));
+
+// ===== 毎回の計算と表示 =====
+function frame() {
+  if (tab === 'p1') { const f = step1(); draw1(f.fA, f.fB); }
+  else if (tab === 'p3') { step3(); draw3(); }
+  else if (tab === 'p4') draw4();
+  requestAnimationFrame(frame);
+}
+
+// ===== はじめ =====
+reset1();
+buildItems(); reset2();
+reset3setup();
+setPreset('one'); updateMsg4();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
