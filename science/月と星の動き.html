@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>月と星の動き</title>
+<!--
+  月と星の動き（小学4年 理科「月と星」）
+  ・南を向いて立ったときに見える空を、半円（ドーム）の形でかいています。
+    下のまっすぐな線が地平線、左はしが東、まん中が南、右はしが西、半円のてっぺんが真上です。
+  ・「北の空」に切りかえると、北極星を中心に星が回るようすが見られます。
+  ・星の位置は、日本（北緯35度・東経135度）から見た本物の位置を計算しています（星座シミュレーター.html と同じ計算）。
+  ・月と太陽は、かんたんにするため「春分・秋分のころの太陽と同じ通り道」を動くことにしています（下の moonENU）。
+  ・ワークシート部品（worksheet.js）を使っています。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* ワークシートの色を、夜空に合う青むらさきにする */
+  :root { --ws-main: #3949ab; --ws-dark: #1a237e; --ws-light: #e8eaf6; --ws-line: #c5cae9; }
+  @media (min-width: 900px) { body.ws-on > .ws-panel { background: linear-gradient(180deg, #f5f6fc 0%, #e8eaf6 100%); } }
+
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #1a237e 0%, #283593 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #c5cae9; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #fff; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #c5cae9; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+  ruby rt { font-size: 0.55em; }
+
+  /* 安全メッセージ */
+  .safety {
+    background: #fff8e1; border: 3px solid #f9a825; border-radius: 12px;
+    padding: 4px 12px; font-size: 16px; font-weight: bold; color: #6d4c00; text-align: center; line-height: 1.9;
+  }
+
+  /* 空の図 */
+  .sky-card { background: #10173a; padding: 8px 10px 10px; }
+  .sky-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+  .tabs { display: flex; gap: 6px; }
+  .tab {
+    min-height: 44px; border: 3px solid #5c6bc0; background: transparent; color: #c5cae9;
+    border-radius: 12px; padding: 2px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .tab.active { background: #fff59d; border-color: #fff59d; color: #1a237e; }
+  .clock { font-size: 1.4rem; font-weight: bold; color: #fff59d; white-space: nowrap; }
+  #sky { display: block; width: 100%; aspect-ratio: 2 / 1.2; max-height: 62vh; touch-action: none; }
+  .info { color: #e8eaf6; font-size: 17px; line-height: 1.6; margin-top: 4px; min-height: 3.2em; }
+  .info b { color: #fff59d; }
+
+  /* 操作パネル */
+  .time-row { display: flex; align-items: center; gap: 10px; }
+  .time-row span { font-size: 16px; white-space: nowrap; color: #555; }
+  input[type=range] { flex: 1; min-width: 0; height: 44px; accent-color: #3949ab; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .row-l { justify-content: flex-start; }
+  .grp { font-weight: bold; color: #1a237e; white-space: nowrap; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #3949ab; border-color: #3949ab; color: #fff; }
+  .go-btn { border: none; background: #3949ab; color: #fff; padding: 8px 18px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.mark { background: #6a1b9a; }
+  .go-btn.ghost { background: #00838f; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .day-row { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; }
+  .day-row .dval { white-space: nowrap; font-weight: bold; color: #1a237e; min-width: 6.5em; }
+  .sep { border: none; border-top: 2px dashed #e0e0e0; margin: 8px 0 2px; }
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #6a1b9a; margin-top: 6px; }
+
+  /* 方位磁針の使い方 */
+  details.card summary { font-weight: bold; color: #1a237e; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+  .compass { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  .compass svg { width: 150px; height: 150px; flex: none; margin: 0 auto; }
+  .compass ol { flex: 1 1 260px; margin: 0; padding-left: 1.4em; line-height: 1.8; }
+  .compass .note { flex-basis: 100%; font-size: 16px; color: #555; margin: 0; }
+
+  .diff { font-size: 15px; color: #c5cae9; margin: 2px 0 0; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🌙 <ruby>月<rt>つき</rt></ruby>と<ruby>星<rt>ほし</rt></ruby>の<ruby>動<rt>うご</rt></ruby>き</h1>
+<p class="subtitle">時こくを<ruby>進<rt>すす</rt></ruby>めて、<ruby>月<rt>つき</rt></ruby>と<ruby>星<rt>ほし</rt></ruby>がどう<ruby>動<rt>うご</rt></ruby>くか<ruby>観察<rt>かんさつ</rt></ruby>しよう</p>
+
+<div class="panel">
+  <div class="safety">
+    🌙 <ruby>夜<rt>よる</rt></ruby>の<ruby>観察<rt>かんさつ</rt></ruby>は、かならず<ruby>大人<rt>おとな</rt></ruby>といっしょに。<ruby>車<rt>くるま</rt></ruby>やくらい<ruby>道<rt>みち</rt></ruby>に気をつけよう<br>
+    ⚠ <ruby>昼<rt>ひる</rt></ruby>の<ruby>月<rt>つき</rt></ruby>を見るときも、<ruby>太陽<rt>たいよう</rt></ruby>はぜったいに見てはいけません
+  </div>
+
+  <!-- 空の図 -->
+  <div class="card sky-card">
+    <div class="sky-head">
+      <div class="tabs" role="group" aria-label="見る方角">
+        <button class="tab active" data-view="S">🧭 <ruby>南<rt>みなみ</rt></ruby>の<ruby>空<rt>そら</rt></ruby></button>
+        <button class="tab" data-view="N">⭐ <ruby>北<rt>きた</rt></ruby>の<ruby>空<rt>そら</rt></ruby></button>
+      </div>
+      <div class="clock" id="clock">午後6時</div>
+    </div>
+    <canvas id="sky" aria-label="南を向いて見た空。地平線と、東・南・西の方位、月と星"></canvas>
+    <div class="info" id="info"></div>
+  </div>
+
+  <!-- 操作 -->
+  <div class="card ctrl">
+    <div class="time-row">
+      <span>午後6時</span>
+      <input type="range" id="slider" min="18" max="30" step="any" value="18" aria-label="時こく">
+      <span>午前6時</span>
+    </div>
+    <div class="row">
+      <button class="go-btn" id="btnPlay">▶ さいせい</button>
+      <span>
+        <button class="chip" data-speed="8">ゆっくり</button>
+        <button class="chip active" data-speed="4">ふつう</button>
+        <button class="chip" data-speed="1.5">はやおくり</button>
+      </span>
+      <button class="go-btn mark" id="btnMark">📍 <ruby>月<rt>つき</rt></ruby>の<ruby>位置<rt>いち</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby></button>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+
+    <hr class="sep">
+    <div class="row row-l">
+      <span class="grp">🌙 <ruby>月<rt>つき</rt></ruby>の<ruby>形<rt>かたち</rt></ruby></span>
+      <button class="chip" data-day="3"><ruby>三日月<rt>みかづき</rt></ruby></button>
+      <button class="chip" data-day="7"><ruby>半月<rt>はんげつ</rt></ruby></button>
+      <button class="chip active" data-day="15"><ruby>満月<rt>まんげつ</rt></ruby></button>
+      <div class="day-row">
+        <input type="range" id="daySlider" min="1" max="29" step="1" value="15" aria-label="新月から何日目か">
+        <span class="dval" id="dayVal"><ruby>新月<rt>しんげつ</rt></ruby>から15日目</span>
+      </div>
+    </div>
+
+    <hr class="sep">
+    <div class="row row-l">
+      <span class="grp">⭐ <ruby>星<rt>ほし</rt></ruby></span>
+      <button class="chip active" data-season="summer"><ruby>夏<rt>なつ</rt></ruby>の<ruby>夜<rt>よる</rt></ruby></button>
+      <button class="chip" data-season="winter"><ruby>冬<rt>ふゆ</rt></ruby>の<ruby>夜<rt>よる</rt></ruby></button>
+      <button class="chip active" id="tgLines" aria-pressed="true"><ruby>星座<rt>せいざ</rt></ruby>の<ruby>線<rt>せん</rt></ruby> ON</button>
+      <button class="chip active" id="tgNames" aria-pressed="true"><ruby>名前<rt>なまえ</rt></ruby> ON</button>
+      <button class="chip" id="tgTrail" aria-pressed="false">1時間ごとの<ruby>位置<rt>いち</rt></ruby> OFF</button>
+      <button class="chip active" id="tgGrid" aria-pressed="true"><ruby>目<rt>め</rt></ruby>もり ON</button>
+    </div>
+    <div class="row">
+      <button class="go-btn ghost" id="btnCopy">📸 <ruby>星座<rt>せいざ</rt></ruby>の<ruby>形<rt>かたち</rt></ruby>をうつす</button>
+      <button class="go-btn ghost" id="btnFit">🔁 うつした<ruby>形<rt>かたち</rt></ruby>をかさねる</button>
+    </div>
+    <div class="msg" id="msg">「▶ さいせい」で時間を<ruby>進<rt>すす</rt></ruby>めてみよう</div>
+  </div>
+
+  <!-- 方位磁針の使い方 -->
+  <details class="card">
+    <summary>🧭 <ruby>方位磁針<rt>ほういじしん</rt></ruby>の<ruby>使<rt>つか</rt></ruby>い<ruby>方<rt>かた</rt></ruby>（<ruby>南<rt>みなみ</rt></ruby>の<ruby>見<rt>み</rt></ruby>つけ<ruby>方<rt>かた</rt></ruby>）</summary>
+    <div class="compass">
+      <!-- 方位磁針の絵：色のついた針（しまもよう）が北をさす -->
+      <svg viewBox="0 0 150 150" role="img" aria-label="方位磁針の絵。色のついた針が北をさしている">
+        <defs><pattern id="stripe" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="6" height="6" fill="#d32f2f"/><rect width="3" height="6" fill="#ef5350"/></pattern></defs>
+        <circle cx="75" cy="75" r="70" fill="#eceff1" stroke="#455a64" stroke-width="5"/>
+        <circle cx="75" cy="75" r="58" fill="#fff" stroke="#b0bec5" stroke-width="2"/>
+        <g font-size="18" font-weight="bold" text-anchor="middle" fill="#263238">
+          <text x="75" y="32">北</text><text x="75" y="132">南</text><text x="122" y="81">東</text><text x="28" y="81">西</text>
+        </g>
+        <polygon points="75,38 84,75 66,75" fill="url(#stripe)" stroke="#b71c1c" stroke-width="1.5"/>
+        <polygon points="75,112 84,75 66,75" fill="#fff" stroke="#607d8b" stroke-width="1.5"/>
+        <circle cx="75" cy="75" r="5" fill="#455a64"/>
+      </svg>
+      <ol>
+        <li><ruby>方位磁針<rt>ほういじしん</rt></ruby>を<ruby>水平<rt>すいへい</rt></ruby>に<ruby>持<rt>も</rt></ruby>ち、<ruby>針<rt>はり</rt></ruby>が<ruby>止<rt>と</rt></ruby>まるのを<ruby>待<rt>ま</rt></ruby>つ。</li>
+        <li><ruby>色<rt>いろ</rt></ruby>のついた<ruby>針<rt>はり</rt></ruby>は<b><ruby>北<rt>きた</rt></ruby></b>をさす。<ruby>文字<rt>もじ</rt></ruby><ruby>盤<rt>ばん</rt></ruby>を<ruby>回<rt>まわ</rt></ruby>して、「<ruby>北<rt>きた</rt></ruby>」を<ruby>色<rt>いろ</rt></ruby>のついた<ruby>針<rt>はり</rt></ruby>に<ruby>合<rt>あ</rt></ruby>わせる。</li>
+        <li>「<ruby>南<rt>みなみ</rt></ruby>」の<ruby>文字<rt>もじ</rt></ruby>の<ruby>向<rt>む</rt></ruby>きを<ruby>向<rt>む</rt></ruby>いて<ruby>立<rt>た</rt></ruby>つ。<b><ruby>左手<rt>ひだりて</rt></ruby>が<ruby>東<rt>ひがし</rt></ruby>、<ruby>右手<rt>みぎて</rt></ruby>が<ruby>西<rt>にし</rt></ruby></b>になる。</li>
+      </ol>
+      <p class="note">※<ruby>鉄<rt>てつ</rt></ruby>や<ruby>磁石<rt>じしゃく</rt></ruby>の<ruby>近<rt>ちか</rt></ruby>くでは、<ruby>針<rt>はり</rt></ruby>がくるって<ruby>正<rt>ただ</rt></ruby>しい<ruby>向<rt>む</rt></ruby>きをさしません。<br>
+      ※<ruby>高<rt>たか</rt></ruby>さは、うでをのばした<b>にぎりこぶし</b>で<ruby>数<rt>かぞ</rt></ruby>えます。こぶし1こ<ruby>分<rt>ぶん</rt></ruby>が<ruby>約<rt>やく</rt></ruby>10<ruby>度<rt>ど</rt></ruby>です。</p>
+    </div>
+  </details>
+
+  <p class="diff">※じっさいとのちがい：<ruby>月<rt>つき</rt></ruby>は30日でもとの<ruby>形<rt>かたち</rt></ruby>にもどることにしています（<ruby>本当<rt>ほんとう</rt></ruby>は<ruby>約<rt>やく</rt></ruby>29.5日）。<ruby>月<rt>つき</rt></ruby>の<ruby>通<rt>とお</rt></ruby>り<ruby>道<rt>みち</rt></ruby>は、<ruby>春分<rt>しゅんぶん</rt></ruby>・<ruby>秋分<rt>しゅうぶん</rt></ruby>のころの<ruby>太陽<rt>たいよう</rt></ruby>と<ruby>同<rt>おな</rt></ruby>じにしています（<ruby>本当<rt>ほんとう</rt></ruby>は<ruby>日<rt>ひ</rt></ruby>によって<ruby>高<rt>たか</rt></ruby>さがかわります）。<ruby>月<rt>つき</rt></ruby>と<ruby>星<rt>ほし</rt></ruby>のならび<ruby>方<rt>かた</rt></ruby>は<ruby>本当<rt>ほんとう</rt></ruby>の<ruby>日<rt>ひ</rt></ruby>づけとはちがいます。<ruby>月<rt>つき</rt></ruby>は<ruby>大<rt>おお</rt></ruby>きめにかいています。<ruby>星<rt>ほし</rt></ruby>の<ruby>位置<rt>いち</rt></ruby>は<ruby>夏<rt>なつ</rt></ruby>＝8月1日、<ruby>冬<rt>ふゆ</rt></ruby>＝1月20日の<ruby>本当<rt>ほんとう</rt></ruby>の<ruby>位置<rt>いち</rt></ruby>です。</p>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: '<ruby>月<rt>つき</rt></ruby>と<ruby>星<rt>ほし</rt></ruby>の<ruby>動<rt>うご</rt></ruby>き',
+  question: '2時間後、<ruby>月<rt>つき</rt></ruby>はどちらに<ruby>動<rt>うご</rt></ruby>くだろうか？',
+  predictionChoices: ['<ruby>東<rt>ひがし</rt></ruby>の<ruby>方<rt>ほう</rt></ruby>へ動く', '<ruby>西<rt>にし</rt></ruby>の<ruby>方<rt>ほう</rt></ruby>へ動く', '動かない'],
+  experimentNote: '<ruby>月<rt>つき</rt></ruby>の<ruby>形<rt>かたち</rt></ruby>をえらび、時こくを<ruby>進<rt>すす</rt></ruby>めながら「📍 <ruby>月<rt>つき</rt></ruby>の<ruby>位置<rt>いち</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby>」をおそう。1時間ごとに<ruby>記録<rt>きろく</rt></ruby>するとくらべやすいよ。',
+  columns: [
+    { key: 'time',   label: '時こく' },
+    { key: 'shape',  label: '<ruby>月<rt>つき</rt></ruby>の<ruby>形<rt>かたち</rt></ruby>' },
+    { key: 'dir',    label: '<ruby>方位<rt>ほうい</rt></ruby>' },
+    { key: 'height', label: '<ruby>高<rt>たか</rt></ruby>さ' }
+  ],
+  chart: false,
+  hint: '方位磁針で南を確かめ、建物や木を目じるしにして、同じ場所から観察することを確かめましょう。高さはにぎりこぶし（1こ約10度）で数えます。満月・半月・三日月で、見える時こくと方位をくらべさせると、どの月も「東→南→西」と動くことに気づけます。星は「📸 星座の形をうつす」→時間を進める→「🔁 うつした形をかさねる」で、ならび方が変わらないことを確かめさせましょう。',
+  answer: '月は、東の方からのぼり、南の空を通って、西の方へしずむ。2時間後には西の方へ動いている。月の形がちがっても、動き方は同じ（見える時こくはちがう：満月は夕方東→真夜中に南→明け方西、半月は夕方南→真夜中ごろ西にしずむ、三日月は夕方西のひくい空ですぐしずむ）。星も時間とともに位置がかわるが、星のならび方はかわらない。北の空の星は、北極星を中心に回るように動く。'
+});
+
+// ===== 天文の計算 =====
+const LAT = 35 * Math.PI / 180;   // 北緯35度（日本）
+const LON = 135;                  // 東経135度（日本標準時の子午線）
+const CYCLE = 30;                 // 教材用に、30日で月の形がもとにもどるモデル（本当は約29.5日）
+const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+
+// 時角（H：真南から西へ何度回ったか）と赤緯（dec：天の赤道から北へ何度か）から、
+// 「東・北・上」の向きの長さ（長さ1の矢印）を求める
+function enu(Hdeg, decDeg) {
+  const H = rad(Hdeg), d = rad(decDeg);
+  return {
+    E: -Math.cos(d) * Math.sin(H),
+    N: Math.cos(LAT) * Math.sin(d) - Math.sin(LAT) * Math.cos(d) * Math.cos(H),
+    U: Math.sin(LAT) * Math.sin(d) + Math.cos(LAT) * Math.cos(d) * Math.cos(H)
+  };
+}
+const altOf = v => deg(Math.asin(Math.max(-1, Math.min(1, v.U))));    // 高さ（度）
+const azOf = v => (deg(Math.atan2(v.E, v.N)) + 360) % 360;             // 方位（北から時計回り、度）
+
+// 太陽：時こく t（18〜30時。24より大きいのは次の日の朝）で、正午に真南
+const sunENU = t => enu((t - 12) * 15, 0);
+// 月：太陽より「新月からの日数×12度」おくれて動く（30日で360度）
+const moonAngle = day => day / CYCLE * 360;
+const moonENU = (t, day) => enu((t - 12) * 15 - moonAngle(day), 0);
+
+// 星：季節の日づけと時こくから、本物の位置を計算（星座シミュレーターと同じ式）
+const SEASONS = { summer: { m: 8, d: 1, name: '夏' }, winter: { m: 1, d: 20, name: '冬' } };
+function starENU(s, t) {
+  const se = SEASONS[st.season];
+  const days = (Date.UTC(2026, se.m - 1, se.d) - Date.UTC(2000, 0, 1, 12)) / 86400000 + (t - 9) / 24;
+  const lst = (280.46061837 + 360.98564736629 * days + LON) % 360;  // 地方恒星時（度）
+  return enu(lst - s.ra * 15, s.dec);
+}
+
+// ===== 星のデータ [記号, 赤経(時), 赤緯(度), 等級, 色, 名前] =====
+const COLORS = { r: '#ff8a80', o: '#ffcc80', y: '#fff59d', w: '#ffffff', b: '#b3d4fc' };
+const STARS = {};
+[
+  // おおぐま座（北斗七星）
+  ['dub', 11.062, 61.75, 1.8, 'o'], ['mer', 11.031, 56.38, 2.4, 'w'], ['phe', 11.897, 53.69, 2.4, 'w'],
+  ['meg', 12.257, 57.03, 3.3, 'w'], ['ali', 12.900, 55.96, 1.8, 'w'], ['miz', 13.399, 54.93, 2.3, 'w'], ['alk', 13.792, 49.31, 1.9, 'b'],
+  // カシオペヤ座
+  ['cap1', 0.153, 59.15, 2.3, 'w'], ['sche', 0.675, 56.54, 2.2, 'o'], ['gcas', 0.945, 60.72, 2.5, 'b'],
+  ['ruch', 1.430, 60.24, 2.7, 'w'], ['seg', 1.907, 63.67, 3.4, 'b'],
+  // こぐま座
+  ['pol', 2.530, 89.26, 2.0, 'y', '北極星'], ['koc', 14.845, 74.16, 2.1, 'o'], ['phk', 15.345, 71.83, 3.0, 'w'],
+  ['zumi', 15.734, 77.79, 4.3, 'w'], ['eumi', 16.766, 82.04, 4.2, 'w'], ['dumi', 17.537, 86.59, 4.4, 'w'], ['humi', 16.291, 75.76, 4.9, 'w'],
+  // こと座・はくちょう座・わし座（夏の大三角）
+  ['vega', 18.615, 38.78, 0.0, 'b', 'ベガ'], ['shel', 18.835, 33.36, 3.5, 'w'], ['sula', 18.982, 32.69, 3.3, 'w'],
+  ['den', 20.690, 45.28, 1.3, 'w', 'デネブ'], ['sadr', 20.371, 40.26, 2.2, 'y'], ['dcyg', 19.749, 45.13, 2.9, 'w'],
+  ['gien', 20.770, 33.97, 2.5, 'o'], ['albi', 19.512, 27.96, 3.1, 'o'],
+  ['alt', 19.846, 8.87, 0.8, 'w', 'アルタイル'], ['tar', 19.771, 10.61, 2.7, 'o'], ['alsh', 19.921, 6.41, 3.7, 'w'],
+  // さそり座
+  ['ant', 16.490, -26.43, 1.1, 'r', 'アンタレス'], ['dsco', 16.005, -22.62, 2.3, 'b'], ['bsco', 16.091, -19.81, 2.6, 'b'],
+  ['psco', 15.981, -26.11, 2.9, 'b'], ['ssco', 16.353, -25.59, 2.9, 'b'], ['tsco', 16.598, -28.22, 2.8, 'b'],
+  ['esco', 16.836, -34.29, 2.3, 'o'], ['musc', 16.864, -38.05, 3.0, 'b'], ['zsco', 16.910, -42.36, 3.6, 'o'],
+  ['etas', 17.202, -43.24, 3.3, 'w'], ['sarg', 17.622, -43.00, 1.9, 'w'], ['iota', 17.793, -40.13, 3.0, 'w'],
+  ['kaps', 17.708, -39.03, 2.4, 'b'], ['shau', 17.560, -37.10, 1.6, 'b'], ['les', 17.513, -37.30, 2.7, 'b'],
+  // オリオン座
+  ['bet', 5.919, 7.41, 0.5, 'r', 'ベテルギウス'], ['rig', 5.242, -8.20, 0.1, 'b', 'リゲル'],
+  ['bell', 5.418, 6.35, 1.6, 'b'], ['saif', 5.796, -9.67, 2.1, 'b'],
+  ['alni', 5.679, -1.94, 1.8, 'b'], ['alnl', 5.604, -1.20, 1.7, 'b'], ['mint', 5.533, -0.30, 2.2, 'b'],
+  // 冬の星
+  ['sir', 6.752, -16.72, -1.5, 'w', 'シリウス'], ['proc', 7.655, 5.22, 0.4, 'y', 'プロキオン'],
+  ['alde', 4.599, 16.51, 0.9, 'o', 'アルデバラン'], ['suba', 3.790, 24.12, 1.6, 'b', 'すばる'],
+  ['cape', 5.278, 46.00, 0.1, 'y', 'カペラ'],
+  ['plx', 7.755, 28.03, 1.1, 'o', 'ポルックス'], ['cast', 7.577, 31.89, 1.6, 'w'],
+  // 春の星
+  ['reg', 10.140, 11.97, 1.4, 'b', 'レグルス'], ['arc', 14.261, 19.18, 0.0, 'o', 'アークトゥルス'], ['spi', 13.420, -11.16, 1.0, 'b', 'スピカ']
+].forEach(([k, ra, dec, mag, col, name]) => { STARS[k] = { ra, dec, mag, col, name }; });
+
+// ===== 星座（線でむすぶ星） =====
+// 新しい星座を足すときは、上の STARS に星を足してから、ここに1行足します。
+const CONSTS = [
+  { name: '北斗七星', anchor: 'meg', dy: -22, lines: [['dub','mer'],['mer','phe'],['phe','meg'],['meg','dub'],['meg','ali'],['ali','miz'],['miz','alk']] },
+  { name: 'カシオペヤ座', anchor: 'gcas', dy: -22, lines: [['cap1','sche'],['sche','gcas'],['gcas','ruch'],['ruch','seg']] },
+  { name: 'こぐま座', anchor: 'koc', dy: 22, lines: [['pol','dumi'],['dumi','eumi'],['eumi','zumi'],['zumi','koc'],['koc','phk'],['phk','humi'],['humi','zumi']] },
+  { name: 'こと座', anchor: 'shel', dy: 22, lines: [['vega','shel'],['shel','sula'],['sula','vega']] },
+  { name: 'はくちょう座', anchor: 'sadr', dy: -22, lines: [['den','sadr'],['sadr','albi'],['dcyg','sadr'],['sadr','gien']] },
+  { name: 'わし座', anchor: 'alt', dy: 24, lines: [['tar','alt'],['alt','alsh']] },
+  { name: 'さそり座', anchor: 'esco', dy: 24, lines: [['bsco','dsco'],['dsco','psco'],['dsco','ssco'],['ssco','ant'],['ant','tsco'],['tsco','esco'],['esco','musc'],['musc','zsco'],['zsco','etas'],['etas','sarg'],['sarg','iota'],['iota','kaps'],['kaps','shau'],['shau','les']] },
+  { name: 'オリオン座', anchor: 'saif', dy: 26, lines: [['bet','bell'],['bell','mint'],['bet','alni'],['mint','alnl'],['alnl','alni'],['mint','rig'],['alni','saif'],['rig','saif']] },
+  { name: 'おうし座', anchor: 'alde', dy: 24, lines: [['alde','suba']] }
+];
+// 大三角（点線でむすぶ）
+const TRIANGLES = [
+  { name: '夏の大三角', stars: ['vega', 'den', 'alt'] },
+  { name: '冬の大三角', stars: ['bet', 'sir', 'proc'] }
+];
+// 「1時間ごとの位置」で通り道をかく星（名前のある明るい星と、北斗七星・カシオペヤ座）
+const TRAIL_STARS = Object.keys(STARS).filter(k => STARS[k].name || ['dub','mer','phe','meg','ali','miz','alk','cap1','sche','gcas','ruch','seg'].includes(k));
+
+// ===== いまの状態 =====
+const st = {
+  t: 18,            // 時こく（18〜30）
+  day: 15,          // 新月から何日目か
+  season: 'summer', // 星の季節
+  view: 'S',        // 'S'＝南の空、'N'＝北の空
+  lines: true, names: true, trail: false, grid: true,
+  playing: false, secPerHour: 4
+};
+let ghost = null;   // 「星座の形をうつす」でのこした形 { view, t, pos: {記号: 東北上の向き} }
+let fitU = 0;       // かさねるアニメの進みぐあい（0〜1）
+let fitAnim = null;
+
+// ===== 時こく・方位・高さのことば =====
+function clockName(t) {
+  const tot = Math.round(t * 60), h = Math.floor(tot / 60) % 24, m = tot % 60;
+  let s = h === 0 ? '午前0時' : (h < 12 ? '午前' + h + '時' : '午後' + (h - 12) + '時');
+  if (h === 0 && !m) s = '午前0時（真夜中）';
+  return m ? s + m + '分' : s;
+}
+const shortClock = h => { h %= 24; return h === 0 ? '午前0時' : (h < 12 ? '午前' + h + '時' : '午後' + (h - 12) + '時'); };
+const DIRS = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
+const dirName = az => DIRS[Math.round(az / 45) % 8];
+function fistText(alt) {
+  const n = Math.round(alt / 10);
+  return n < 1 ? '地平線すれすれ' : 'こぶし' + n + 'こ分';
+}
+function shapeName(day) {
+  if (day <= 1 || day >= 29) return '新月に近い月';
+  if (day <= 4) return '三日月';
+  if (day <= 6) return '三日月と半月の間';
+  if (day <= 8) return '半月（上弦の月）';
+  if (day <= 13) return 'ふくらんだ月';
+  if (day <= 16) return '満月';
+  if (day <= 21) return '欠けていく月';
+  if (day <= 23) return '半月（下弦の月）';
+  return '細い月（明け方の月）';
+}
+// ふりがな付きの月の名前（画面の文字用）
+const RUBY = { '三日月': '<ruby>三日月<rt>みかづき</rt></ruby>', '半月': '<ruby>半月<rt>はんげつ</rt></ruby>', '満月': '<ruby>満月<rt>まんげつ</rt></ruby>',
+  '上弦': '<ruby>上弦<rt>じょうげん</rt></ruby>', '下弦': '<ruby>下弦<rt>かげん</rt></ruby>', '新月': '<ruby>新月<rt>しんげつ</rt></ruby>' };
+const withRuby = s => s.replace(/三日月|半月|満月|上弦|下弦|新月/g, w => RUBY[w]);
+
+// ===== 空の図（Canvas） =====
+const $ = id => document.getElementById(id);
+const cv = $('sky');
+let geo = null;   // 図の中心・半径など
+let hits = [];    // タップで名前を出すための、星や月の画面の位置
+let bubble = null; // タップしたときに出す名前 { text, x, y, until }
+
+function fit() { // 画面の大きさに合わせて、くっきりかく
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, W: r.width, H: r.height };
+}
+
+// 空の向き（東・北・上）→ 画面の位置
+// 見ている方角の地平線の点（南の空なら真南）を中心にして、そこからの角度のはなれぐあいを半径にする。
+// こうすると、地平線は下のまっすぐな線、真上は半円のてっぺんになる。
+function proj(v) {
+  const c = st.view === 'S' ? -v.N : v.N;          // 見ている方角へのかたむき
+  const px = st.view === 'S' ? -v.E : v.E;         // 画面の右向き（南を向くと西が右、北を向くと東が右）
+  const rho = Math.acos(Math.max(-1, Math.min(1, c)));
+  const len = Math.hypot(px, v.U);
+  const r = rho / (Math.PI / 2) * geo.R;
+  if (len < 1e-9) return { x: geo.cx, y: geo.by, rho };
+  return { x: geo.cx + px / len * r, y: geo.by - v.U / len * r, rho };
+}
+const fromAltAz = (alt, az) => ({ E: Math.cos(rad(alt)) * Math.sin(rad(az)), N: Math.cos(rad(alt)) * Math.cos(rad(az)), U: Math.sin(rad(alt)) });
+const visible = (v, p) => v.U > 0 && p.rho < rad(100);
+
+function label(ctx, text, x, y, color, size, align) {
+  ctx.font = 'bold ' + size + 'px "Hiragino Sans", "Yu Gothic", sans-serif';
+  ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(8,12,40,0.85)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+}
+const mix = (a, b, k) => {
+  const p = s => [1, 3, 5].map(i => parseInt(s.substr(i, 2), 16));
+  const A = p(a), B = p(b);
+  return 'rgb(' + A.map((v, i) => Math.round(v + (B[i] - v) * k)).join(',') + ')';
+};
+
+// 月のかがやいている部分（太陽のある向き＝右 として、あとで回す）
+function moonShape(ctx, R, day) {
+  const a = moonAngle(day), d = a <= 180 ? a : 360 - a;   // 0＝新月、180＝満月
+  ctx.fillStyle = 'rgba(70,80,110,0.55)';                  // かげの部分（うっすら）
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+  if (d < 2) return;
+  ctx.fillStyle = '#fff9c4';
+  ctx.beginPath();
+  ctx.arc(0, 0, R, -Math.PI / 2, Math.PI / 2, false);     // 右半分のふち
+  const rx = Math.abs(Math.cos(rad(d))) * R;               // 明るいところと暗いところのさかいめ
+  ctx.ellipse(0, 0, Math.max(rx, 0.01), R, 0, Math.PI / 2, -Math.PI / 2, d < 90);
+  ctx.fill();
+}
+
+function draw() {
+  const { ctx, W, H } = fit();
+  if (W < 60 || H < 60) return;                      // まだ画面の大きさが決まっていないとき
+  const gh = Math.max(46, H * 0.13);                 // 地面の高さ
+  const by = H - gh;                                 // 地平線の高さ
+  const R = Math.min(W / 2 - 4, by - 4) / 1.1;       // 地平線から真上までの半径
+  geo = { cx: W / 2, by, R };
+  const fs = Math.max(14, Math.min(20, R * 0.075));  // 文字の大きさ
+  hits = [];
+  ctx.clearRect(0, 0, W, H);
+
+  // --- 空の色（太陽の高さで、夕やけ → 夜 → 明け方） ---
+  const sunAlt = altOf(sunENU(st.t));
+  const k = Math.max(0, Math.min(1, (sunAlt + 14) / 14)); // 1＝しずんだばかり、0＝まっくら
+  const dark = Math.max(0, Math.min(1, (-sunAlt - 3) / 9)); // 星の見えやすさ
+  ctx.save();
+  ctx.beginPath(); ctx.arc(geo.cx, by, R * 1.1, Math.PI, 0); ctx.closePath(); ctx.clip();
+  const g = ctx.createLinearGradient(0, by - R * 1.1, 0, by);
+  g.addColorStop(0, mix('#060a1f', '#3f51b5', k * 0.8));
+  g.addColorStop(1, mix('#16245a', '#ff9e5e', k));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, by);
+
+  // --- 目もり（高さ30度・60度の線と、方位の線） ---
+  if (st.grid) {
+    ctx.strokeStyle = 'rgba(200,210,255,0.25)'; ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
+    const az0 = st.view === 'S' ? 90 : -90;
+    for (const alt of [30, 60]) {
+      ctx.beginPath();
+      for (let i = 0; i <= 60; i++) { const p = proj(fromAltAz(alt, az0 + i * 3)); i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); }
+      ctx.stroke();
+      const p = proj(fromAltAz(alt, az0 + 90 + 12));
+      label(ctx, alt === 30 ? 'こぶし3こ' : 'こぶし6こ', p.x, p.y, 'rgba(200,210,255,0.7)', fs * 0.7);
+    }
+    for (const a of [45, 90, 135]) {
+      ctx.beginPath();
+      for (let alt = 0; alt <= 90; alt += 5) { const p = proj(fromAltAz(alt, az0 + a)); alt ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  // 真上（半円のてっぺん）
+  ctx.strokeStyle = 'rgba(200,210,255,0.35)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(geo.cx, by, R, Math.PI, 0); ctx.stroke();
+  label(ctx, '真上', geo.cx, by - R - fs * 0.1, 'rgba(220,225,255,0.8)', fs * 0.75);
+
+  // --- 星の位置 ---
+  const pos = {};
+  for (const key in STARS) {
+    const v = starENU(STARS[key], st.t), p = proj(v);
+    pos[key] = visible(v, p) ? p : null;
+  }
+
+  // --- 1時間ごとの位置（星の通り道） ---
+  if (st.trail && dark > 0.05) {
+    ctx.strokeStyle = 'rgba(255,245,157,0.45)'; ctx.lineWidth = 2;
+    for (const key of TRAIL_STARS) {
+      ctx.beginPath(); let on = false;
+      for (let t = 18; t <= st.t + 1e-6; t += 0.1) {
+        const v = starENU(STARS[key], Math.min(t, st.t)), p = proj(v);
+        if (visible(v, p)) { on ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); on = true; } else on = false;
+      }
+      ctx.stroke();
+    }
+  }
+
+  // --- 星座の線と大三角 ---
+  if (st.lines && dark > 0.05) {
+    ctx.globalAlpha = dark;
+    ctx.strokeStyle = '#9fa8da'; ctx.lineWidth = 1.6;
+    for (const c of CONSTS) for (const [a, b] of c.lines) {
+      if (pos[a] && pos[b]) { ctx.beginPath(); ctx.moveTo(pos[a].x, pos[a].y); ctx.lineTo(pos[b].x, pos[b].y); ctx.stroke(); }
+    }
+    ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 2; ctx.setLineDash([7, 6]);
+    for (const tr of TRIANGLES) {
+      const ps = tr.stars.map(s => pos[s]);
+      if (!ps.every(p => p)) continue;
+      ctx.beginPath(); ps.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+
+  // --- 星 ---
+  for (const key in STARS) {
+    const p = pos[key]; if (!p) continue;
+    const s = STARS[key];
+    const a = dark * (s.mag < 1.5 ? 1 : s.mag < 3 ? 0.85 : 0.6);
+    if (a < 0.03) continue;
+    const r = s.mag < 0 ? 5.5 : s.mag < 1 ? 4.6 : s.mag < 2 ? 3.6 : s.mag < 3 ? 2.6 : 1.8;
+    ctx.globalAlpha = a;
+    if (s.mag < 1.5) { ctx.fillStyle = COLORS[s.col]; ctx.globalAlpha = a * 0.2; ctx.beginPath(); ctx.arc(p.x, p.y, r * 2.4, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = a; }
+    ctx.fillStyle = COLORS[s.col];
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+    if (key === 'pol') { // 北極星には、目じるしの輪
+      ctx.strokeStyle = '#fff59d'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, r + 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+    hits.push({ x: p.x, y: p.y, text: s.name || (CONSTS.find(c => c.lines.some(l => l.includes(key))) || { name: '星' }).name + 'の星' });
+  }
+
+  // --- うつした星座の形（ghost）。星の上にかいて、重なったのがわかるようにする ---
+  if (ghost && ghost.view === st.view) drawGhost(ctx, pos, fs);
+
+  // --- 星と星座の名前 ---
+  if (st.names && dark > 0.3) {
+    ctx.globalAlpha = Math.min(1, dark * 1.3);
+    for (const key in STARS) {
+      const p = pos[key], s = STARS[key];
+      if (p && s.name && p.y < by - 8) label(ctx, s.name, p.x, p.y - fs * 0.9, '#ffe082', fs * 0.72);
+    }
+    if (st.lines) {
+      for (const c of CONSTS) { const p = pos[c.anchor]; if (p && p.y + c.dy < by - 8) label(ctx, c.name, p.x, p.y + c.dy, '#c5cae9', fs * 0.75); }
+      for (const tr of TRIANGLES) {
+        const ps = tr.stars.map(s => pos[s]);
+        if (ps.every(p => p)) label(ctx, tr.name, (ps[0].x + ps[1].x + ps[2].x) / 3, (ps[0].y + ps[1].y + ps[2].y) / 3, '#ffd54f', fs * 0.8);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // --- 北の空：北極星のまわりを回る向きの矢印 ---
+  if (st.view === 'N' && pos.pol && dark > 0.3) {
+    const p = pos.pol, rr = R * 0.2;
+    ctx.strokeStyle = 'rgba(255,245,157,0.7)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, rr, -0.3, -2.4, true); ctx.stroke();
+    const a = -2.4, ex = p.x + Math.cos(a) * rr, ey = p.y + Math.sin(a) * rr;   // 矢じり（反時計回り）
+    ctx.fillStyle = 'rgba(255,245,157,0.9)';
+    ctx.beginPath(); ctx.moveTo(ex - 8, ey + 2); ctx.lineTo(ex + 6, ey + 7); ctx.lineTo(ex + 2, ey - 8); ctx.fill();
+  }
+
+  // --- 月（南の空のときだけ） ---
+  if (st.view === 'S') drawMoonParts(ctx, fs);
+  ctx.restore();
+
+  // --- 地面と方位 ---
+  ctx.fillStyle = '#1b2e1b'; ctx.fillRect(0, by, W, H - by);
+  ctx.fillStyle = '#142414';    // 地平線の家と木のかげ（小さめ）
+  const sil = [[0.18, 'tree'], [0.3, 'house'], [0.66, 'house'], [0.8, 'tree']];
+  for (const [fx, kind] of sil) {
+    const x = geo.cx + (fx - 0.5) * 2 * R;
+    if (kind === 'tree') { ctx.beginPath(); ctx.moveTo(x - 7, by); ctx.lineTo(x, by - 14); ctx.lineTo(x + 7, by); ctx.fill(); }
+    else { ctx.fillRect(x - 12, by - 9, 24, 9); ctx.beginPath(); ctx.moveTo(x - 14, by - 9); ctx.lineTo(x, by - 16); ctx.lineTo(x + 14, by - 9); ctx.fill(); }
+  }
+  ctx.strokeStyle = '#7cb342'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, by); ctx.lineTo(W, by); ctx.stroke();
+  const names = st.view === 'S' ? ['東', '南東', '南', '南西', '西'] : ['西', '北西', '北', '北東', '東'];
+  names.forEach((n, i) => {
+    const x = geo.cx + (i - 2) * R / 2;
+    ctx.fillStyle = '#7cb342'; ctx.fillRect(x - 1, by, 2, 6);
+    label(ctx, n, x, by + gh * 0.5, i === 2 ? '#fff59d' : '#c5e1a5', i % 2 ? fs * 0.85 : fs * 1.2);
+  });
+
+  // --- タップした星の名前 ---
+  if (bubble && bubble.until > performance.now()) {
+    ctx.font = 'bold ' + fs + 'px "Hiragino Sans", "Yu Gothic", sans-serif';
+    const tw = ctx.measureText(bubble.text).width + 16;
+    const bx = Math.max(4, Math.min(W - tw - 4, bubble.x - tw / 2)), byy = Math.max(4, bubble.y - fs * 2.6);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.roundRect(bx, byy, tw, fs * 1.6, 8); ctx.fill();
+    ctx.fillStyle = '#1a237e'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(bubble.text, bx + 8, byy + fs * 0.8);
+  }
+  updateText();
+}
+
+// 月・月の通り道・記録のしるし
+function drawMoonParts(ctx, fs) {
+  const mr = Math.max(13, geo.R * 0.065);   // 月の大きさ（本当より大きくかく）
+  // 1時間ごとの位置（月の通り道）
+  if (st.trail) {
+    for (let h = 18; h <= Math.floor(st.t + 1e-6); h++) {
+      const v = moonENU(h, st.day), p = proj(v);
+      if (!visible(v, p)) continue;
+      ctx.strokeStyle = 'rgba(255,249,196,0.7)'; ctx.lineWidth = 2; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, mr * 0.75, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      label(ctx, (h % 24) + '時', p.x, p.y + mr * 0.75 + fs * 0.6, 'rgba(255,249,196,0.85)', fs * 0.65);
+    }
+  }
+  // 記録したしるし（むらさきの◆）
+  const recs = Worksheet.getRecords().filter(r => r.day === st.day && typeof r.h === 'number');
+  for (const r of recs) {
+    const v = moonENU(r.h, r.day), p = proj(v);
+    if (!visible(v, p)) continue;
+    ctx.save(); ctx.fillStyle = '#ce93d8'; ctx.strokeStyle = '#4a148c'; ctx.lineWidth = 2;
+    ctx.translate(p.x, p.y - mr - 10); ctx.rotate(Math.PI / 4); ctx.fillRect(-6, -6, 12, 12); ctx.strokeRect(-6, -6, 12, 12); ctx.restore();
+    label(ctx, r.time, p.x, p.y - mr - 26, '#e1bee7', fs * 0.65);
+  }
+  // いまの月
+  const v = moonENU(st.t, st.day), p = proj(v);
+  if (!visible(v, p)) return;
+  // かがやいている側を、太陽のある向きにむける（太陽の方へ少しずらした点を画面にうつして向きを決める）
+  const s = sunENU(st.t), e = 0.05;
+  const q = { E: v.E + s.E * e, N: v.N + s.N * e, U: v.U + s.U * e };
+  const n = Math.hypot(q.E, q.N, q.U); q.E /= n; q.N /= n; q.U /= n;
+  const pq = proj(q);
+  const ang = Math.atan2(pq.y - p.y, pq.x - p.x);
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,249,196,0.18)'; ctx.beginPath(); ctx.arc(p.x, p.y, mr * 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.translate(p.x, p.y); ctx.rotate(ang);
+  moonShape(ctx, mr, st.day);
+  ctx.restore();
+  hits.push({ x: p.x, y: p.y, r: mr + 6, text: '月（' + shapeName(st.day) + '）' });
+}
+
+// うつした星座の形をかく。かさねるときは、星座ごとに「動かす・回す」をして今の形に重ねる
+function drawGhost(ctx, pos, fs) {
+  const groups = CONSTS.map(c => ({ name: c.name, lines: c.lines }))
+    .concat(TRIANGLES.map(t => ({ name: t.name, lines: [[t.stars[0], t.stars[1]], [t.stars[1], t.stars[2]], [t.stars[2], t.stars[0]]] })));
+  const labels = [];
+  for (const gr of groups) {
+    ctx.strokeStyle = '#4dd0e1'; ctx.fillStyle = '#4dd0e1'; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.lineCap = 'round';
+    const keys = [...new Set(gr.lines.flat())].filter(k => ghost.pos[k]);
+    const P = {}; keys.forEach(k => { const p = proj(ghost.pos[k]); if (ghost.pos[k].U > 0 && p.rho < rad(100)) P[k] = p; });
+    const both = keys.filter(k => P[k] && pos[k]);
+    // 重ねるための「動かす・回す・大きさ」を求める（最小二乗法）
+    let T = null;
+    if (fitU > 0 && both.length >= 2) {
+      let pcx = 0, pcy = 0, qcx = 0, qcy = 0;
+      both.forEach(k => { pcx += P[k].x; pcy += P[k].y; qcx += pos[k].x; qcy += pos[k].y; });
+      pcx /= both.length; pcy /= both.length; qcx /= both.length; qcy /= both.length;
+      let a = 0, b = 0, pp = 0;
+      both.forEach(k => {
+        const px = P[k].x - pcx, py = P[k].y - pcy, qx = pos[k].x - qcx, qy = pos[k].y - qcy;
+        a += px * qx + py * qy; b += px * qy - py * qx; pp += px * px + py * py;
+      });
+      T = { pcx, pcy, qcx, qcy, phi: Math.atan2(b, a), s: pp ? Math.hypot(a, b) / pp : 1 };
+    }
+    const tf = p => {
+      if (!T) return p;
+      const u = fitU, ph = T.phi * u, sc = 1 + (T.s - 1) * u;
+      const dx = p.x - T.pcx, dy = p.y - T.pcy;
+      return { x: T.pcx + (T.qcx - T.pcx) * u + sc * (dx * Math.cos(ph) - dy * Math.sin(ph)),
+               y: T.pcy + (T.qcy - T.pcy) * u + sc * (dx * Math.sin(ph) + dy * Math.cos(ph)) };
+    };
+    if (fitU > 0 && !T) continue;   // 重ねられない星座（今は見えない）は、かさねるときはかかない
+    for (const [a, b] of gr.lines) {
+      if (!P[a] || !P[b]) continue;
+      const A = tf(P[a]), B = tf(P[b]);
+      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+    }
+    for (const k of keys) if (P[k]) { const A = tf(P[k]); ctx.beginPath(); ctx.arc(A.x, A.y, 4, 0, Math.PI * 2); ctx.fill(); }
+    // 線のある星座には「○時の形」と書く（重ねる前だけ）
+    const k0 = gr.lines.length > 1 && keys.find(k => P[k]);
+    if (fitU === 0 && k0) labels.push(P[k0]);
+  }
+  ctx.setLineDash([]); ctx.lineCap = 'butt';
+  const hh = Math.floor(ghost.t + 1e-6) % 24;
+  labels.forEach(p => label(ctx, hh + '時の形', p.x, p.y - fs * 0.9, '#4dd0e1', fs * 0.7));
+}
+
+// ===== 文字の表示 =====
+function updateText() {
+  $('clock').textContent = clockName(st.t);
+  const dv = $('dayVal');
+  dv.innerHTML = '<ruby>新月<rt>しんげつ</rt></ruby>から' + st.day + '日目';
+  if (st.view === 'N') {
+    $('info').innerHTML = '⭐ <b><ruby>北<rt>きた</rt></ruby>の<ruby>空<rt>そら</rt></ruby></b>：<ruby>北極星<rt>ほっきょくせい</rt></ruby>（点線の輪）は、ほとんど<ruby>動<rt>うご</rt></ruby>きません。<ruby>北斗七星<rt>ほくとしちせい</rt></ruby>やカシオペヤ<ruby>座<rt>ざ</rt></ruby>は、<ruby>北極星<rt>ほっきょくせい</rt></ruby>を<ruby>中心<rt>ちゅうしん</rt></ruby>に<ruby>回<rt>まわ</rt></ruby>るように<ruby>動<rt>うご</rt></ruby>くよ（<ruby>月<rt>つき</rt></ruby>は<ruby>南<rt>みなみ</rt></ruby>の<ruby>空<rt>そら</rt></ruby>で見よう）。';
+    return;
+  }
+  const v = moonENU(st.t, st.day), alt = altOf(v), name = withRuby(shapeName(st.day));
+  // 月の出・真南・月の入りの時こく（太陽より、日数×12度おくれる → 1日に約48分おそくなる）
+  const a = moonAngle(st.day), wrap = h => ((h % 24) + 24) % 24;
+  const rise = wrap(12 + (a - 90) / 15), south = wrap(12 + a / 15), set = wrap(12 + (a + 90) / 15);
+  const hm = h => { const m = Math.round(h * 60) % 1440; return shortClock(Math.floor(m / 60)) + (m % 60 >= 30 ? '半' : ''); };
+  let now;
+  if (st.day <= 1 || st.day >= 29) now = '<ruby>新月<rt>しんげつ</rt></ruby>のころの<ruby>月<rt>つき</rt></ruby>は、<ruby>太陽<rt>たいよう</rt></ruby>と<ruby>同<rt>おな</rt></ruby>じ<ruby>方<rt>ほう</rt></ruby>にあるので、ほとんど見えません。';
+  else if (alt <= 0) now = 'いま、<ruby>月<rt>つき</rt></ruby>は<b><ruby>地平線<rt>ちへいせん</rt></ruby>の<ruby>下<rt>した</rt></ruby></b>にあって見えません。';
+  else now = 'いま、<b>' + dirName(azOf(v)) + '</b>の<ruby>空<rt>そら</rt></ruby>・<ruby>高<rt>たか</rt></ruby>さ <b>' + fistText(alt) + '</b>（<ruby>約<rt>やく</rt></ruby>' + Math.round(alt) + '<ruby>度<rt>ど</rt></ruby>）';
+  $('info').innerHTML = '🌙 <b>' + name + '</b>　' + now +
+    '<br><small><ruby>月<rt>つき</rt></ruby>の<ruby>出<rt>で</rt></ruby> ' + hm(rise) + 'ごろ → <ruby>真南<rt>まみなみ</rt></ruby> ' + hm(south) + 'ごろ → <ruby>月<rt>つき</rt></ruby>の<ruby>入<rt>い</rt></ruby>り ' + hm(set) + 'ごろ</small>';
+}
+
+// ===== 操作 =====
+const slider = $('slider');
+function setTime(t) {
+  st.t = Math.max(18, Math.min(30, t));
+  slider.value = st.t;
+  if (fitU > 0 && !fitAnim) fitU = 0;    // 時間を動かしたら、かさねた形はもとの場所にもどす
+  draw();
+}
+slider.addEventListener('input', () => { stop(); setTime(parseFloat(slider.value)); });
+
+// さいせい
+let lastT = 0;
+function loop(now) {
+  if (!st.playing) return;
+  const dt = lastT ? (now - lastT) / 1000 : 0;
+  lastT = now;
+  setTime(st.t + dt / st.secPerHour);
+  if (st.t >= 30) { stop(); return; }
+  requestAnimationFrame(loop);
+}
+function play() {
+  if (st.t >= 30) setTime(18);
+  st.playing = true; lastT = 0;
+  $('btnPlay').textContent = '⏸ とめる';
+  requestAnimationFrame(loop);
+}
+function stop() { st.playing = false; $('btnPlay').textContent = '▶ さいせい'; }
+$('btnPlay').onclick = () => st.playing ? stop() : play();
+document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => {
+  st.secPerHour = parseFloat(b.dataset.speed);
+  document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('active', x === b));
+});
+
+// 南の空・北の空
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  st.view = b.dataset.view;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  cv.setAttribute('aria-label', st.view === 'S' ? '南を向いて見た空。地平線と、東・南・西の方位、月と星' : '北を向いて見た空。北極星と、北斗七星・カシオペヤ座');
+  fitU = 0;
+  draw();
+});
+
+// 月の形
+function setDay(d) {
+  st.day = d;
+  $('daySlider').value = d;
+  document.querySelectorAll('[data-day]').forEach(x => x.classList.toggle('active', +x.dataset.day === d));
+  draw();
+}
+document.querySelectorAll('[data-day]').forEach(b => b.onclick = () => {
+  setDay(+b.dataset.day);
+  if (st.view !== 'S') document.querySelector('.tab[data-view="S"]').click();
+  $('msg').innerHTML = withRuby(shapeName(st.day)) + 'にしたよ。「▶ さいせい」で<ruby>動<rt>うご</rt></ruby>きを見てみよう';
+});
+$('daySlider').addEventListener('input', e => setDay(+e.target.value));
+
+// 星の季節
+document.querySelectorAll('[data-season]').forEach(b => b.onclick = () => {
+  st.season = b.dataset.season;
+  document.querySelectorAll('[data-season]').forEach(x => x.classList.toggle('active', x === b));
+  ghost = null; fitU = 0;
+  draw();
+});
+
+// ON / OFF のボタン
+function toggle(id, prop, html) {
+  const b = $(id);
+  b.onclick = () => {
+    st[prop] = !st[prop];
+    b.classList.toggle('active', st[prop]);
+    b.setAttribute('aria-pressed', st[prop]);
+    b.innerHTML = html + (st[prop] ? ' ON' : ' OFF');
+    draw();
+  };
+}
+toggle('tgLines', 'lines', '<ruby>星座<rt>せいざ</rt></ruby>の<ruby>線<rt>せん</rt></ruby>');
+toggle('tgNames', 'names', '<ruby>名前<rt>なまえ</rt></ruby>');
+toggle('tgTrail', 'trail', '1時間ごとの<ruby>位置<rt>いち</rt></ruby>');
+toggle('tgGrid', 'grid', '<ruby>目<rt>め</rt></ruby>もり');
+
+// 月の位置を記録する（いちばん近い、ちょうどの時こくにする）
+$('btnMark').onclick = () => {
+  stop();
+  if (st.view !== 'S') document.querySelector('.tab[data-view="S"]').click();
+  const h = Math.round(st.t);
+  setTime(h);
+  const v = moonENU(h, st.day), alt = altOf(v);
+  if (st.day <= 1 || st.day >= 29 || alt <= 0) {
+    $('msg').innerHTML = shortClock(h) + 'は、<ruby>月<rt>つき</rt></ruby>が見えないので<ruby>記録<rt>きろく</rt></ruby>できないよ';
+    return;
+  }
+  if (Worksheet.getRecords().some(r => r.h === h && r.day === st.day)) {
+    $('msg').innerHTML = shortClock(h) + 'の<ruby>記録<rt>きろく</rt></ruby>は、もうあるよ';
+    return;
+  }
+  Worksheet.addRecord({ time: shortClock(h), shape: shapeName(st.day), dir: dirName(azOf(v)), height: fistText(alt), h, day: st.day });
+  $('msg').innerHTML = '📍 ' + shortClock(h) + 'の<ruby>月<rt>つき</rt></ruby>の<ruby>位置<rt>いち</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby>したよ';
+  draw();
+};
+
+// 星座の形をうつす・かさねる
+$('btnCopy').onclick = () => {
+  stop();
+  const se = {};
+  for (const key in STARS) se[key] = starENU(STARS[key], st.t);
+  ghost = { view: st.view, t: st.t, pos: se };
+  fitU = 0;
+  if (!st.lines) $('tgLines').click();
+  $('msg').innerHTML = '📸 ' + clockName(st.t) + 'の<ruby>星座<rt>せいざ</rt></ruby>の<ruby>形<rt>かたち</rt></ruby>をうつしたよ（水色の点線）。時間を<ruby>進<rt>すす</rt></ruby>めてみよう';
+  draw();
+};
+$('btnFit').onclick = () => {
+  stop();
+  if (!ghost || ghost.view !== st.view) { $('msg').innerHTML = '先に「📸 <ruby>星座<rt>せいざ</rt></ruby>の<ruby>形<rt>かたち</rt></ruby>をうつす」をおしてね'; return; }
+  if (Math.abs(ghost.t - st.t) < 0.5) { $('msg').innerHTML = '時間を<ruby>進<rt>すす</rt></ruby>めてから、かさねてみよう'; return; }
+  const t0 = performance.now();
+  cancelAnimationFrame(fitAnim);
+  const step = now => {
+    fitU = Math.min(1, (now - t0) / 1200);
+    draw();
+    if (fitU < 1) fitAnim = requestAnimationFrame(step);
+    else { fitAnim = null; $('msg').innerHTML = '🔁 ぴったり<ruby>重<rt>かさ</rt></ruby>なったね！ <ruby>星座<rt>せいざ</rt></ruby>の<ruby>場所<rt>ばしょ</rt></ruby>はかわっても、<b><ruby>星<rt>ほし</rt></ruby>のならび<ruby>方<rt>かた</rt></ruby>はかわらない</b>'; }
+  };
+  fitAnim = requestAnimationFrame(step);
+};
+
+// 星や月をタップすると、名前が出る
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  let best = null, bd = 26;
+  for (const h of hits) { const d = Math.hypot(h.x - x, h.y - y); if (d < Math.max(bd, h.r || 0)) { bd = d; best = h; } }
+  if (!best) return;
+  bubble = { text: best.text, x: best.x, y: best.y, until: performance.now() + 2500 };
+  draw();
+  setTimeout(draw, 2600);
+});
+
+// もういちど：記録を消して、はじめの状態にもどす
+$('btnReset').onclick = () => {
+  stop();
+  const n = Worksheet.getRecords().length;
+  if (n && !confirm('月の位置の記録をぜんぶ消して、はじめにもどします。よろしいですか？')) return;
+  for (let i = n - 1; i >= 0; i--) Worksheet.removeRecord(i);
+  ghost = null; fitU = 0;
+  document.querySelector('.tab[data-view="S"]').click();
+  document.querySelector('[data-season="summer"]').click();
+  for (const [id, prop, on] of [['tgLines', 'lines', true], ['tgNames', 'names', true], ['tgTrail', 'trail', false], ['tgGrid', 'grid', true]]) {
+    if (st[prop] !== on) $(id).click();
+  }
+  setDay(15);
+  $('msg').innerHTML = '「▶ さいせい」で時間を<ruby>進<rt>すす</rt></ruby>めてみよう';
+  setTime(18);
+};
+
+// ワークシートで記録を消したときも、しるしが消えるように少しずつかき直す
+setInterval(() => { if (!st.playing && !fitAnim) draw(); }, 700);
+new ResizeObserver(() => draw()).observe(cv);
+setTime(18);
+</script>
+</body>
+</html>
