@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>こん虫の育ち方</title>
+<!--
+  こん虫の育ち方（小学3年 理科「こん虫の育ち方」「こん虫の体のつくり」）
+  ・モンシロチョウ・カブトムシ（さなぎになる）、トンボ・バッタ・カマキリ（さなぎにならない）から選ぶ。
+  ・「育ち方」：日数スライダーと再生で、たまご → 幼虫 → （さなぎ） → 成虫 を Canvas の絵で見る。
+     まだ見ていないだんかいは「？」にしておき、成虫まで進めると「さなぎになる／ならない」がわかる。
+  ・「体のつくり」：成虫の頭・むね・はらを色ともようで分ける。しょっ角・目・口・あし・はねをタップすると名前が出る。
+  ・「仲間分けクイズ」：カードを「こん虫」「こん虫ではない」にドラッグして分け、答え合わせで理由を出す。
+  ・「くらべる」：2つの虫の育ち方を、2本のタイムラインにならべてくらべる。
+  ・日数などは、下の BUGS（虫のデータ）でかえられます。
+  ・ワークシート部品（worksheet.js）を使っています。
+  ・「完全変態」「不完全変態」という言葉は、先生モード（?teacher=1）の説明だけに出します。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 860px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+  section { display: flex; flex-direction: column; gap: 10px; }
+
+  /* モードのタブ */
+  .modes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .mode {
+    min-height: 50px; border: 3px solid #ffb74d; background: #fff8e1; color: #bf360c; border-radius: 12px;
+    padding: 4px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .mode.active { background: #e65100; border-color: #e65100; color: #fff; }
+
+  /* 虫をえらぶタブ（小さな絵つき） */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .tab {
+    min-height: 56px; border: 3px solid #aed581; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 2px 10px 2px 6px; font-family: inherit; font-size: 17px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .tab canvas { width: 46px; height: 36px; flex: none; }
+  .tab .tname { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+  .tab .kind { font-size: 12px; font-weight: bold; color: #777; }
+  .tab.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .tab.active .kind { color: #e8f5e9; }
+
+  .main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; }
+  .side { display: flex; flex-direction: column; gap: 10px; }
+  .fig-title { margin: 0 0 4px; font-size: 16px; font-weight: bold; color: #33691e; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #cvG { aspect-ratio: 640 / 440; border-radius: 8px; }
+  #cvB { aspect-ratio: 640 / 480; border-radius: 8px; cursor: pointer; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .chip.small { min-height: 44px; font-size: 16px; padding: 2px 10px; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 18px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.blue { background: #0072b2; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .lbl { font-size: 16px; color: #555; font-weight: bold; }
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #1565c0; margin-top: 4px; }
+  .diff { font-size: 15px; color: #666; margin: 4px 0 0; }
+  .hidden { display: none !important; }
+
+  /* だんかいの色ともよう（色だけで分けないように、もようと文字も付ける） */
+  .st-egg   { background-color: #fff1a8; background-image: radial-gradient(circle, rgba(0,0,0,.2) 1.6px, transparent 2.2px); background-size: 9px 9px; }
+  .st-larva { background-color: #a9dcf5; background-image: repeating-linear-gradient(90deg, rgba(0,0,0,.15) 0 3px, transparent 3px 10px); }
+  .st-pupa  { background-color: #f7c46c; background-image: repeating-linear-gradient(45deg, rgba(0,0,0,.17) 0 3px, transparent 3px 10px); }
+  .st-adult { background-color: #92d6bb; background-image: linear-gradient(rgba(0,0,0,.13) 2px, transparent 2px), linear-gradient(90deg, rgba(0,0,0,.13) 2px, transparent 2px); background-size: 10px 10px; }
+  .st-unk   { background: #e0e0e0; color: #777 !important; }
+
+  /* いまのようす */
+  .now { font-size: 16px; line-height: 1.7; }
+  .now b { font-size: 1.25rem; color: #bf360c; }
+  .stage-now { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
+  .stchip { display: inline-block; border: 2px solid #555; border-radius: 10px; padding: 2px 12px; font-weight: bold; font-size: 1.3rem; color: #222; }
+  .desc { margin: 6px 0 0; font-size: 17px; background: #fffde7; border: 3px solid #fbc02d; border-radius: 12px; padding: 6px 10px; }
+
+  /* 育ち方の順（まだ見ていないところは「？」） */
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-weight: bold; font-size: 16px; }
+  .flow .fs { border: 2px solid #777; border-radius: 10px; padding: 2px 8px; color: #222; }
+  .flow .fs.cur { outline: 3px solid #e65100; outline-offset: 1px; }
+  .flow .ar { color: #777; }
+  .flow-note { font-size: 15px; color: #33691e; font-weight: bold; margin-top: 4px; min-height: 1.4em; }
+
+  /* だんかいの帯と日数スライダー */
+  .band-wrap { position: relative; margin: 0 14px; }
+  .band { display: flex; height: 34px; border: 2px solid #777; border-radius: 8px; overflow: hidden; }
+  .seg { display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: #222; white-space: nowrap; overflow: hidden; border-right: 2px solid #fff; min-width: 0; }
+  .seg:last-child { border-right: none; }
+  .pin { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: #e65100; border-radius: 2px; pointer-events: none; }
+  .day-wrap { position: relative; padding: 0 4px; }
+  input[type=range] { width: 100%; height: 44px; accent-color: #e65100; margin: 0; }
+  .ticks { position: relative; height: 22px; margin: 0 14px; font-size: 13px; color: #666; }
+  .ticks span { position: absolute; transform: translateX(-50%); top: 0; white-space: nowrap; }
+  .ticks span::before { content: ''; position: absolute; left: 50%; top: -6px; width: 1px; height: 6px; background: #999; }
+
+  /* 体のつくり */
+  .info { margin-top: 6px; background: #fffde7; border: 3px solid #fbc02d; border-radius: 12px; padding: 6px 10px; font-size: 17px; min-height: 3.2em; }
+  .info .pname { font-size: 1.25rem; font-weight: bold; color: #6d4c41; margin-right: 6px; }
+  .legend { display: flex; flex-direction: column; gap: 6px; font-size: 17px; font-weight: bold; }
+  .legend .sw { display: inline-block; width: 46px; height: 26px; border: 2px solid #333; border-radius: 6px; vertical-align: middle; margin-right: 6px; }
+  .sw.head { background-color: #56b4e9; background-image: radial-gradient(circle, rgba(0,0,0,.35) 1.6px, transparent 2px); background-size: 8px 8px; }
+  .sw.thorax { background-color: #e69f00; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 3px, transparent 3px 8px); }
+  .sw.abdomen { background-color: #009e73; background-image: repeating-linear-gradient(-45deg, rgba(255,255,255,.6) 0 2px, transparent 2px 7px); }
+  .fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fchip { border: 2px solid #bbb; border-radius: 10px; padding: 2px 8px; font-size: 16px; color: #888; background: #fafafa; }
+  .fchip.on { border-color: #558b2f; color: #33691e; background: #f1f8e9; font-weight: bold; }
+  .point { font-size: 17px; background: #e8f5e9; border: 3px solid #81c784; }
+
+  /* 仲間分けクイズ */
+  .hint-s { margin: 0 0 6px; font-size: 16px; color: #555; }
+  .tray { display: flex; flex-wrap: wrap; gap: 8px; min-height: 140px; justify-content: center; align-items: flex-start; border: 3px dashed #c5e1a5; border-radius: 12px; padding: 8px; }
+  .qcard {
+    width: 116px; background: #fff; border: 3px solid #9e9e9e; border-radius: 12px; padding: 3px 3px 4px; text-align: center;
+    touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; font-weight: bold; font-size: 16px; position: relative;
+  }
+  .qcard canvas { aspect-ratio: 120 / 96; pointer-events: none; }
+  .qcard.sel { border-color: #e65100; box-shadow: 0 0 0 3px #ffcc80; }
+  .qcard.dragging { z-index: 100; opacity: 0.92; cursor: grabbing; box-shadow: 0 8px 18px rgba(0,0,0,0.3); }
+  .qcard .mark { position: absolute; top: -12px; right: -10px; width: 36px; height: 36px; border-radius: 50%; font-size: 22px; line-height: 30px; border: 3px solid; background: #fff; }
+  .mark.ok { color: #0072b2; border-color: #0072b2; }
+  .mark.ng { color: #d55e00; border-color: #d55e00; border-style: dashed; }
+  .zones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .zone { border: 4px solid; border-radius: 14px; min-height: 180px; padding: 6px 8px; }
+  .zone h3 { margin: 0 0 6px; font-size: 19px; }
+  .zone.ins { border-color: #0072b2; background: #e3f2fd; color: #0d47a1; }
+  .zone.non { border-color: #d55e00; background: #fbe9e7; color: #bf360c; border-style: dashed; }
+  .zone .list { display: flex; flex-wrap: wrap; gap: 8px; min-height: 120px; }
+  .zone.over, .tray.over { box-shadow: 0 0 0 5px #ffd54f; }
+  .reasons { margin: 6px 0 0; padding-left: 0; list-style: none; font-size: 17px; }
+  .reasons li { padding: 4px 0; border-bottom: 1px dashed #ddd; }
+  .reasons .ok { color: #0072b2; font-weight: bold; }
+  .reasons .ng { color: #d55e00; font-weight: bold; }
+
+  /* くらべる */
+  .cmp-pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+  .cmp-head { display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 19px; color: #33691e; margin-bottom: 6px; }
+  .cmp-head canvas { width: 46px; height: 36px; }
+  .cmp-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+  .cmp-cell { border: 3px solid #888; border-radius: 12px; background: #fff; padding: 4px; text-align: center; position: relative; font-size: 15px; }
+  .cmp-cell:not(:last-child)::after { content: '➜'; position: absolute; right: -19px; top: 36%; font-size: 17px; color: #555; }
+  .cmp-cell canvas { aspect-ratio: 120 / 96; }
+  .cmp-name { font-weight: bold; font-size: 17px; margin-top: 2px; }
+  .cmp-name.st { border-radius: 8px; border: 2px solid #777; }
+  .cmp-dur { color: #555; }
+  .cmp-note { color: #6d4c41; font-size: 14px; font-weight: bold; }
+  .cmp-cell.none { border-style: dashed; background: #f5f5f5; color: #777; display: flex; align-items: center; justify-content: center; min-height: 120px; }
+  .tbar { display: flex; height: 30px; border: 2px solid #777; border-radius: 8px; overflow: hidden; margin-top: 8px; }
+  .tbar-note { font-size: 14px; color: #666; margin-top: 2px; }
+  .cmp-ans { margin-top: 8px; font-size: 18px; background: #e8f5e9; border: 3px solid #81c784; border-radius: 12px; padding: 8px 10px; }
+
+  .teacher { border: 3px solid #8e24aa; background: #f8eefb; font-size: 16px; }
+  .teacher .fig-title { color: #6a1b9a; }
+  .teacher ul { margin: 4px 0; padding-left: 1.2em; }
+
+  @media (max-width: 680px) {
+    .main { grid-template-columns: 1fr; }
+    .cmp-cells { gap: 12px; }
+    .cmp-cell { font-size: 13px; padding: 2px; }
+    .cmp-cell:not(:last-child)::after { right: -13px; font-size: 13px; }
+    .cmp-name { font-size: 14px; }
+    .cmp-note { font-size: 12px; }
+    .ticks .odd { display: none; }
+    .qcard { width: 100px; font-size: 15px; }
+    .tab { font-size: 15px; padding-right: 6px; }
+    .tab canvas { width: 36px; height: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🦋 こん<ruby>虫<rt>ちゅう</rt></ruby>の<ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby></h1>
+<p class="subtitle">たまごから<ruby>成虫<rt>せいちゅう</rt></ruby>まで、どんな<ruby>順<rt>じゅん</rt></ruby>に<ruby>育<rt>そだ</rt></ruby>つかな？ <ruby>体<rt>からだ</rt></ruby>のつくりも<ruby>調<rt>しら</rt></ruby>べよう。</p>
+
+<div class="panel">
+  <div class="modes">
+    <button class="mode active" data-mode="grow">🔍 <ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby></button>
+    <button class="mode" data-mode="body">🐞 <ruby>体<rt>からだ</rt></ruby>のつくり</button>
+    <button class="mode" data-mode="quiz">🧺 <ruby>仲間<rt>なかま</rt></ruby><ruby>分<rt>わ</rt></ruby>けクイズ</button>
+    <button class="mode" data-mode="cmp">📏 くらべる</button>
+  </div>
+
+  <div class="tabs" id="bugTabs"></div>
+
+  <!-- ===== ① 育ち方 ===== -->
+  <section id="secGrow">
+    <div class="main">
+      <div class="card">
+        <canvas id="cvG" aria-label="えらんだこん虫の、いまのだんかいの絵"></canvas>
+      </div>
+      <div class="side">
+        <div class="card now">
+          <div class="stage-now"><span class="stchip st-egg" id="gChip">たまご</span></div>
+          <div>たまごがうまれてから <b id="gDay">0</b> <ruby>日<rt>にち</rt></ruby><ruby>目<rt>め</rt></ruby> <span id="gMonth"></span></div>
+          <div>このだんかいの<ruby>長<rt>なが</rt></ruby>さ（めやす）：<strong id="gDur"></strong></div>
+          <div><ruby>大<rt>おお</rt></ruby>きさ（めやす）：<strong id="gSize"></strong></div>
+          <p class="desc" id="gDesc"></p>
+        </div>
+        <div class="card">
+          <p class="fig-title"><ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby>の<ruby>順<rt>じゅん</rt></ruby>（<ruby>見<rt>み</rt></ruby>たところまで）</p>
+          <div class="flow" id="gFlow"></div>
+          <div class="flow-note" id="gFlowNote"></div>
+          <div class="row"><button class="go-btn blue" id="btnRec">📝 <ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby>する</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="band-wrap"><div class="band" id="band"></div><div class="pin" id="pin"></div></div>
+      <div class="day-wrap"><input type="range" id="day" min="0" max="45" step="1" value="0" aria-label="たまごがうまれてからの日数"></div>
+      <div class="ticks" id="ticks"></div>
+      <div class="row">
+        <button class="go-btn orange" id="btnPlay">▶ さいせい</button>
+        <span>
+          <button class="chip" data-sec="40">ゆっくり</button>
+          <button class="chip active" data-sec="20">ふつう</button>
+          <button class="chip" data-sec="8">はやおくり</button>
+        </span>
+        <button class="go-btn sub" id="btnReset">もういちど</button>
+      </div>
+      <div class="msg" id="msg">&nbsp;</div>
+    </div>
+  </section>
+
+  <!-- ===== ② 体のつくり ===== -->
+  <section id="secBody" class="hidden">
+    <div class="main">
+      <div class="card">
+        <canvas id="cvB" aria-label="こん虫の成虫を、せなかがわから見た図。部分をタップすると名前が出る"></canvas>
+        <div class="info" id="bInfo">👆 しょっ<ruby>角<rt>かく</rt></ruby>・<ruby>目<rt>め</rt></ruby>・<ruby>口<rt>くち</rt></ruby>・あし・はね などをタップしてみよう</div>
+      </div>
+      <div class="side">
+        <div class="card">
+          <p class="fig-title"><ruby>体<rt>からだ</rt></ruby>は 3つに<ruby>分<rt>わ</rt></ruby>かれている</p>
+          <div class="legend">
+            <div><span class="sw head"></span><ruby>頭<rt>あたま</rt></ruby>（<ruby>点<rt>てん</rt></ruby>のもよう）</div>
+            <div><span class="sw thorax"></span>むね（よこじま）</div>
+            <div><span class="sw abdomen"></span>はら（ななめの<ruby>線<rt>せん</rt></ruby>）</div>
+          </div>
+          <div class="row"><button class="chip small active" id="btnColor">🎨 <ruby>色<rt>いろ</rt></ruby><ruby>分<rt>わ</rt></ruby>け ON</button></div>
+        </div>
+        <div class="card">
+          <p class="fig-title"><ruby>見<rt>み</rt></ruby>つけたもの <span id="fCount"></span></p>
+          <div class="fchips" id="fChips"></div>
+          <div class="row"><button class="go-btn sub" id="btnBodyReset">もういちど</button></div>
+        </div>
+        <div class="card point">💡 こん<ruby>虫<rt>ちゅう</rt></ruby>の<ruby>体<rt>からだ</rt></ruby>は、<b><ruby>頭<rt>あたま</rt></ruby>・むね・はら</b>の3つに<ruby>分<rt>わ</rt></ruby>かれている。あしは<b>むねに6<ruby>本<rt>ほん</rt></ruby></b>ついている。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ③ 仲間分けクイズ ===== -->
+  <section id="secQuiz" class="hidden">
+    <div class="card">
+      <p class="fig-title">カードをドラッグして、「こん<ruby>虫<rt>ちゅう</rt></ruby>」と「こん<ruby>虫<rt>ちゅう</rt></ruby>ではない」に<ruby>分<rt>わ</rt></ruby>けよう</p>
+      <p class="hint-s">ヒント：あしは<ruby>何本<rt>なんぼん</rt></ruby>？ <ruby>体<rt>からだ</rt></ruby>はいくつに<ruby>分<rt>わ</rt></ruby>かれている？（カードをタップしてから<ruby>箱<rt>はこ</rt></ruby>をタップしても<ruby>動<rt>うご</rt></ruby>かせるよ）</p>
+      <div class="tray" id="tray" data-zone="tray"></div>
+    </div>
+    <div class="zones">
+      <div class="zone ins" data-zone="ins"><h3>○ こん<ruby>虫<rt>ちゅう</rt></ruby></h3><div class="list"></div></div>
+      <div class="zone non" data-zone="non"><h3>✕ こん<ruby>虫<rt>ちゅう</rt></ruby>ではない</h3><div class="list"></div></div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <button class="go-btn orange" id="btnCheck">✔ <ruby>答<rt>こた</rt></ruby>え<ruby>合<rt>あ</rt></ruby>わせ</button>
+        <button class="go-btn sub" id="btnQReset">もういちど</button>
+      </div>
+      <div class="msg" id="qMsg">&nbsp;</div>
+      <ul class="reasons" id="reasons"></ul>
+    </div>
+  </section>
+
+  <!-- ===== ④ くらべる ===== -->
+  <section id="secCmp" class="hidden">
+    <div class="card">
+      <p class="fig-title">2つのこん<ruby>虫<rt>ちゅう</rt></ruby>の<ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby>を、ならべてくらべよう</p>
+      <div class="cmp-pick"><span class="lbl">上：</span><span id="pickA"></span></div>
+      <div class="cmp-pick"><span class="lbl">下：</span><span id="pickB"></span></div>
+    </div>
+    <div class="card" id="rowA"></div>
+    <div class="card" id="rowB"></div>
+    <div class="card">
+      <div class="row">
+        <button class="go-btn" id="btnCmpAns">💡 ちがいをたしかめる</button>
+        <button class="go-btn blue" id="btnCmpRec">📝 2つの<ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby>する</button>
+        <button class="go-btn sub" id="btnCmpReset">もういちど</button>
+      </div>
+      <div class="msg" id="cMsg">&nbsp;</div>
+      <div class="cmp-ans hidden" id="cmpAns"></div>
+    </div>
+  </section>
+
+  <!-- ===== 先生モードだけに出す説明 ===== -->
+  <div class="card teacher hidden" id="teacherBox">
+    <p class="fig-title">👩‍🏫 先生用メモ</p>
+    <ul>
+      <li><b>完全変態（かんぜんへんたい）</b>：たまご → 幼虫 → さなぎ → 成虫。モンシロチョウ・カブトムシ（ほかにテントウムシ・ハチ・アリ・ハエなど）。</li>
+      <li><b>不完全変態（ふかんぜんへんたい）</b>：たまご → 幼虫 → 成虫。トンボ・バッタ・カマキリ（ほかにセミ・コオロギなど）。幼虫は成虫ににた形で、最後のだっ皮ではねがのびる。</li>
+      <li>3年の教科書ではこの言葉を使わないので、子どもには「さなぎになる育ち方」「さなぎにならない育ち方」と言いかえます。</li>
+      <li>予想を大切にするため、虫のタブの「さなぎになる／ならない」と、育ち方の帯・順は、その虫を成虫まで進めるまで「？」になっています（「もういちど」で「？」にもどります）。「くらべる」では、はじめから全部見えます。</li>
+      <li>クイズの答え：こん虫＝モンシロチョウ・アリ・テントウムシ・セミ／こん虫ではない＝クモ・ダンゴムシ・ミミズ・ムカデ。アリは、はねがなくてもこん虫です。</li>
+      <li>カブトムシのむねは、せなかから見える大きな部分だけでなく、前ばねの下にかくれた部分もふくみます。カマキリの細長い「首」もむねです。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <p class="diff">※じっさいとのちがい：<ruby>日数<rt>にっすう</rt></ruby>は<ruby>目安<rt>めやす</rt></ruby>で、<ruby>気温<rt>きおん</rt></ruby>や<ruby>地<rt>ち</rt></ruby>いき、<ruby>年<rt>とし</rt></ruby>によってかわります。だっ<ruby>皮<rt>ぴ</rt></ruby>の<ruby>回数<rt>かいすう</rt></ruby>も<ruby>目安<rt>めやす</rt></ruby>です。<ruby>絵<rt>え</rt></ruby>はかんたんにしていて、<ruby>大<rt>おお</rt></ruby>きさも<ruby>見<rt>み</rt></ruby>やすいようにかえています（ほんとうの<ruby>大<rt>おお</rt></ruby>きさは「<ruby>大<rt>おお</rt></ruby>きさ（めやす）」を<ruby>見<rt>み</rt></ruby>てね）。トンボはシオカラトンボ、バッタはトノサマバッタ、カマキリはオオカマキリをもとにしています。</p>
+  </div>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: 'こん<ruby>虫<rt>ちゅう</rt></ruby>の<ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby>',
+  question: 'トンボには、さなぎの<ruby>時期<rt>じき</rt></ruby>があるだろうか？',
+  predictionChoices: ['さなぎの<ruby>時期<rt>じき</rt></ruby>がある', 'さなぎの<ruby>時期<rt>じき</rt></ruby>はない', 'わからない'],
+  experimentNote: '「🔍 <ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby>」でトンボをえらび、<ruby>成虫<rt>せいちゅう</rt></ruby>になるまで<ruby>日<rt>ひ</rt></ruby>にちを<ruby>進<rt>すす</rt></ruby>めよう。モンシロチョウも<ruby>進<rt>すす</rt></ruby>めて、それぞれ「📝 <ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby>する」をおそう。「📏 くらべる」で2つをならべてみよう。',
+  columns: [
+    { key: 'bug', label: '<ruby>虫<rt>むし</rt></ruby>' },
+    { key: 'order', label: '<ruby>育<rt>そだ</rt></ruby>ち<ruby>方<rt>かた</rt></ruby>の<ruby>順<rt>じゅん</rt></ruby>' },
+    { key: 'pupa', label: 'さなぎの<ruby>時期<rt>じき</rt></ruby>' }
+  ],
+  chart: false,
+  hint: 'まずモンシロチョウ（さなぎになる）を成虫まで観察し、次にトンボを観察させます。「くらべる」で2本のタイムラインをならべると、トンボには「さなぎ」のだんかいがないことがはっきりします。ヤゴ（幼虫）が成虫ににた形をしていることにも気づかせましょう。【先生向けの用語】たまご→幼虫→さなぎ→成虫 の育ち方を「完全変態」、たまご→幼虫→成虫 の育ち方を「不完全変態」といいます（3年の教科書では使いません）。',
+  answer: 'トンボには、さなぎの時期はない。トンボは、たまご→幼虫（ヤゴ）→成虫 の順に育つ。バッタやカマキリも同じ育ち方をする。モンシロチョウやカブトムシは、たまご→幼虫→さなぎ→成虫 の順に育つ。こん虫には、さなぎになる育ち方と、さなぎにならない育ち方がある。'
+});
+
+// ===== 小さな道具 =====
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const R = (k, y) => '<ruby>' + k + '<rt>' + y + '</rt></ruby>';
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+function rgbOf(c) {
+  if (c[0] === '#') { const v = parseInt(c.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; }
+  return c.match(/\d+/g).map(Number);
+}
+function mix(c1, c2, t) {   // 2つの色をまぜる
+  t = clamp(t, 0, 1);
+  const a = rgbOf(c1), b = rgbOf(c2);
+  return 'rgb(' + a.map((v, i) => Math.round(lerp(v, b[i], t))).join(',') + ')';
+}
+function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }  // いつも同じならびの乱数
+
+// ===== だんかいの名前 =====
+const ST_NAME = { egg: 'たまご', larva: R('幼虫', 'ようちゅう'), pupa: 'さなぎ', adult: R('成虫', 'せいちゅう') };
+const ST_PLAIN = { egg: 'たまご', larva: '幼虫', pupa: 'さなぎ', adult: '成虫' };
+const YOU = R('幼虫', 'ようちゅう'), SEI = R('成虫', 'せいちゅう');
+
+// ===== 虫のデータ =====
+// start：たまごがうまれる月と日（そこからの日数で「○月ごろ」を出す）
+// stages：だんかい。from〜to はたまごがうまれてからの日数。molts：だっ皮する日
+// sizeCm：幼虫の大きさ（生まれたとき〜いちばん大きいとき、cm）
+// scene：うしろの絵（leaf 葉の上／twig えだ／flower 花畑／soil 土の中／tree 木のみき／pond 水の中／pondAir 池の上／grass 草むら）
+// zoom：true だと「大きくしてかいています」と出す
+const BUGS = {
+  monshiro: {
+    name: 'モンシロチョウ', pupa: true, start: [5, 1], total: 45,
+    stages: [
+      { k: 'egg', from: 0, to: 5, dur: '約5日', size: '約1mm', scene: 'leaf', zoom: true,
+        desc: 'キャベツなどの' + R('葉', 'は') + 'に、1つずつうみつけられる。はじめはうすい' + R('黄色', 'きいろ') + 'で、だんだんオレンジ' + R('色', 'いろ') + 'になる。' },
+      { k: 'larva', from: 5, to: 20, dur: '約2週間', sizeCm: [0.2, 3], scene: 'leaf', alias: '青虫', molts: [8, 11, 14, 17],
+        desc: R('生', 'う') + 'まれるとすぐ、たまごのからを' + R('食', 'た') + 'べる。そのあとはキャベツの' + R('葉', 'は') + 'を' + R('食', 'た') + 'べて' + R('大', 'おお') + 'きくなる。' + R('皮', 'かわ') + 'をぬぐ（だっ' + R('皮', 'ぴ') + 'する）たびに' + R('大', 'おお') + 'きくなる。' },
+      { k: 'pupa', from: 20, to: 30, dur: '約10日', size: '約2cm', scene: 'twig',
+        desc: R('糸', 'いと') + 'で' + R('体', 'からだ') + 'をささえて、じっと' + R('動', 'うご') + 'かない。' + R('何', 'なに') + 'も' + R('食', 'た') + 'べない。' + R('中', 'なか') + 'で、' + R('体', 'からだ') + 'が' + SEI + 'の' + R('形', 'かたち') + 'につくりかわっている。' },
+      { k: 'adult', from: 30, to: 45, dur: '約2週間', size: 'はねを広げて約5cm', scene: 'flower',
+        desc: 'さなぎから' + R('出', 'で') + 'てくる（' + R('羽化', 'うか') + '）。' + R('花', 'はな') + 'のみつをすい、キャベツなどの' + R('葉', 'は') + 'にたまごをうむ。' }
+    ]
+  },
+  kabuto: {
+    name: 'カブトムシ', pupa: true, start: [8, 1], total: 385,
+    stages: [
+      { k: 'egg', from: 0, to: 14, dur: '約2週間', size: '約3mm', scene: 'soil', zoom: true,
+        desc: 'くさった' + R('葉', 'は') + 'がまじった' + R('土', 'つち') + '（ふよう' + R('土', 'ど') + '）の' + R('中', 'なか') + 'にうみつけられる。' + R('水', 'みず') + 'をすって、' + R('少', 'すこ') + 'し' + R('大', 'おお') + 'きくなる。' },
+      { k: 'larva', from: 14, to: 300, dur: '約10か月', sizeCm: [0.7, 10], scene: 'soil', molts: [35, 70],
+        desc: R('土', 'つち') + 'の' + R('中', 'なか') + 'で、ふよう' + R('土', 'ど') + 'を' + R('食', 'た') + 'べて' + R('大', 'おお') + 'きくなる。2' + R('回', 'かい') + 'だっ' + R('皮', 'ぴ') + 'する。' + R('土', 'つち') + 'の' + R('中', 'なか') + 'で' + R('冬', 'ふゆ') + 'をこす。' },
+      { k: 'pupa', from: 300, to: 325, dur: '約3週間', size: '約6cm', scene: 'soil',
+        desc: R('土', 'つち') + 'の' + R('中', 'なか') + 'に' + R('部屋', 'へや') + '（さなぎの' + R('部屋', 'へや') + '）をつくって、さなぎになる。' + R('角', 'つの') + 'の' + R('形', 'かたち') + 'がもう' + R('見', 'み') + 'える。' },
+      { k: 'adult', from: 325, to: 385, dur: '約1〜3か月', size: '角もふくめて約5〜8cm', scene: 'tree',
+        desc: R('夏', 'なつ') + 'の' + R('夜', 'よる') + '、クヌギなどの' + R('木', 'き') + 'のしるをなめる。オスには' + R('角', 'つの') + 'がある。' }
+    ]
+  },
+  tombo: {
+    name: 'トンボ', pupa: false, start: [7, 1], total: 385,
+    stages: [
+      { k: 'egg', from: 0, to: 10, dur: '約10日', size: '約0.5mm', scene: 'pond', zoom: true,
+        desc: R('水', 'みず') + 'の' + R('中', 'なか') + 'にうみつけられる。' },
+      { k: 'larva', from: 10, to: 325, dur: '約10か月', sizeCm: [0.1, 2.5], scene: 'pond', alias: 'ヤゴ', molts: [25, 45, 70, 100, 140, 180, 220, 255, 285, 305],
+        desc: R('水', 'みず') + 'の' + R('中', 'なか') + 'にすみ、' + R('小', 'ちい') + 'さな' + R('虫', 'むし') + 'などを' + R('食', 'た') + 'べる。10' + R('回', 'かい') + 'ぐらいだっ' + R('皮', 'ぴ') + 'して' + R('大', 'おお') + 'きくなる。' + R('水', 'みず') + 'の' + R('中', 'なか') + 'で' + R('冬', 'ふゆ') + 'をこす。' + SEI + 'ににた' + R('形', 'かたち') + 'で、せなかに' + R('小', 'ちい') + 'さなはねのもとがある。' },
+      { k: 'adult', from: 325, to: 385, dur: '約1〜2か月', size: '約5cm', scene: 'pondAir',
+        desc: R('草', 'くさ') + 'のくきをのぼって' + R('水', 'みず') + 'から' + R('出', 'で') + 'て、ヤゴの' + R('皮', 'かわ') + 'をやぶって' + R('出', 'で') + 'てくる（' + R('羽化', 'うか') + '）。' + R('飛', 'と') + 'びながら' + R('小', 'ちい') + 'さな' + R('虫', 'むし') + 'をつかまえて' + R('食', 'た') + 'べる。' }
+    ]
+  },
+  batta: {
+    name: 'バッタ', pupa: false, start: [10, 1], total: 330,
+    stages: [
+      { k: 'egg', from: 0, to: 220, dur: '約7か月', size: 'たまご1つ 約5mm', scene: 'soil', zoom: true,
+        desc: R('土', 'つち') + 'の' + R('中', 'なか') + 'に、あわでつつんだたまごのかたまりをうむ。そのまま' + R('土', 'つち') + 'の' + R('中', 'なか') + 'で' + R('冬', 'ふゆ') + 'をこす。' },
+      { k: 'larva', from: 220, to: 262, dur: '約40日', sizeCm: [0.7, 4], scene: 'grass', molts: [228, 235, 242, 249, 256],
+        desc: R('草', 'くさ') + 'を' + R('食', 'た') + 'べて' + R('大', 'おお') + 'きくなる。' + SEI + 'ににた' + R('形', 'かたち') + 'だけど、はねがまだ' + R('小', 'ちい') + 'さくて' + R('飛', 'と') + 'べない。5' + R('回', 'かい') + 'だっ' + R('皮', 'ぴ') + 'する。' },
+      { k: 'adult', from: 262, to: 330, dur: '約2か月', size: '約4〜6cm', scene: 'grass',
+        desc: R('最後', 'さいご') + 'のだっ' + R('皮', 'ぴ') + 'で、はねがのびて' + SEI + 'になる。' + R('草', 'くさ') + 'を' + R('食', 'た') + 'べ、' + R('太', 'ふと') + 'い' + R('後', 'うし') + 'ろあしで' + R('遠', 'とお') + 'くまではねる。' }
+    ]
+  },
+  kamakiri: {
+    name: 'カマキリ', pupa: false, start: [10, 15], total: 355,
+    stages: [
+      { k: 'egg', from: 0, to: 200, dur: '約6か月半', size: 'らんのう 約4cm', scene: 'twig', zoom: true,
+        desc: R('木', 'き') + 'のえだなどに、あわでできた「らんのう」をうみつける。' + R('中', 'なか') + 'に200こくらいのたまごがあり、そのまま' + R('冬', 'ふゆ') + 'をこす。' },
+      { k: 'larva', from: 200, to: 295, dur: '約3か月', sizeCm: [1, 8], scene: 'grass', molts: [212, 224, 236, 248, 260, 272, 284],
+        desc: R('小', 'ちい') + 'さな' + R('虫', 'むし') + 'をつかまえて' + R('食', 'た') + 'べる。' + SEI + 'ににた' + R('形', 'かたち') + 'だけど、はねがまだ' + R('小', 'ちい') + 'さい。7' + R('回', 'かい') + 'ぐらいだっ' + R('皮', 'ぴ') + 'する。' },
+      { k: 'adult', from: 295, to: 355, dur: '約2か月', size: '約7〜9cm', scene: 'grass',
+        desc: R('最後', 'さいご') + 'のだっ' + R('皮', 'ぴ') + 'で、はねのある' + SEI + 'になる。かまの' + R('形', 'かたち') + 'の' + R('前', 'まえ') + 'あしで' + R('虫', 'むし') + 'をつかまえる。' }
+    ]
+  }
+};
+const BUG_KEYS = Object.keys(BUGS);
+
+// だんかいの名前（幼虫には「青虫」「ヤゴ」などのよび名も付ける）
+function stageLabel(B, S) { return ST_NAME[S.k] + (S.alias ? '（' + S.alias + '）' : ''); }
+
+// d 日目は、どのだんかいか
+function stageAt(B, d) {
+  let i = B.stages.findIndex(s => d < s.to);
+  if (i < 0) i = B.stages.length - 1;
+  const S = B.stages[i];
+  const r = { i, S, k: S.k, p: clamp((d - S.from) / (S.to - S.from), 0, 1), grow: 0, instar: 0, sinceMolt: Infinity };
+  if (S.k === 'larva') {
+    const ms = S.molts, done = ms.filter(m => m <= d);
+    r.instar = done.length;
+    const a = done.length ? done[done.length - 1] : S.from;
+    const b = ms[done.length] != null ? ms[done.length] : S.to;
+    const within = clamp((d - a) / (b - a), 0, 1);
+    r.grow = clamp((r.instar + 0.7 * within) / (ms.length + 0.7), 0, 1);   // 0：生まれたとき 〜 1：いちばん大きい
+    if (done.length) r.sinceMolt = d - a;
+  }
+  return r;
+}
+// 大きさのめやす（文字）
+function sizeText(S, grow) {
+  if (!S.sizeCm) return S.size;
+  const [a, b] = S.sizeCm, cm = a * Math.pow(b / a, grow);
+  if (cm < 1) return '約' + Math.max(1, Math.round(cm * 10)) + 'mm';
+  return '約' + (Math.round(cm * 10) / 10) + 'cm';
+}
+// d 日目は何月ごろか
+function monthOf(B, d) { return new Date(2025, B.start[0] - 1, B.start[1] + Math.floor(d)).getMonth() + 1; }
+function season(m) { return m >= 3 && m <= 5 ? 'spring' : m >= 6 && m <= 8 ? 'summer' : m >= 9 && m <= 11 ? 'autumn' : 'winter'; }
+
+// =====================================================================
+//  絵をかく道具
+// =====================================================================
+function E(x, y, rx, ry, rot) { const p = new Path2D(); p.ellipse(x, y, rx, ry, rot || 0, 0, Math.PI * 2); return p; }
+function L(pts) { const p = new Path2D(); p.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) p.lineTo(pts[i][0], pts[i][1]); return p; }
+function PG(pts) { const p = L(pts); p.closePath(); return p; }
+function SM(pts) {   // 点をなめらかにつないだ、とじた形
+  const p = new Path2D(), n = pts.length, mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const m0 = mid(pts[n - 1], pts[0]); p.moveTo(m0[0], m0[1]);
+  for (let i = 0; i < n; i++) { const a = pts[i], m = mid(a, pts[(i + 1) % n]); p.quadraticCurveTo(a[0], a[1], m[0], m[1]); }
+  p.closePath(); return p;
+}
+function MIR(pts) { return pts.concat(pts.slice(1, -1).reverse().map(([x, y]) => [-x, y])); }   // 右半分の点から、左右対称の形を作る
+function both(ctx, fn) { fn(1); ctx.save(); ctx.scale(-1, 1); fn(-1); ctx.restore(); }   // 右がわをかいて、左右反転して左がわもかく
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function label(ctx, text, x, y, color, size, align, stroke) {
+  ctx.font = 'bold ' + size + 'px ' + FONT;
+  ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = stroke || 'rgba(255,255,255,0.92)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+}
+function tag(ctx, text, x, y, bg, fg, alignRight) {   // 角の丸い札
+  ctx.font = 'bold 24px ' + FONT;
+  const w = ctx.measureText(text).width + 22, x0 = alignRight ? x - w : x;
+  rr(ctx, x0, y, w, 40, 11); ctx.fillStyle = bg; ctx.fill();
+  ctx.fillStyle = fg; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(text, x0 + 11, y + 21);
+}
+// キャンバスの大きさを画面に合わせる（LW：横はばを何ピクセルとしてかくか）
+function prep(c, LW) {
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if (!r.width) return null;
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr * r.width / LW, 0, 0, dpr * r.width / LW, 0, 0);
+  return ctx;
+}
+
+// ----- 「体のつくり」の色分け（色だけでなく、もようでも分ける） -----
+const BODYCOL = {
+  head:    { c: '#56B4E9', p: 'dots',   name: '頭' },
+  thorax:  { c: '#E69F00', p: 'stripe', name: 'むね' },
+  abdomen: { c: '#009E73', p: 'diag',   name: 'はら' }
+};
+function pat(ctx, kind) {
+  ctx._pat = ctx._pat || {};
+  if (!ctx._pat[kind]) {
+    const c = document.createElement('canvas'); c.width = c.height = 10;
+    const g = c.getContext('2d');
+    if (kind === 'dots') { g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.arc(2.5, 2.5, 1.5, 0, 7); g.moveTo(9, 7.5); g.arc(7.5, 7.5, 1.5, 0, 7); g.fill(); }
+    if (kind === 'stripe') { g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillRect(0, 0, 10, 3.5); }
+    if (kind === 'diag') { g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, 10); g.lineTo(10, 0); g.moveTo(-5, 5); g.lineTo(5, -5); g.moveTo(5, 15); g.lineTo(15, 5); g.stroke(); }
+    ctx._pat[kind] = ctx.createPattern(c, 'repeat');
+  }
+  return ctx._pat[kind];
+}
+
+// ----- 部分をかいて、タップできるように場所をおぼえる -----
+// o.body：色分け　o.sel：えらばれた部分（黄色でかこむ）　o.hits：タップの場所を入れる配列　o.outline：はねの点線だけかく
+const PRI = { antenna: 1, eye: 1, mouth: 1, horn: 1, leg: 2, head: 3, thorax: 3, abdomen: 4, wing: 5 };  // 重なったとき、数の小さいほうを先に調べる
+function fillPart(ctx, o, part, path, color, stroke, lw) {
+  if (o.outline) { ctx.strokeStyle = 'rgba(60,60,60,0.85)'; ctx.lineWidth = 1.3; ctx.stroke(path); return; }
+  const bc = o.body && BODYCOL[part];
+  ctx.fillStyle = bc ? bc.c : color; ctx.fill(path);
+  if (bc) { ctx.fillStyle = pat(ctx, bc.p); ctx.fill(path); }
+  if (stroke !== null) { ctx.strokeStyle = stroke || 'rgba(0,0,0,0.6)'; ctx.lineWidth = lw || 1.2; ctx.stroke(path); }
+  if (o.sel === part) { ctx.save(); ctx.globalAlpha = 1; ctx.strokeStyle = '#ffd600'; ctx.lineWidth = 4; ctx.stroke(path); ctx.strokeStyle = '#e65100'; ctx.lineWidth = 1.5; ctx.stroke(path); ctx.restore(); }
+  if (o.hits) o.hits.push({ part, path, m: ctx.getTransform(), pri: PRI[part] || 9 });
+}
+function strokePart(ctx, o, part, path, color, lw) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (o.sel === part) { ctx.strokeStyle = '#ffd600'; ctx.lineWidth = lw + 6; ctx.stroke(path); }
+  ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.stroke(path);
+  if (o.hits) o.hits.push({ part, path, m: ctx.getTransform(), pri: PRI[part] || 9, stroke: lw });
+}
+// あしに 1〜6 の番号を付ける（あしをタップしたとき）
+function legNo(ctx, o, sx, i, x, y) {
+  if (o.sel !== 'leg') return;
+  ctx.save(); ctx.translate(x, y); ctx.scale(sx, 1);
+  ctx.beginPath(); ctx.arc(0, 0, 9.5, 0, 7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = '#e65100'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#e65100'; ctx.font = 'bold 13px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(sx > 0 ? i + 1 : i + 4), 0, 0.5);
+  ctx.restore();
+}
+// 細いあしをまとめてかく（list：右がわのあしの点。start：番号のはじまり）
+function legs(ctx, o, list, color, lw, start) {
+  both(ctx, sx => list.forEach((pts, j) => {
+    strokePart(ctx, o, 'leg', L(pts), color, lw);
+    const e = pts[pts.length - 1];
+    legNo(ctx, o, sx, (start || 0) + j, e[0], e[1]);
+  }));
+}
+function segLines(ctx, ys, hw, color) {   // はらのふしの線
+  ctx.strokeStyle = color; ctx.lineWidth = 1;
+  ys.forEach(([y, w]) => { ctx.beginPath(); ctx.moveTo(-w, y); ctx.quadraticCurveTo(0, y + 2.5, w, y); ctx.stroke(); });
+}
+
+// =====================================================================
+//  成虫（と、さなぎにならない虫の幼虫）を、せなかがわから見た絵
+//  頭が上（y がマイナス）。それぞれの虫の「設計図」を SPEC にまとめる。
+//  legs：あし　under：はねの下にかくれる部分　wings：はね　over：はねより上に見える部分
+// =====================================================================
+const SPEC = {};
+
+// ----- モンシロチョウ -----
+SPEC.monshiro = {
+  bbox: [-106, -126, 106, 52],
+  lab: { head: [0, -61], thorax: [0, -38], abdomen: [0, 18] },
+  legs(ctx, o) { legs(ctx, o, [[[6, -46], [16, -56], [20, -70]], [[8, -38], [22, -36], [30, -46]], [[7, -30], [20, -22], [28, -8]]], '#333', 1.6); },
+  under() {},
+  wings(ctx, o) {
+    both(ctx, () => {
+      ctx.save(); ctx.scale(o.flap == null ? 1 : o.flap, 1);
+      const fw = new Path2D(); fw.moveTo(8, -48); fw.bezierCurveTo(30, -80, 70, -100, 96, -98); fw.bezierCurveTo(104, -80, 104, -55, 98, -40); fw.bezierCurveTo(70, -34, 35, -30, 10, -30); fw.closePath();
+      const hw = new Path2D(); hw.moveTo(9, -34); hw.bezierCurveTo(45, -42, 82, -36, 86, -12); hw.bezierCurveTo(88, 15, 60, 42, 36, 46); hw.bezierCurveTo(20, 40, 10, 15, 8, -12); hw.closePath();
+      fillPart(ctx, o, 'wing', hw, '#fbfbf2', 'rgba(90,90,90,0.65)', 1.2);
+      if (!o.outline) {   // 後ろばねの黒い点
+        ctx.save(); ctx.clip(hw); ctx.fillStyle = 'rgba(50,50,50,0.7)'; ctx.beginPath(); ctx.ellipse(46, -39, 5, 3.5, 0, 0, 7); ctx.fill(); ctx.restore();
+      }
+      fillPart(ctx, o, 'wing', fw, '#ffffff', 'rgba(90,90,90,0.65)', 1.2);
+      if (!o.outline) {   // 前ばねの先が黒く、黒い点が2つ
+        ctx.save(); ctx.clip(fw); ctx.fillStyle = 'rgba(45,45,45,0.75)';
+        ctx.beginPath(); ctx.ellipse(101, -96, 24, 15, 0.5, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.arc(64, -60, 6, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.arc(70, -42, 5, 0, 7); ctx.fill();
+        ctx.strokeStyle = 'rgba(150,150,150,0.5)'; ctx.lineWidth = 0.8;
+        [[96, -92], [100, -70], [96, -48], [70, -36]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(10, -40); ctx.lineTo(x, y); ctx.stroke(); });
+        ctx.restore();
+      }
+      ctx.restore();
+    });
+  },
+  over(ctx, o) {
+    const ab = SM(MIR([[0, -24], [6, -20], [7, 0], [6, 30], [3, 47], [0, 50]]));
+    fillPart(ctx, o, 'abdomen', ab, '#3d3d3d');
+    if (!o.body) segLines(ctx, [[-10, 6], [0, 7], [10, 7], [20, 6], [30, 6], [40, 4]], 0, 'rgba(255,255,255,0.3)');
+    fillPart(ctx, o, 'thorax', E(0, -38, 11, 16), '#2f2f2f');
+    fillPart(ctx, o, 'head', E(0, -61, 8.5, 7.5), '#333');
+    both(ctx, () => fillPart(ctx, o, 'eye', E(6.5, -63, 4, 5), '#8a7a48', 'rgba(0,0,0,.6)', 1));
+    const mp = new Path2D(); mp.arc(0, -72, 3.6, Math.PI * 0.5, Math.PI * 2.3);   // くるくるまいた口
+    strokePart(ctx, o, 'mouth', mp, '#555', 1.5);
+    both(ctx, () => {
+      strokePart(ctx, o, 'antenna', L([[3, -67], [12, -92], [22, -118]]), '#333', 1.5);
+      fillPart(ctx, o, 'antenna', E(22.5, -120, 2.4, 4, 0.4), '#333', null);
+    });
+  }
+};
+
+// ----- カブトムシ（オス） -----
+SPEC.kabuto = {
+  bbox: [-80, -156, 80, 92],
+  lab: { head: [0, -73], thorax: [0, -46], abdomen: [0, 40] },
+  legs(ctx, o) { legs(ctx, o, [[[26, -44], [50, -56], [60, -74], [64, -96]], [[22, -12], [52, -6], [70, 14], [78, 36]], [[20, 2], [46, 26], [56, 58], [62, 90]]], '#2a160a', 5); },
+  under(ctx, o) {
+    fillPart(ctx, o, 'thorax', E(0, -14, 25, 15), '#3a2010');   // 前ばねの下にかくれた「むね」
+    fillPart(ctx, o, 'abdomen', E(0, 38, 30, 44), '#3a2010');
+    if (o.body) return;
+    segLines(ctx, [[12, 26], [26, 29], [40, 29], [54, 26], [66, 21]], 0, 'rgba(255,255,255,0.15)');
+  },
+  wings(ctx, o) {
+    both(ctx, () => {
+      const w = new Path2D(); w.moveTo(1, -24); w.bezierCurveTo(18, -28, 38, -26, 41, -14); w.bezierCurveTo(46, 20, 40, 62, 22, 80); w.bezierCurveTo(12, 88, 4, 90, 1, 90); w.closePath();
+      fillPart(ctx, o, 'wing', w, '#5a3014', 'rgba(0,0,0,.7)', 1.5);
+      if (!o.outline) { ctx.fillStyle = 'rgba(255,255,255,0.13)'; ctx.fill(E(20, 12, 6, 32, -0.08)); }
+    });
+  },
+  over(ctx, o) {
+    const pr = new Path2D(); pr.moveTo(-36, -30); pr.bezierCurveTo(-46, -50, -34, -72, 0, -72); pr.bezierCurveTo(34, -72, 46, -50, 36, -30); pr.bezierCurveTo(20, -24, -20, -24, -36, -30); pr.closePath();
+    fillPart(ctx, o, 'thorax', pr, '#4a2812');
+    both(ctx, () => fillPart(ctx, o, 'mouth', E(8, -85, 4.5, 3.2), '#e0a040', null));
+    fillPart(ctx, o, 'head', E(0, -73, 15, 11), '#3a1f0e');
+    both(ctx, () => {
+      fillPart(ctx, o, 'eye', E(13, -72, 3.5, 3), '#9a7350', 'rgba(0,0,0,.6)', 0.8);
+      strokePart(ctx, o, 'antenna', L([[12, -79], [20, -86], [24, -92]]), '#3a1f0e', 1.6);
+      fillPart(ctx, o, 'antenna', E(25, -94, 3, 2.2, 0.5), '#3a1f0e', null);
+    });
+    // 大きい角（頭から）
+    const hp = new Path2D(); hp.moveTo(-5, -80); hp.lineTo(-4, -128); hp.quadraticCurveTo(-12, -140, -15, -152); hp.lineTo(-10, -154); hp.quadraticCurveTo(-4, -142, 0, -138);
+    hp.quadraticCurveTo(4, -142, 10, -154); hp.lineTo(15, -152); hp.quadraticCurveTo(12, -140, 4, -128); hp.lineTo(5, -80); hp.closePath();
+    fillPart(ctx, o, 'horn', hp, '#3a1f0e');
+    // 小さい角（むねから）
+    const sp = new Path2D(); sp.moveTo(-4, -62); sp.lineTo(-3, -86); sp.lineTo(-8, -93); sp.lineTo(0, -89); sp.lineTo(8, -93); sp.lineTo(3, -86); sp.lineTo(4, -62); sp.closePath();
+    fillPart(ctx, o, 'horn', sp, '#4a2812');
+  }
+};
+
+// ----- トンボ（シオカラトンボのオス） -----
+SPEC.tombo = {
+  bbox: [-158, -100, 158, 122],
+  lab: { head: [0, -78], thorax: [0, -50], abdomen: [0, 40] },
+  legs(ctx, o) { legs(ctx, o, [[[7, -58], [15, -66], [17, -78]], [[8, -50], [19, -54], [25, -64]], [[8, -42], [21, -42], [29, -52]]], '#222', 1.6); },
+  under() {},
+  wings(ctx, o) {
+    both(ctx, () => {
+      ctx.save(); ctx.scale(o.flap == null ? 1 : o.flap, 1);
+      const fw = new Path2D(); fw.moveTo(10, -60); fw.bezierCurveTo(50, -72, 120, -74, 152, -66); fw.bezierCurveTo(158, -62, 156, -54, 148, -52); fw.bezierCurveTo(110, -50, 50, -48, 10, -52); fw.closePath();
+      const hw = new Path2D(); hw.moveTo(10, -46); hw.bezierCurveTo(50, -56, 120, -52, 148, -40); hw.bezierCurveTo(154, -36, 152, -28, 144, -27); hw.bezierCurveTo(100, -22, 40, -14, 12, -36); hw.closePath();
+      [fw, hw].forEach(w => fillPart(ctx, o, 'wing', w, 'rgba(225,240,250,0.6)', 'rgba(90,110,130,0.85)', 1));
+      if (!o.outline) {
+        ctx.strokeStyle = 'rgba(90,110,130,0.45)'; ctx.lineWidth = 0.7;
+        [[-62, -60], [-57, -56], [-44, -38], [-38, -32]].forEach(([a, b]) => { ctx.beginPath(); ctx.moveTo(12, a + 6); ctx.lineTo(146, b - 3); ctx.stroke(); });
+        ctx.fillStyle = '#3a3a3a'; ctx.fillRect(136, -67, 9, 4); ctx.fillRect(132, -45, 9, 4);   // はねの先の黒い点
+      }
+      ctx.restore();
+    });
+  },
+  over(ctx, o) {
+    const ab = SM(MIR([[0, -32], [6, -28], [5, 0], [5, 60], [4.5, 100], [3, 118], [0, 122]]));
+    fillPart(ctx, o, 'abdomen', ab, '#93b6d8');
+    if (!o.body) {
+      ctx.save(); ctx.clip(ab); ctx.fillStyle = '#2b2b2b'; ctx.fillRect(-8, 96, 16, 30); ctx.restore();
+      segLines(ctx, [-18, -4, 10, 24, 38, 52, 66, 80, 94].map(y => [y, 5]), 0, 'rgba(0,0,0,0.3)');
+    }
+    fillPart(ctx, o, 'thorax', E(0, -50, 13, 19), '#5b5040');
+    if (!o.body) { ctx.strokeStyle = 'rgba(230,210,120,0.7)'; ctx.lineWidth = 2; both(ctx, () => { ctx.beginPath(); ctx.moveTo(5, -64); ctx.lineTo(8, -38); ctx.stroke(); }); }
+    fillPart(ctx, o, 'head', E(0, -78, 15, 10), '#3e3a30');
+    fillPart(ctx, o, 'mouth', E(0, -89, 5, 3), '#8a7a50', null);
+    both(ctx, () => {
+      fillPart(ctx, o, 'eye', E(9, -80, 9, 10), '#4d8fa8', 'rgba(0,0,0,.6)', 1);
+      strokePart(ctx, o, 'antenna', L([[3, -88], [6, -94], [9, -98]]), '#333', 1.3);
+    });
+  }
+};
+
+// ----- ヤゴ（トンボの幼虫） -----
+SPEC.yago = {
+  bbox: [-60, -98, 60, 68],
+  legs(ctx, o) { legs(ctx, o, [[[13, -48], [32, -60], [42, -80]], [[15, -42], [42, -32], [56, -10]], [[15, -34], [42, -10], [52, 30]]], '#5d4330', 3); },
+  under(ctx, o) {
+    fillPart(ctx, o, 'abdomen', SM(MIR([[0, -32], [16, -24], [24, 0], [22, 35], [14, 58], [0, 66]])), '#7b5b3a');
+    segLines(ctx, [-12, 0, 12, 24, 36, 48].map(y => [y, 18]), 0, 'rgba(0,0,0,0.25)');
+  },
+  wings(ctx, o) {   // はねのもと（だんだんのびる）
+    const len = 10 + 50 * (o.wing || 0.2);
+    both(ctx, () => fillPart(ctx, o, 'wing', PG([[3, -36], [14, -34], [12, -36 + len], [4, -36 + len * 0.92]]), '#6a4c30', 'rgba(0,0,0,.5)', 1));
+  },
+  over(ctx, o) {
+    fillPart(ctx, o, 'thorax', E(0, -44, 17, 14), '#6d5035');
+    fillPart(ctx, o, 'mouth', E(0, -85, 8, 4), '#5d4330', null);
+    fillPart(ctx, o, 'head', E(0, -70, 20, 13), '#7b5b3a');
+    both(ctx, () => {
+      fillPart(ctx, o, 'eye', E(16, -73, 8, 9), '#4a3825', 'rgba(0,0,0,.5)', 1);
+      strokePart(ctx, o, 'antenna', L([[6, -80], [9, -88], [12, -93]]), '#5d4330', 1.2);
+    });
+  }
+};
+
+// ----- バッタ（トノサマバッタ） -----
+SPEC.batta = {
+  bbox: [-50, -142, 50, 118],
+  lab: { head: [0, -82], thorax: [0, -52], abdomen: [0, 30] },
+  legs(ctx, o) {
+    legs(ctx, o, [[[11, -60], [24, -66], [28, -80], [32, -84]], [[12, -44], [28, -42], [36, -56], [40, -58]]], '#6b8e23', 2.4, 0);
+    both(ctx, sx => {   // 後ろあし（太くて長い）
+      const fe = new Path2D(); fe.moveTo(10, -30); fe.bezierCurveTo(30, -30, 42, 20, 38, 58); fe.bezierCurveTo(36, 62, 32, 62, 31, 58); fe.bezierCurveTo(28, 24, 18, -14, 9, -22); fe.closePath();
+      fillPart(ctx, o, 'leg', fe, '#7da33a', 'rgba(0,0,0,.55)', 1.2);
+      strokePart(ctx, o, 'leg', L([[35, 60], [42, 20], [44, -8]]), '#9a6b3b', 2.2);
+      legNo(ctx, o, sx, 2, 44, -8);
+    });
+  },
+  under(ctx, o) {
+    fillPart(ctx, o, 'thorax', E(0, -27, 13, 11), '#78a63c');
+    fillPart(ctx, o, 'abdomen', SM(MIR([[0, -20], [11, -14], [13, 20], [11, 60], [7, 84], [0, 90]])), '#86b04a');
+    if (!o.body) segLines(ctx, [-4, 8, 20, 32, 44, 56, 68].map(y => [y, 11]), 0, 'rgba(0,0,0,0.22)');
+  },
+  wings(ctx, o) {
+    const len = 152 * (o.wing == null ? 1 : o.wing);
+    both(ctx, () => {
+      const p = new Path2D(); p.moveTo(2, -38); p.lineTo(15, -36); p.bezierCurveTo(19, -36 + len * 0.4, 18, -36 + len * 0.9, 10, -36 + len); p.lineTo(3, -38 + len * 0.98); p.closePath();
+      fillPart(ctx, o, 'wing', p, '#9aa86a', 'rgba(60,60,30,.7)', 1.2);
+      if (!o.outline && len > 100) {
+        ctx.save(); ctx.clip(p); ctx.fillStyle = 'rgba(70,60,30,0.45)';
+        [[10, 20], [8, 44], [11, 66], [8, 88]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 4, 6, 0, 0, 7); ctx.fill(); });
+        ctx.restore();
+      }
+    });
+  },
+  over(ctx, o) {
+    const pn = new Path2D(); pn.moveTo(-14, -68); pn.lineTo(14, -68); pn.bezierCurveTo(17, -56, 17, -44, 16, -36); pn.lineTo(-16, -36); pn.bezierCurveTo(-17, -44, -17, -56, -14, -68); pn.closePath();
+    fillPart(ctx, o, 'thorax', pn, '#7cb342');
+    if (!o.body) { ctx.strokeStyle = 'rgba(40,70,10,0.5)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, -67); ctx.lineTo(0, -37); ctx.stroke(); }
+    fillPart(ctx, o, 'mouth', E(0, -97, 5, 3.5), '#5d7a2a', null);
+    fillPart(ctx, o, 'head', E(0, -82, 12, 15), '#7cb342');
+    both(ctx, () => {
+      fillPart(ctx, o, 'eye', E(10, -86, 4.5, 7), '#8d6e3f', 'rgba(0,0,0,.6)', 1);
+      strokePart(ctx, o, 'antenna', L([[5, -95], [11, -115], [18, -138]]), '#6b8e23', 1.8);
+    });
+  }
+};
+
+// ----- カマキリ（オオカマキリ） -----
+SPEC.kamakiri = {
+  bbox: [-72, -178, 72, 104],
+  lab: { head: [0, -118], thorax: [0, -72], abdomen: [0, 40] },
+  legs(ctx, o) {
+    both(ctx, sx => {   // 前あし（かまの形）
+      fillPart(ctx, o, 'leg', PG([[4, -94], [9, -96], [22, -118], [16, -121]]), '#8bc34a', 'rgba(0,0,0,.5)', 1);
+      const fm = PG([[16, -118], [24, -121], [35, -158], [28, -162]]);
+      fillPart(ctx, o, 'leg', fm, '#8bc34a', 'rgba(0,0,0,.5)', 1);
+      if (!o.outline) { ctx.strokeStyle = '#33691e'; ctx.lineWidth = 1; for (let i = 0; i < 5; i++) { const y = -126 - i * 7, x = 18.5 + i * 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 4, y - 2); ctx.stroke(); } }
+      strokePart(ctx, o, 'leg', L([[31, -160], [23, -138], [20, -128]]), '#7cb342', 3);
+      legNo(ctx, o, sx, 0, 31, -164);
+    });
+    legs(ctx, o, [[[10, -34], [42, -46], [60, -22], [66, -16]], [[10, -22], [46, -4], [64, 48], [68, 54]]], '#7cb342', 2.4, 1);
+  },
+  under(ctx, o) {
+    fillPart(ctx, o, 'thorax', E(0, -30, 11, 13), '#8bc34a');
+    fillPart(ctx, o, 'abdomen', SM(MIR([[0, -18], [14, -10], [18, 25], [16, 70], [10, 96], [0, 102]])), '#9ccc65');
+    if (!o.body) segLines(ctx, [0, 14, 28, 42, 56, 70, 84].map(y => [y, 16]), 0, 'rgba(0,0,0,0.2)');
+  },
+  wings(ctx, o) {
+    const len = 140 * (o.wing == null ? 1 : o.wing);
+    both(ctx, () => {
+      const p = new Path2D(); p.moveTo(2, -42); p.lineTo(17, -38); p.bezierCurveTo(22, -38 + len * 0.4, 22, -38 + len * 0.9, 12, -38 + len); p.lineTo(3, -40 + len * 0.98); p.closePath();
+      fillPart(ctx, o, 'wing', p, '#a5d36b', 'rgba(50,80,20,.7)', 1.2);
+      if (!o.outline && len > 90) { ctx.strokeStyle = 'rgba(50,80,20,0.4)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(14, -36); ctx.quadraticCurveTo(18, 30, 10, -38 + len * 0.95); ctx.stroke(); }
+    });
+  },
+  over(ctx, o) {
+    const pt = new Path2D(); pt.moveTo(-5, -104); pt.bezierCurveTo(-9, -96, -10, -88, -7, -80); pt.lineTo(-6, -48); pt.bezierCurveTo(-8, -44, -10, -42, -11, -40);
+    pt.lineTo(11, -40); pt.bezierCurveTo(10, -42, 8, -44, 6, -48); pt.lineTo(7, -80); pt.bezierCurveTo(10, -88, 9, -96, 5, -104); pt.closePath();
+    fillPart(ctx, o, 'thorax', pt, '#8bc34a');
+    fillPart(ctx, o, 'mouth', E(0, -137, 4, 3), '#689f38', null);
+    const hd = new Path2D(); hd.moveTo(-24, -114); hd.quadraticCurveTo(-20, -108, -8, -104); hd.lineTo(8, -104); hd.quadraticCurveTo(20, -108, 24, -114); hd.quadraticCurveTo(14, -126, 0, -135); hd.quadraticCurveTo(-14, -126, -24, -114); hd.closePath();
+    fillPart(ctx, o, 'head', hd, '#9ccc65');
+    both(ctx, () => {
+      fillPart(ctx, o, 'eye', E(18, -116, 6, 7.5, 0.3), '#d4e8a8', 'rgba(0,0,0,.6)', 1);
+      if (!o.outline) { ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(18, -115, 1.6, 0, 7); ctx.fill(); }
+      strokePart(ctx, o, 'antenna', L([[5, -128], [18, -150], [30, -176]]), '#689f38', 1.2);
+    });
+  }
+};
+
+// せなかがわから見た絵をかく（diag：「体のつくり」用。はねをすかして、体の3つの部分がよく見えるようにする）
+function drawDorsal(ctx, sp, o) {
+  if (o.diag) {
+    ctx.save(); ctx.globalAlpha = 0.4; sp.wings(ctx, o); ctx.restore();
+    sp.legs(ctx, o); sp.under(ctx, o); sp.over(ctx, o);
+    ctx.save(); ctx.setLineDash([5, 4]); sp.wings(ctx, Object.assign({}, o, { outline: true, hits: null, sel: null })); ctx.restore();
+  } else {
+    sp.legs(ctx, o); sp.under(ctx, o); sp.wings(ctx, o); sp.over(ctx, o);
+  }
+}
+
+// =====================================================================
+//  たまご・さなぎになる虫の幼虫・さなぎ の絵（横から見たところ）
+// =====================================================================
+// モンシロチョウのたまご（とっくりの形）
+function mEgg(ctx, o) {
+  const p = new Path2D(); p.moveTo(0, -21); p.bezierCurveTo(5, -20, 8, -6, 7, 8); p.bezierCurveTo(6.5, 17, 3, 20, 0, 20); p.bezierCurveTo(-3, 20, -6.5, 17, -7, 8); p.bezierCurveTo(-8, -6, -5, -20, 0, -21);
+  ctx.fillStyle = mix('#fff59d', '#ffb74d', o.p || 0); ctx.fill(p);
+  ctx.strokeStyle = '#c79a3a'; ctx.lineWidth = 0.8; ctx.stroke(p);
+  ctx.save(); ctx.clip(p); ctx.strokeStyle = 'rgba(0,0,0,0.14)'; ctx.lineWidth = 0.6;
+  [-4.5, -1.5, 1.5, 4.5].forEach(x => { ctx.beginPath(); ctx.moveTo(x * 0.6, -18); ctx.quadraticCurveTo(x * 1.25, 0, x, 18); ctx.stroke(); });
+  ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fill(E(-2.5, -4, 1.5, 7));
+  ctx.restore();
+}
+// モンシロチョウの幼虫（青虫）
+function mLarva(ctx, o) {
+  const n = 12, t = o.t || 0, X = i => -88 + i * 16.5;
+  const wv = i => o.anim ? Math.sin(t * 4 - i * 0.7) * 2.2 : 0;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#33691e'; ctx.lineWidth = 2.2;   // むねのあし（3対）
+  for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(X(i), wv(i) + 8); ctx.lineTo(X(i) - 3, wv(i) + 16); ctx.stroke(); }
+  [5, 6, 7, 8, 11].forEach(i => {   // はらのあし（いぼのようなあし）
+    rr(ctx, X(i) - 4, wv(i) + 6, 8, 10, 3); ctx.fillStyle = '#9ccc65'; ctx.fill(); ctx.strokeStyle = '#558b2f'; ctx.lineWidth = 1; ctx.stroke();
+  });
+  for (let i = n - 1; i >= 0; i--) {
+    ctx.beginPath(); ctx.arc(X(i), wv(i), i === n - 1 ? 9.5 : 11, 0, 7);
+    ctx.fillStyle = '#7cb342'; ctx.fill(); ctx.strokeStyle = '#558b2f'; ctx.lineWidth = 0.8; ctx.stroke();
+  }
+  for (let i = 0; i < n; i++) {
+    ctx.fillStyle = '#fff176'; ctx.beginPath(); ctx.ellipse(X(i), wv(i) + 5, 2.6, 1.6, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(30,60,10,0.35)'; ctx.beginPath(); ctx.arc(X(i) - 3, wv(i) - 4, 0.9, 0, 7); ctx.arc(X(i) + 3, wv(i) - 6, 0.9, 0, 7); ctx.fill();
+  }
+  const hy = wv(-1) + 1;
+  ctx.beginPath(); ctx.arc(-104, hy, 9.5, 0, 7); ctx.fillStyle = '#689f38'; ctx.fill(); ctx.strokeStyle = '#33691e'; ctx.stroke();
+  ctx.fillStyle = '#1b2e0a'; ctx.beginPath(); ctx.arc(-108, hy - 2, 1.4, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#33691e'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-111, hy + 5); ctx.lineTo(-108, hy + 7); ctx.stroke();
+}
+// モンシロチョウのさなぎ（左の x=-30 のあたりのえだに、糸でついている）
+function mPupa(ctx, o) {
+  const p = PG([[-22, 95], [-8, 72], [10, 44], [20, 14], [22, -6], [30, -24], [18, -34], [12, -62], [2, -86], [-10, -76], [-18, -44], [-22, -6], [-24, 50]]);
+  const late = clamp(((o.p || 0) - 0.75) / 0.25, 0, 1);   // 羽化が近づくと、はねのもようがすけて見える
+  ctx.fillStyle = mix('#a5d06b', '#e9ecdc', late); ctx.fill(p);
+  ctx.strokeStyle = '#558b2f'; ctx.lineWidth = 1.4; ctx.stroke(p);
+  ctx.save(); ctx.clip(p);
+  ctx.strokeStyle = 'rgba(60,90,20,0.45)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-18, -40); ctx.quadraticCurveTo(10, -10, 4, 40); ctx.stroke();
+  if (late > 0) { ctx.fillStyle = 'rgba(40,40,40,' + (0.6 * late) + ')'; ctx.beginPath(); ctx.arc(6, -6, 3, 0, 7); ctx.arc(10, 8, 2.5, 0, 7); ctx.fill(); }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.2;   // 体をささえる糸
+  ctx.beginPath(); ctx.moveTo(-30, -18); ctx.lineTo(21, -8); ctx.moveTo(-30, -4); ctx.lineTo(21, -8); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(-26, 96, 6, 3, 0, 0, 7); ctx.fill();
+}
+// カブトムシのたまご
+function kEgg(ctx, o) {
+  const g = (o.p || 0) * 4;
+  ctx.fillStyle = '#fffbea'; ctx.fill(E(0, 0, 14 + g, 12.5 + g));
+  ctx.strokeStyle = '#b8ad86'; ctx.lineWidth = 0.8; ctx.stroke(E(0, 0, 14 + g, 12.5 + g));
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fill(E(-5, -5, 4, 2.5, -0.5));
+}
+// カブトムシの幼虫（Cの字の形）
+function kLarva(ctx, o) {
+  const n = 11, R0 = 52, segs = [];
+  for (let i = 0; i < n; i++) {
+    const a = (-60 - i * 24) * Math.PI / 180;
+    segs.push({ x: Math.cos(a) * R0, y: Math.sin(a) * R0, a, r: i < 3 ? 17 + i * 3 : i > 7 ? 27 : 25 });
+  }
+  ctx.lineCap = 'round'; ctx.strokeStyle = '#c9a46b'; ctx.lineWidth = 3;   // あし（頭に近い3つのふしの内がわ）
+  for (let i = 0; i < 3; i++) {
+    const s = segs[i], ang = s.a + Math.PI, ix = s.x + Math.cos(ang) * (s.r - 3), iy = s.y + Math.sin(ang) * (s.r - 3);
+    const x1 = ix + Math.cos(ang - 0.3) * 11, y1 = iy + Math.sin(ang - 0.3) * 11;
+    ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(x1, y1); ctx.lineTo(x1 + Math.cos(ang - 1.1) * 9, y1 + Math.sin(ang - 1.1) * 9); ctx.stroke();
+  }
+  for (let i = n - 1; i >= 0; i--) {
+    const s = segs[i];
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7);
+    ctx.fillStyle = i > 7 ? mix('#f3ead2', '#8f8672', (i - 7) / 3.5) : '#f3ead2'; ctx.fill();
+    ctx.strokeStyle = 'rgba(120,100,70,0.6)'; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = '#b8864b';   // 気門（息をするあな）
+    ctx.beginPath(); ctx.ellipse(s.x + Math.cos(s.a) * s.r * 0.55, s.y + Math.sin(s.a) * s.r * 0.55, 2.2, 3.2, s.a, 0, 7); ctx.fill();
+  }
+  const ha = -36 * Math.PI / 180, hx = Math.cos(ha) * R0, hy = Math.sin(ha) * R0;
+  ctx.beginPath(); ctx.arc(hx, hy, 15, 0, 7); ctx.fillStyle = '#c0702a'; ctx.fill(); ctx.strokeStyle = '#7a3e10'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = '#1a0d05'; ctx.lineWidth = 3;   // あご
+  ctx.beginPath(); ctx.moveTo(hx + 8, hy + 8); ctx.quadraticCurveTo(hx + 16, hy + 12, hx + 12, hy + 18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(hx + 12, hy + 2); ctx.quadraticCurveTo(hx + 22, hy + 4, hx + 20, hy + 11); ctx.stroke();
+}
+// カブトムシのさなぎ（オス。角の形が見える）
+function kPupa(ctx, o) {
+  const body = SM([[-50, -22], [-10, -30], [30, -26], [62, -14], [76, 4], [66, 22], [30, 32], [-10, 32], [-46, 24], [-58, 4]]);
+  ctx.fillStyle = '#c9873f'; ctx.fill(body); ctx.strokeStyle = '#7a4a1c'; ctx.lineWidth = 1.5; ctx.stroke(body);
+  ctx.save(); ctx.clip(body);
+  ctx.strokeStyle = 'rgba(110,60,20,0.5)'; ctx.lineWidth = 1.2;
+  for (let x = 14; x <= 64; x += 10) { ctx.beginPath(); ctx.moveTo(x, -30); ctx.quadraticCurveTo(x + 6, 0, x, 32); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(120,60,20,0.25)'; ctx.beginPath(); ctx.moveTo(-30, -14); ctx.quadraticCurveTo(2, -4, 8, 30); ctx.lineTo(-28, 30); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  ctx.strokeStyle = '#8a5a2a'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  [[-42, 20, -14, 30], [-36, 12, -4, 24], [-30, 4, 4, 16]].forEach(([a, b, c, d]) => { ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c, d); ctx.stroke(); });
+  ctx.fillStyle = '#c07a36'; ctx.fill(E(-60, 6, 14, 16)); ctx.strokeStyle = '#7a4a1c'; ctx.lineWidth = 1.2; ctx.stroke(E(-60, 6, 14, 16));
+  const hp = new Path2D(); hp.moveTo(-66, -6); hp.bezierCurveTo(-82, -14, -96, -22, -100, -42); hp.lineTo(-92, -42); hp.bezierCurveTo(-90, -26, -78, -14, -62, 2); hp.closePath();
+  ctx.fillStyle = '#b8732f'; ctx.fill(hp); ctx.stroke(hp);
+  ctx.fillStyle = '#b8732f'; ctx.fill(E(-34, -29, 8, 5)); ctx.stroke(E(-34, -29, 8, 5));
+}
+// トンボのたまご（水の中にばらばら）
+function tEgg(ctx, o) {
+  const r = rng(11);
+  for (let i = 0; i < 22; i++) {
+    const x = (r() - 0.5) * 56, y = (r() - 0.5) * 44, a = r() * 3;
+    ctx.fillStyle = '#fff6c8'; ctx.fill(E(x, y, 3.4, 2.4, a)); ctx.strokeStyle = '#c9b46a'; ctx.lineWidth = 0.6; ctx.stroke(E(x, y, 3.4, 2.4, a));
+    if ((o.p || 0) > 0.6) { ctx.fillStyle = '#5d4037'; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 1.6, y + Math.sin(a) * 1.6, 0.7, 0, 7); ctx.fill(); }
+  }
+}
+// バッタのたまご（土の中の、あわでつつんだかたまり）
+function bEgg(ctx, o) {
+  const pod = SM(MIR([[0, -50], [11, -44], [14, -10], [13, 30], [9, 46], [0, 50]]));
+  ctx.fillStyle = '#e2cfa5'; ctx.fill(pod); ctx.strokeStyle = '#a8925f'; ctx.lineWidth = 1; ctx.stroke(pod);
+  for (let y = -30; y <= 37; y += 9) {
+    [[-5, 0.15], [5, -0.15]].forEach(([x, a]) => { ctx.fillStyle = '#d39b45'; ctx.fill(E(x, y, 3.6, 5.5, a)); ctx.strokeStyle = '#9b6a22'; ctx.lineWidth = 0.6; ctx.stroke(E(x, y, 3.6, 5.5, a)); });
+  }
+  ctx.fillStyle = '#f2e6c8'; ctx.fill(E(0, -42, 10, 7));
+}
+// カマキリのたまご（らんのう。上の y=-28 のあたりがえだにつく）
+function kmEgg(ctx, o) {
+  const p = new Path2D(); p.moveTo(-44, -26); p.bezierCurveTo(-30, -32, 30, -32, 44, -26); p.bezierCurveTo(50, -6, 38, 22, 0, 30); p.bezierCurveTo(-38, 22, -50, -6, -44, -26); p.closePath();
+  ctx.fillStyle = '#cdb08a'; ctx.fill(p); ctx.strokeStyle = '#8d6e4f'; ctx.lineWidth = 1.2; ctx.stroke(p);
+  ctx.save(); ctx.clip(p);
+  ctx.fillStyle = '#e2cba5'; ctx.fill(E(0, -4, 9, 30));
+  ctx.strokeStyle = 'rgba(110,80,50,0.45)'; ctx.lineWidth = 1;
+  for (let x = -40; x <= 40; x += 6) { ctx.beginPath(); ctx.moveTo(x, -30); ctx.quadraticCurveTo(x * 0.9, 0, x * 0.6, 30); ctx.stroke(); }
+  ctx.restore();
+}
+
+// 絵をかく（key：虫　k：だんかい　o：いろいろな設定）
+function drawCreature(ctx, key, k, o) {
+  const B = BUGS[key];
+  if (k === 'adult') return drawDorsal(ctx, SPEC[key], Object.assign({ wing: 1 }, o));
+  if (k === 'larva' && !B.pupa) return drawDorsal(ctx, SPEC[key === 'tombo' ? 'yago' : key], Object.assign({}, o, { wing: 0.14 + 0.3 * (o.grow || 0) }));
+  const fn = { monshiro: { egg: mEgg, larva: mLarva, pupa: mPupa }, kabuto: { egg: kEgg, larva: kLarva, pupa: kPupa }, tombo: { egg: tEgg }, batta: { egg: bEgg }, kamakiri: { egg: kmEgg } }[key][k];
+  fn(ctx, o);
+}
+const EBOX = {   // 絵のおよその大きさ（小さな絵の中に入れるとき使う）
+  monshiro: { egg: [-10, -22, 10, 22], larva: [-115, -14, 105, 20], pupa: [-32, -90, 32, 100] },
+  kabuto: { egg: [-20, -20, 20, 20], larva: [-80, -80, 80, 80], pupa: [-104, -46, 80, 36] },
+  tombo: { egg: [-32, -26, 32, 26] }, batta: { egg: [-16, -52, 16, 52] }, kamakiri: { egg: [-50, -34, 50, 32] }
+};
+function bboxOf(key, k) {
+  if (k === 'adult') return SPEC[key].bbox;
+  if (k === 'larva' && !BUGS[key].pupa) { const b = SPEC[key === 'tombo' ? 'yago' : key].bbox; return key === 'tombo' ? b : [b[0], b[1], b[2], b[3] * 0.55]; }
+  return EBOX[key][k];
+}
+// 小さなキャンバスに、絵をちょうどよい大きさでかく
+function thumb(c, key, k, o) {
+  const r = c.getBoundingClientRect(); if (!r.width) return;
+  const LW = 120, LH = LW * r.height / r.width, ctx = prep(c, LW);
+  ctx.clearRect(0, 0, LW, LH);
+  const [x0, y0, x1, y1] = bboxOf(key, k), pad = 5;
+  const s = Math.min((LW - pad * 2) / (x1 - x0), (LH - pad * 2) / (y1 - y0));
+  ctx.save(); ctx.translate(LW / 2 - (x0 + x1) / 2 * s, LH / 2 - (y0 + y1) / 2 * s); ctx.scale(s, s);
+  drawCreature(ctx, key, k, Object.assign({ t: 0, p: 0.3, grow: 1, flap: 1 }, o));
+  ctx.restore();
+}
+
+// =====================================================================
+//  うしろの景色（640×440 として、かく）
+// =====================================================================
+const SKY = { spring: ['#bfe3ff', '#f2fbff'], summer: ['#7cc4ff', '#e0f3ff'], autumn: ['#ffcf99', '#fff3df'], winter: ['#c5d0d6', '#eef2f4'] };
+function sky(ctx, m, y1) {
+  const c = SKY[season(m)], g = ctx.createLinearGradient(0, 0, 0, y1);
+  g.addColorStop(0, c[0]); g.addColorStop(1, c[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, 640, y1);
+}
+function snow(ctx, t, y1) {
+  const r = rng(7); ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  for (let i = 0; i < 45; i++) {
+    const x = r() * 640, sp = 12 + r() * 18, y = (r() * y1 + t * sp) % y1, s = 1.5 + r() * 2;
+    ctx.beginPath(); ctx.arc(x + Math.sin(t + i) * 6, y, s, 0, 7); ctx.fill();
+  }
+}
+function grassBlades(ctx, r, n, y0, y1, color) {
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  for (let i = 0; i < n; i++) {
+    const x = r() * 640, y = y0 + r() * (y1 - y0), h = 10 + r() * 18, b = (r() - 0.5) * 10;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + b * 0.3, y - h * 0.6, x + b, y - h); ctx.stroke();
+  }
+}
+function sceneBg(ctx, type, m, t) {
+  const sea = season(m), win = sea === 'winter', r = rng(3);
+  let snowTo = 440;
+  if (type === 'leaf') {   // キャベツの葉（上から見たところ）
+    ctx.fillStyle = '#7cb342'; ctx.fillRect(0, 0, 640, 440);
+    const lf = new Path2D(); lf.moveTo(60, 440); lf.bezierCurveTo(-20, 240, 120, 30, 320, 30); lf.bezierCurveTo(520, 30, 660, 240, 580, 440); lf.closePath();
+    const g = ctx.createRadialGradient(320, 300, 40, 320, 260, 330); g.addColorStop(0, '#e6f5c9'); g.addColorStop(1, '#b5d98a');
+    ctx.fillStyle = g; ctx.fill(lf); ctx.strokeStyle = '#8bbf5a'; ctx.lineWidth = 3; ctx.stroke(lf);
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineCap = 'round'; ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.moveTo(320, 440); ctx.lineTo(320, 60); ctx.stroke();
+    ctx.lineWidth = 4;
+    [[-1, 140], [1, 140], [-1, 250], [1, 250], [-1, 350], [1, 350]].forEach(([s, y]) => { ctx.beginPath(); ctx.moveTo(320, y + 40); ctx.quadraticCurveTo(320 + s * 90, y, 320 + s * 210, y - 50); ctx.stroke(); });
+  } else if (type === 'flower') {   // 花畑
+    sky(ctx, m, 440);
+    ctx.fillStyle = '#a5d66f'; ctx.beginPath(); ctx.ellipse(160, 360, 260, 70, 0, 0, 7); ctx.ellipse(500, 370, 260, 60, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#8bc34a'; ctx.fillRect(0, 360, 640, 80);
+    for (let i = 0; i < 10; i++) {
+      const x = 25 + i * 66 + r() * 20, h = 50 + r() * 50, y = 440 - h;
+      ctx.strokeStyle = '#558b2f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, 440); ctx.lineTo(x, y); ctx.stroke();
+      ctx.fillStyle = i % 3 === 2 ? '#ffffff' : '#fdd835';
+      for (let j = 0; j < 6; j++) { ctx.beginPath(); ctx.arc(x + Math.cos(j) * 8, y - 6 + Math.sin(j * 2) * 6, 5, 0, 7); ctx.fill(); }
+    }
+  } else if (type === 'twig') {   // えだ（えだは、虫といっしょにかく）
+    sky(ctx, m, 440);
+    ctx.fillStyle = win ? '#b0bec5' : sea === 'autumn' ? '#c5a35a' : '#9ccc65';
+    ctx.beginPath(); ctx.ellipse(120, 450, 200, 60, 0, 0, 7); ctx.ellipse(520, 455, 220, 60, 0, 0, 7); ctx.fill();
+  } else if (type === 'soil') {   // 土の中（横から切ったところ）
+    const GY = 110; snowTo = GY - 4;
+    sky(ctx, m, GY);
+    const g = ctx.createLinearGradient(0, GY, 0, 440); g.addColorStop(0, '#8d6e63'); g.addColorStop(1, '#4e342e');
+    ctx.fillStyle = g; ctx.fillRect(0, GY, 640, 440 - GY);
+    for (let i = 0; i < 130; i++) { ctx.fillStyle = i % 2 ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.arc(r() * 640, GY + r() * 330, 1 + r() * 2.5, 0, 7); ctx.fill(); }
+    for (let i = 0; i < 26; i++) { ctx.fillStyle = 'rgba(70,45,25,0.7)'; ctx.beginPath(); ctx.ellipse(r() * 640, GY + 6 + r() * 110, 5 + r() * 8, 2 + r() * 2, r() * 3, 0, 7); ctx.fill(); }
+    grassBlades(ctx, r, 60, GY + 2, GY + 3, win ? '#a1887f' : sea === 'autumn' ? '#b5a03a' : '#558b2f');
+    if (win) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, GY - 6, 640, 8); }
+    label(ctx, '土の中', 62, GY + 28, '#fff', 26, 'center', 'rgba(60,30,10,0.9)');
+  } else if (type === 'tree') {   // 木のみき
+    const g = ctx.createLinearGradient(0, 0, 0, 440); g.addColorStop(0, '#a5d6a7'); g.addColorStop(1, '#2e7d32');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 640, 440);
+    for (let i = 0; i < 18; i++) { ctx.fillStyle = 'rgba(27,94,32,0.35)'; ctx.beginPath(); ctx.arc(r() * 640, r() * 440, 30 + r() * 40, 0, 7); ctx.fill(); }
+    ctx.fillStyle = '#6d4c41'; ctx.fillRect(190, 0, 260, 440);
+    ctx.strokeStyle = 'rgba(40,25,15,0.45)'; ctx.lineWidth = 3;
+    for (let x = 205; x < 445; x += 22) { ctx.beginPath(); ctx.moveTo(x, 0); for (let y = 0; y <= 440; y += 40) ctx.lineTo(x + (r() - 0.5) * 8, y); ctx.stroke(); }
+    ctx.fillStyle = '#b26a00'; ctx.fill(E(390, 120, 26, 15)); ctx.fillStyle = 'rgba(255,220,150,0.6)'; ctx.fill(E(383, 116, 9, 4));
+    label(ctx, '木のしる', 390, 86, '#5d3a00', 22);
+  } else if (type === 'pond') {   // 水の中
+    const WY = 70; snowTo = WY - 2;
+    sky(ctx, m, WY);
+    const g = ctx.createLinearGradient(0, WY, 0, 440); g.addColorStop(0, win ? '#cfe3ea' : '#b3e5fc'); g.addColorStop(1, win ? '#4f7f99' : '#0277bd');
+    ctx.fillStyle = g; ctx.fillRect(0, WY, 640, 440 - WY);
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, WY); ctx.lineTo(640, WY); ctx.stroke();
+    ctx.fillStyle = '#6d5c45'; ctx.beginPath(); ctx.moveTo(0, 440); ctx.lineTo(0, 405); for (let x = 0; x <= 640; x += 40) ctx.lineTo(x, 400 + Math.sin(x / 50) * 8); ctx.lineTo(640, 440); ctx.closePath(); ctx.fill();
+    [60, 96, 560, 600].forEach((x, i) => {   // アシ
+      ctx.strokeStyle = win ? '#a1887f' : '#558b2f'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, 420); ctx.quadraticCurveTo(x + 6, 200, x + (i % 2 ? 10 : -6), 20); ctx.stroke();
+    });
+    [170, 470].forEach(x => {   // 水草
+      ctx.strokeStyle = '#2e7d32'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, 410);
+      for (let y = 410; y > 240; y -= 10) ctx.lineTo(x + Math.sin(y / 20 + t) * 6, y); ctx.stroke();
+      for (let y = 400; y > 250; y -= 26) { ctx.fillStyle = '#43a047'; ctx.fill(E(x + 10 + Math.sin(y / 20 + t) * 6, y, 10, 3.5, -0.4)); ctx.fill(E(x - 10 + Math.sin(y / 20 + t) * 6, y - 12, 10, 3.5, 0.4)); }
+    });
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5;
+    for (let i = 0; i < 6; i++) { const y = 400 - ((t * 30 + i * 57) % 330); ctx.beginPath(); ctx.arc(130 + i * 80 + Math.sin(t * 2 + i) * 5, y, 3 + (i % 3), 0, 7); ctx.stroke(); }
+    if (win) { ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillRect(0, WY - 3, 640, 8); }
+    label(ctx, '水の中', 62, WY + 30, '#fff', 26, 'center', 'rgba(1,60,110,0.9)');
+  } else if (type === 'pondAir') {   // 池の上
+    sky(ctx, m, 440);
+    ctx.fillStyle = '#7cb342'; ctx.beginPath(); ctx.ellipse(120, 375, 200, 40, 0, 0, 7); ctx.ellipse(540, 375, 200, 40, 0, 0, 7); ctx.fill();
+    const g = ctx.createLinearGradient(0, 370, 0, 440); g.addColorStop(0, '#81d4fa'); g.addColorStop(1, '#0288d1');
+    ctx.fillStyle = g; ctx.fillRect(0, 380, 640, 60);
+    [70, 110, 530, 575].forEach((x, i) => { ctx.strokeStyle = '#558b2f'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, 440); ctx.quadraticCurveTo(x + 6, 320, x + (i % 2 ? 12 : -8), 230); ctx.stroke(); });
+  } else if (type === 'grass') {   // 草むら
+    const GY = 120;
+    sky(ctx, m, GY);
+    const c = win ? ['#d7ccc8', '#bcaaa4'] : sea === 'autumn' ? ['#cdbb62', '#9e8f3c'] : ['#b5dc85', '#7cb342'];
+    const g = ctx.createLinearGradient(0, GY, 0, 440); g.addColorStop(0, c[0]); g.addColorStop(1, c[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, GY, 640, 440 - GY);
+    // 虫が見やすいように、まん中は土が見えているところにする
+    const pg = ctx.createRadialGradient(320, 280, 30, 320, 280, 230); pg.addColorStop(0, 'rgba(236,224,190,1)'); pg.addColorStop(0.7, 'rgba(236,224,190,0.85)'); pg.addColorStop(1, 'rgba(236,224,190,0)');
+    ctx.fillStyle = pg; ctx.fill(E(320, 280, 260, 170));
+    grassBlades(ctx, r, 150, GY + 10, 440, win ? 'rgba(120,100,90,0.6)' : 'rgba(60,110,30,0.55)');
+    if (!win) for (let i = 0; i < 10; i++) { ctx.fillStyle = i % 2 ? '#fff' : '#fdd835'; ctx.beginPath(); ctx.arc(r() * 640, GY + 20 + r() * 300, 3, 0, 7); ctx.fill(); }
+  }
+  if (win) snow(ctx, t, snowTo);
+}
+function twigV(ctx, x) {   // たてのえだ
+  ctx.fillStyle = '#795548'; ctx.fillRect(x - 7, 0, 14, 440);
+  ctx.strokeStyle = 'rgba(40,25,15,0.4)'; ctx.lineWidth = 1.5;
+  for (let y = 20; y < 440; y += 46) { ctx.beginPath(); ctx.moveTo(x - 5, y); ctx.lineTo(x + 4, y + 8); ctx.stroke(); }
+  ctx.strokeStyle = '#795548'; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, 330); ctx.lineTo(x - 90, 280); ctx.stroke();
+  ctx.fillStyle = '#7cb342'; ctx.fill(E(x - 100, 270, 24, 11, -0.4));
+}
+function twigH(ctx, y) {   // よこのえだ
+  ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 16; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-10, y - 6); ctx.lineTo(650, y + 8); ctx.stroke();
+  ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(470, y + 4); ctx.lineTo(540, y - 60); ctx.moveTo(140, y - 2); ctx.lineTo(90, y - 50); ctx.stroke();
+}
+
+// 景色の中に、虫をおく
+function placeCreature(ctx, key, s, t) {
+  const o = { t, p: s.p, grow: s.grow, anim: true, flap: 1 }, k = s.k;
+  const at = (x, y, sc) => { ctx.translate(x, y); ctx.scale(sc, sc); };
+  if (key === 'monshiro') {
+    if (k === 'egg') { at(320, 250, 4); mEgg(ctx, o); }
+    else if (k === 'larva') {
+      const holes = Math.floor(s.grow * 5);   // 葉を食べたあな
+      ctx.fillStyle = '#7cb342';
+      [[200, 120, 26, 18], [430, 140, 30, 20], [170, 330, 28, 22], [470, 320, 34, 24], [300, 100, 22, 16]].slice(0, holes).forEach(([x, y, a, b]) => ctx.fill(E(x, y, a, b, 0.3)));
+      at(330, 250, 0.55 + 1.15 * s.grow); mLarva(ctx, o);
+    }
+    else if (k === 'pupa') { twigV(ctx, 252); at(305, 240, 1.7); mPupa(ctx, o); }
+    else { at(320, 210 + Math.sin(t * 1.7) * 12, 1.4); drawCreature(ctx, key, 'adult', Object.assign(o, { flap: 0.35 + 0.65 * Math.abs(Math.cos(t * 5)) })); }
+  } else if (key === 'kabuto') {
+    if (k === 'egg') { at(320, 290, 3.5); kEgg(ctx, o); }
+    else if (k === 'larva') { at(320, 290, 0.35 + 0.75 * s.grow); kLarva(ctx, o); }
+    else if (k === 'pupa') {
+      ctx.fillStyle = '#3e2723'; ctx.fill(E(320, 290, 165, 88)); ctx.fillStyle = '#5d4037'; ctx.fill(E(320, 294, 155, 78));
+      label(ctx, 'さなぎの部屋', 320, 192, '#fff', 22, 'center', 'rgba(60,30,10,0.9)');
+      at(335, 292, 1.35); kPupa(ctx, o);
+    }
+    else { at(320, 250, 1.25); drawCreature(ctx, key, 'adult', o); }
+  } else if (key === 'tombo') {
+    if (k === 'egg') { at(320, 330, 2.6); tEgg(ctx, o); }
+    else if (k === 'larva') { at(320, 300 + Math.sin(t) * 3, 0.4 + 1.3 * s.grow); drawCreature(ctx, key, 'larva', o); }
+    else { at(320, 200 + Math.sin(t * 1.3) * 6, 1.1); drawCreature(ctx, key, 'adult', Object.assign(o, { flap: 0.88 + 0.12 * Math.cos(t * 30) })); }
+  } else if (key === 'batta') {
+    if (k === 'egg') { at(320, 300, 2); bEgg(ctx, o); }
+    else if (k === 'larva') { at(320, 270, 0.4 + 0.65 * s.grow); drawCreature(ctx, key, 'larva', o); }
+    else { at(320, 250, 1.25); drawCreature(ctx, key, 'adult', o); }
+  } else if (key === 'kamakiri') {
+    if (k === 'egg') { twigH(ctx, 172); at(320, 215, 2); kmEgg(ctx, o); }
+    else if (k === 'larva') { at(320, 280, 0.35 + 0.65 * s.grow); drawCreature(ctx, key, 'larva', o); }
+    else { at(320, 258, 1.1); drawCreature(ctx, key, 'adult', o); }
+  }
+}
+
+// =====================================================================
+//  ① 育ち方
+// =====================================================================
+let mode = 'grow', bugKey = 'monshiro';
+const dayOf = {}, seenMax = {};
+BUG_KEYS.forEach(k => { dayOf[k] = 0; seenMax[k] = 0; });
+let playing = false, secTotal = 20, holdUntil = 0, lastShown = '';
+const cvG = $('cvG');
+const B = () => BUGS[bugKey];
+
+function say(html, id) { $(id || 'msg').innerHTML = html || '&nbsp;'; }
+function adultSeen(key) { const st = BUGS[key].stages; return seenMax[key] >= st[st.length - 1].from; }
+
+function drawGrow(now) {
+  const ctx = prep(cvG, 640); if (!ctx) return;
+  const b = B(), d = dayOf[bugKey], s = stageAt(b, d), mon = monthOf(b, d), t = now / 1000;
+  ctx.clearRect(0, 0, 640, 440);
+  sceneBg(ctx, s.S.scene, mon, t);
+  ctx.save(); placeCreature(ctx, bugKey, s, t); ctx.restore();
+  tag(ctx, mon + '月ごろ' + (season(mon) === 'winter' ? '（冬）' : ''), 10, 10, 'rgba(255,255,255,0.88)', '#bf360c');
+  if (s.S.zoom) tag(ctx, '大きくしてかいています', 630, 10, 'rgba(255,255,255,0.88)', '#555', true);
+  if (s.k === 'larva' && s.sinceMolt < Math.max(1, b.total / 60)) {   // だっ皮したばかり
+    tag(ctx, 'だっ皮した！（' + s.instar + '回目）', 630, 390, '#fff3e0', '#e65100', true);
+  }
+}
+
+// 右がわの「いまのようす」と、帯・スライダーを書きかえる
+function updateGrow(force) {
+  const b = B(), d = dayOf[bugKey], s = stageAt(b, d), key = bugKey + Math.floor(d) + '|' + seenMax[bugKey];
+  if (Math.floor(d) > seenMax[bugKey]) {
+    const before = adultSeen(bugKey), oldI = stageAt(b, seenMax[bugKey]).i;
+    seenMax[bugKey] = Math.floor(d);
+    if (stageAt(b, seenMax[bugKey]).i !== oldI) force = true;
+    if (!before && adultSeen(bugKey)) renderTabs();
+  }
+  if (!force && key === lastShown) return;
+  lastShown = bugKey + Math.floor(d) + '|' + seenMax[bugKey];
+  $('day').value = Math.floor(d);
+  $('pin').style.left = (d / b.total * 100) + '%';
+  const chip = $('gChip'); chip.className = 'stchip st-' + s.k; chip.innerHTML = stageLabel(b, s.S);
+  $('gDay').textContent = Math.floor(d);
+  const mon = monthOf(b, d);
+  $('gMonth').innerHTML = '（' + mon + R('月', 'がつ') + 'ごろ' + (season(mon) === 'winter' ? '・' + R('冬', 'ふゆ') : '') + '）';
+  $('gDur').textContent = s.S.dur;
+  $('gSize').textContent = sizeText(s.S, s.grow);
+  $('gDesc').innerHTML = s.S.desc;
+  // 帯（まだ見ていないところは、まとめて「？」）
+  let h = '', hidden = 0;
+  b.stages.forEach(S => {
+    if (seenMax[bugKey] >= S.from) h += '<div class="seg st-' + S.k + '" style="flex:' + (S.to - S.from) + '">' + ST_NAME[S.k] + '</div>';
+    else hidden += S.to - S.from;
+  });
+  if (hidden) h += '<div class="seg st-unk" style="flex:' + hidden + '">？</div>';
+  $('band').innerHTML = h;
+  // 育ち方の順
+  const seen = b.stages.filter(S => seenMax[bugKey] >= S.from);
+  let f = seen.map(S => '<span class="fs st-' + S.k + (S === s.S ? ' cur' : '') + '">' + ST_NAME[S.k] + '</span>').join('<span class="ar">→</span>');
+  if (!adultSeen(bugKey)) f += '<span class="ar">→</span><span class="fs st-unk">？</span>';
+  $('gFlow').innerHTML = f;
+  $('gFlowNote').innerHTML = adultSeen(bugKey)
+    ? (b.pupa ? '● さなぎになる' + R('育', 'そだ') + 'ち' + R('方', 'かた') : '▲ さなぎにならない' + R('育', 'そだ') + 'ち' + R('方', 'かた') + '（' + YOU + 'から、そのまま' + SEI + 'になる）')
+    : 'この' + R('先', 'さき') + 'はどうなるかな？ ' + R('予想', 'よそう') + 'してから' + R('進', 'すす') + 'めよう';
+}
+
+// 目もり（短いものは日数、長いものは月）
+function buildTicks() {
+  const b = B(); let h = '';
+  $('day').max = b.total;
+  if (b.total <= 60) {
+    for (let d = 0; d <= b.total; d += 5) h += '<span style="left:' + (d / b.total * 100) + '%">' + (d % 10 === 0 ? d + '日' : '') + '</span>';
+  } else {
+    let prev = monthOf(b, 0), n = 0;
+    for (let d = 1; d <= b.total; d++) {
+      const m = monthOf(b, d);
+      if (m !== prev) { h += '<span class="' + (n % 2 ? 'odd' : '') + '" style="left:' + (d / b.total * 100) + '%">' + m + '月</span>'; prev = m; n++; }
+    }
+  }
+  $('ticks').innerHTML = h;
+}
+
+// 再生：だんかいがかわるところ・だっ皮するところで、いったん止まって知らせる
+function advance(dt) {
+  const b = B(), prev = dayOf[bugKey];
+  let next = prev + dt * b.total / secTotal;
+  const evs = [];
+  b.stages.forEach((S, i) => {
+    if (i > 0) evs.push({ d: S.from, type: 'stage', S, prevS: b.stages[i - 1] });
+    (S.molts || []).forEach((m, j) => evs.push({ d: m, type: 'molt', n: j + 1 }));
+  });
+  const ev = evs.filter(e => e.d > prev && e.d <= next).sort((a, c) => a.d - c.d)[0];
+  if (ev) {
+    next = ev.d;
+    if (ev.type === 'stage') { holdUntil = performance.now() + 1600; say(stageMsg(b, ev.S, ev.prevS)); }
+    else { if (b.total < 100) holdUntil = performance.now() + 500; say('だっ' + R('皮', 'ぴ') + 'した！ ' + R('皮', 'かわ') + 'をぬいで' + R('大', 'おお') + 'きくなったよ（' + ev.n + R('回目', 'かいめ') + '）'); }
+  }
+  if (next >= b.total) { next = b.total; stop(); say('おしまい。' + R('育', 'そだ') + 'ち' + R('方', 'かた') + 'の' + R('順', 'じゅん') + 'をたしかめて、「📝 ' + R('記録', 'きろく') + 'する」をおそう'); }
+  dayOf[bugKey] = next;
+}
+function stageMsg(b, S, prevS) {
+  if (S.k === 'larva') return 'たまごから ' + stageLabel(b, S) + ' が' + R('生', 'う') + 'まれたよ！';
+  if (S.k === 'pupa') return YOU + 'が さなぎ になった！ さなぎは' + R('何', 'なに') + 'も' + R('食', 'た') + 'べず、じっとしているよ';
+  if (prevS.k === 'pupa') return 'さなぎから ' + SEI + ' が' + R('出', 'で') + 'てきた！（' + R('羽化', 'うか') + '）';
+  return YOU + 'から、そのまま ' + SEI + ' になった！ さなぎには ならなかったね';
+}
+function play() {
+  if (dayOf[bugKey] >= B().total) dayOf[bugKey] = 0;
+  playing = true; holdUntil = 0; $('btnPlay').textContent = '⏸ とめる';
+}
+function stop() { playing = false; $('btnPlay').textContent = '▶ さいせい'; }
+$('btnPlay').addEventListener('click', () => playing ? stop() : play());
+document.querySelectorAll('[data-sec]').forEach(btn => btn.addEventListener('click', () => {
+  secTotal = +btn.dataset.sec;
+  document.querySelectorAll('[data-sec]').forEach(x => x.classList.toggle('active', x === btn));
+}));
+$('day').addEventListener('input', e => {
+  stop();
+  const b = B(), before = stageAt(b, dayOf[bugKey]);
+  dayOf[bugKey] = +e.target.value;
+  const now = stageAt(b, dayOf[bugKey]);
+  if (now.i !== before.i) say(now.i > before.i ? stageMsg(b, now.S, b.stages[now.i - 1]) : stageLabel(b, now.S) + 'のころにもどったよ');
+  updateGrow();
+});
+$('btnReset').addEventListener('click', () => {
+  stop(); dayOf[bugKey] = 0; seenMax[bugKey] = 0;
+  renderTabs(); updateGrow(true);
+  say(B().name + 'を、たまごの' + R('日', 'ひ') + 'にもどしたよ');
+});
+$('btnRec').addEventListener('click', () => {
+  const b = B();
+  if (!adultSeen(bugKey)) { say(SEI + 'になるまで' + R('日', 'ひ') + 'にちを' + R('進', 'すす') + 'めてから' + R('記録', 'きろく') + 'しよう'); return; }
+  recordBug(bugKey);
+  say('📝 ' + b.name + 'の' + R('育', 'そだ') + 'ち' + R('方', 'かた') + 'を、ワークシートに' + R('記録', 'きろく') + 'したよ');
+});
+function recordBug(key) {
+  const b = BUGS[key];
+  Worksheet.addRecord({ bug: b.name, order: b.stages.map(S => ST_PLAIN[S.k]).join('→'), pupa: b.pupa ? 'ある' : 'ない' });
+}
+
+// ----- 虫をえらぶタブ -----
+function renderTabs() {
+  BUG_KEYS.forEach(k => {
+    const el = document.querySelector('.tab[data-bug="' + k + '"] .kind');
+    if (el) el.textContent = adultSeen(k) ? (BUGS[k].pupa ? '● さなぎになる' : '▲ さなぎにならない') : 'さなぎは？';
+  });
+}
+(function buildTabs() {
+  $('bugTabs').innerHTML = BUG_KEYS.map(k => '<button class="tab' + (k === bugKey ? ' active' : '') + '" data-bug="' + k + '"><canvas></canvas><span class="tname">' + BUGS[k].name + '<span class="kind"></span></span></button>').join('');
+  document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => {
+    stop();
+    bugKey = btn.dataset.bug;
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === btn));
+    buildTicks(); updateGrow(true); say(B().name + 'をえらんだよ');
+    bodySel = null; drawBody(); renderFound(); showPart(null);
+  }));
+  renderTabs();
+})();
+function drawTabIcons() { document.querySelectorAll('.tab').forEach(btn => thumb(btn.querySelector('canvas'), btn.dataset.bug, 'adult')); }
+
+// =====================================================================
+//  ② 体のつくり
+// =====================================================================
+const cvB = $('cvB');
+let bodyHits = [], bodySel = null, colorOn = true;
+const found = {}; BUG_KEYS.forEach(k => found[k] = new Set());
+const hc = document.createElement('canvas').getContext('2d');   // タップの当たり判定用
+
+// 部分の名前とせつめい
+function partInfo(key, part) {
+  const base = {
+    head: [R('頭', 'あたま'), R('目', 'め') + '・' + R('口', 'くち') + '・しょっ' + R('角', 'かく') + 'がある。'],
+    thorax: ['むね', 'あしが6' + R('本', 'ほん') + 'と、はねがついている。'],
+    abdomen: ['はら', 'いくつかの「ふし」に' + R('分', 'わ') + 'かれていて、' + R('曲', 'ま') + 'げることができる。'],
+    antenna: ['しょっ' + R('角', 'かく'), 'においや、まわりのようすを' + R('感', 'かん') + 'じとる。'],
+    eye: [R('目', 'め'), R('小', 'ちい') + 'さな' + R('目', 'め') + 'がたくさん' + R('集', 'あつ') + 'まってできている。'],
+    mouth: [R('口', 'くち'), ''],
+    leg: ['あし', 'ぜんぶで<b>6' + R('本', 'ほん') + '</b>。どれも<b>むね</b>から' + R('出', 'で') + 'ている（1〜6の' + R('番号', 'ばんごう') + 'を' + R('見', 'み') + 'てね）。ふしがあって' + R('曲', 'ま') + 'がる。'],
+    wing: ['はね', '4まい。<b>むね</b>についている。'],
+    horn: [R('角', 'つの'), 'オスだけにある。' + R('大', 'おお') + 'きい' + R('角', 'つの') + 'は' + R('頭', 'あたま') + 'から、' + R('小', 'ちい') + 'さい' + R('角', 'つの') + 'はむねから' + R('出', 'で') + 'ている。']
+  }[part];
+  let text = base[1];
+  const add = {
+    monshiro: { mouth: 'ストローのような' + R('口', 'くち') + 'で、' + R('花', 'はな') + 'のみつをすう。ふだんはくるくるとまいている。', antenna: text + R('先', 'さき') + 'がふくらんでいる。', wing: text + 'こなのようなもの（りんぷん）でおおわれている。' },
+    kabuto: { mouth: 'ブラシのような' + R('口', 'くち') + 'で、' + R('木', 'き') + 'のしるをなめる。', thorax: 'せなかから' + R('見', 'み') + 'える' + R('大', 'おお') + 'きなところと、' + R('前', 'まえ') + 'ばねの' + R('下', 'した') + 'にかくれているところが むね。あし6' + R('本', 'ほん') + 'は、どれも むね から' + R('出', 'で') + 'ている。', wing: 'かたい' + R('前', 'まえ') + 'ばね2まいが、うすい' + R('後', 'うし') + 'ろばね2まいをまもっている。' + R('飛', 'と') + 'ぶときは' + R('後', 'うし') + 'ろばねを' + R('広', 'ひろ') + 'げる。むね についている。' },
+    tombo: { mouth: 'かむ' + R('口', 'くち') + '。' + R('飛', 'と') + 'びながら' + R('小', 'ちい') + 'さな' + R('虫', 'むし') + 'をつかまえて' + R('食', 'た') + 'べる。', eye: 'とても' + R('大', 'おお') + 'きな' + R('目', 'め') + '。' + R('小', 'ちい') + 'さな' + R('目', 'め') + 'が1' + R('万', 'まん') + 'こ' + R('以上', 'いじょう') + R('集', 'あつ') + 'まっていて、まわりがよく' + R('見', 'み') + 'える。', wing: text + 'うすくて、すきとおっている。' },
+    batta: { mouth: 'かむ' + R('口', 'くち') + '。' + R('草', 'くさ') + 'を' + R('食', 'た') + 'べる。', leg: text + R('後', 'うし') + 'ろあしは' + R('太', 'ふと') + 'くて' + R('長', 'なが') + 'く、' + R('遠', 'とお') + 'くまではねることができる。', wing: text + 'ふだんは、せなかにたたんでいる。' },
+    kamakiri: { mouth: 'かむ' + R('口', 'くち') + '。つかまえた' + R('虫', 'むし') + 'を' + R('食', 'た') + 'べる。', leg: text + R('前', 'まえ') + 'あしは「かま」の' + R('形', 'かたち') + 'で、えものをつかまえる。', thorax: R('細長', 'ほそなが') + 'い「' + R('首', 'くび') + '」のように' + R('見', 'み') + 'えるところも むね。かまの' + R('形', 'かたち') + 'の' + R('前', 'まえ') + 'あしは、ここから' + R('出', 'で') + 'ている。', wing: text + 'ふだんは、せなかにたたんでいる。' }
+  }[key];
+  if (add && add[part]) text = add[part];
+  return { name: base[0], text };
+}
+function foundList(key) {
+  const l = [['head', R('頭', 'あたま')], ['thorax', 'むね'], ['abdomen', 'はら'], ['antenna', 'しょっ' + R('角', 'かく')], ['eye', R('目', 'め')], ['mouth', R('口', 'くち')], ['leg', 'あし'], ['wing', 'はね']];
+  if (key === 'kabuto') l.push(['horn', R('角', 'つの')]);
+  return l;
+}
+function renderFound() {
+  const l = foundList(bugKey), f = found[bugKey];
+  $('fChips').innerHTML = l.map(([p, n]) => '<span class="fchip' + (f.has(p) ? ' on' : '') + '">' + (f.has(p) ? '✔ ' : '□ ') + n + '</span>').join('');
+  const c = l.filter(([p]) => f.has(p)).length;
+  $('fCount').textContent = c + ' / ' + l.length + (c === l.length ? '　ぜんぶ見つけた！' : '');
+}
+function showPart(part) {
+  if (!part) { $('bInfo').innerHTML = '👆 しょっ' + R('角', 'かく') + '・' + R('目', 'め') + '・' + R('口', 'くち') + '・あし・はね などをタップしてみよう'; return; }
+  const i = partInfo(bugKey, part);
+  $('bInfo').innerHTML = '<span class="pname">' + i.name + '</span>' + i.text;
+}
+let bodyView = { cx: 0, cy: 0, k: 1 };
+function drawBody() {
+  if (mode !== 'body') return;
+  const ctx = prep(cvB, 640); if (!ctx) return;
+  ctx.fillStyle = '#fffdf3'; ctx.fillRect(0, 0, 640, 480);
+  const sp = SPEC[bugKey], [x0, y0, x1, y1] = sp.bbox;
+  const k = Math.min(490 / (x1 - x0), 440 / (y1 - y0)), cx = 255 - (x0 + x1) / 2 * k, cy = 240 - (y0 + y1) / 2 * k;
+  bodyView = { cx, cy, k };
+  bodyHits = [];
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k);
+  drawDorsal(ctx, sp, { wing: 1, flap: 1, body: colorOn, diag: true, hits: bodyHits, sel: bodySel, t: 0 });
+  ctx.restore();
+  if (colorOn) {   // 頭・むね・はら の名札
+    let prevY = -99;
+    ['head', 'thorax', 'abdomen'].forEach(p => {
+      const x = cx + sp.lab[p][0] * k, y = cy + sp.lab[p][1] * k, ly = Math.max(y, prevY + 52); prevY = ly;
+      ctx.strokeStyle = '#444'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(512, ly); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 7); ctx.fill();
+      rr(ctx, 514, ly - 24, 120, 48, 11); ctx.fillStyle = BODYCOL[p].c; ctx.fill(); ctx.fillStyle = pat(ctx, BODYCOL[p].p); ctx.fill();
+      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
+      label(ctx, BODYCOL[p].name, 574, ly + 1, '#111', 30);
+    });
+  }
+}
+function hitTest(hits, px, py) {
+  // 1回目：あとからかいた（上に見えている）部分から順に、ぴったり当たるものをさがす
+  // 2回目：目・口・あしなどの小さな部分は、少しはずれていてもよい
+  const top = hits.slice().reverse(), small = hits.slice().sort((a, b) => a.pri - b.pri), dpr = window.devicePixelRatio || 1;
+  hc.lineCap = 'round'; hc.lineJoin = 'round';
+  for (let pass = 0; pass < 2; pass++) {
+    for (const h of pass ? small : top) {
+      const q = h.m.inverse().transformPoint(new DOMPoint(px, py)), sc = Math.hypot(h.m.a, h.m.b) || 1, tol = 9 * dpr / sc;
+      if (h.stroke) { hc.lineWidth = h.stroke + tol * (pass ? 2 : 0.6); if (hc.isPointInStroke(h.path, q.x, q.y)) return h; }
+      else if (!pass) { if (hc.isPointInPath(h.path, q.x, q.y)) return h; }
+      else { hc.lineWidth = tol * 2; if (h.pri <= 2 && hc.isPointInStroke(h.path, q.x, q.y)) return h; }
+    }
+  }
+  return null;
+}
+cvB.addEventListener('pointerdown', ev => {
+  const r = cvB.getBoundingClientRect();
+  const px = (ev.clientX - r.left) * cvB.width / r.width, py = (ev.clientY - r.top) * cvB.height / r.height;
+  const h = hitTest(bodyHits, px, py);
+  bodySel = h ? h.part : null;
+  if (h) found[bugKey].add(h.part);
+  showPart(bodySel); renderFound(); drawBody();
+});
+$('btnColor').addEventListener('click', () => {
+  colorOn = !colorOn;
+  $('btnColor').classList.toggle('active', colorOn);
+  $('btnColor').innerHTML = '🎨 ' + R('色', 'いろ') + R('分', 'わ') + 'け ' + (colorOn ? 'ON' : 'OFF');
+  drawBody();
+});
+$('btnBodyReset').addEventListener('click', () => { found[bugKey].clear(); bodySel = null; showPart(null); renderFound(); drawBody(); });
+
+// =====================================================================
+//  ③ 仲間分けクイズ
+// =====================================================================
+// 小さな絵（120×96、まん中が 0,0）
+const QDRAW = {
+  butterfly(ctx) { ctx.translate(0, 13); ctx.scale(0.36, 0.36); drawDorsal(ctx, SPEC.monshiro, { wing: 1, flap: 1 }); },
+  ant(ctx) {
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    both(ctx, () => [[[4, -14], [16, -22], [24, -18]], [[5, -9], [20, -8], [28, -2]], [[4, -5], [17, 6], [23, 18]], [[4, -31], [9, -40], [18, -38]]].forEach(p => ctx.stroke(L(p))));
+    ctx.fillStyle = '#222'; [E(0, -27, 8, 7), E(0, -10, 5, 9), E(0, 2, 3, 3), E(0, 17, 9, 12)].forEach(p => ctx.fill(p));
+  },
+  ladybug(ctx) {
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+    both(ctx, () => [[[10, -12], [19, -17]], [[12, -2], [22, 0]], [[11, 8], [19, 15]]].forEach(p => ctx.stroke(L(p))));
+    ctx.fillStyle = '#222'; ctx.fill(E(0, -22, 7, 5)); ctx.fill(E(0, -16, 13, 6));
+    ctx.fillStyle = '#fff'; both(ctx, () => ctx.fill(E(8, -17, 3, 2.5)));
+    ctx.fillStyle = '#e53935'; ctx.fill(E(0, 4, 20, 19)); ctx.strokeStyle = '#8e1b1b'; ctx.lineWidth = 1; ctx.stroke(E(0, 4, 20, 19));
+    ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(0, 23); ctx.stroke();
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(0, -11, 4, 0, 7); ctx.fill();
+    both(ctx, () => [[9, -4, 4], [12, 8, 3.5], [6, 15, 3.5]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); }));
+  },
+  cicada(ctx) {
+    ctx.strokeStyle = '#4e342e'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    both(ctx, () => [[[8, -16], [16, -24], [20, -30]], [[10, -10], [28, -12], [32, -18]], [[10, -4], [30, 4], [34, 0]]].forEach(p => ctx.stroke(L(p))));
+    both(ctx, () => { const w = new Path2D(); w.moveTo(3, -14); w.bezierCurveTo(20, -14, 30, 0, 26, 30); w.bezierCurveTo(22, 40, 10, 42, 2, 40); w.closePath(); ctx.fillStyle = '#6d4c41'; ctx.fill(w); ctx.strokeStyle = '#3e2723'; ctx.lineWidth = 1; ctx.stroke(w); });
+    ctx.fillStyle = '#3e2723'; ctx.fill(E(0, -11, 11, 8)); ctx.fill(E(0, -21, 13, 5));
+    ctx.fillStyle = '#8d6e63'; both(ctx, () => ctx.fill(E(13, -21, 4, 4)));
+  },
+  spider(ctx) {
+    ctx.strokeStyle = '#5d4037'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    both(ctx, () => [[[6, -14], [20, -28], [34, -36]], [[7, -11], [24, -16], [40, -14]], [[7, -8], [24, -4], [40, 4]], [[6, -5], [20, 8], [32, 22]]].forEach(p => ctx.stroke(L(p))));
+    ctx.fillStyle = '#6d4c41'; ctx.fill(E(0, -10, 9, 9));
+    ctx.fillStyle = '#8d6e63'; ctx.fill(E(0, 13, 12, 15));
+    ctx.strokeStyle = '#fdd835'; ctx.lineWidth = 2; [4, 12, 20].forEach(y => { ctx.beginPath(); ctx.moveTo(-9, y); ctx.quadraticCurveTo(0, y + 4, 9, y); ctx.stroke(); });
+    ctx.fillStyle = '#111'; both(ctx, () => { ctx.beginPath(); ctx.arc(2.5, -16, 1.2, 0, 7); ctx.fill(); });
+  },
+  pillbug(ctx) {
+    ctx.strokeStyle = '#424242'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    both(ctx, () => { for (let i = 0; i < 7; i++) { const y = -12 + i * 5.5; ctx.beginPath(); ctx.moveTo(12, y); ctx.lineTo(22, y + 2); ctx.stroke(); } ctx.stroke(L([[6, -22], [14, -30], [18, -28]])); });
+    ctx.fillStyle = '#555'; ctx.fill(E(0, -20, 9, 5));
+    ctx.fillStyle = '#616161'; ctx.fill(E(0, 4, 16, 22)); ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.stroke(E(0, 4, 16, 22));
+    for (let i = 1; i <= 8; i++) { const y = -16 + i * 4.6; ctx.beginPath(); ctx.moveTo(-15, y); ctx.quadraticCurveTo(0, y + 3, 15, y); ctx.stroke(); }
+  },
+  worm(ctx) {
+    const p = new Path2D();
+    for (let x = -48; x <= 48; x += 2) { const y = 7 * Math.sin(x / 12); x === -48 ? p.moveTo(x, y) : p.lineTo(x, y); }
+    ctx.lineCap = 'round'; ctx.strokeStyle = '#d48888'; ctx.lineWidth = 10; ctx.stroke(p);
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1;
+    for (let x = -44; x <= 44; x += 5) { const y = 7 * Math.sin(x / 12); ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x, y + 5); ctx.stroke(); }
+    ctx.strokeStyle = '#eaa9a0'; ctx.lineWidth = 12; ctx.beginPath(); for (let x = -26; x <= -16; x += 2) { const y = 7 * Math.sin(x / 12); x === -26 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke();
+  },
+  centipede(ctx) {
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#f9a825'; ctx.lineWidth = 1.3;
+    both(ctx, () => { for (let i = 0; i < 20; i++) { const y = -32 + i * 3.5; ctx.beginPath(); ctx.moveTo(5, y); ctx.lineTo(13, y + 2.5); ctx.stroke(); } });
+    for (let i = 19; i >= 0; i--) { const y = -32 + i * 3.5; ctx.fillStyle = '#5d4037'; ctx.fill(E(0, y, 6, 2.4)); }
+    ctx.fillStyle = '#c62828'; ctx.fill(E(0, -37, 6, 5));
+    ctx.strokeStyle = '#c62828'; ctx.lineWidth = 1.4; both(ctx, () => ctx.stroke(L([[3, -41], [10, -49]])));
+  }
+};
+const QUIZ = [
+  { key: 'butterfly', name: 'チョウ', ins: true, why: R('体', 'からだ') + 'が' + R('頭', 'あたま') + '・むね・はらの3つに' + R('分', 'わ') + 'かれていて、あしが6' + R('本', 'ほん') + 'ある。' },
+  { key: 'ant', name: 'アリ', ins: true, why: 'はねはないけれど、' + R('体', 'からだ') + 'が' + R('頭', 'あたま') + '・むね・はらの3つに' + R('分', 'わ') + 'かれていて、あしが6' + R('本', 'ほん') + 'ある。' },
+  { key: 'ladybug', name: 'テントウムシ', ins: true, why: R('体', 'からだ') + 'が' + R('頭', 'あたま') + '・むね・はらに' + R('分', 'わ') + 'かれていて、あしが6' + R('本', 'ほん') + 'ある（はらは、かたいはねの' + R('下', 'した') + '）。' },
+  { key: 'cicada', name: 'セミ', ins: true, why: R('体', 'からだ') + 'が' + R('頭', 'あたま') + '・むね・はらに' + R('分', 'わ') + 'かれていて、あしが6' + R('本', 'ほん') + 'ある。はねも4まいある。' },
+  { key: 'spider', name: 'クモ', ins: false, why: 'あしが<b>8' + R('本', 'ほん') + '</b>ある。' + R('体', 'からだ') + 'は「' + R('頭', 'あたま') + 'とむねがいっしょになったところ」と「はら」の<b>2つ</b>に' + R('分', 'わ') + 'かれている。' },
+  { key: 'pillbug', name: 'ダンゴムシ', ins: false, why: 'あしが<b>14' + R('本', 'ほん') + '</b>ある。' + R('体', 'からだ') + 'はたくさんのふしに' + R('分', 'わ') + 'かれている（エビやカニの' + R('仲間', 'なかま') + '）。' },
+  { key: 'worm', name: 'ミミズ', ins: false, why: 'あしが<b>ない</b>。' + R('体', 'からだ') + 'は、たくさんのふしがつながった' + R('形', 'かたち') + '。' },
+  { key: 'centipede', name: 'ムカデ', ins: false, why: 'あしが<b>とても多い</b>（40' + R('本', 'ほん') + 'くらい）。' + R('体', 'からだ') + 'はたくさんのふしに' + R('分', 'わ') + 'かれている。' }
+];
+const zones = { tray: $('tray'), ins: document.querySelector('.zone.ins'), non: document.querySelector('.zone.non') };
+const zoneList = z => z === 'tray' ? zones.tray : zones[z].querySelector('.list');
+let qSel = null, qDrag = null;
+function drawQuizCards() {
+  document.querySelectorAll('.qcard').forEach(el => {
+    const c = el.querySelector('canvas'), ctx = prep(c, 120); if (!ctx) return;
+    ctx.clearRect(0, 0, 120, 96); ctx.save(); ctx.translate(60, 48); QDRAW[el.dataset.key](ctx); ctx.restore();
+  });
+}
+function quizReset() {
+  const order = QUIZ.map((q, i) => i).sort(() => Math.random() - 0.5);
+  ['ins', 'non'].forEach(z => zoneList(z).innerHTML = '');
+  zones.tray.innerHTML = order.map(i => '<div class="qcard" data-key="' + QUIZ[i].key + '"><canvas></canvas>' + QUIZ[i].name + '</div>').join('');
+  zones.tray.querySelectorAll('.qcard').forEach(bindCard);
+  qSel = null; $('reasons').innerHTML = ''; say('', 'qMsg');
+  drawQuizCards();
+}
+function zoneAt(x, y) {
+  for (const z of ['ins', 'non', 'tray']) { const r = zones[z].getBoundingClientRect(); if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return z; }
+  return null;
+}
+function moveCard(el, z) {
+  zoneList(z).appendChild(el);
+  const m = el.querySelector('.mark'); if (m) m.remove();
+  el.classList.remove('sel'); qSel = null;
+}
+function bindCard(el) {
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (err) { /* そのまま */ }
+    qDrag = { el, x0: e.clientX, y0: e.clientY, moved: false };
+  });
+  el.addEventListener('pointermove', e => {
+    if (!qDrag || qDrag.el !== el) return;
+    const dx = e.clientX - qDrag.x0, dy = e.clientY - qDrag.y0;
+    if (!qDrag.moved && Math.hypot(dx, dy) > 8) { qDrag.moved = true; el.classList.add('dragging'); }
+    if (qDrag.moved) {
+      el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      const z = zoneAt(e.clientX, e.clientY);
+      Object.keys(zones).forEach(k => zones[k].classList.toggle('over', k === z));
+    }
+  });
+  const end = e => {
+    if (!qDrag || qDrag.el !== el) return;
+    const d = qDrag; qDrag = null;
+    el.classList.remove('dragging'); el.style.transform = '';
+    Object.values(zones).forEach(z => z.classList.remove('over'));
+    if (e.type === 'pointercancel') return;
+    if (d.moved) { const z = zoneAt(e.clientX, e.clientY); if (z) moveCard(el, z); }
+    else {   // タップ：えらぶ（もう一度タップでやめる）
+      const on = qSel !== el;
+      document.querySelectorAll('.qcard').forEach(c => c.classList.remove('sel'));
+      qSel = on ? el : null; if (on) el.classList.add('sel');
+    }
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+Object.keys(zones).forEach(z => zones[z].addEventListener('click', e => {
+  if (e.target.closest('.qcard') || !qSel) return;
+  moveCard(qSel, z);
+}));
+$('btnCheck').addEventListener('click', () => {
+  let ok = 0, placed = 0, h = '';
+  ['ins', 'non'].forEach(z => zoneList(z).querySelectorAll('.qcard').forEach(el => {
+    const q = QUIZ.find(x => x.key === el.dataset.key), right = (z === 'ins') === q.ins;
+    placed++; if (right) ok++;
+    let m = el.querySelector('.mark'); if (!m) { m = document.createElement('span'); el.appendChild(m); }
+    m.className = 'mark ' + (right ? 'ok' : 'ng'); m.textContent = right ? '○' : '✕';
+  }));
+  QUIZ.forEach(q => {
+    const el = document.querySelector('.qcard[data-key="' + q.key + '"]'), z = el.parentElement.closest('[data-zone]').dataset.zone;
+    if (z === 'tray') return;
+    const right = (z === 'ins') === q.ins;
+    h += '<li><span class="' + (right ? 'ok' : 'ng') + '">' + (right ? '○' : '✕') + '</span> <b>' + q.name + '</b>：' + (q.ins ? 'こん' + R('虫', 'ちゅう') : 'こん' + R('虫', 'ちゅう') + 'ではない') + '。' + q.why + '</li>';
+  });
+  $('reasons').innerHTML = h;
+  const left = QUIZ.length - placed;
+  say(placed === 0 ? 'カードを' + R('箱', 'はこ') + 'に' + R('入', 'い') + 'れてから' + R('答', 'こた') + 'え' + R('合', 'あ') + 'わせしよう'
+    : ok + ' / ' + placed + ' ' + R('正', 'せい') + 'かい' + (left ? '（まだ' + left + 'まい' + R('残', 'のこ') + 'っているよ）' : ok === QUIZ.length ? '　ぜんぶ' + R('正', 'せい') + 'かい！🎉' : '　✕のカードを' + R('動', 'うご') + 'かしてみよう'), 'qMsg');
+});
+$('btnQReset').addEventListener('click', quizReset);
+
+// =====================================================================
+//  ④ くらべる
+// =====================================================================
+let cmpA = 'monshiro', cmpB = 'tombo';
+function renderPicks() {
+  [['pickA', 'A'], ['pickB', 'B']].forEach(([id, w]) => {
+    const cur = w === 'A' ? cmpA : cmpB;
+    $(id).innerHTML = BUG_KEYS.map(k => '<button class="chip small' + (k === cur ? ' active' : '') + '" data-pick="' + w + '" data-bug="' + k + '">' + BUGS[k].name + '</button>').join('');
+  });
+  document.querySelectorAll('[data-pick]').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.dataset.pick === 'A') cmpA = btn.dataset.bug; else cmpB = btn.dataset.bug;
+    $('cmpAns').classList.add('hidden'); say('', 'cMsg');
+    renderCmp();
+  }));
+}
+function renderRow(el, key) {
+  const b = BUGS[key];
+  let h = '<div class="cmp-head"><canvas data-bug="' + key + '" data-st="adult"></canvas>' + b.name + '</div><div class="cmp-cells">';
+  ['egg', 'larva', 'pupa', 'adult'].forEach(k => {
+    const S = b.stages.find(s => s.k === k);
+    if (!S) { h += '<div class="cmp-cell none"><div>さなぎの<br>' + R('時期', 'じき') + 'は<br><b>ない</b></div></div>'; return; }
+    h += '<div class="cmp-cell"><canvas data-bug="' + key + '" data-st="' + k + '"></canvas>' +
+      '<div class="cmp-name st st-' + k + '">' + stageLabel(b, S) + '</div><div class="cmp-dur">' + S.dur + '</div>' +
+      (k === 'larva' ? '<div class="cmp-note">' + SEI + (b.pupa ? 'とちがう' + R('形', 'かたち') : 'ににた' + R('形', 'かたち')) + '</div>' : '') + '</div>';
+  });
+  h += '</div><div class="tbar">' + b.stages.map(S => '<div class="seg st-' + S.k + '" style="flex:' + (S.to - S.from) + '">' + ((S.to - S.from) / b.total > 0.12 ? S.dur : '') + '</div>').join('') + '</div>' +
+    '<div class="tbar-note">' + R('下', 'した') + 'の' + R('帯', 'おび') + 'は、それぞれのだんかいにかかる' + R('日数', 'にっすう') + 'の' + R('長', 'なが') + 'さをあらわしています</div>';
+  el.innerHTML = h;
+  el.querySelectorAll('canvas').forEach(c => thumb(c, c.dataset.bug, c.dataset.st, c.dataset.st === 'adult' ? {} : { p: 0.5 }));
+}
+function renderCmp() { if (mode !== 'cmp') return; renderPicks(); renderRow($('rowA'), cmpA); renderRow($('rowB'), cmpB); }
+$('btnCmpAns').addEventListener('click', () => {
+  const a = BUGS[cmpA], b = BUGS[cmpB];
+  const P = (x) => R('育', 'そだ') + 'つ';
+  let h;
+  if (cmpA === cmpB) h = '同じ' + R('虫', 'むし') + 'をえらんでいるよ。ちがう' + R('虫', 'むし') + 'をえらんでくらべてみよう。';
+  else if (a.pupa !== b.pupa) {
+    const yes = a.pupa ? a : b, no = a.pupa ? b : a;
+    h = '<b>' + yes.name + '</b>は、たまご → ' + YOU + ' → <b>さなぎ</b> → ' + SEI + ' の' + R('順', 'じゅん') + 'に' + P() + '。<br>' +
+      '<b>' + no.name + '</b>は、<b>さなぎにならず</b>に、たまご → ' + YOU + ' → ' + SEI + ' の' + R('順', 'じゅん') + 'に' + P() + '。<br>' +
+      'さなぎにならない' + R('虫', 'むし') + 'の' + YOU + 'は、' + SEI + 'ににた' + R('形', 'かたち') + 'をしているね。';
+  } else if (a.pupa) h = 'どちらも、たまご → ' + YOU + ' → <b>さなぎ</b> → ' + SEI + ' の' + R('順', 'じゅん') + 'に' + P() + '（さなぎになる）。' + YOU + 'は、' + SEI + 'とまったくちがう' + R('形', 'かたち') + 'だね。';
+  else h = 'どちらも、たまご → ' + YOU + ' → ' + SEI + ' の' + R('順', 'じゅん') + 'に' + P() + '（<b>さなぎにならない</b>）。' + YOU + 'は、' + SEI + 'ににた' + R('形', 'かたち') + 'だね。';
+  $('cmpAns').innerHTML = '💡 ' + h; $('cmpAns').classList.remove('hidden');
+});
+$('btnCmpRec').addEventListener('click', () => {
+  recordBug(cmpA); if (cmpB !== cmpA) recordBug(cmpB);
+  say('📝 ' + BUGS[cmpA].name + (cmpB !== cmpA ? 'と' + BUGS[cmpB].name : '') + 'の' + R('育', 'そだ') + 'ち' + R('方', 'かた') + 'を、ワークシートに' + R('記録', 'きろく') + 'したよ', 'cMsg');
+});
+$('btnCmpReset').addEventListener('click', () => { cmpA = 'monshiro'; cmpB = 'tombo'; $('cmpAns').classList.add('hidden'); say('', 'cMsg'); renderCmp(); });
+
+// =====================================================================
+//  モードの切りかえ・はじめの用意
+// =====================================================================
+const SECS = { grow: 'secGrow', body: 'secBody', quiz: 'secQuiz', cmp: 'secCmp' };
+document.querySelectorAll('.mode').forEach(btn => btn.addEventListener('click', () => {
+  mode = btn.dataset.mode;
+  if (mode !== 'grow') stop();
+  document.querySelectorAll('.mode').forEach(x => x.classList.toggle('active', x === btn));
+  Object.entries(SECS).forEach(([m, id]) => $(id).classList.toggle('hidden', m !== mode));
+  $('bugTabs').classList.toggle('hidden', mode === 'quiz' || mode === 'cmp');
+  if (mode === 'body') { renderFound(); drawBody(); }
+  if (mode === 'quiz') drawQuizCards();
+  if (mode === 'cmp') renderCmp();
+}));
+if (Worksheet.isTeacher()) $('teacherBox').classList.remove('hidden');
+
+let lastNow = performance.now();
+function loop(now) {
+  const dt = Math.min(0.1, (now - lastNow) / 1000); lastNow = now;
+  if (mode === 'grow') {
+    if (playing && now >= holdUntil) { advance(dt); updateGrow(); }
+    drawGrow(now);
+  }
+  requestAnimationFrame(loop);
+}
+window.addEventListener('resize', () => { drawTabIcons(); drawBody(); drawQuizCards(); renderCmp(); });
+buildTicks();
+updateGrow(true);
+drawTabIcons();
+quizReset();
+say('▶ さいせい をおすか、スライダーを' + R('動', 'うご') + 'かして' + R('日', 'ひ') + 'にちを' + R('進', 'すす') + 'めよう');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
