@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>雲の動きと台風のひみつ</title>
+<!--
+  雲の動きと台風のひみつ（小学5年 理科「天気の変化」）
+  ・① 雲の動き：日本付近を上から見た雲の模式図（気象衛星の写真のような絵）を、3日間ぶん再生する。
+      雲のかたまりが西から東へ動き、福岡 → 大阪 → 東京の順に雨になるようすを、表に記録できる。
+  ・② 天気を予想しよう：1〜3日目の雲と雨のところを見て、4日目の天気を予想するクイズ（5問）。
+  ・③ 台風：月ごとのよくある進み方と、台風の雨雲・強い風の地いき。台風をドラッグすると、
+      7つの都市の雨・風の強さが、色・もよう・文字で出る。
+  ・④ 防災：ハザードマップでひなん場所をえらぶ・注意報と警報・警戒レベル・そなえ・○×クイズ。
+  ・先生モード（?teacher=1）：① に発展「天気図（高気圧・低気圧・前線。中学校の内容）」のボタンが出る。
+  ・しくみ：雲や台風は、本物の気象データではなく、学習用の模式データです。
+      雲のかたまりは、下の SYSTEMS（雲の場所と動く速さ）・CLOUD／RAIN（雲と雨の広さ）で変えられます。
+  ・ワークシート部品（worksheet.js）を使っています。① の「記録する」と ② のクイズの答えを記録します。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e3f2fd 0%, #bbdefb 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #1565c0; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #0d47a1; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #1565c0; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+
+  /* タブ */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .tab {
+    min-height: 48px; border: 3px solid #90caf9; background: #fff; color: #0d47a1; border-radius: 12px;
+    padding: 4px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .tab.active { background: #1565c0; border-color: #1565c0; color: #fff; }
+
+  canvas { display: block; width: 100%; touch-action: none; border-radius: 8px; }
+  #cv { aspect-ratio: 640 / 480; }
+  #cv.tall { aspect-ratio: 640 / 560; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 18px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #1565c0; border-color: #1565c0; color: #fff; }
+  .chip.teach { border-color: #8e24aa; color: #6a1b9a; }
+  .chip.teach.active { background: #6a1b9a; color: #fff; }
+  .go-btn { border: none; background: #1565c0; color: #fff; padding: 8px 16px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.green { background: #2e7d32; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn:disabled, .chip:disabled { opacity: 0.4; cursor: default; }
+  .lbl { font-size: 16px; color: #555; font-weight: bold; }
+  .msg { min-height: 3em; line-height: 1.5; text-align: center; font-weight: bold; color: #1565c0; margin-top: 6px; display: flex; align-items: center; justify-content: center; }
+  .diff { font-size: 15px; color: #666; margin: 4px 0 0; line-height: 1.6; }
+  .hint { font-size: 15px; color: #777; text-align: center; margin: 2px 0 0; }
+  .clock { font-size: 1.25rem; font-weight: bold; color: #bf360c; min-width: 8em; text-align: center; }
+  .hidden { display: none !important; }
+  input[type=range] { width: min(420px, 80vw); height: 44px; accent-color: #1565c0; }
+
+  /* 天気の表（① 雲の動き） */
+  .wtable { border-collapse: collapse; margin: 6px auto 0; font-size: 15px; }
+  .wtable th, .wtable td { border: 2px solid #cfd8dc; padding: 3px 5px; text-align: center; min-width: 3.6em; }
+  .wtable th { background: #e3f2fd; color: #0d47a1; }
+  .wtable td.now { outline: 3px solid #e65100; outline-offset: -3px; }
+  .wtable .w-sun { background: #fff8e1; color: #8d6e00; }
+  .wtable .w-cloud { background: #eceff1; color: #455a64; }
+  .wtable .w-rain { background: repeating-linear-gradient(135deg, #bbdefb 0 6px, #e3f2fd 6px 12px); color: #0d47a1; }
+  .tscroll { overflow-x: auto; max-width: 100%; }
+
+  /* クイズの答え */
+  .ans { min-width: 5.5em; }
+  .ans.ok { background: #2e7d32; border-color: #2e7d32; color: #fff; }
+  .ans.ng { background: #fff; border-color: #c62828; color: #c62828; text-decoration: line-through; }
+
+  /* 台風：都市ごとの雨・風 */
+  .cities { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 6px; }
+  .city { border: 2px solid #cfd8dc; border-radius: 10px; padding: 4px 6px; font-size: 16px; }
+  .city b { display: block; font-size: 17px; }
+  .lv { display: inline-block; border-radius: 6px; padding: 1px 6px; margin: 2px 0; font-weight: bold; font-size: 15px; border: 2px solid #999; }
+  /* 強さ：色だけでなく、もよう（なし・点・しま・あみ）と文字でも区別する */
+  .lv0 { background: #fff; color: #777; border-color: #ccc; }
+  .lv1 { background: radial-gradient(#8a7a00 1.3px, transparent 1.6px) 0 0 / 7px 7px, #F0E442; color: #333; border-color: #b8a800; }
+  .lv2 { background: repeating-linear-gradient(135deg, #b87800 0 2px, #E69F00 2px 7px); color: #222; border-color: #a06a00; }
+  .lv3 { background: repeating-linear-gradient(45deg, #7a2600 0 2px, transparent 2px 7px), repeating-linear-gradient(135deg, #7a2600 0 2px, #D55E00 2px 7px); color: #fff; border-color: #7a2600; text-shadow: 0 0 3px #000; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; font-size: 15px; margin-top: 4px; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .sw { display: inline-block; width: 26px; height: 18px; border-radius: 4px; border: 2px solid #888; }
+  .sw.strong { background: repeating-linear-gradient(135deg, #a89a00 0 2px, rgba(240,228,66,0.7) 2px 7px); }
+  .sw.storm { background: repeating-linear-gradient(45deg, #7a2600 0 2px, transparent 2px 7px), repeating-linear-gradient(135deg, #7a2600 0 2px, rgba(213,94,0,0.8) 2px 7px); }
+
+  /* 防災 */
+  .bosai { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+  .bcard { border: 3px solid #90caf9; border-radius: 12px; padding: 8px 10px; line-height: 1.6; }
+  .bcard h3 { margin: 0 0 4px; font-size: 1.15rem; color: #0d47a1; }
+  .bcard p, .bcard li { font-size: 17px; margin: 2px 0; }
+  .bcard ul { margin: 2px 0; padding-left: 1.3em; }
+  .steps { display: flex; align-items: flex-end; gap: 6px; margin: 6px 0; }
+  .step { flex: 1; border-radius: 8px; padding: 4px; text-align: center; font-weight: bold; font-size: 16px; line-height: 1.35; border: 3px solid #333; }
+  .step .ic { font-size: 1.3rem; display: block; }
+  .s1 { background: #fff59d; min-height: 70px; }
+  .s2 { background: #ef9a9a; min-height: 100px; }
+  .s3 { background: #4a148c; color: #fff; min-height: 130px; }
+  .lvtable { border-collapse: collapse; width: 100%; font-size: 16px; }
+  .lvtable td { border: 2px solid #cfd8dc; padding: 3px 6px; }
+  .lvtable td:first-child { font-weight: bold; white-space: nowrap; text-align: center; }
+  .hz { width: 100%; max-width: 440px; display: block; margin: 0 auto; touch-action: manipulation; }
+  .hz .pick { cursor: pointer; }
+  .oxq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-top: 2px dashed #cfd8dc; padding: 6px 0; font-size: 17px; }
+  .oxq .qt { flex: 1 1 220px; }
+  .oxq .chip { min-width: 3em; }
+  .oxq .res { flex-basis: 100%; font-size: 16px; color: #1565c0; font-weight: bold; }
+  .hzres { min-height: 1.5em; font-weight: bold; color: #1565c0; line-height: 1.6; margin: 4px 0 0; }
+  .teacher-note { background: #f3e5f5; border: 2px solid #ab47bc; border-radius: 10px; padding: 8px 10px; font-size: 15px; line-height: 1.6; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1 data-j>🌀 雲の動きと台風のひみつ</h1>
+<p class="subtitle" data-j>雲の動きから天気を予想しよう。台風はどう進む？</p>
+
+<div class="panel" data-j>
+  <div class="tabs">
+    <button class="tab active" data-tab="move">☁ ① 雲の動き</button>
+    <button class="tab" data-tab="quiz">❓ ② 天気を予想しよう</button>
+    <button class="tab" data-tab="typhoon">🌀 ③ 台風</button>
+    <button class="tab" data-tab="bosai">🏫 ④ 防災</button>
+  </div>
+
+  <div class="card" id="mainCard">
+    <canvas id="cv" aria-label="日本付近の雲のようすの図"></canvas>
+    <div class="msg" id="msg">&nbsp;</div>
+
+    <!-- ① 雲の動き -->
+    <div id="ctlMove">
+      <div class="row">
+        <button class="go-btn sub" id="btnBack" aria-label="3時間もどす">◀</button>
+        <span class="clock" id="clock">1日目 午前9時</span>
+        <button class="go-btn sub" id="btnFwd" aria-label="3時間すすめる">▶</button>
+        <button class="go-btn" id="btnPlay">▶ 再生</button>
+        <button class="go-btn orange" id="btnRec">📝 記録する</button>
+      </div>
+      <div class="row">
+        <input type="range" id="tSlider" min="0" max="72" step="1" value="0" aria-label="時刻">
+      </div>
+      <div class="row">
+        <span class="lbl">はやさ</span>
+        <button class="chip" data-speed="3">ゆっくり</button>
+        <button class="chip active" data-speed="6">ふつう</button>
+        <button class="chip" data-speed="14">はやおくり</button>
+        <button class="chip active" id="btnRainM">☂ 雨のところ ON</button>
+        <button class="chip" id="btnTrail">➡ 動きの矢印 OFF</button>
+        <button class="chip teach hidden" id="btnFront">発展：天気図 OFF</button>
+        <button class="go-btn sub" id="btnResetM">もういちど</button>
+      </div>
+      <div class="tscroll">
+        <table class="wtable" id="wtable" aria-label="都市ごとの天気の表"></table>
+      </div>
+      <p class="hint">時間がすすむと、表に天気が入るよ。雨（しまもよう）は、どの都市から始まるかな？</p>
+    </div>
+
+    <!-- ② 天気を予想しよう -->
+    <div id="ctlQuiz" class="hidden">
+      <div class="row" id="quizAns">
+        <button class="chip ans" data-a="晴れ">☀ 晴れ</button>
+        <button class="chip ans" data-a="くもり">☁ くもり</button>
+        <button class="chip ans" data-a="雨">☂ 雨</button>
+      </div>
+      <div class="row">
+        <button class="go-btn hidden" id="btnNextQ">つぎの問題 ▶</button>
+        <button class="go-btn sub" id="btnResetQ">はじめから</button>
+      </div>
+      <p class="hint">雲（白いところ）と雨のところ（青いしまもよう）は、1日でどのくらい、どちらへ動いているかな？</p>
+    </div>
+
+    <!-- ③ 台風 -->
+    <div id="ctlTy" class="hidden">
+      <div class="row">
+        <span class="lbl">よくある進み方</span>
+        <button class="chip" data-month="8">8月</button>
+        <button class="chip active" data-month="9">9月</button>
+        <button class="chip" data-month="10">10月</button>
+        <button class="go-btn" id="btnTyGo">▶ 台風を進める</button>
+        <button class="go-btn sub" id="btnResetTy">もういちど</button>
+      </div>
+      <div class="row">
+        <span class="lbl">はやさ</span>
+        <button class="chip" data-tspeed="0.5">ゆっくり</button>
+        <button class="chip active" data-tspeed="1">ふつう</button>
+        <button class="chip" data-tspeed="2.2">はやおくり</button>
+      </div>
+      <div class="row">
+        <button class="chip active" id="btnPath">〰 進み方 ON</button>
+        <button class="chip active" id="btnZone">💨 強い風の地いき ON</button>
+        <button class="chip active" id="btnCloudT">☁ 雨雲 ON</button>
+        <button class="chip" id="btnArrow">↺ 風の向き OFF</button>
+      </div>
+      <div class="legend">
+        <span><span class="sw strong"></span>強風域（風が強い地いき）</span>
+        <span><span class="sw storm"></span>暴風域（とても強い風の地いき）</span>
+      </div>
+      <div class="cities" id="cities"></div>
+      <div class="legend">
+        <span><span class="lv lv0">ない</span></span>
+        <span><span class="lv lv1">弱い（点）</span></span>
+        <span><span class="lv lv2">強い（しま）</span></span>
+        <span><span class="lv lv3">とても強い（あみ）</span></span>
+      </div>
+      <p class="hint">地図の上の台風（まん中の目）を指でドラッグして動かしてみよう。</p>
+    </div>
+
+    <!-- ④ 防災 -->
+    <div id="ctlBosai" class="hidden">
+      <div class="bosai">
+        <div class="bcard">
+          <h3>🗺 ハザードマップでひなん場所をえらぼう</h3>
+          <p>ハザードマップは、大雨のときに水につかりそうなところや、がけくずれがおきそうなところを、地図にしたものです。市町村が作っています。</p>
+          <svg class="hz" id="hzmap" viewBox="0 0 440 280" role="img" aria-label="町のハザードマップ"></svg>
+          <div class="row">
+            <span class="lbl">大雨のとき、家からひなんするならどっち？</span>
+            <button class="chip ans" data-hz="A">Ａ 小学校</button>
+            <button class="chip ans" data-hz="B">Ｂ 公民館</button>
+          </div>
+          <p id="hzRes" class="hzres"></p>
+        </div>
+
+        <div class="bcard">
+          <h3>📢 注意報と警報</h3>
+          <p>気象庁が、災害のおそれがあるときに発表します。</p>
+          <div class="steps">
+            <div class="step s1"><span class="ic">！</span>注意報<br><small>災害がおきるおそれ</small></div>
+            <div class="step s2"><span class="ic">！！</span>警報<br><small>大きな災害がおきるおそれ</small></div>
+            <div class="step s3"><span class="ic">！！！</span>特別警報<br><small>何十年に一度の大きな災害のおそれ</small></div>
+          </div>
+          <p>市町村からは、ひなんの合図として「警戒レベル」が出ます。</p>
+          <table class="lvtable">
+            <tr><td>レベル３</td><td>お年よりや体の不自由な人などは、ひなんを始める</td></tr>
+            <tr><td>レベル４</td><td>危ない場所にいる人は、全員ひなんする（このときまでに、かならずひなん）</td></tr>
+            <tr><td>レベル５</td><td>すでに災害がおきているかもしれない。命を守る行動を</td></tr>
+          </table>
+        </div>
+
+        <div class="bcard">
+          <h3>🎒 台風が来る前のそなえ</h3>
+          <ul>
+            <li>テレビ・ラジオ・市町村のお知らせで、台風の進み方や警報を調べる</li>
+            <li>家の人と、ひなん場所とそこまでの道を決めておく</li>
+            <li>ベランダや庭の、風でとばされそうな物を家の中に入れる</li>
+            <li>飲み水・食べ物・かいちゅう電灯・電池・薬などを用意する（持ち出しぶくろ）</li>
+            <li>ひなんは、明るいうちに、雨や風が強くなる前に</li>
+          </ul>
+        </div>
+
+        <div class="bcard">
+          <h3>⭕❌ こんなとき、どうする？</h3>
+          <div id="oxList"></div>
+        </div>
+      </div>
+    </div>
+    <p class="teacher-note hidden" id="tNote"></p>
+  </div>
+
+  <div class="card">
+    <p class="diff">※じっさいとのちがい：雲・雨のところ・台風の進み方や強さは、本物の気象データではなく、学習用の模式です。日本付近の雲は西から東へ動くことが多いですが、夏や台風のときなど、そうならないこともあります。台風の大きさ・強さ・進む速さは、1つ1つちがいます。本物の天気は、気象庁や市町村のお知らせで調べましょう。</p>
+  </div>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// =====================================================================
+// ふりがな辞書：{漢字|よみ} の形で書いておくと、画面の文字に自動でふりがなが付きます。
+// （長いことばから先に当てはめます。足りないことばは、ここに足してください）
+// =====================================================================
+const DICT_SRC = [
+  '{天気図|てんきず}', '{天気|てんき}', '{雲|くも}', '{雨雲|あまぐも}', '{雨|あめ}', '{晴|は}れ', '{台風|たいふう}', '{防災|ぼうさい}',
+  '{予想|よそう}', '{実験|じっけん}', '{結果|けっか}', '{考察|こうさつ}', '{記録|きろく}', '{再生|さいせい}',
+  '{福岡|ふくおか}', '{大阪|おおさか}', '{東京|とうきょう}', '{那覇|なは}', '{鹿児島|かごしま}', '{仙台|せんだい}', '{札幌|さっぽろ}',
+  '{都市|とし}', '{地図|ちず}', '{日本|にほん}', '{西|にし}', '{東|ひがし}', '{南|みなみ}', '{北|きた}',
+  '{午前|ごぜん}', '{午後|ごご}', '{正午|しょうご}', '{日目|にちめ}', '{時間|じかん}', '{時刻|じこく}', '{時|じ}', '{何日|なんにち}', '{何十年|なんじゅうねん}', '{一度|いちど}',
+  '{強風域|きょうふういき}', '{暴風域|ぼうふういき}', '{強|つよ}', '{弱|よわ}', '{風|かぜ}', '{地|ち}いき', '{向|む}き', '{進|すす}',
+  '{発展|はってん}', '{高気圧|こうきあつ}', '{低気圧|ていきあつ}', '{前線|ぜんせん}', '{中学校|ちゅうがっこう}',
+  '{注意報|ちゅういほう}', '{特別警報|とくべつけいほう}', '{警報|けいほう}', '{警戒|けいかい}', '{気象庁|きしょうちょう}', '{発表|はっぴょう}',
+  '{災害|さいがい}', '{市町村|しちょうそん}', '{小学校|しょうがっこう}', '{公民館|こうみんかん}', '{場所|ばしょ}', '{作|つく}',
+  '{全員|ぜんいん}', '{危|あぶ}な', '{命|いのち}', '{守|まも}', '{行動|こうどう}', '{始|はじ}め', '{体|からだ}', '{不自由|ふじゆう}',
+  '{家|いえ}', '{庭|にわ}', '{物|もの}', '{中|なか}', '{入|い}れ', '{飲|の}み', '{水|みず}', '{食|た}べ', '{薬|くすり}', '{用意|ようい}',
+  '{持|も}ち', '{出|だ}し', '{明|あか}るい', '{前|まえ}', '{道|みち}', '{決|き}め', '{調|しら}べ', '{知|し}らせ', '{合図|あいず}',
+  '{本物|ほんもの}', '{学習用|がくしゅうよう}', '{模式|もしき}', '{気象|きしょう}', '{大|おお}きさ', '{大|おお}きな', '{速|はや}さ',
+  '{動|うご}', '{指|ゆび}', '{目|め}', '{表|ひょう}', '{問題|もんだい}', '{正解|せいかい}', '{見|み}', '{白|しろ}い', '{青|あお}い',
+  '{夏|なつ}', '{月|がつ}', '{海|うみ}', '{大陸|たいりく}', '{太平洋|たいへいよう}', '{日本海|にほんかい}', '{東|ひがし}シナ{海|かい}',
+  '{中心|ちゅうしん}', '{来|き}たり', '{暗|くら}い', '{変|か}わり{方|かた}', '{順|じゅん}', '{進|すす}み{方|かた}', '{大雨|おおあめ}', '{大切|たいせつ}', '{来|く}る', '{来|き}て', '{出|で}たら', '{出|で}る', '{出|で}ます', '{高|たか}い', '{人|ひと}', '{入|はい}る', '{上|うえ}', '{行|い}く', '{矢印|やじるし}', '{朝|あさ}', '{夜|よる}', '{始|はじ}ま', '{点|てん}', '{川|かわ}', '{種類|しゅるい}', '{使|つか}', '{年|ねん}', '{電灯|でんとう}', '{電池|でんち}', '{急|きゅう}', '{波|なみ}', '{新|あたら}し', '{続|つづ}け', '{暗|くら}く', '{外|そと}', '{歩|ある}く', '{早|はや}め',
+  '{生|う}まれ', '{変|か}わ', '{変|か}え', '{変化|へんか}', '{動|うご}き', '{答|こた}え', '{思|おも}', '{考|かんが}え', '{理由|りゆう}', '{近|ちか}', '{右側|みぎがわ}', '{左側|ひだりがわ}', '{次|つぎ}', '{日|ひ}', '{今日|きょう}', '{明日|あした}'
+];
+const DICT = {};
+DICT_SRC.forEach(s => {
+  DICT[s.replace(/\{([^|}]+)\|[^}]+\}/g, '$1')] = s.replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>');
+});
+const DICT_RE = new RegExp(Object.keys(DICT).sort((a, b) => b.length - a.length)
+  .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+// 文字列にふりがなを付ける（タグの入っていない文字列に使う）
+const J = s => String(s).replace(DICT_RE, m => DICT[m]);
+// 画面の中の文字（data-j を付けたところ）に、まとめてふりがなを付ける
+function rubyfy(root) {
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const list = [];
+  while (w.nextNode()) {
+    const n = w.currentNode;
+    if (n.parentElement.closest('ruby, script, style, canvas, svg')) continue;
+    if (J(n.nodeValue) !== n.nodeValue) list.push(n);
+  }
+  list.forEach(n => {
+    const t = document.createElement('template');
+    t.innerHTML = J(n.nodeValue);
+    n.replaceWith(t.content);
+  });
+}
+document.querySelectorAll('[data-j]').forEach(rubyfy);
+
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: J('雲の動きと台風のひみつ'),
+  question: J('明日の天気はどうなる？ 雲の動きと天気の変わり方には、どんなきまりがあるだろうか？'),
+  predictionChoices: [J('西の天気が、あとから東にやってくる'), J('東の天気が、あとから西にやってくる'), J('きまりはない')],
+  experimentNote: J('「① 雲の動き」で時間を進め、ときどき「記録する」をおそう。福岡・大阪・東京の天気が、どの順に雨になるかをくらべよう。「② 天気を予想しよう」の答えも記録されるよ。'),
+  columns: [
+    { key: 'when', label: J('時刻') },
+    { key: 'fk', label: J('福岡') },
+    { key: 'os', label: J('大阪') },
+    { key: 'tk', label: J('東京') },
+    { key: 'memo', label: 'メモ' }
+  ],
+  chart: false,
+  hint: '① では、雲のかたまりが西から東へ1日に約1000km動き、福岡→大阪→東京の順に半日ほどずつおくれて雨になることに目を向けさせましょう。表の「雨」のしまもようが、ななめの階だんのようにならびます。② では「1日にどのくらい動いたか」を図からつかみ、同じだけ東へ動くと考えて予想させます。③ では、台風は南のあたたかい海で生まれ、はじめは西や北西へ、日本付近では東よりに向きを変えることが多いこと、中心に近いほど雨や風が強いことをおさえます。進む向きの右側は、台風のうずの風と台風を動かす風の向きがそろうので、風が特に強くなります。',
+  answer: '日本付近では、雲はおよそ西から東へ動く。そのため、天気もおよそ西から東へ変わっていく。西の空や西の地いきの天気を調べると、明日の天気を予想することができる。台風は、日本の南の海上で発生し、はじめは西や北の方へ動き、日本付近では東よりに進むことが多い。台風が近づくと、雨や風が強くなり、大きな災害がおきることがある。'
+});
+
+// ===== 小さな道具 =====
+const $ = id => document.getElementById(id);
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+const D2R = Math.PI / 180;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const TEACHER = Worksheet.isTeacher();
+function setMsg(html) { $('msg').innerHTML = '<span>' + (html || '&nbsp;') + '</span>'; }
+// 決まった順に出てくる、でたらめな数（同じ seed なら同じ雲の形になる）
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+// 文字をかく（白いふちどり付き）
+function label(c, text, x, y, color, size, align, edge) {
+  c.save();
+  c.font = 'bold ' + (size || 14) + 'px ' + FONT;
+  c.textAlign = align || 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 4; c.strokeStyle = edge || 'rgba(255,255,255,0.92)'; c.lineJoin = 'round'; c.strokeText(text, x, y);
+  c.fillStyle = color || '#333'; c.fillText(text, x, y);
+  c.restore();
+}
+function arrow(c, x1, y1, x2, y2, w, color) {
+  const a = Math.atan2(y2 - y1, x2 - x1), hl = Math.max(8, w * 2.6);
+  c.save();
+  c.strokeStyle = color; c.fillStyle = color; c.lineWidth = w; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2 - Math.cos(a) * hl * 0.7, y2 - Math.sin(a) * hl * 0.7); c.stroke();
+  c.beginPath(); c.moveTo(x2, y2);
+  c.lineTo(x2 - Math.cos(a - 0.5) * hl, y2 - Math.sin(a - 0.5) * hl);
+  c.lineTo(x2 - Math.cos(a + 0.5) * hl, y2 - Math.sin(a + 0.5) * hl);
+  c.closePath(); c.fill();
+  c.restore();
+}
+function setupCanvas(cv, w, h) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = w * dpr; cv.height = h * dpr;
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return c;
+}
+const CW = 640;
+let CH = 480;
+const cv = $('cv');
+let ctx = setupCanvas(cv, CW, CH);
+
+// =====================================================================
+// 地図（メルカトル図法：上から見た地図。緯度・経度 → 画面の位置）
+// =====================================================================
+const merc = lat => Math.log(Math.tan(Math.PI / 4 + lat * D2R / 2)) / D2R;
+const imerc = m => (2 * Math.atan(Math.exp(m * D2R)) - Math.PI / 2) / D2R;
+// lonMin〜lonMax の経度を、横 w ピクセルに入れる。下のはしが latMin（緯度）
+function makeProj(lonMin, lonMax, latMin, x0, y0, w, h) {
+  const s = w / (lonMax - lonMin), mTop = merc(latMin) + h / s;
+  return {
+    x0, y0, w, h, s,
+    x: lon => x0 + (lon - lonMin) * s,
+    y: lat => y0 + (mTop - merc(lat)) * s,
+    lon: x => lonMin + (x - x0) / s,
+    lat: y => imerc(mTop - (y - y0) / s),
+    pxPerKm: lat => s / (111.2 * Math.cos(lat * D2R))   // その緯度で 1km が何ピクセルか
+  };
+}
+const PROJ_MOVE = makeProj(116, 150, 25, 0, 0, 640, 480);    // ① 日本付近
+const PROJ_TY = makeProj(110, 152, 13, 0, 0, 640, 560);      // ③ 南の海までふくめた地図
+
+// 陸地の形（[経度, 緯度] をつないだ、かんたんな形）
+const LAND = [
+  // 大陸（中国・朝鮮半島・ロシア）
+  [[90, 60], [90, 10], [105, 10], [106, 20], [108, 21.5], [109.5, 21.4], [111, 21.5], [113, 22.3], [116, 22.9], [118, 24.4], [119.5, 25.5],
+   [120.5, 27.3], [121.5, 29.5], [122, 30.8], [121, 32.3], [120.3, 34.3], [119.3, 35.1], [120.6, 36.1], [122.5, 37.2], [120.5, 37.8],
+   [118.5, 38.3], [117.7, 39], [119.5, 39.9], [121.2, 40.9], [122.3, 40.5], [121.2, 39], [122.5, 39.6], [124.3, 39.9],
+   [125.2, 39.4], [125.3, 38.1], [126.6, 37.6], [126.5, 36.3], [126.3, 34.6], [127.4, 34.5], [128.6, 34.9], [129.3, 35.3], [129.5, 36.2],
+   [129.3, 37.3], [128.5, 38.4], [127.6, 39.5], [128.6, 40.3], [129.7, 40.9], [129.8, 41.8], [130.6, 42.4], [131, 42.7], [133, 42.8],
+   [135.3, 43.8], [137.5, 45.4], [139, 47], [140.5, 50], [141, 60]],
+  // 本州
+  [[130.9, 34.0], [131.4, 34.5], [132.6, 35.4], [133.5, 35.5], [134.5, 35.6], [135.3, 35.6], [135.9, 35.7], [136.1, 36.2], [136.7, 37.0],
+   [136.9, 37.5], [137.3, 37.5], [137.0, 36.8], [137.6, 36.9], [138.5, 37.6], [139.4, 38.2], [139.8, 39.0], [140.0, 40.0], [139.9, 40.6],
+   [140.3, 41.2], [140.8, 41.1], [141.2, 41.3], [141.5, 40.6], [141.9, 40.0], [142.0, 39.4], [141.6, 38.6], [141.0, 38.2], [140.9, 37.3],
+   [140.8, 36.6], [140.6, 35.8], [140.8, 35.7], [140.4, 35.2], [139.9, 34.9], [139.9, 35.4], [139.6, 35.3], [139.2, 35.2], [138.9, 34.6],
+   [138.7, 35.1], [138.2, 34.6], [137.3, 34.6], [136.9, 34.6], [136.8, 34.25], [136.3, 34.2], [135.8, 33.5], [135.2, 33.8], [135.1, 34.2],
+   [135.4, 34.7], [134.6, 34.8], [133.9, 34.5], [133.0, 34.4], [132.4, 34.3], [131.7, 34.0], [131.0, 33.95]],
+  // 九州
+  [[129.8, 33.5], [130.4, 33.9], [131.0, 33.9], [131.6, 33.6], [131.9, 33.0], [131.6, 32.4], [131.4, 31.6], [131.1, 31.2], [130.7, 31.0],
+   [130.6, 31.4], [130.2, 31.3], [130.2, 32.2], [130.5, 32.7], [129.8, 32.7], [129.7, 33.1]],
+  // 四国
+  [[132.4, 33.9], [133.5, 34.3], [134.4, 34.2], [134.7, 33.8], [134.2, 33.2], [133.6, 33.5], [133.0, 32.8], [132.5, 33.2]],
+  // 北海道
+  [[140.0, 41.5], [140.1, 42.2], [140.4, 42.6], [140.3, 43.2], [141.3, 43.3], [141.6, 44.4], [141.9, 45.4], [142.6, 44.8], [143.5, 44.2],
+   [144.5, 43.9], [145.3, 44.3], [145.2, 43.6], [145.8, 43.3], [145.0, 43.0], [144.0, 42.9], [143.3, 42.0], [142.0, 42.5], [141.2, 42.4],
+   [140.9, 41.8], [140.5, 41.7]],
+  // 台湾・海南島・ルソン島
+  [[121.0, 25.2], [121.9, 25.0], [121.5, 23.5], [120.8, 22.0], [120.2, 22.6], [120.1, 23.5], [120.7, 24.6]],
+  [[108.6, 19.2], [109.6, 20.0], [110.6, 20.1], [111.0, 19.6], [110.4, 18.6], [109.5, 18.2], [108.7, 18.5]],
+  [[120.6, 18.5], [121.9, 18.4], [122.2, 17.1], [121.5, 15.9], [121.7, 14.3], [122.6, 14.2], [124.2, 13.5], [123.5, 12.7], [122.0, 13.5],
+   [120.6, 14.2], [120.0, 15.4], [119.8, 16.3], [120.4, 16.7]],
+  // 沖縄島・奄美大島・屋久島（小さな島）
+  [[127.65, 26.1], [127.95, 26.45], [128.3, 26.85], [128.15, 26.9], [127.85, 26.6], [127.7, 26.35]],
+  [[129.2, 28.1], [129.7, 28.45], [129.5, 28.5], [129.15, 28.3]],
+  [[130.4, 30.25], [130.65, 30.3], [130.6, 30.45], [130.4, 30.4]]
+];
+// 都市（[経度, 緯度]）
+const CITY = {
+  '那覇': [127.68, 26.21], '鹿児島': [130.56, 31.56], '福岡': [130.40, 33.59], '大阪': [135.50, 34.69],
+  '東京': [139.69, 35.69], '仙台': [140.87, 38.27], '札幌': [141.35, 43.06]
+};
+const MOVE_CITIES = ['福岡', '大阪', '東京'];
+const CITY_KEY = { '福岡': 'fk', '大阪': 'os', '東京': 'tk' };
+
+// 地図の下地（海・陸・海の名前）をかく。opt.names で海の名前を出す
+function drawBase(c, P, opt) {
+  opt = opt || {};
+  c.save();
+  c.beginPath(); c.rect(P.x0, P.y0, P.w, P.h); c.clip();
+  c.fillStyle = '#163a5f'; c.fillRect(P.x0, P.y0, P.w, P.h);
+  // 経線・緯線（5度ごと）
+  c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 1;
+  for (let lon = 110; lon <= 155; lon += 5) { c.beginPath(); c.moveTo(P.x(lon), P.y0); c.lineTo(P.x(lon), P.y0 + P.h); c.stroke(); }
+  for (let lat = 10; lat <= 50; lat += 5) { c.beginPath(); c.moveTo(P.x0, P.y(lat)); c.lineTo(P.x0 + P.w, P.y(lat)); c.stroke(); }
+  c.fillStyle = '#5f7f4f'; c.strokeStyle = '#8fae78'; c.lineWidth = 1.2;
+  LAND.forEach(poly => {
+    c.beginPath();
+    poly.forEach((p, i) => { const x = P.x(p[0]), y = P.y(p[1]); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+    c.closePath(); c.fill(); c.stroke();
+  });
+  if (opt.names) {
+    const sz = P.w > 400 ? 15 : 11, col = 'rgba(200,225,255,0.75)', ed = 'rgba(0,0,0,0)';
+    label(c, '日本海', P.x(134), P.y(39.5), col, sz, 'center', ed);
+    label(c, '太平洋', P.x(144), P.y(31), col, sz, 'center', ed);
+    label(c, '東シナ海', P.x(125), P.y(29.5), col, sz, 'center', ed);
+    label(c, '大陸', P.x(120), P.y(41), 'rgba(230,240,220,0.8)', sz, 'center', ed);
+  }
+  c.restore();
+}
+// 方位（北の矢印と、西・東）
+function drawCompass(c, x, y) {
+  c.save();
+  c.fillStyle = 'rgba(255,255,255,0.85)';
+  c.beginPath(); c.roundRect ? c.roundRect(x - 30, y - 34, 60, 68, 10) : c.rect(x - 30, y - 34, 60, 68); c.fill();
+  arrow(c, x, y + 10, x, y - 20, 3, '#c62828');
+  label(c, '北', x, y + 22, '#c62828', 14);
+  label(c, '西', x - 20, y - 4, '#333', 13);
+  label(c, '東', x + 20, y - 4, '#333', 13);
+  c.restore();
+}
+
+// ===== 雲のかたまりのモデル =====
+// 雲のかたまりは、北東〜南西にのびただ円（少しでこぼこ）。まん中の方が雨のところ。
+// 1時間に経度 0.45 度ずつ東へ動く（日本付近で 1日に約1000km）。
+const SPEED = 0.45;                       // 1時間に動く経度（度）
+const TILT = 30 * D2R;                    // だ円のかたむき（北東向き）
+const CLOUD = { rx: 5.0, ry: 3.2 };       // 雲の広さ（度。東西に近い方向・南北に近い方向）
+const RAIN = { rx: 2.6, ry: 1.6 };        // 雨のところの広さ
+// ① で動かす雲のかたまり（lon0 は 1日目 午前9時の中心の経度）
+const SYSTEMS = [
+  { lon0: 118.6, lat: 34.6, ph1: 0.5, ph2: 2.0, seed: 11 },
+  { lon0: 82.6, lat: 35.2, ph1: 1.7, ph2: 0.3, seed: 23 },
+  { lon0: 154.6, lat: 35.4, ph1: 2.6, ph2: 1.1, seed: 37 }
+];
+// 点（lon, lat）が、かたまりの形の「何ばい」の場所にあるか（1 より小さければ中）
+function shapeR(c, lon, lat, sz) {
+  const dx = (lon - c.lon) * Math.cos(c.lat * D2R), dy = lat - c.lat;
+  const u = dx * Math.cos(TILT) + dy * Math.sin(TILT), v = -dx * Math.sin(TILT) + dy * Math.cos(TILT);
+  const th = Math.atan2(v / sz.ry, u / sz.rx);
+  return Math.hypot(u / sz.rx, v / sz.ry) / edgeK(c, th);
+}
+const edgeK = (c, th) => 1 + 0.12 * Math.sin(3 * th + c.ph1) + 0.08 * Math.sin(5 * th + c.ph2);
+// かたまりの形の上の点（だ円の角度 th、大きさ k）→ [経度, 緯度]
+function shapePoint(c, sz, th, k) {
+  const e = edgeK(c, th) * k, u = Math.cos(th) * sz.rx * e, v = Math.sin(th) * sz.ry * e;
+  const dx = u * Math.cos(TILT) - v * Math.sin(TILT), dy = u * Math.sin(TILT) + v * Math.cos(TILT);
+  return [c.lon + dx / Math.cos(c.lat * D2R), c.lat + dy];
+}
+// その場所の天気（雨のところの中＝雨、雲の中＝くもり、それ以外＝晴れ）
+function weatherAt(list, lon, lat) {
+  if (list.some(c => shapeR(c, lon, lat, RAIN) < 1)) return '雨';
+  if (list.some(c => shapeR(c, lon, lat, CLOUD) < 1)) return 'くもり';
+  return '晴れ';
+}
+const systemsAt = t => SYSTEMS.map(s => Object.assign({}, s, { lon: s.lon0 + SPEED * t }));
+
+// 雲のつぶ（ふわっとした白い丸）の絵を1つ作っておき、たくさん重ねてかく
+const PUFF = document.createElement('canvas');
+PUFF.width = PUFF.height = 64;
+(() => {
+  const c = PUFF.getContext('2d'), g = c.createRadialGradient(32, 32, 2, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.55, 'rgba(250,252,255,0.75)'); g.addColorStop(1, 'rgba(240,245,255,0)');
+  c.fillStyle = g; c.fillRect(0, 0, 64, 64);
+})();
+// かたまりごとの雲のつぶの場所（だ円の中の角度と大きさ）を決めておく
+const puffCache = {};
+function puffsOf(seed) {
+  if (puffCache[seed]) return puffCache[seed];
+  const r = rng(seed), list = [];
+  for (let i = 0; i < 90; i++) {
+    const k = Math.sqrt(r()) * 0.9, th = r() * Math.PI * 2;
+    list.push({ th, k, size: 1.3 + r() * 0.9 - k * 0.6, a: 0.6 + (1 - k) * 0.4 });
+  }
+  puffCache[seed] = list;
+  return list;
+}
+// 雨のところのもよう（青いしま）
+function makePattern(c, draw, n) {
+  const p = document.createElement('canvas'); p.width = p.height = n;
+  draw(p.getContext('2d'), n);
+  return c.createPattern(p, 'repeat');
+}
+let PAT = {};
+function makePatterns() {
+  PAT.rain = makePattern(ctx, (g, n) => {
+    g.fillStyle = 'rgba(40,120,255,0.45)'; g.fillRect(0, 0, n, n);
+    g.strokeStyle = 'rgba(0,50,160,0.9)'; g.lineWidth = 2.5;
+    g.beginPath(); g.moveTo(0, n); g.lineTo(n, 0); g.moveTo(-n / 2, n / 2); g.lineTo(n / 2, -n / 2); g.moveTo(n / 2, n * 1.5); g.lineTo(n * 1.5, n / 2); g.stroke();
+  }, 12);
+  PAT.strong = makePattern(ctx, (g, n) => {   // 強風域：黄＋しま
+    g.fillStyle = 'rgba(240,228,66,0.28)'; g.fillRect(0, 0, n, n);
+    g.strokeStyle = 'rgba(150,135,0,0.8)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(n, n); g.moveTo(-n / 2, n / 2); g.lineTo(n / 2, n * 1.5); g.moveTo(n / 2, -n / 2); g.lineTo(n * 1.5, n / 2); g.stroke();
+  }, 12);
+  PAT.storm = makePattern(ctx, (g, n) => {    // 暴風域：赤だいだい＋あみ
+    g.fillStyle = 'rgba(213,94,0,0.38)'; g.fillRect(0, 0, n, n);
+    g.strokeStyle = 'rgba(110,30,0,0.9)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(n, n); g.moveTo(n, 0); g.lineTo(0, n); g.stroke();
+  }, 12);
+}
+makePatterns();
+
+// 雲のかたまり1つをかく
+function drawCloudSystem(c, P, s) {
+  const list = puffsOf(s.seed), kmPx = P.pxPerKm(s.lat);
+  list.forEach(p => {
+    const [lon, lat] = shapePoint(s, CLOUD, p.th, p.k);
+    const r = p.size * 111 * kmPx * 1.0;
+    c.globalAlpha = p.a;
+    c.drawImage(PUFF, P.x(lon) - r, P.y(lat) - r, r * 2, r * 2);
+  });
+  c.globalAlpha = 1;
+}
+// 雨のところ（しまもよう）をかく
+function drawRainArea(c, P, s, showText) {
+  c.beginPath();
+  for (let i = 0; i <= 48; i++) {
+    const [lon, lat] = shapePoint(s, RAIN, i / 48 * Math.PI * 2, 1);
+    i ? c.lineTo(P.x(lon), P.y(lat)) : c.moveTo(P.x(lon), P.y(lat));
+  }
+  c.closePath();
+  c.fillStyle = PAT.rain; c.fill();
+  c.strokeStyle = '#0d47a1'; c.lineWidth = 2; c.setLineDash([6, 4]); c.stroke(); c.setLineDash([]);
+  if (showText) label(c, '雨', P.x(s.lon), P.y(s.lat), '#0d47a1', P.w > 400 ? 18 : 12);
+}
+// 天気のマーク（晴れ＝太陽、くもり＝雲、雨＝雲としずく。形と文字で区別する）
+function weatherIcon(c, kind, x, y, r) {
+  c.save();
+  if (kind === '晴れ') {
+    c.strokeStyle = '#e65100'; c.lineWidth = Math.max(2, r * 0.18); c.lineCap = 'round';
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      c.beginPath(); c.moveTo(x + Math.cos(a) * r * 0.75, y + Math.sin(a) * r * 0.75); c.lineTo(x + Math.cos(a) * r * 1.1, y + Math.sin(a) * r * 1.1); c.stroke();
+    }
+    c.fillStyle = '#ffb300'; c.beginPath(); c.arc(x, y, r * 0.55, 0, 6.28); c.fill();
+  } else {
+    const cy = kind === '雨' ? y - r * 0.25 : y;
+    c.fillStyle = kind === '雨' ? '#78909c' : '#b0bec5'; c.strokeStyle = '#37474f'; c.lineWidth = 1.5;
+    c.beginPath();
+    c.arc(x - r * 0.45, cy + r * 0.1, r * 0.42, Math.PI * 0.5, Math.PI * 1.5);
+    c.arc(x - r * 0.05, cy - r * 0.25, r * 0.5, Math.PI, Math.PI * 1.9);
+    c.arc(x + r * 0.5, cy + r * 0.05, r * 0.42, Math.PI * 1.4, Math.PI * 0.5);
+    c.closePath(); c.fill(); c.stroke();
+    if (kind === '雨') {
+      c.strokeStyle = '#1565c0'; c.lineWidth = Math.max(2, r * 0.16); c.lineCap = 'round';
+      for (let i = -1; i <= 1; i++) { c.beginPath(); c.moveTo(x + i * r * 0.4, y + r * 0.45); c.lineTo(x + i * r * 0.4 - r * 0.15, y + r * 0.85); c.stroke(); }
+    }
+  }
+  c.restore();
+}
+// 都市の印と名前（weather を入れると天気マークも）
+function drawCity(c, P, name, weather, big) {
+  const [lon, lat] = CITY[name], x = P.x(lon), y = P.y(lat);
+  c.fillStyle = '#fff'; c.strokeStyle = '#c62828'; c.lineWidth = 2.5;
+  c.beginPath(); c.arc(x, y, big ? 6 : 4, 0, 6.28); c.fill(); c.stroke();
+  const fs = big ? 15 : 11;
+  // 名前の位置（重ならないように少しずらす）
+  const off = { '福岡': [-8, 16], '大阪': [0, 18], '東京': [10, 18] }[name] || [0, 16];
+  if (weather && big) {
+    // 地図の上は小さなマークだけ（雲が見えるように）
+    weatherIcon(c, weather, x + 14, y - 14, 10);
+    label(c, name, x + off[0], y + off[1], '#fff', 14, 'center', 'rgba(0,0,0,0.65)');
+  } else if (weather) {
+    const bx = x + off[0], by = y + off[1] + (big ? 14 : 8);
+    c.fillStyle = 'rgba(255,255,255,0.93)'; c.strokeStyle = '#37474f'; c.lineWidth = 1.5;
+    const bw = big ? 92 : 58, bh = big ? 50 : 32;
+    c.beginPath(); c.roundRect ? c.roundRect(bx - bw / 2, by - bh / 2, bw, bh, 8) : c.rect(bx - bw / 2, by - bh / 2, bw, bh); c.fill(); c.stroke();
+    weatherIcon(c, weather, bx - bw / 2 + bh / 2, by, big ? 15 : 9);
+    c.font = 'bold ' + fs + 'px ' + FONT; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillStyle = '#333';
+    c.fillText(name, bx - bw / 2 + bh - 2, by - (big ? 9 : 6));
+    c.fillStyle = weather === '雨' ? '#0d47a1' : weather === '晴れ' ? '#bf360c' : '#455a64';
+    c.fillText(weather, bx - bw / 2 + bh - 2, by + (big ? 11 : 7));
+  } else {
+    label(c, name, x + off[0], y + off[1], '#fff', fs, 'center', 'rgba(0,0,0,0.6)');
+  }
+}
+
+// ===== 天気図（発展・先生モード）：低気圧・前線・高気圧 =====
+function drawFront(c, P, pts, kind) {
+  // kind: 'cold'（寒冷前線：青い線に三角）/'warm'（温暖前線：赤い線に半円）
+  const col = kind === 'cold' ? '#1e64c8' : '#d32f2f';
+  const xy = pts.map(p => [P.x(p[0]), P.y(p[1])]);
+  c.save();
+  c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 3.5;
+  c.beginPath(); xy.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.stroke();
+  // 線にそって、記号を一定の間かくでならべる（進む向きは東・南東側）
+  let acc = 0;
+  for (let i = 1; i < xy.length; i++) {
+    const [ax, ay] = xy[i - 1], [bx, by] = xy[i], L = Math.hypot(bx - ax, by - ay), a = Math.atan2(by - ay, bx - ax);
+    for (let d = 18 - acc; d < L; d += 30) {
+      const x = ax + Math.cos(a) * d, y = ay + Math.sin(a) * d;
+      c.save(); c.translate(x, y); c.rotate(a);
+      // 記号は、前線が進む側（線の進む向きの左側＝東・南東側）に付ける
+      c.beginPath();
+      if (kind === 'cold') { c.moveTo(-7, 0); c.lineTo(7, 0); c.lineTo(0, -11); }
+      else c.arc(0, 0, 7, 0, Math.PI, true);
+      c.closePath(); c.fill(); c.restore();
+    }
+    acc = (acc + L) % 30;
+  }
+  c.restore();
+}
+function drawWeatherMap(c, P, list) {
+  list.forEach((s, i) => {
+    if (s.lon < 108 || s.lon > 160) return;
+    const L = [s.lon - 1.2, s.lat + 1.8];
+    // 寒冷前線（低気圧から南西へ）・温暖前線（低気圧から南東へ）
+    drawFront(c, P, [L, [s.lon - 2.4, s.lat - 0.6], [s.lon - 4.8, s.lat - 3.0]], 'cold');
+    drawFront(c, P, [L, [s.lon + 1.8, s.lat + 0.6], [s.lon + 4.2, s.lat - 1.0]], 'warm');
+    label(c, '低', P.x(L[0]), P.y(L[1]) - 2, '#d32f2f', 24);
+    label(c, '低気圧', P.x(L[0]), P.y(L[1]) - 24, '#d32f2f', 13);
+    // 高気圧（雲のかたまりのあいだ）
+    const H = [s.lon + 18, 34.5];
+    if (H[0] > 119 && H[0] < 147) label(c, '高', P.x(H[0]), P.y(H[1]), '#1565c0', 24);
+    if (H[0] > 119 && H[0] < 147) label(c, '高気圧', P.x(H[0]), P.y(H[1]) + 22, '#1565c0', 13);
+  });
+}
+
+// =====================================================================
+// ① 雲の動き
+// =====================================================================
+const TABLE_T = [0, 12, 24, 36, 48, 60, 72];            // 表に入れる時刻（1日目 午前9時から何時間後）
+const MV = { t: 0, play: false, speed: 6, rain: true, trail: false, front: false, seen: -1 };
+// 時刻の名前（t は 1日目 午前9時から何時間後）
+function timeName(t) {
+  const H = 9 + Math.floor(t + 1e-6), day = Math.floor(H / 24) + 1, h = H % 24;
+  const hn = h === 0 ? '午前0時' : h < 12 ? '午前' + h + '時' : h === 12 ? '正午' : '午後' + (h - 12) + '時';
+  return day + '日目 ' + hn;
+}
+const tableHead = t => { const H = 9 + t, day = Math.floor(H / 24) + 1; return day + '日目<br>' + (H % 24 < 12 ? '朝9時' : '夜9時'); };
+const WCLASS = { '晴れ': 'w-sun', 'くもり': 'w-cloud', '雨': 'w-rain' };
+const WCHAR = { '晴れ': '☀晴れ', 'くもり': '☁くもり', '雨': '☂雨' };
+function buildTable() {
+  let h = '<tr><th>' + J('都市') + '</th>' + TABLE_T.map(t => '<th>' + J(tableHead(t)) + '</th>').join('') + '</tr>';
+  MOVE_CITIES.forEach(n => {
+    h += '<tr><th>' + J(n) + '</th>' + TABLE_T.map((t, i) => '<td id="tc' + CITY_KEY[n] + i + '"></td>').join('') + '</tr>';
+  });
+  $('wtable').innerHTML = h;
+}
+// 時間が進んだら、通りすぎた時刻の天気を表に入れる
+function updateTable() {
+  let last = -1;
+  TABLE_T.forEach((t, i) => { if (MV.t >= t - 1e-6) last = i; });
+  if (last > MV.seen) {
+    for (let i = MV.seen + 1; i <= last; i++) {
+      const list = systemsAt(TABLE_T[i]);
+      MOVE_CITIES.forEach(n => {
+        const w = weatherAt(list, ...CITY[n]), td = $('tc' + CITY_KEY[n] + i);
+        td.className = WCLASS[w]; td.innerHTML = J(WCHAR[w]);
+      });
+    }
+    MV.seen = last;
+  }
+  TABLE_T.forEach((t, i) => MOVE_CITIES.forEach(n => $('tc' + CITY_KEY[n] + i).classList.toggle('now', Math.abs(MV.t - t) < 0.5)));
+}
+function setTime(t) {
+  MV.t = clamp(t, 0, 72);
+  $('tSlider').value = Math.round(MV.t);
+  $('clock').innerHTML = J(timeName(MV.t));
+  updateTable();
+}
+function setPlay(on) {
+  MV.play = on;
+  $('btnPlay').innerHTML = on ? '⏸ ' + J('とめる') : '▶ ' + J('再生');
+}
+function drawMove() {
+  const P = PROJ_MOVE, c = ctx, list = systemsAt(MV.t);
+  drawBase(c, P, { names: true });
+  c.save(); c.beginPath(); c.rect(0, 0, CW, CH); c.clip();
+  list.forEach(s => drawCloudSystem(c, P, s));
+  if (MV.rain) list.forEach(s => drawRainArea(c, P, s, true));
+  // 動きの矢印：12時間前の雲の中心 → 今の中心
+  if (MV.trail) list.forEach(s => {
+    const x0 = P.x(s.lon - SPEED * 12), x1 = P.x(s.lon), y = P.y(s.lat + 4.2);
+    if (x1 > 20 && x0 < CW - 20) {
+      arrow(c, x0, y, x1, y, 6, '#ff7043');
+      label(c, '12時間で動いたきょり', (x0 + x1) / 2, y - 16, '#bf360c', 14);
+    }
+  });
+  if (MV.front) drawWeatherMap(c, P, list);
+  MOVE_CITIES.forEach(n => drawCity(c, P, n, weatherAt(list, ...CITY[n]), true));
+  c.restore();
+  // 下のらん：3つの都市の天気（西から順に）
+  MOVE_CITIES.forEach((n, i) => {
+    const w = weatherAt(list, ...CITY[n]), bx = 190 + i * 130, by = CH - 34;
+    c.fillStyle = 'rgba(255,255,255,0.94)'; c.strokeStyle = '#37474f'; c.lineWidth = 1.5;
+    c.beginPath(); c.roundRect ? c.roundRect(bx - 60, by - 24, 120, 48, 8) : c.rect(bx - 60, by - 24, 120, 48); c.fill(); c.stroke();
+    weatherIcon(c, w, bx - 36, by, 15);
+    c.font = 'bold 16px ' + FONT; c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.fillStyle = '#333'; c.fillText(n, bx - 14, by - 10);
+    c.fillStyle = w === '雨' ? '#0d47a1' : w === '晴れ' ? '#bf360c' : '#455a64'; c.fillText(w, bx - 14, by + 11);
+    if (i < 2) arrow(c, bx + 63, by, bx + 77, by, 2.5, '#fff');
+  });
+  drawCompass(c, CW - 40, 44);
+  // 左上に時刻
+  c.fillStyle = 'rgba(255,255,255,0.9)'; c.beginPath(); c.roundRect ? c.roundRect(10, 10, 190, 34, 8) : c.rect(10, 10, 190, 34); c.fill();
+  label(c, timeName(MV.t), 105, 27, '#bf360c', 18);
+  label(c, '西', 18, CH - 20, '#fff', 18, 'left', 'rgba(0,0,0,0.6)');
+  label(c, '東', CW - 18, CH - 20, '#fff', 18, 'right', 'rgba(0,0,0,0.6)');
+}
+function stepMove(dt) {
+  if (!MV.play) return;
+  const nt = MV.t + dt * MV.speed;
+  if (nt >= 72) { setTime(72); setPlay(false); setMsg(J('3日間のようすを見たね。表の「雨」は、どの都市から始まって、どの順に進んだかな？')); return; }
+  setTime(nt);
+}
+function resetMove() {
+  setPlay(false); MV.seen = -1; buildTable(); setTime(0);
+  setMsg(TAB_MSG.move);
+}
+$('btnPlay').addEventListener('click', () => { if (MV.t >= 72) { MV.seen = -1; buildTable(); setTime(0); } setPlay(!MV.play); });
+$('btnBack').addEventListener('click', () => { setPlay(false); setTime(Math.ceil(MV.t / 3 - 1e-6) * 3 - 3); });
+$('btnFwd').addEventListener('click', () => { setPlay(false); setTime(Math.floor(MV.t / 3 + 1e-6) * 3 + 3); });
+$('tSlider').addEventListener('input', e => { setPlay(false); setTime(+e.target.value); });
+document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => {
+  MV.speed = +b.dataset.speed;
+  document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('active', x === b));
+}));
+function toggleBtn(btn, key, onText, offText, obj) {
+  btn.addEventListener('click', () => {
+    obj[key] = !obj[key];
+    btn.innerHTML = J(obj[key] ? onText : offText);
+    btn.classList.toggle('active', obj[key]);
+  });
+}
+toggleBtn($('btnRainM'), 'rain', '☂ 雨のところ ON', '☂ 雨のところ OFF', MV);
+toggleBtn($('btnTrail'), 'trail', '➡ 動きの矢印 ON', '➡ 動きの矢印 OFF', MV);
+toggleBtn($('btnFront'), 'front', '発展：天気図 ON', '発展：天気図 OFF', MV);
+$('btnResetM').addEventListener('click', resetMove);
+$('btnRec').addEventListener('click', () => {
+  const list = systemsAt(MV.t), rec = { when: timeName(MV.t), memo: '' };
+  MOVE_CITIES.forEach(n => { rec[CITY_KEY[n]] = weatherAt(list, ...CITY[n]); });
+  Worksheet.addRecord(rec);
+  setMsg(J('📝 ' + timeName(MV.t) + 'の天気を記録したよ（福岡：' + rec.fk + '・大阪：' + rec.os + '・東京：' + rec.tk + '）'));
+});
+
+// =====================================================================
+// ② 天気を予想しよう（1〜3日目の雲と雨のところ → 4日目の天気）
+// =====================================================================
+// L0：1日目 正午の雲の中心の経度。1日に 10.8 度（SPEED×24時間）ずつ東へ動く
+const QUIZ = [
+  { city: '東京', L0: 108.0, lat: 34.8, ph1: 0.3, ph2: 1.2, seed: 51 },
+  { city: '大阪', L0: 119.0, lat: 35.0, ph1: 1.1, ph2: 2.2, seed: 52 },
+  { city: '福岡', L0: 97.0, lat: 34.4, ph1: 2.0, ph2: 0.6, seed: 53 },
+  { city: '東京', L0: 94.0, lat: 35.2, ph1: 0.8, ph2: 2.9, seed: 54 },
+  { city: '大阪', L0: 103.0, lat: 34.6, ph1: 1.5, ph2: 1.8, seed: 55 }
+];
+const QZ = { i: 0, answered: false, score: 0 };
+const QPROJ = [0, 1, 2, 3].map(k => makeProj(116, 150, 25, (k % 2) * 320, Math.floor(k / 2) * 240, 320, 240));
+const qSys = (q, k) => ({ lon: q.L0 + SPEED * 24 * k, lat: q.lat, ph1: q.ph1, ph2: q.ph2, seed: q.seed });
+const qAnswer = q => weatherAt([qSys(q, 3)], ...CITY[q.city]);
+function quizText() {
+  const q = QUIZ[QZ.i];
+  return J('問題 ' + (QZ.i + 1) + '／' + QUIZ.length + '：1〜3日目の雲を見て、4日目の正午の「' + q.city + '」の天気を予想しよう');
+}
+function showQuiz() {
+  QZ.answered = false;
+  document.querySelectorAll('#quizAns .ans').forEach(b => { b.disabled = false; b.classList.remove('ok', 'ng'); });
+  $('btnNextQ').classList.add('hidden');
+  setMsg(quizText());
+}
+function drawQuiz() {
+  const c = ctx, q = QUIZ[QZ.i];
+  c.fillStyle = '#fff'; c.fillRect(0, 0, CW, CH);
+  QPROJ.forEach((P, k) => {
+    drawBase(c, P, { names: false });
+    c.save(); c.beginPath(); c.rect(P.x0, P.y0, P.w, P.h); c.clip();
+    if (k < 3 || QZ.answered) {
+      const s = qSys(q, k);
+      drawCloudSystem(c, P, s);
+      drawRainArea(c, P, s, false);
+    }
+    MOVE_CITIES.forEach(n => {
+      const w = k === 3 && QZ.answered ? weatherAt([qSys(q, 3)], ...CITY[n]) : null;
+      drawCity(c, P, n, n === q.city ? w : null, false);
+      if (w && n !== q.city) { const [lo, la] = CITY[n]; weatherIcon(c, w, P.x(lo) + 10, P.y(la) - 10, 7); }
+    });
+    if (k === 3 && !QZ.answered) {
+      c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(P.x0, P.y0, P.w, P.h);
+      label(c, '？', P.x0 + P.w / 2, P.y0 + P.h / 2 - 10, '#fff', 64, 'center', 'rgba(0,0,0,0.5)');
+      label(c, 'どうなるかな', P.x0 + P.w / 2, P.y0 + P.h / 2 + 36, '#fff', 16, 'center', 'rgba(0,0,0,0.5)');
+    }
+    // 聞いている都市を目立たせる
+    const [lon, lat] = CITY[q.city];
+    c.strokeStyle = '#ffeb3b'; c.lineWidth = 3; c.setLineDash([4, 3]);
+    c.beginPath(); c.arc(P.x(lon), P.y(lat), 11, 0, 6.28); c.stroke(); c.setLineDash([]);
+    c.restore();
+    // 題
+    c.fillStyle = k === 3 ? '#e65100' : 'rgba(255,255,255,0.92)';
+    c.beginPath(); c.roundRect ? c.roundRect(P.x0 + 6, P.y0 + 6, 118, 26, 7) : c.rect(P.x0 + 6, P.y0 + 6, 118, 26); c.fill();
+    label(c, (k + 1) + '日目 正午', P.x0 + 65, P.y0 + 19, k === 3 ? '#fff' : '#333', 15, 'center', 'rgba(0,0,0,0)');
+    c.strokeStyle = '#fff'; c.lineWidth = 3; c.strokeRect(P.x0, P.y0, P.w, P.h);
+  });
+  label(c, '西 ←', 8, CH - 14, '#fff', 13, 'left', 'rgba(0,0,0,0.6)');
+  label(c, '→ 東', CW - 8, CH - 14, '#fff', 13, 'right', 'rgba(0,0,0,0.6)');
+}
+document.querySelectorAll('#quizAns .ans').forEach(b => b.addEventListener('click', () => {
+  if (QZ.answered) return;
+  const q = QUIZ[QZ.i], ans = qAnswer(q), my = b.dataset.a, ok = my === ans;
+  QZ.answered = true; if (ok) QZ.score++;
+  document.querySelectorAll('#quizAns .ans').forEach(x => {
+    x.disabled = true;
+    if (x.dataset.a === ans) x.classList.add('ok'); else if (x === b) x.classList.add('ng');
+  });
+  let why;
+  if (ans === '雨') why = '雨のところが1日に同じくらいずつ東へ動いて、4日目には' + q.city + 'の上に来たね。';
+  else if (qSys(q, 3).lon > CITY[q.city][0]) why = '雨のところは、もう' + q.city + 'より東へ通りすぎたよ。';
+  else why = '雨のところは、まだ' + q.city + 'までとどいていないよ。もう少しで雨になりそうだね。';
+  setMsg(J((ok ? '⭕ 正解！' : '❌ ざんねん。答えは「' + ans + '」。') + why));
+  const rec = { when: '予想クイズ' + (QZ.i + 1) + '（4日目）', fk: '', os: '', tk: '', memo: ok ? '正解' : 'まちがい' };
+  rec[CITY_KEY[q.city]] = '予想 ' + my + ' → ' + ans;
+  Worksheet.addRecord(rec);
+  if (QZ.i < QUIZ.length - 1) $('btnNextQ').classList.remove('hidden');
+  else setTimeout(() => setMsg(J('おしまい！ ' + QUIZ.length + '問中 ' + QZ.score + '問 正解。雲は西から東へ動くので、西の天気を見ると明日の天気が予想できるね。')), 2200);
+}));
+$('btnNextQ').addEventListener('click', () => { QZ.i++; showQuiz(); });
+$('btnResetQ').addEventListener('click', () => { QZ.i = 0; QZ.score = 0; showQuiz(); });
+
+// =====================================================================
+// ③ 台風
+// =====================================================================
+// 月ごとのよくある進み方（[経度, 緯度]。学習用の模式）
+const PATHS = {
+  8: [[146, 15], [141.5, 19.5], [137, 24], [133, 28], [130, 31.5], [128.8, 35], [129.5, 38.5], [132, 41.5]],
+  9: [[142, 13.5], [137.5, 17], [133.5, 21], [130.5, 25], [129.2, 28.5], [130.3, 31.5], [133, 34], [137, 36.6], [141.5, 39.5], [146, 42]],
+  10: [[140, 13.5], [135.5, 16.5], [132.5, 20.5], [131.5, 24.5], [132.8, 28.2], [135.5, 31.3], [139.8, 33.8], [145, 36.5], [150, 39]]
+};
+const PATH_STYLE = { 8: [10, 6], 9: [], 10: [3, 5] };
+const TY = { lon: 142, lat: 13.5, month: 9, s: 0, run: false, speed: 1, path: true, zone: true, cloud: true, arrow: false, drag: false, trail: [], heading: null };
+// 台風の大きさ（km。学習用の模式）
+const R_STORM = 230, R_STRONG = 520, R_CLOUD = 520;
+// 道のりにそって、s（0〜1）の場所と向き
+function pathAt(pts, s) {
+  const seg = []; let tot = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const m = Math.cos((pts[i][1] + pts[i - 1][1]) / 2 * D2R);
+    const L = Math.hypot((pts[i][0] - pts[i - 1][0]) * m, pts[i][1] - pts[i - 1][1]);
+    seg.push(L); tot += L;
+  }
+  let d = clamp(s, 0, 1) * tot;
+  for (let i = 0; i < seg.length; i++) {
+    if (d <= seg[i] || i === seg.length - 1) {
+      const f = clamp(d / seg[i], 0, 1), a = pts[i], b = pts[i + 1];
+      const m = Math.cos(a[1] * D2R);
+      return { lon: a[0] + (b[0] - a[0]) * f, lat: a[1] + (b[1] - a[1]) * f, dir: Math.atan2(b[1] - a[1], (b[0] - a[0]) * m), tot };
+    }
+    d -= seg[i];
+  }
+}
+// 台風の進む向き（ドラッグしたときは、緯度から「よくある向き」を決める）：東から反時計回りの角度
+function tyDir() {
+  if (TY.heading != null) return TY.heading;
+  const f = clamp((TY.lat - 22) / 10, 0, 1);       // 南では北西へ、北では北東へ
+  return (135 - 90 * f) * D2R;
+}
+const kmBetween = (lon1, lat1, lon2, lat2) => 111.2 * Math.hypot((lon2 - lon1) * Math.cos((lat1 + lat2) / 2 * D2R), lat2 - lat1);
+// 強い風の地いきは、進む向きの右側に少しずれている（右側は風が強い）
+function windCenter() {
+  const a = tyDir(), off = 70;
+  return [TY.lon + off * Math.sin(a) / (111.2 * Math.cos(TY.lat * D2R)), TY.lat - off * Math.cos(a) / 111.2];
+}
+// 都市の雨・風の強さ（0 ない・1 弱い・2 強い・3 とても強い）
+function cityLevels(name) {
+  const [lon, lat] = CITY[name], wc = windCenter();
+  const dr = kmBetween(TY.lon, TY.lat, lon, lat), dw = kmBetween(wc[0], wc[1], lon, lat);
+  const rain = dr < 250 ? 3 : dr < 480 ? 2 : dr < 800 ? 1 : 0;
+  const wind = dw < R_STORM ? 3 : dw < R_STRONG ? 2 : dw < R_STRONG + 280 ? 1 : 0;
+  return { rain, wind };
+}
+const LV_NAME = ['ない', '弱い', '強い', 'とても強い'];
+let cityHTMLKey = '';
+function updateCities() {
+  const names = Object.keys(CITY), lv = names.map(cityLevels);
+  const key = lv.map(l => l.rain + '' + l.wind).join(',');
+  if (key === cityHTMLKey) return;
+  cityHTMLKey = key;
+  $('cities').innerHTML = names.map((n, i) => '<div class="city"><b>' + J(n) + '</b>' +
+    '☂' + J('雨') + ' <span class="lv lv' + lv[i].rain + '">' + J(LV_NAME[lv[i].rain]) + '</span><br>' +
+    '💨' + J('風') + ' <span class="lv lv' + lv[i].wind + '">' + J(LV_NAME[lv[i].wind]) + '</span></div>').join('');
+}
+function drawTyphoon(c, P, time) {
+  const x = P.x(TY.lon), y = P.y(TY.lat), kp = P.pxPerKm(TY.lat);
+  // 雨雲（反時計回りのうず。時間とともに回る）
+  if (TY.cloud) {
+    c.save();
+    const R = R_CLOUD * kp;
+    const g = c.createRadialGradient(x, y, 4, x, y, R * 0.55);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, R * 0.55, 0, 6.28); c.fill();
+    const rot = -time * 0.9;                 // 画面の上で反時計回り
+    for (let arm = 0; arm < 4; arm++) {
+      const base = rot + arm * Math.PI / 2;
+      for (let k = 0; k < 26; k++) {
+        const f = k / 25, r = R * (0.15 + 0.85 * f), a = base + f * 3.2;   // 外へ行くほど時計回りに回りこむ
+        const pr = (1 - f * 0.6) * R * 0.16;
+        c.globalAlpha = 0.75 * (1 - f * 0.7);
+        c.drawImage(PUFF, x + Math.cos(a) * r - pr, y + Math.sin(a) * r - pr, pr * 2, pr * 2);
+      }
+    }
+    c.globalAlpha = 1;
+    c.restore();
+  }
+  // 強い風の地いき（強風域・暴風域）
+  if (TY.zone) {
+    const wc = windCenter(), wx = P.x(wc[0]), wy = P.y(wc[1]);
+    c.beginPath(); c.arc(wx, wy, R_STRONG * kp, 0, 6.28);
+    c.fillStyle = PAT.strong; c.fill(); c.strokeStyle = '#b8a800'; c.lineWidth = 2.5; c.stroke();
+    c.beginPath(); c.arc(wx, wy, R_STORM * kp, 0, 6.28);
+    c.fillStyle = PAT.storm; c.fill(); c.strokeStyle = '#7a2600'; c.lineWidth = 2.5; c.stroke();
+  }
+  // 風の向き（反時計回りに、中心へふきこむ）
+  if (TY.arrow) {
+    for (let ring = 0; ring < 2; ring++) {
+      const r = (ring ? 300 : 160) * kp;
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 + time * 0.4 * (ring ? 1 : -1) * 0 + ring * 0.4;
+        const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+        // 反時計回り（画面では角度がへる向き）＋ 中心向き
+        const vx = Math.sin(a) - 0.45 * Math.cos(a), vy = -Math.cos(a) - 0.45 * Math.sin(a);
+        const L = ring ? 26 : 20;
+        arrow(c, px - vx * L / 2, py - vy * L / 2, px + vx * L / 2, py + vy * L / 2, 3.5, '#4dd0e1');
+      }
+    }
+  }
+  // 台風の目（ドラッグする取っ手）
+  c.fillStyle = '#263238'; c.beginPath(); c.arc(x, y, 7, 0, 6.28); c.fill();
+  c.strokeStyle = '#ff7043'; c.lineWidth = 3; c.setLineDash([5, 4]);
+  c.beginPath(); c.arc(x, y, 22, 0, 6.28); c.stroke(); c.setLineDash([]);
+  label(c, '台風の目', x, y - 32, '#bf360c', 14);
+}
+function drawTyTab(time) {
+  const P = PROJ_TY, c = ctx;
+  drawBase(c, P, { names: false });
+  c.save(); c.beginPath(); c.rect(0, 0, CW, CH); c.clip();
+  // 台風が生まれる海
+  c.strokeStyle = 'rgba(255,183,77,0.9)'; c.lineWidth = 2; c.setLineDash([8, 6]);
+  c.beginPath(); c.ellipse(P.x(139), P.y(16), 95, 42, 0, 0, 6.28); c.stroke(); c.setLineDash([]);
+  label(c, 'あたたかい海で 台風が生まれる', P.x(139), P.y(16), '#ffcc80', 14, 'center', 'rgba(0,0,0,0.55)');
+  label(c, '太平洋', P.x(147), P.y(27), 'rgba(200,225,255,0.8)', 15, 'center', 'rgba(0,0,0,0)');
+  label(c, '日本海', P.x(134.5), P.y(39.5), 'rgba(200,225,255,0.8)', 14, 'center', 'rgba(0,0,0,0)');
+  // 月ごとのよくある進み方
+  if (TY.path) {
+    Object.keys(PATHS).forEach(m => {
+      const pts = PATHS[m], on = +m === TY.month;
+      c.save();
+      c.strokeStyle = on ? '#ffffff' : 'rgba(255,255,255,0.45)'; c.lineWidth = on ? 4 : 2.5;
+      c.setLineDash(PATH_STYLE[m]);
+      c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(P.x(p[0]), P.y(p[1])) : c.moveTo(P.x(p[0]), P.y(p[1]))); c.stroke();
+      c.setLineDash([]);
+      const a = pts[pts.length - 2], b = pts[pts.length - 1];
+      arrow(c, P.x(a[0]), P.y(a[1]), P.x(b[0]), P.y(b[1]), on ? 4 : 2.5, on ? '#fff' : 'rgba(255,255,255,0.55)');
+      label(c, m + '月', P.x(b[0]) + 4, P.y(b[1]) - 12, on ? '#fff' : 'rgba(255,255,255,0.8)', on ? 16 : 13, 'center', 'rgba(0,0,0,0.6)');
+      c.restore();
+    });
+  }
+  // 通ってきた道
+  if (TY.trail.length > 1) {
+    c.strokeStyle = '#ff8a65'; c.lineWidth = 3; c.setLineDash([2, 5]);
+    c.beginPath(); TY.trail.forEach((p, i) => i ? c.lineTo(P.x(p[0]), P.y(p[1])) : c.moveTo(P.x(p[0]), P.y(p[1]))); c.stroke(); c.setLineDash([]);
+  }
+  drawTyphoon(c, P, time);
+  // 都市
+  Object.keys(CITY).forEach(n => {
+    const [lon, lat] = CITY[n], x = P.x(lon), y = P.y(lat), l = cityLevels(n), m = Math.max(l.rain, l.wind);
+    c.fillStyle = ['#fff', '#F0E442', '#E69F00', '#D55E00'][m]; c.strokeStyle = '#111'; c.lineWidth = 2;
+    c.beginPath(); c.arc(x, y, 6, 0, 6.28); c.fill(); c.stroke();
+    label(c, n, x + 9, y - 1, '#fff', 13, 'left', 'rgba(0,0,0,0.65)');
+  });
+  c.restore();
+  drawCompass(c, 40, 44);
+}
+function tyStep(dt) {
+  if (!TY.run) return;
+  const pts = PATHS[TY.month], tot = pathAt(pts, 0).tot;
+  TY.s += dt * TY.speed * 2.2 / tot;          // 1秒に「2.2度ぶん」くらい進む（ふつう）
+  const p = pathAt(pts, TY.s);
+  TY.lon = p.lon; TY.lat = p.lat; TY.heading = p.dir;
+  const last = TY.trail[TY.trail.length - 1];
+  if (!last || kmBetween(last[0], last[1], p.lon, p.lat) > 40) TY.trail.push([p.lon, p.lat]);
+  if (TY.s >= 1) { TY.run = false; $('btnTyGo').innerHTML = '▶ ' + J('台風を進める'); setMsg(J(TY.month + '月のよくある進み方：南の海で生まれて北へ進み、日本の近くで東よりに向きを変えたね。')); }
+}
+function tyToStart() {
+  TY.run = false; TY.s = 0; TY.trail = [];
+  const p = pathAt(PATHS[TY.month], 0);
+  TY.lon = p.lon; TY.lat = p.lat; TY.heading = p.dir;
+  $('btnTyGo').innerHTML = '▶ ' + J('台風を進める');
+}
+document.querySelectorAll('[data-month]').forEach(b => b.addEventListener('click', () => {
+  TY.month = +b.dataset.month;
+  document.querySelectorAll('[data-month]').forEach(x => x.classList.toggle('active', x === b));
+  tyToStart();
+}));
+document.querySelectorAll('[data-tspeed]').forEach(b => b.addEventListener('click', () => {
+  TY.speed = +b.dataset.tspeed;
+  document.querySelectorAll('[data-tspeed]').forEach(x => x.classList.toggle('active', x === b));
+}));
+$('btnTyGo').addEventListener('click', () => {
+  if (TY.run) { TY.run = false; $('btnTyGo').innerHTML = '▶ ' + J('台風を進める'); return; }
+  if (TY.s >= 1 || TY.heading == null || TY.s === 0) tyToStart();
+  TY.run = true; $('btnTyGo').innerHTML = '⏸ ' + J('とめる');
+  setMsg(J('台風が近づくと、都市の雨と風はどう変わるかな？ 下の表も見てみよう'));
+});
+$('btnResetTy').addEventListener('click', () => { tyToStart(); setMsg(TAB_MSG.typhoon); });
+toggleBtn($('btnPath'), 'path', '〰 進み方 ON', '〰 進み方 OFF', TY);
+toggleBtn($('btnZone'), 'zone', '💨 強い風の地いき ON', '💨 強い風の地いき OFF', TY);
+toggleBtn($('btnCloudT'), 'cloud', '☁ 雨雲 ON', '☁ 雨雲 OFF', TY);
+toggleBtn($('btnArrow'), 'arrow', '↺ 風の向き ON', '↺ 風の向き OFF', TY);
+// 台風をドラッグする（マウスでもタッチでも）
+function canvasXY(e) {
+  const r = cv.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * CW, (e.clientY - r.top) / r.height * CH];
+}
+function moveTyTo(x, y) {
+  const P = PROJ_TY;
+  TY.lon = clamp(P.lon(x), 112, 150); TY.lat = clamp(P.lat(y), 14, 44);
+  TY.heading = null; TY.run = false; TY.trail = [];
+  $('btnTyGo').innerHTML = '▶ ' + J('台風を進める');
+}
+cv.addEventListener('pointerdown', e => {
+  if (tab !== 'typhoon') return;
+  const [x, y] = canvasXY(e);
+  TY.drag = true; cv.setPointerCapture(e.pointerId);
+  moveTyTo(x, y);
+  e.preventDefault();
+});
+cv.addEventListener('pointermove', e => {
+  if (!TY.drag) return;
+  const [x, y] = canvasXY(e); moveTyTo(x, y);
+});
+const endDrag = () => {
+  if (!TY.drag) return;
+  TY.drag = false;
+  const near = Object.keys(CITY).filter(n => { const l = cityLevels(n); return l.rain === 3 || l.wind === 3; });
+  setMsg(J(near.length ? near.join('・') + 'は、雨や風が「とても強い」。台風の中心に近いほど、雨や風が強くなるね。' : '台風の中心から遠いところでは、雨や風はあまり強くないね。'));
+};
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+// =====================================================================
+// ④ 防災
+// =====================================================================
+// ハザードマップ（SVG でかく。川の近くの低いところは水につかるおそれ、山の下はがけくずれのおそれ）
+$('hzmap').innerHTML = `
+  <defs>
+    <pattern id="pFlood" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="10" height="10" fill="#bbdefb"/><rect width="4" height="10" fill="#64b5f6"/></pattern>
+    <pattern id="pSlide" width="10" height="10" patternUnits="userSpaceOnUse">
+      <rect width="10" height="10" fill="#ffe0b2"/><circle cx="5" cy="5" r="2" fill="#bf6c00"/></pattern>
+  </defs>
+  <rect width="440" height="280" fill="#f1f8e9"/>
+  <!-- 山（がけくずれのおそれ） -->
+  <path d="M0 0 H200 Q170 50 120 70 Q60 90 0 95 Z" fill="#a5d6a7"/>
+  <path d="M0 95 Q60 90 120 70 Q170 50 200 0 H235 Q205 70 135 95 Q70 115 0 122 Z" fill="url(#pSlide)" stroke="#bf6c00" stroke-width="2"/>
+  <!-- 水につかるおそれ（川のまわり） -->
+  <path d="M0 175 Q120 150 220 190 T440 200 V280 H0 Z" fill="url(#pFlood)" stroke="#1565c0" stroke-width="2"/>
+  <!-- 川 -->
+  <path d="M0 225 Q120 200 220 238 T440 245" fill="none" stroke="#1e88e5" stroke-width="16"/>
+  <!-- 高台 -->
+  <ellipse cx="350" cy="80" rx="95" ry="55" fill="#c5e1a5" stroke="#7cb342" stroke-width="2"/>
+  <text x="350" y="40" font-size="13" text-anchor="middle" fill="#33691e" font-weight="bold">たかだい（高いところ）</text>
+  <!-- 道 -->
+  <path d="M250 150 Q300 130 330 95" fill="none" stroke="#9e9e9e" stroke-width="7" stroke-dasharray="2 0"/>
+  <path d="M250 150 Q200 175 150 200" fill="none" stroke="#9e9e9e" stroke-width="7"/>
+  <!-- 家 -->
+  <g><polygon points="250,128 268,144 232,144" fill="#e53935"/><rect x="236" y="144" width="28" height="20" fill="#fff" stroke="#333" stroke-width="2"/>
+  <text x="250" y="180" font-size="14" text-anchor="middle" font-weight="bold">家</text></g>
+  <!-- A 小学校（水につかるおそれのある場所） -->
+  <g class="pick" data-hz="A"><rect x="118" y="186" width="58" height="34" fill="#fff" stroke="#333" stroke-width="3" rx="4"/>
+  <text x="147" y="209" font-size="18" text-anchor="middle" font-weight="bold">Ａ</text>
+  <text x="147" y="176" font-size="13" text-anchor="middle" font-weight="bold">小学校</text></g>
+  <!-- B 公民館（高台） -->
+  <g class="pick" data-hz="B"><rect x="318" y="62" width="58" height="34" fill="#fff" stroke="#333" stroke-width="3" rx="4"/>
+  <text x="347" y="85" font-size="18" text-anchor="middle" font-weight="bold">Ｂ</text>
+  <text x="347" y="112" font-size="13" text-anchor="middle" font-weight="bold">公民館</text></g>
+  <!-- はんれい -->
+  <rect x="268" y="236" width="18" height="12" fill="url(#pFlood)" stroke="#1565c0"/><text x="290" y="246" font-size="12">水につかるおそれ</text>
+  <rect x="268" y="256" width="18" height="12" fill="url(#pSlide)" stroke="#bf6c00"/><text x="290" y="266" font-size="12">がけくずれのおそれ</text>`;
+function pickHz(which) {
+  document.querySelectorAll('[data-hz].ans').forEach(b => {
+    b.classList.remove('ok', 'ng');
+    if (b.dataset.hz === 'B') b.classList.add('ok'); else if (b.dataset.hz === which) b.classList.add('ng');
+  });
+  $('hzRes').innerHTML = J(which === 'B'
+    ? '⭕ 正解！ Ｂの公民館は高いところにあって、水につかるおそれのある地いきの外だね。'
+    : '❌ Ａの小学校は、川の近くの水につかるおそれのある地いきの中だよ。大雨のときは、Ｂの公民館のような高いところへ。ひなん場所は、災害の種類によって使えないことがあるので、ハザードマップで調べておこう。');
+}
+document.querySelectorAll('[data-hz]').forEach(el => el.addEventListener('click', () => pickHz(el.dataset.hz)));
+// ○×クイズ
+const OX = [
+  ['台風が来ているときに、川や海のようすを見に行く。', false, '川や海は、急に水がふえたり、高い波が来たりして、とても危ない。近づかないようにしよう。'],
+  ['警報が出たら、テレビやラジオで新しい知らせを調べる。', true, '台風の進み方や雨のようすは変わっていくので、新しい知らせを調べ続けよう。'],
+  ['ひなんは、暗くなる前・雨や風が強くなる前にする。', true, '暗いときや、雨や風が強いときに外を歩くのは危ない。早めのひなんが大切。'],
+  ['ハザードマップは、災害がおきてから、はじめて見ればよい。', false, '災害がおきる前に、家の人といっしょに見て、ひなん場所と道をたしかめておこう。']
+];
+$('oxList').innerHTML = OX.map((q, i) => '<div class="oxq"><span class="qt">' + J((i + 1) + '．' + q[0]) + '</span>' +
+  '<button class="chip ans" data-ox="' + i + '" data-v="1">⭕</button><button class="chip ans" data-ox="' + i + '" data-v="0">❌</button>' +
+  '<span class="res" id="oxr' + i + '"></span></div>').join('');
+document.querySelectorAll('[data-ox]').forEach(b => b.addEventListener('click', () => {
+  const i = +b.dataset.ox, q = OX[i], my = b.dataset.v === '1', ok = my === q[1];
+  document.querySelectorAll('[data-ox="' + i + '"]').forEach(x => {
+    x.classList.remove('ok', 'ng');
+    if ((x.dataset.v === '1') === q[1]) x.classList.add('ok'); else if (x === b) x.classList.add('ng');
+  });
+  $('oxr' + i).innerHTML = J((ok ? '正解！ ' : 'ざんねん。 ') + q[2]);
+}));
+
+// =====================================================================
+// 先生モード
+// =====================================================================
+if (TEACHER) {
+  $('btnFront').classList.remove('hidden');
+  $('tNote').innerHTML = '👩‍🏫 <b>先生へ</b>：① の「発展：天気図」は中学校2年の内容（高気圧・低気圧・前線）です。低気圧のまわりに雲が多く雨になりやすいこと、高気圧におおわれると晴れやすいことを、ふれる程度にとどめてください。日本付近の雲が西から東へ動くのは、上空をふく強い西風（偏西風）のためですが、これも中学校の内容です。② の正解は、雲が「1日にどれだけ動いたか」から考えさせると、根きょのある予想になります。④ の警戒レベルは、市町村が出すひなんの情報です（レベル4「避難指示」で危険な場所から全員避難）。地域のハザードマップや学校の防災計画とあわせて使うと、より身近な学習になります。';
+}
+
+// =====================================================================
+// タブの切りかえと、くり返しの絵のかき直し
+// =====================================================================
+let tab = 'move';
+const TAB_MSG = {
+  move: J('▶ 再生をおして、雲（白いところ）がどちらへ動くか見てみよう'),
+  quiz: '',
+  typhoon: J('台風の目をドラッグして、都市の雨・風の強さがどう変わるか調べよう'),
+  bosai: J('台風や大雨にそなえて、できることを調べよう')
+};
+function setCanvasSize(h) {
+  if (h === CH) return;
+  CH = h; ctx = setupCanvas(cv, CW, CH); makePatterns();
+}
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  $('ctlMove').classList.toggle('hidden', tab !== 'move');
+  $('ctlQuiz').classList.toggle('hidden', tab !== 'quiz');
+  $('ctlTy').classList.toggle('hidden', tab !== 'typhoon');
+  $('ctlBosai').classList.toggle('hidden', tab !== 'bosai');
+  cv.classList.toggle('hidden', tab === 'bosai');
+  cv.classList.toggle('tall', tab === 'typhoon');
+  $('msg').classList.toggle('hidden', tab === 'bosai');
+  setCanvasSize(tab === 'typhoon' ? 560 : 480);
+  if (tab !== 'move') setPlay(false);
+  if (tab !== 'typhoon' && TY.run) { TY.run = false; $('btnTyGo').innerHTML = '▶ ' + J('台風を進める'); }
+  if (tab === 'quiz') { if (QZ.answered) { /* そのまま */ } else setMsg(quizText()); }
+  else setMsg(TAB_MSG[tab]);
+}));
+
+let lastTs = 0, clockT = 0;
+function loop(ts) {
+  const dt = clamp((ts - lastTs) / 1000 || 0, 0, 0.05);
+  lastTs = ts; clockT += dt;
+  if (tab === 'move') { stepMove(dt); drawMove(); }
+  else if (tab === 'quiz') drawQuiz();
+  else if (tab === 'typhoon') { tyStep(dt); drawTyTab(clockT); updateCities(); }
+  requestAnimationFrame(loop);
+}
+
+// ===== はじめ =====
+buildTable();
+setTime(0);
+tyToStart();
+showQuiz();
+setMsg(TAB_MSG.move);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
