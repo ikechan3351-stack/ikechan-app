@@ -7,7 +7,7 @@
      ・ショート回路（豆電球を通らずに電池の＋と−がつながる）かどうか
      ・つかないとき、どこが原因か（ヒント用）
    を計算します。画面の絵とは切りはなしてあるので、どの教材からも使えます。
-   （3年「電気の通り道」で使用。4年「電流のはたらき」・6年「電気の利用」でも使う予定）
+   （3年「電気の通り道」・4年「電流のはたらき」で使用。6年「電気の利用」でも使う予定）
    外部ライブラリは使っていません（オフラインでも動きます）。
 
    【考え方】
@@ -37,8 +37,8 @@
        const d = CircuitEngine.diagnose(circuit);   // つかない理由をしらべる（下の diagnose を参照）
      </script>
 
-   【部品の種類をふやすとき】（4年のモーター、6年の発電機など）
-     CircuitEngine.defineType('motor', { R: 4, load: true, pNom: 0.3 });
+   【部品の種類をふやすとき】（6年の電熱線・発電機など。モーター・けん流計は下の TYPES に入っています）
+     CircuitEngine.defineType('heater', { R: 4, load: true, pNom: 0.3 });
        R    … 電気の通りにくさ（Ω）
        emf  … 電池のように電気をおし出すはたらき（V）。書くと「電源」になる
        load … true なら、豆電球やモーターのように電気を使う部品（明るさ・回る速さを計算する）
@@ -54,6 +54,7 @@
   const R_BATT = 0.1;     // かん電池の中の、電気の通りにくさ（Ω）
   const R_BULB = 5;       // 豆電球の、電気の通りにくさ（Ω）
   const R_WIRE = 0.01;    // どう線（ほとんど0）
+  const R_MOTOR = 4;      // モーターの、電気の通りにくさ（Ω）。電池1こで約0.37A流れる
   const SHORT_I = 2;      // 電池にこれより大きい電流（A）が流れたらショート。ふつうは約0.3A
   const LIT = 0.05;       // 明るさがこれより大きければ「ついた」
   const LOW_R = 0.05;     // これより通りやすい部品は「どう線と同じ」（同じ点）とみなす
@@ -63,6 +64,8 @@
     wire:    { R: R_WIRE },
     battery: { R: R_BATT, emf: EMF },
     bulb:    { R: R_BULB, load: true, pNom: Math.pow(EMF / (R_BATT + R_BULB), 2) * R_BULB },
+    motor:   { R: R_MOTOR, load: true, pNom: Math.pow(EMF / (R_BATT + R_MOTOR), 2) * R_MOTOR }, // モーター（4年）
+    meter:   { R: R_WIRE },                                    // けん流計（電流の大きさと向きをはかる。4年）
     switch:  { R: R_WIRE, openWhen: el => !el.on },            // スイッチ：on が false なら切れている
     gap:     { R: 0.02, openWhen: el => !el.conductor }        // 物をはさむ所：電気を通す物のときだけつながる
   };

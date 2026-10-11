@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>電流のはたらき</title>
+<!--
+  電流のはたらき（小学4年 理科「電流のはたらき」）
+  ・かん電池のつなぎ方（1こ・2こ直列・2こへい列）と、電池の向きを切りかえて、
+    けん流計・モーター（または豆電球）のようすをくらべます。
+  ・電流の計算は、共通ファイル circuit-engine.js でしています（3年「電気の通り道」と同じ）。
+    回路の形（どこに何をつなぐか）は、下の buildCircuit に書いてあります。
+  ・下の「電池の長持ちくらべ」は、電池の中の電気の量（CAP）がへっていくようすを計算しています。
+  ・ワークシート部品（worksheet.js）を使っています。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 6px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+  .fig-title { margin: 0 0 4px; font-size: 17px; font-weight: bold; color: #33691e; }
+
+  .safety {
+    background: #fff8e1; border: 3px solid #f9a825; border-radius: 12px;
+    padding: 4px 12px; font-size: 16px; font-weight: bold; color: #6d4c00; text-align: center;
+  }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 6px; }
+  .grp { font-weight: bold; color: #33691e; white-space: nowrap; font-size: 16px; }
+  .chip, .go-btn {
+    min-height: 48px; border-radius: 12px; font-family: inherit; font-size: 17px; font-weight: bold;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip { border: 3px solid #ccc; background: #fff; color: #555; padding: 4px 12px; }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .go-btn { border: none; background: #558b2f; color: #fff; padding: 8px 16px; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go-btn.flip { background: #c62828; }
+  .go-btn.mark { background: #6a1b9a; }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+
+  /* 回路の絵と回路図 */
+  svg#board { display: block; width: 100%; height: auto; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+  .under { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; align-items: center; margin-top: 4px; }
+  @media (max-width: 600px) { .under { grid-template-columns: 1fr; } }
+  .now { background: #f9fbe7; border: 3px solid #dcedc8; border-radius: 12px; padding: 8px 12px; line-height: 1.75; font-size: 17px; }
+  .now b { color: #33691e; }
+  .now.off { background: #f5f5f5; border-color: #e0e0e0; color: #616161; }
+  .schem { border: 3px solid #e0e0e0; border-radius: 12px; padding: 4px; }
+  .schem .cap { font-size: 14px; font-weight: bold; color: #555; text-align: center; }
+  .schem svg { display: block; width: 100%; height: auto; max-height: 190px; }
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #6a1b9a; margin-top: 6px; }
+
+  /* 長持ちくらべ */
+  .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+  .lane { border: 3px solid #dcedc8; border-radius: 12px; padding: 4px 6px; text-align: center; background: #fafff5; }
+  .lane.done { border-style: dashed; border-color: #9e9e9e; background: #f5f5f5; }
+  .lane h3 { margin: 0; font-size: 17px; color: #33691e; }
+  .lane svg { display: block; width: 100%; height: auto; }
+  .lane .st { font-size: 15px; line-height: 1.5; min-height: 2.2em; }
+  .race-time { font-size: 1.3rem; font-weight: bold; color: #33691e; white-space: nowrap; }
+
+  .diff { font-size: 15px; color: #666; margin: 2px 0 0; line-height: 1.6; }
+  @media (max-width: 560px) {
+    .chip, .go-btn { font-size: 15px; padding-left: 9px; padding-right: 9px; }
+    /* スマホでは、3つの回路をたてにならべる */
+    .lanes { grid-template-columns: 1fr; }
+    .lane { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
+    .lane h3 { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🔋 <ruby>電流<rt>でんりゅう</rt></ruby>のはたらき</h1>
+<p class="subtitle">かん<ruby>電池<rt>でんち</rt></ruby>のつなぎ<ruby>方<rt>かた</rt></ruby>や<ruby>向<rt>む</rt></ruby>きをかえて、モーターの<ruby>回<rt>まわ</rt></ruby>り<ruby>方<rt>かた</rt></ruby>をくらべよう</p>
+
+<div class="panel">
+  <div class="safety">⚠ かん<ruby>電池<rt>でんち</rt></ruby>の＋と−を、どう<ruby>線<rt>せん</rt></ruby>だけでつながないこと（ショート<ruby>回路<rt>かいろ</rt></ruby>）。<ruby>電池<rt>でんち</rt></ruby>が<ruby>熱<rt>あつ</rt></ruby>くなってきけんです</div>
+
+  <!-- 回路 -->
+  <div class="card">
+    <div class="row">
+      <span class="grp">🔋 つなぎ<ruby>方<rt>かた</rt></ruby></span>
+      <button class="chip active" data-mode="one">1こ</button>
+      <button class="chip" data-mode="series">2こ <ruby>直列<rt>ちょくれつ</rt></ruby></button>
+      <button class="chip" data-mode="parallel">2こ へい<ruby>列<rt>れつ</rt></ruby></button>
+      <button class="go-btn flip" id="btnFlip">🔄 <ruby>電池<rt>でんち</rt></ruby>の<ruby>向<rt>む</rt></ruby>きを<ruby>入<rt>い</rt></ruby>れかえる</button>
+    </div>
+    <div class="row">
+      <span class="grp">⚙ つなぐ<ruby>物<rt>もの</rt></ruby></span>
+      <button class="chip active" data-load="motor">モーター</button>
+      <button class="chip" data-load="bulb"><ruby>豆電球<rt>まめでんきゅう</rt></ruby></button>
+      <button class="chip active" id="btnSw" aria-pressed="true">スイッチ <b>ON</b></button>
+      <button class="chip active" id="btnFlow" aria-pressed="true"><ruby>電流<rt>でんりゅう</rt></ruby>のつぶ ON</button>
+    </div>
+
+    <svg id="board" viewBox="0 0 680 420" role="img" aria-label="かん電池・スイッチ・けん流計・モーターをつないだ回路"></svg>
+
+    <div class="under">
+      <div class="now" id="now"></div>
+      <div class="schem">
+        <div class="cap"><ruby>回路図<rt>かいろず</rt></ruby>（<ruby>電気用図記号<rt>でんきようずきごう</rt></ruby>）</div>
+        <svg id="schem" viewBox="0 0 260 190" role="img" aria-label="回路図"></svg>
+      </div>
+    </div>
+    <div class="row">
+      <button class="go-btn mark" id="btnMark">📍 <ruby>結果<rt>けっか</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby></button>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+    <div class="msg" id="msg">つなぎ<ruby>方<rt>かた</rt></ruby>をかえて、けん<ruby>流<rt>りゅう</rt></ruby><ruby>計<rt>けい</rt></ruby>の<ruby>針<rt>はり</rt></ruby>とモーターをくらべよう</div>
+  </div>
+
+  <!-- 電池の長持ちくらべ -->
+  <div class="card">
+    <p class="fig-title">⏱ <ruby>電池<rt>でんち</rt></ruby>の<ruby>長持<rt>ながも</rt></ruby>ちくらべ（<ruby>新<rt>あたら</rt></ruby>しい<ruby>電池<rt>でんち</rt></ruby>で、<ruby>同<rt>おな</rt></ruby>時にスタート）</p>
+    <div class="row">
+      <button class="go-btn" id="btnRace">▶ スタート</button>
+      <span>
+        <button class="chip" data-speed="0.6">ゆっくり</button>
+        <button class="chip active" data-speed="1.5">ふつう</button>
+        <button class="chip" data-speed="4">はやおくり</button>
+      </span>
+      <button class="go-btn sub" id="btnRaceReset">はじめから</button>
+      <span class="race-time" id="raceTime">0<ruby>時間<rt>じかん</rt></ruby></span>
+    </div>
+    <div class="lanes" id="lanes"></div>
+    <div class="msg" id="raceMsg">どのつなぎ<ruby>方<rt>かた</rt></ruby>が、いちばん<ruby>長<rt>なが</rt></ruby>く<ruby>回<rt>まわ</rt></ruby>りつづけるかな？</div>
+  </div>
+
+  <p class="diff">※じっさいとのちがい：モーターの<ruby>速<rt>はや</rt></ruby>さは、モーターにかかる<ruby>電圧<rt>でんあつ</rt></ruby>に<ruby>比例<rt>ひれい</rt></ruby>するとしてかんたんにしています。<ruby>電流<rt>でんりゅう</rt></ruby>の<ruby>数字<rt>すうじ</rt></ruby>は、<ruby>電池<rt>でんち</rt></ruby>1こで<ruby>約<rt>やく</rt></ruby>0.37A<ruby>流<rt>なが</rt></ruby>れるモーターとして<ruby>計算<rt>けいさん</rt></ruby>した<ruby>目安<rt>めやす</rt></ruby>です。<ruby>長持<rt>ながも</rt></ruby>ちくらべの<ruby>時間<rt>じかん</rt></ruby>も<ruby>目安<rt>めやす</rt></ruby>で、<ruby>本当<rt>ほんとう</rt></ruby>は<ruby>電池<rt>でんち</rt></ruby>の<ruby>種類<rt>しゅるい</rt></ruby>によってちがいます。<ruby>電池<rt>でんち</rt></ruby>を1こだけ<ruby>反対<rt>はんたい</rt></ruby>向きにすることは、ショートのきけんがあるので、ここではできないようにしています。</p>
+</div>
+
+<script src="circuit-engine.js"></script>
+<script src="worksheet.js"></script>
+<script>
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: '<ruby>電流<rt>でんりゅう</rt></ruby>のはたらき',
+  question: 'かん<ruby>電池<rt>でんち</rt></ruby>2こを<ruby>直列<rt>ちょくれつ</rt></ruby>につなぐと、モーターの<ruby>回<rt>まわ</rt></ruby>る<ruby>速<rt>はや</rt></ruby>さはどうなるだろうか？',
+  predictionChoices: ['<ruby>速<rt>はや</rt></ruby>くなる', 'おそくなる', 'かわらない'],
+  experimentNote: 'つなぎ<ruby>方<rt>かた</rt></ruby>を「1こ」「2こ<ruby>直列<rt>ちょくれつ</rt></ruby>」「2こへい<ruby>列<rt>れつ</rt></ruby>」にかえて、それぞれ「📍 <ruby>結果<rt>けっか</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby>」をおそう。<ruby>電池<rt>でんち</rt></ruby>の<ruby>向<rt>む</rt></ruby>きを<ruby>入<rt>い</rt></ruby>れかえたときも<ruby>記録<rt>きろく</rt></ruby>してみよう。',
+  columns: [
+    { key: 'way',  label: 'つなぎ<ruby>方<rt>かた</rt></ruby>' },
+    { key: 'part', label: 'つないだ<ruby>物<rt>もの</rt></ruby>' },
+    { key: 'dir',  label: '<ruby>電流<rt>でんりゅう</rt></ruby>の<ruby>向<rt>む</rt></ruby>き' },
+    { key: 'amp',  label: '<ruby>電流<rt>でんりゅう</rt></ruby>の<ruby>大<rt>おお</rt></ruby>きさ', unit: 'A', digits: 2 },
+    { key: 'spd',  label: '<ruby>速<rt>はや</rt></ruby>さ・<ruby>明<rt>あか</rt></ruby>るさ（1こを1）', digits: 1 }
+  ],
+  chart: { type: 'bar', x: 'way', y: 'amp' },
+  hint: 'けん流計の針のふれはばと、モーターの速さを、いつも「電池1こ」とくらべさせましょう。直列とへい列では、つなぎ方の図（回路図）を指でたどらせ、電流の通り道が1本か2本に分かれるかに目を向けさせます。電池の向きを入れかえたときは、けん流計の針のふれる向きとモーターの回る向きが同時に変わることを確かめさせます。',
+  answer: 'かん電池2こを直列につなぐと、電池1このときより回路に流れる電流が大きくなり（約2倍）、モーターは速く回る（豆電球は明るくなる）。へい列につないだときは、電流の大きさは電池1このときとほぼ同じで、モーターの速さもほぼ同じ。そのかわり、へい列は電池が長持ちする。電流には向きがあり、電池の向きを反対にすると、電流の向きが反対になって、モーターの回る向きも反対になる。'
+});
+
+// ===== 回路の形 =====
+// 絵の中の場所（たんしの名前 → 座標）。四角い輪の回路で、
+//   上：けん流計　右：モーター（豆電球）　左：スイッチ　下：かん電池
+const P = {
+  TL: [80, 70], TR: [560, 70], BL: [80, 330], BR: [560, 330],
+  M1: [230, 70], M2: [410, 70],     // けん流計の左右のたんし
+  SWa: [80, 160], SWb: [80, 240],   // スイッチの上・下
+  L1: [560, 140], L2: [560, 260]    // モーター（豆電球）の上・下
+};
+const MODE_NAME = { one: '1こ', series: '2こ直列', parallel: '2こへい列' };
+const LOAD_NAME = { motor: 'モーター', bulb: '豆電球' };
+
+// circuit-engine にわたす回路を作る。
+// wires には、どう線の通り道（点のならび）も入れる。点のならびは a → b の向き（電流がプラスのときに流れる向き）。
+// flip＝true なら電池の向きを反対にする。emfs で電池ごとの電圧を変えられる（長持ちくらべ用）。
+function buildCircuit(mode, flip, load, swOn, emfs) {
+  const els = [], wires = [], batts = [];
+  // どう線：たんし a から（とちゅうの角 mid を通って）たんし b まで
+  const W = (id, a, b, mid) => {
+    wires.push({ id, pts: [P[a], ...(mid || []), P[b]] });
+    els.push({ id, type: 'wire', a, b });
+  };
+  // 電池：left・right は左はし・右はしのたんし。ふつうは右が＋（電流は右へおし出される）
+  const batt = (id, left, right, y, x1, x2, k) => {
+    P[left] = [x1, y]; P[right] = [x2, y];
+    const plusRight = !flip;
+    const b = { id, type: 'battery', a: plusRight ? left : right, b: plusRight ? right : left };
+    if (emfs) b.emf = emfs[k];
+    els.push(b); batts.push({ id, x1, x2, y, plusRight });
+  };
+  els.push({ id: 'SW', type: 'switch', a: 'SWa', b: 'SWb', on: swOn });
+  els.push({ id: 'G', type: 'meter', a: 'M1', b: 'M2' });
+  els.push({ id: 'LD', type: load, a: 'L1', b: 'L2' });
+  W('wTop1', 'M1', 'SWa', [P.TL]);           // けん流計 → 左上 → スイッチ
+  W('wTop2', 'L1', 'M2', [P.TR]);            // モーター上 → 右上 → けん流計
+  if (mode === 'one') {
+    batt('B1', 'P1L', 'P1R', 330, 280, 400, 0);
+    W('wBotL', 'SWb', 'P1L', [P.BL]);
+    W('wBotR', 'P1R', 'L2', [P.BR]);
+  } else if (mode === 'series') {
+    batt('B1', 'P1L', 'P1R', 330, 190, 300, 0);
+    batt('B2', 'P2L', 'P2R', 330, 360, 470, 1);
+    W('wBotL', 'SWb', 'P1L', [P.BL]);
+    W('wMid', 'P1R', 'P2L');
+    W('wBotR', 'P2R', 'L2', [P.BR]);
+  } else {
+    P.JL = [170, 330]; P.JR = [490, 330];
+    batt('B1', 'P1L', 'P1R', 285, 270, 390, 0);
+    batt('B2', 'P2L', 'P2R', 375, 270, 390, 1);
+    W('wBotL', 'SWb', 'JL', [P.BL]);
+    W('wJL1', 'JL', 'P1L', [[170, 285]]);
+    W('wJL2', 'JL', 'P2L', [[170, 375]]);
+    W('wJR1', 'P1R', 'JR', [[490, 285]]);
+    W('wJR2', 'P2R', 'JR', [[490, 375]]);
+    W('wBotR', 'JR', 'L2', [P.BR]);
+  }
+  return { elements: els, wires, batts };
+}
+
+// ===== 計算 =====
+const R_OF = load => CircuitEngine.TYPES[load].R;
+// 電池1こ（新品）のときの、つないだ物にかかる電圧。速さ・明るさの「1」にする
+const V1 = {};
+['motor', 'bulb'].forEach(ld => {
+  const s = CircuitEngine.solve(buildCircuit('one', false, ld, true));
+  V1[ld] = Math.abs(s.current.get('LD')) * R_OF(ld);
+});
+// 回路を計算して、見せたい数をまとめる
+function measure(mode, flip, load, swOn, emfs) {
+  const c = buildCircuit(mode, flip, load, swOn, emfs);
+  const sim = CircuitEngine.solve(c);
+  const iLD = sim.current.get('LD') || 0;
+  return {
+    c, sim,
+    iG: sim.current.get('G') || 0,            // けん流計の電流（左 → 右 がプラス）
+    amp: Math.abs(iLD),
+    rel: Math.abs(iLD) * R_OF(load) / V1[load], // 速さ・明るさ（電池1このときを1とする）
+    bright: sim.brightness.get('LD') || 0,
+    turn: iLD < -1e-9 ? 1 : (iLD > 1e-9 ? -1 : 0)  // 1＝右回り（電流が下から上へ）、-1＝左回り
+  };
+}
+
+// ===== いまの状態 =====
+const st = { mode: 'one', flip: false, load: 'motor', sw: true, flow: true };
+let cur = null;           // いまの計算結果
+let ang = 0;              // プロペラの角度
+const phase = {};         // つぶの進みぐあい（どう線ごと）
+
+// ===== 絵をかく道具 =====
+const $ = id => document.getElementById(id);
+const ptsStr = pts => pts.map(p => p.join(',')).join(' ');
+function along(pts, d) { // 点のならびの、はじめから d の所の座標
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x1, y1] = pts[i], [x2, y2] = pts[i + 1], L = Math.hypot(x2 - x1, y2 - y1);
+    if (d <= L) return [x1 + (x2 - x1) * d / L, y1 + (y2 - y1) * d / L, Math.atan2(y2 - y1, x2 - x1)];
+    d -= L;
+  }
+  const n = pts.length; return [pts[n - 1][0], pts[n - 1][1], 0];
+}
+const lenOf = pts => pts.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
+const tri = (x, y, a, r, fill) => {   // 向きつきの三角（電流の向きの矢印）
+  const p = k => [x + Math.cos(a + k) * r, y + Math.sin(a + k) * r];
+  return `<polygon points="${ptsStr([p(0), p(2.4), p(-2.4)])}" fill="${fill}" stroke="#fff" stroke-width="1.5"/>`;
+};
+
+// かん電池の絵（つつの形）。＋のほうに小さなでっぱりと「＋」の文字
+function battSVG(b) {
+  const { x1, x2, y, plusRight } = b, h = 40;
+  const px = plusRight ? x2 : x1, mx = plusRight ? x1 : x2;
+  const nub = plusRight ? `<rect x="${x2}" y="${y - 8}" width="9" height="16" rx="2" fill="#bdbdbd" stroke="#616161" stroke-width="1.5"/>`
+                        : `<rect x="${x1 - 9}" y="${y - 8}" width="9" height="16" rx="2" fill="#bdbdbd" stroke="#616161" stroke-width="1.5"/>`;
+  const band = plusRight ? `<rect x="${x2 - 30}" y="${y - h / 2}" width="30" height="${h}" fill="#c62828"/>`
+                         : `<rect x="${x1}" y="${y - h / 2}" width="30" height="${h}" fill="#c62828"/>`;
+  return `<g>
+    <rect x="${x1}" y="${y - h / 2}" width="${x2 - x1}" height="${h}" rx="6" fill="#37474f" stroke="#212121" stroke-width="2"/>
+    ${band}${nub}
+    <text x="${px + (plusRight ? -15 : 15)}" y="${y + 9}" font-size="26" font-weight="bold" fill="#fff" text-anchor="middle">＋</text>
+    <text x="${mx + (plusRight ? 16 : -16)}" y="${y + 9}" font-size="26" font-weight="bold" fill="#fff" text-anchor="middle">−</text>
+  </g>`;
+}
+
+// けん流計（針は電流の流れる向きにふれる）
+function meterSVG(iG) {
+  const cx = 320, cy = 108, r = 70;
+  const a = Math.max(-1, Math.min(1, iG / 1.0)) * 58 * Math.PI / 180;  // 1A でいちばんはしまでふれる
+  let ticks = '';
+  for (let v = -1; v <= 1.001; v += 0.1) {
+    const t = v * 58 * Math.PI / 180, big = Math.abs(Math.round(v * 10)) % 5 === 0;
+    const r1 = r - (big ? 14 : 8);
+    ticks += `<line x1="${cx + Math.sin(t) * r1}" y1="${cy - Math.cos(t) * r1}" x2="${cx + Math.sin(t) * r}" y2="${cy - Math.cos(t) * r}" stroke="#333" stroke-width="${big ? 2.5 : 1.2}"/>`;
+    if (big) ticks += `<text x="${cx + Math.sin(t) * (r - 26)}" y="${cy - Math.cos(t) * (r - 26) + 5}" font-size="14" text-anchor="middle" fill="#333">${Math.abs(Math.round(v * 10)) / 10}</text>`;
+  }
+  return `<g>
+    <rect x="230" y="14" width="180" height="108" rx="10" fill="#fffde7" stroke="#455a64" stroke-width="3"/>
+    ${ticks}
+    <text x="${cx}" y="54" font-size="15" text-anchor="middle" fill="#555" font-weight="bold">A</text>
+    <line x1="${cx}" y1="${cy}" x2="${cx + Math.sin(a) * (r - 4)}" y2="${cy - Math.cos(a) * (r - 4)}" stroke="#c62828" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="6" fill="#455a64"/>
+    <text x="${cx}" y="140" font-size="16" text-anchor="middle" fill="#33691e" font-weight="bold">けん流計</text>
+  </g>`;
+}
+
+// モーター（前から見た図。プロペラが回る）
+function motorSVG(cx, cy, s, angle, rel) {
+  let blades = '';
+  for (let i = 0; i < 3; i++) {
+    const a = angle + i * 120;
+    blades += `<ellipse cx="0" cy="${-30 * s}" rx="${11 * s}" ry="${30 * s}" fill="${i ? '#81d4fa' : '#ff8f00'}" stroke="#01579b" stroke-width="${1.8 * s}" transform="rotate(${a})"/>`;
+  }
+  const blur = rel > 1.5 ? `<circle r="${60 * s}" fill="rgba(129,212,250,0.25)"/>` : '';
+  return `<g transform="translate(${cx},${cy})">
+    <rect x="${-26 * s}" y="${-40 * s}" width="${52 * s}" height="${80 * s}" rx="${8 * s}" fill="#90a4ae" stroke="#455a64" stroke-width="${2 * s}"/>
+    ${blur}${blades}
+    <circle r="${7 * s}" fill="#455a64"/>
+  </g>`;
+}
+// 豆電球（明るさで光の輪が大きくなる）
+function bulbSVG(cx, cy, s, bright) {
+  const glow = Math.min(1.6, Math.sqrt(bright));
+  return `<g transform="translate(${cx},${cy})">
+    ${glow > 0.02 ? `<circle r="${(30 + 40 * glow) * s}" fill="rgba(255,213,79,${0.25 + 0.2 * Math.min(1, glow)})"/>` : ''}
+    <rect x="${-14 * s}" y="${22 * s}" width="${28 * s}" height="${22 * s}" fill="#bdbdbd" stroke="#616161" stroke-width="${1.5 * s}"/>
+    <circle r="${30 * s}" fill="${glow > 0.02 ? '#fff59d' : '#eceff1'}" stroke="#78909c" stroke-width="${2 * s}"/>
+    <path d="M${-8 * s},${22 * s} L${-8 * s},${2 * s} Q0,${-12 * s} ${8 * s},${2 * s} L${8 * s},${22 * s}" fill="none" stroke="${glow > 0.02 ? '#ff6f00' : '#616161'}" stroke-width="${2.5 * s}"/>
+  </g>`;
+}
+
+// ===== 回路の絵 =====
+function drawBoard() {
+  const c = cur.c;
+  let out = `<rect width="680" height="420" fill="#fafff5"/>`;
+  // どう線
+  for (const w of c.wires) out += `<polyline points="${ptsStr(w.pts)}" fill="none" stroke="#546e7a" stroke-width="6" stroke-linejoin="round"/>`;
+  // スイッチ（タップで ON/OFF）
+  const [sx, sy1] = P.SWa, sy2 = P.SWb[1];
+  const lever = st.sw ? [sx, sy1 + 6] : [sx - 52, sy1 + 22];
+  out += `<g data-act="switch" style="cursor:pointer">
+    <rect x="${sx - 60}" y="${sy1 - 10}" width="90" height="${sy2 - sy1 + 20}" fill="transparent"/>
+    <rect x="${sx - 22}" y="${sy1 - 6}" width="44" height="${sy2 - sy1 + 12}" rx="6" fill="#d7ccc8" stroke="#6d4c41" stroke-width="2"/>
+    <circle cx="${sx}" cy="${sy1}" r="7" fill="#9e9e9e" stroke="#424242" stroke-width="2"/>
+    <circle cx="${sx}" cy="${sy2}" r="7" fill="#9e9e9e" stroke="#424242" stroke-width="2"/>
+    <line x1="${sx}" y1="${sy2}" x2="${lever[0]}" y2="${lever[1]}" stroke="#212121" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="${lever[0]}" cy="${lever[1]}" r="8" fill="#e53935"/>
+    <text x="${sx + 30}" y="${(sy1 + sy2) / 2 + 6}" font-size="17" font-weight="bold" fill="${st.sw ? '#33691e' : '#757575'}">${st.sw ? 'ON' : 'OFF'}</text>
+    <text x="${sx - 2}" y="${sy2 + 34}" font-size="15" font-weight="bold" fill="#33691e" text-anchor="middle">スイッチ</text>
+  </g>`;
+  // 電池
+  for (const b of c.batts) out += battSVG(b);
+  // けん流計
+  out += meterSVG(cur.iG);
+  // モーター・豆電球（たんしからのどう線）
+  out += `<line x1="${P.L1[0]}" y1="${P.L1[1]}" x2="${P.L1[0]}" y2="160" stroke="#546e7a" stroke-width="6"/>
+          <line x1="${P.L2[0]}" y1="${P.L2[1]}" x2="${P.L2[0]}" y2="240" stroke="#546e7a" stroke-width="6"/>`;
+  out += st.load === 'motor' ? motorSVG(560, 200, 1, ang, cur.rel) : bulbSVG(560, 196, 1, cur.bright);
+  // モーターの回る向き
+  if (st.load === 'motor' && cur.turn) {
+    out += `<text x="640" y="135" font-size="40" text-anchor="middle" fill="#0d47a1">${cur.turn > 0 ? '↻' : '↺'}</text>
+            <text x="640" y="160" font-size="15" font-weight="bold" text-anchor="middle" fill="#0d47a1">${cur.turn > 0 ? '右回り' : '左回り'}</text>`;
+  }
+  // 電流のつぶと、向きの矢印
+  for (const w of c.wires) {
+    const I = cur.sim.current.get(w.id) || 0;
+    if (Math.abs(I) < 1e-4) continue;
+    const L = lenOf(w.pts);
+    if (st.flow) {
+      const gap = 26, ph = ((phase[w.id] || 0) % gap + gap) % gap;
+      for (let d = ph; d < L; d += gap) {
+        const [x, y] = along(w.pts, d);
+        out += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="#ffd600" stroke="#6d4c00" stroke-width="1.5"/>`;
+      }
+    }
+    if (['wTop1', 'wTop2', 'wBotL', 'wBotR'].includes(w.id)) {
+      const [x, y, a] = along(w.pts, L * 0.5);
+      out += tri(x, y, I > 0 ? a : a + Math.PI, 12, '#c62828');
+    }
+  }
+  $('board').innerHTML = out;
+}
+
+// ===== 回路図（電気用図記号） =====
+function drawSchem() {
+  const L = 25, R = 235, T = 30, B = 150;
+  const line = (x1, y1, x2, y2, w) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#212121" stroke-width="${w || 2.5}"/>`;
+  const blank = (x, y, w, h) => `<rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" fill="#fff"/>`;
+  // かん電池の記号：長い線が＋、短く太い線が−
+  const cell = (cx, cy) => {
+    const pr = !st.flip, lx = cx + (pr ? 5 : -5), sx = cx + (pr ? -5 : 5);
+    return blank(cx, cy, 12, 34) + line(lx, cy - 16, lx, cy + 16, 2.5) + line(sx, cy - 8, sx, cy + 8, 5) +
+      `<text x="${lx + (pr ? 9 : -9)}" y="${cy - 10}" font-size="13" text-anchor="middle" fill="#c62828" font-weight="bold">＋</text>`;
+  };
+  let out = `<rect width="260" height="190" fill="#fff"/>`;
+  out += line(L, T, R, T) + line(R, T, R, B) + line(L, T, L, B);
+  if (st.mode === 'parallel') {
+    out += line(L, B, 90, B) + line(170, B, R, B) + line(90, B - 18, 90, B + 18) + line(170, B - 18, 170, B + 18);
+    out += line(90, B - 18, 170, B - 18) + line(90, B + 18, 170, B + 18);
+    out += cell(130, B - 18) + cell(130, B + 18);
+  } else {
+    out += line(L, B, R, B);
+    out += st.mode === 'one' ? cell(130, B) : cell(105, B) + cell(155, B);
+  }
+  // スイッチ（左）
+  out += blank(L, 90, 12, 34);
+  out += `<circle cx="${L}" cy="73" r="3.5" fill="#212121"/><circle cx="${L}" cy="107" r="3.5" fill="#212121"/>`;
+  out += st.sw ? line(L, 107, L, 73) : line(L, 107, L - 16, 78);
+  // けん流計（上）
+  out += `<circle cx="130" cy="${T}" r="13" fill="#fff" stroke="#212121" stroke-width="2.5"/><text x="130" y="${T + 6}" font-size="15" text-anchor="middle" font-weight="bold">検</text>`;
+  // モーター・豆電球（右）
+  out += `<circle cx="${R}" cy="90" r="15" fill="#fff" stroke="#212121" stroke-width="2.5"/>`;
+  out += st.load === 'motor' ? `<text x="${R}" y="96" font-size="16" text-anchor="middle" font-weight="bold">M</text>`
+    : line(R - 10, 80, R + 10, 100, 2) + line(R + 10, 80, R - 10, 100, 2);
+  // 電流の向き（上の線に矢印）
+  if (st.sw) {
+    const a = st.flip ? 0 : Math.PI;
+    out += `<polygon points="${ptsStr([0, 2.4, -2.4].map(k => [70 + Math.cos(a + k) * 9, T + Math.sin(a + k) * 9]))}" fill="#c62828"/>`;
+    out += `<text x="70" y="${T - 10}" font-size="12" text-anchor="middle" fill="#c62828">電流</text>`;
+  }
+  out += `<text x="${L}" y="182" font-size="12" fill="#555">スイッチ</text><text x="${R}" y="125" font-size="12" text-anchor="end" fill="#555">${LOAD_NAME[st.load]}</text>`;
+  $('schem').innerHTML = out;
+}
+
+// ===== いまのようす（文字） =====
+function updateNow() {
+  const box = $('now');
+  if (!st.sw) {
+    box.className = 'now off';
+    box.innerHTML = 'スイッチが<b>OFF</b>なので、<ruby>回路<rt>かいろ</rt></ruby>が切れていて<ruby>電流<rt>でんりゅう</rt></ruby>は<ruby>流<rt>なが</rt></ruby>れません。<br>けん<ruby>流<rt>りゅう</rt></ruby><ruby>計<rt>けい</rt></ruby>の<ruby>針<rt>はり</rt></ruby>は0、' + (st.load === 'motor' ? 'モーターは<ruby>止<rt>と</rt></ruby>まっています。' : '<ruby>豆電球<rt>まめでんきゅう</rt></ruby>はつきません。');
+    return;
+  }
+  box.className = 'now';
+  const side = cur.iG < 0 ? '<ruby>左<rt>ひだり</rt></ruby>' : '<ruby>右<rt>みぎ</rt></ruby>';
+  const what = st.load === 'motor'
+    ? 'モーター：<b>' + speedWord(cur.rel) + '</b>（1このときの<ruby>約<rt>やく</rt></ruby>' + cur.rel.toFixed(1) + '<ruby>倍<rt>ばい</rt></ruby>）・<b>' + (cur.turn > 0 ? '<ruby>右<rt>みぎ</rt></ruby><ruby>回<rt>まわ</rt></ruby>り ↻' : '<ruby>左<rt>ひだり</rt></ruby><ruby>回<rt>まわ</rt></ruby>り ↺') + '</b>'
+    : '<ruby>豆電球<rt>まめでんきゅう</rt></ruby>：<b>' + brightWord(cur.rel) + '</b>（1このときの<ruby>約<rt>やく</rt></ruby>' + cur.rel.toFixed(1) + '<ruby>倍<rt>ばい</rt></ruby>の<ruby>電圧<rt>でんあつ</rt></ruby>）';
+  box.innerHTML = '🧭 けん<ruby>流<rt>りゅう</rt></ruby><ruby>計<rt>けい</rt></ruby>：<b>' + cur.amp.toFixed(2) + ' A</b>（<ruby>針<rt>はり</rt></ruby>は' + side + 'にふれた）<br>' + what +
+    '<br>🔋 ' + withRuby(MODE_NAME[st.mode]) + '・<ruby>電池<rt>でんち</rt></ruby>の<ruby>向<rt>む</rt></ruby>き：' + (st.flip ? '<b><ruby>反対<rt>はんたい</rt></ruby></b>' : 'ふつう');
+}
+const speedWord = r => r > 1.4 ? '速く回る' : (r > 0.6 ? 'ふつうに回る' : (r > 0.05 ? 'ゆっくり回る' : '止まっている'));
+const brightWord = r => r > 1.4 ? 'とても明るい' : (r > 0.6 ? 'ふつうの明るさ' : (r > 0.05 ? '暗い' : 'つかない'));
+const withRuby = s => s.replace('直列', '<ruby>直列<rt>ちょくれつ</rt></ruby>').replace('へい列', 'へい<ruby>列<rt>れつ</rt></ruby>');
+
+// 状態がかわったら計算しなおす
+function recompute() {
+  cur = measure(st.mode, st.flip, st.load, st.sw);
+  drawSchem();
+  updateNow();
+  drawBoard();
+}
+
+// ===== 電池の長持ちくらべ =====
+const CAP = 2.0;            // 電池1この中の電気の量（A×時間）。目安
+const race = { t: 0, running: false, hoursPerSec: 1.5, lanes: [] };
+// 電池ののこり（0〜1）→ 電圧。新しいときは1.5V、へると下がり、なくなると0
+const emfOf = r => r <= 0 ? 0 : 1.5 * (0.6 + 0.4 * r) * Math.min(1, r / 0.06);
+function raceReset() {
+  race.t = 0; race.running = false;
+  race.lanes = ['one', 'series', 'parallel'].map(mode => ({ mode, r: mode === 'one' ? [1] : [1, 1], stopT: null, m: null }));
+  race.lanes.forEach(laneMeasure);
+  $('btnRace').textContent = '▶ スタート';
+  $('raceMsg').innerHTML = 'どのつなぎ<ruby>方<rt>かた</rt></ruby>が、いちばん<ruby>長<rt>なが</rt></ruby>く' + (st.load === 'motor' ? '<ruby>回<rt>まわ</rt></ruby>り' : 'つき') + 'つづけるかな？';
+  drawRace();
+}
+function laneMeasure(ln) {
+  ln.m = measure(ln.mode, false, st.load, true, ln.r.map(emfOf));
+  if (!ln.ang) ln.ang = 0;
+}
+function raceStep(hours) {
+  const h = 0.02;
+  for (let done = 0; done < hours; done += h) {
+    const dh = Math.min(h, hours - done);
+    race.t += dh;
+    for (const ln of race.lanes) {
+      if (ln.stopT != null) continue;
+      ln.r = ln.r.map((r, i) => Math.max(0, r - Math.abs(ln.m.sim.current.get('B' + (i + 1)) || 0) * dh / CAP));
+      laneMeasure(ln);
+      if (ln.m.rel < 0.08) { ln.stopT = race.t; ln.r = ln.r.map(() => 0); laneMeasure(ln); }
+    }
+  }
+  if (race.lanes.every(l => l.stopT != null)) {
+    race.running = false;
+    $('btnRace').textContent = '▶ スタート';
+    const best = race.lanes.reduce((a, b) => b.stopT > a.stopT ? b : a), fast = race.lanes.find(l => l.mode === 'series');
+    $('raceMsg').innerHTML = '🏁 いちばん<ruby>長持<rt>ながも</rt></ruby>ちしたのは <b>' + withRuby(MODE_NAME[best.mode]) + '</b>！ ' +
+      withRuby('直列') + 'はいちばん' + (st.load === 'motor' ? '<ruby>速<rt>はや</rt></ruby>く<ruby>回<rt>まわ</rt></ruby>る' : '<ruby>明<rt>あか</rt></ruby>るい') + 'けれど、' + hm(fast.stopT) + 'で<ruby>電池<rt>でんち</rt></ruby>がなくなったね';
+  }
+}
+const hm = t => { const m = Math.round(t * 60); return Math.floor(m / 60) + '時間' + (m % 60 ? (m % 60) + '分' : ''); };
+function drawRace() {
+  $('raceTime').innerHTML = hm(race.t).replace('時間', '<ruby>時間<rt>じかん</rt></ruby>');
+  const box = $('lanes');
+  if (box.children.length !== 3) {
+    box.innerHTML = race.lanes.map((l, i) => `<div class="lane" id="lane${i}"><h3>${withRuby(MODE_NAME[l.mode])}</h3><svg viewBox="0 0 200 200"></svg><div class="st"></div></div>`).join('');
+  }
+  race.lanes.forEach((ln, i) => {
+    const el = $('lane' + i), m = ln.m;
+    el.classList.toggle('done', ln.stopT != null);
+    el.querySelector('h3').innerHTML = withRuby(MODE_NAME[ln.mode]);
+    let svg = `<defs><pattern id="st${i}" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#7cb342"/><rect width="4" height="8" fill="#9ccc65"/></pattern></defs>`;
+    svg += st.load === 'motor' ? motorSVG(100, 60, 0.68, ln.ang, m.rel) : bulbSVG(100, 56, 0.55, m.bright);
+    // 電池ののこり（しまもようのバーと％の数字）
+    svg += `<text x="12" y="138" font-size="14" font-weight="bold" fill="#555">電池ののこり</text>`;
+    ln.r.forEach((r, k) => {
+      const y = 146 + k * 26;
+      svg += `<rect x="12" y="${y}" width="112" height="20" rx="4" fill="#fff" stroke="#455a64" stroke-width="2"/>
+        <rect x="124" y="${y + 5}" width="6" height="10" fill="#455a64"/>
+        <rect x="14" y="${y + 2}" width="${Math.max(0, 108 * r)}" height="16" fill="${r > 0.2 ? `url(#st${i})` : '#e53935'}"/>
+        <text x="194" y="${y + 16}" font-size="16" text-anchor="end" font-weight="bold" fill="#333">${Math.round(r * 100)}%</text>`;
+    });
+    el.querySelector('svg').innerHTML = svg;
+    el.querySelector('.st').innerHTML = ln.stopT != null
+      ? '⏹ <b>' + hm(ln.stopT) + '</b>で<ruby>止<rt>と</rt></ruby>まった'
+      : (st.load === 'motor' ? '<ruby>速<rt>はや</rt></ruby>さ' : '<ruby>明<rt>あか</rt></ruby>るさ') + ' ×' + m.rel.toFixed(1);
+  });
+}
+
+// ===== うごかす（毎フレーム） =====
+let last = 0;
+function frame(now) {
+  const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
+  last = now;
+  // プロペラとつぶ
+  if (cur) {
+    ang += cur.turn * cur.rel * 1.3 * 360 * dt * (st.load === 'motor' ? 1 : 0);
+    for (const w of cur.c.wires) phase[w.id] = (phase[w.id] || 0) + (cur.sim.current.get(w.id) || 0) * 150 * dt;
+    drawBoard();
+  }
+  if (race.running) {
+    raceStep(dt * race.hoursPerSec);
+  }
+  race.lanes.forEach(ln => { ln.ang = (ln.ang || 0) + ln.m.turn * ln.m.rel * 1.3 * 360 * dt; });
+  drawRace();
+  requestAnimationFrame(frame);
+}
+
+// ===== 操作 =====
+const setActive = (sel, fn) => document.querySelectorAll(sel).forEach(x => x.classList.toggle('active', fn(x)));
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+  st.mode = b.dataset.mode; setActive('[data-mode]', x => x === b); recompute();
+  $('msg').innerHTML = withRuby(MODE_NAME[st.mode]) + 'にしたよ。けん<ruby>流<rt>りゅう</rt></ruby><ruby>計<rt>けい</rt></ruby>の<ruby>針<rt>はり</rt></ruby>を見てみよう';
+});
+document.querySelectorAll('[data-load]').forEach(b => b.onclick = () => {
+  st.load = b.dataset.load; setActive('[data-load]', x => x === b); recompute(); raceReset();
+});
+$('btnFlip').onclick = () => {
+  st.flip = !st.flip; recompute();
+  $('msg').innerHTML = '🔄 <ruby>電池<rt>でんち</rt></ruby>の<ruby>向<rt>む</rt></ruby>きを' + (st.flip ? '<ruby>反対<rt>はんたい</rt></ruby>にしたよ' : 'もとにもどしたよ') + '。<ruby>電流<rt>でんりゅう</rt></ruby>のつぶ・<ruby>針<rt>はり</rt></ruby>・' + (st.load === 'motor' ? 'モーターの<ruby>回<rt>まわ</rt></ruby>る<ruby>向<rt>む</rt></ruby>き' : '<ruby>豆電球<rt>まめでんきゅう</rt></ruby>') + 'はどうなった？';
+};
+function setSw(on) {
+  st.sw = on;
+  $('btnSw').classList.toggle('active', on); $('btnSw').setAttribute('aria-pressed', on);
+  $('btnSw').innerHTML = 'スイッチ <b>' + (on ? 'ON' : 'OFF') + '</b>';
+  recompute();
+}
+$('btnSw').onclick = () => setSw(!st.sw);
+$('board').addEventListener('pointerdown', e => { if (e.target.closest('[data-act="switch"]')) setSw(!st.sw); });
+$('btnFlow').onclick = () => {
+  st.flow = !st.flow;
+  $('btnFlow').classList.toggle('active', st.flow); $('btnFlow').setAttribute('aria-pressed', st.flow);
+  $('btnFlow').innerHTML = '<ruby>電流<rt>でんりゅう</rt></ruby>のつぶ ' + (st.flow ? 'ON' : 'OFF');
+};
+
+// 結果を記録する
+$('btnMark').onclick = () => {
+  if (!st.sw) { $('msg').innerHTML = 'スイッチを ON にしてから<ruby>記録<rt>きろく</rt></ruby>しよう'; return; }
+  const way = MODE_NAME[st.mode], part = LOAD_NAME[st.load], dir = st.flip ? '反対' : 'ふつう';
+  if (Worksheet.getRecords().some(r => r.way === way && r.part === part && r.dir === dir)) {
+    $('msg').innerHTML = 'この<ruby>結果<rt>けっか</rt></ruby>は、もう<ruby>記録<rt>きろく</rt></ruby>してあるよ。つなぎ<ruby>方<rt>かた</rt></ruby>をかえてみよう';
+    return;
+  }
+  Worksheet.addRecord({ way, part, dir, amp: +cur.amp.toFixed(2), spd: +cur.rel.toFixed(1) });
+  $('msg').innerHTML = '📍 ' + withRuby(way) + 'の<ruby>結果<rt>けっか</rt></ruby>を<ruby>記録<rt>きろく</rt></ruby>したよ';
+};
+
+// もういちど
+$('btnReset').onclick = () => {
+  const n = Worksheet.getRecords().length;
+  if (n && !confirm('記録をぜんぶ消して、はじめにもどします。よろしいですか？')) return;
+  for (let i = n - 1; i >= 0; i--) Worksheet.removeRecord(i);
+  st.mode = 'one'; st.flip = false; st.load = 'motor';
+  setActive('[data-mode]', x => x.dataset.mode === 'one');
+  setActive('[data-load]', x => x.dataset.load === 'motor');
+  if (!st.flow) $('btnFlow').click();
+  setSw(true);
+  raceReset();
+  $('msg').innerHTML = 'つなぎ<ruby>方<rt>かた</rt></ruby>をかえて、けん<ruby>流<rt>りゅう</rt></ruby><ruby>計<rt>けい</rt></ruby>の<ruby>針<rt>はり</rt></ruby>とモーターをくらべよう';
+};
+
+// 長持ちくらべ
+$('btnRace').onclick = () => {
+  if (race.lanes.every(l => l.stopT != null)) raceReset();
+  race.running = !race.running;
+  $('btnRace').textContent = race.running ? '⏸ とめる' : '▶ つづける';
+};
+$('btnRaceReset').onclick = raceReset;
+document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => {
+  race.hoursPerSec = parseFloat(b.dataset.speed); setActive('[data-speed]', x => x === b);
+});
+
+recompute();
+raceReset();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
