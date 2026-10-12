@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>座標平面のテスト（graph-engine.js）</title>
+<style>
+  :root { --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3faf8 0%, #d9efea 100%);
+    min-height: 100vh; padding: 10px 16px 32px; font-size: 18px;
+  }
+  button, input { font-family: inherit; color: inherit; }
+  .wrap { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; }
+  h1 { margin: 0; flex: 1; text-align: center; font-size: clamp(1.3rem, 3vw, 1.8rem); color: var(--accent-dark); }
+  h2 { margin: 0 0 8px; font-size: 1.2rem; color: var(--accent-dark); }
+  .card { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .demo { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 760px) { .demo { grid-template-columns: 1fr; } }
+  .plane { border: 2px solid #e0f2f1; border-radius: 14px; }
+  .info { display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { font-weight: 900; color: var(--accent-dark); }
+  .box { background: #f3faf8; border-radius: 12px; padding: 8px 12px; }
+  input[type=range] { flex: 1; min-width: 140px; height: 44px; }
+  input[type=number] { width: 90px; min-height: 44px; font-size: 1.1rem; padding: 4px 8px; border: 2px solid var(--soft); border-radius: 10px; }
+  .chip {
+    min-height: 48px; padding: 4px 16px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .note { font-size: 0.9rem; color: #546e7a; margin: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+  td, th { border-bottom: 1px solid #e0f2f1; padding: 6px 8px; text-align: left; }
+  .ok { color: #2e7d32; font-weight: bold; }
+  .ng { color: #ad1457; font-weight: bold; }
+  .summary { font-weight: 900; font-size: 1.1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← もどる</a>
+    <h1>座標平面のテスト（graph-engine.js）</h1>
+  </div>
+  <p class="note">開発用のページです（トップページには載せていません）。右上のボタン：＋－ ズーム、⟲ もとにもどす、すいつく の切りかえ、📷 画像で保存。何もないところをドラッグすると中心が動きます。</p>
+
+  <!-- ① 直線2本の交点 -->
+  <div class="card">
+    <h2>① 直線2本の交点（点 P・Q をドラッグ）</h2>
+    <div class="demo">
+      <div class="plane" id="g1"></div>
+      <div class="info">
+        <div class="box"><span class="lbl" style="color:#e65100">━ 直線 ℓ（P・Q を通る）</span><div id="l1"></div></div>
+        <div class="box"><span class="lbl" style="color:#1565c0">┅ 直線 m（点線）</span><div id="l2"></div></div>
+        <div class="box"><span class="lbl">● 交点</span><div id="cross"></div></div>
+        <p class="note">交点は分数で厳密に計算しています（すいつかないにすると小数の点でも計算できます）。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 放物線 -->
+  <div class="card">
+    <h2>② 放物線 y = ax²（変域・ぬり・反比例）</h2>
+    <div class="demo">
+      <div class="plane" id="g2"></div>
+      <div class="info">
+        <div class="row"><span class="lbl">a ＝</span>
+          <input type="range" id="aR" min="-3" max="3" step="0.25" value="1">
+          <input type="number" id="aN" min="-3" max="3" step="0.25" value="1">
+        </div>
+        <div class="box" id="parab"></div>
+        <div class="row">
+          <button class="chip" id="tArea">ぬり（x軸との間）：あり</button>
+          <button class="chip" id="tInv">反比例 y = 6/x：なし</button>
+        </div>
+        <p class="note">変域 −1 ≦ x ≦ 2 の部分を太線で、はしの点 ●（ふくむ）を表示。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ ドラッグ点 -->
+  <div class="card">
+    <h2>③ ドラッグ点（三角形・直線の上だけ動く点）</h2>
+    <div class="demo">
+      <div class="plane" id="g3"></div>
+      <div class="info">
+        <div class="box"><span class="lbl">△ABC の面積</span><div id="area"></div></div>
+        <div class="box"><span class="lbl">点 R（y = x/2 の上だけ動く）</span><div id="rpos"></div></div>
+        <div class="box"><span class="lbl">うごいた回数（onChange）</span> <span id="cnt">0</span></div>
+        <div class="row"><button class="chip" id="reset3">もういちど（点を元の位置へ）</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>④ 計算のチェック</h2>
+    <p class="summary" id="summary"></p>
+    <table id="checks"><thead><tr><th>しらべたこと</th><th>結果</th><th>期待</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="graph-engine.js"></script>
+<script>
+  const F = Fraction, G = GraphEngine, M = MathRender;
+  const big = { size: 'small' };
+
+  // ===== ① 直線2本の交点 =====
+  const g1 = G.create(document.getElementById('g1'), { xmin: -6, xmax: 6, ymin: -6, ymax: 6, controls: true });
+  const P = g1.draggable(-3, -4, { label: 'P', showCoords: true, color: '#e65100' });
+  const Q = g1.draggable(2, 4, { label: 'Q', showCoords: true, color: '#e65100' });
+  const m = G.lineFromSlope(-1, 3);
+  g1.lineThrough(P, Q, { color: '#e65100', label: 'ℓ' });
+  g1.line(m, { color: '#1565c0', dash: true, label: 'm' });
+  // 交点（ℓ と m が平行のときは描かない）
+  const crossPt = () => { const r = G.intersect(G.lineFromPoints(P, Q) || { x: P.x }, m); return r.kind === 'point' ? [r.x, r.y] : [99, 99]; };
+  g1.point(crossPt, null, '', { color: '#263238', r: 7 });
+  function show1() {
+    const l = G.lineFromPoints(P, Q);
+    document.getElementById('l1').innerHTML = l ? M.html(G.lineText(l), big) : '（P と Q が同じ点）';
+    document.getElementById('l2').innerHTML = M.html(G.lineText(m), big);
+    const r = l ? G.intersect(l, m) : null;
+    document.getElementById('cross').innerHTML = !r ? '―' :
+      r.kind === 'point' ? M.html(`(${r.x}, ${r.y})`, big) : (r.kind === 'parallel' ? '平行なので交わらない' : '重なっている（交点が無数）');
+  }
+  g1.onChange(show1);
+  show1();
+
+  // ===== ② 放物線 =====
+  const g2 = G.create(document.getElementById('g2'), { xmin: -5, xmax: 5, ymin: -5, ymax: 7, controls: true });
+  let a = F.from(1);
+  const fa = x => toNum(a) * x * x;
+  function toNum(f) { return f.n / f.d; }
+  const area = g2.area(fa, null, { from: -1, to: 2, fill: '#ffcc80', fillOpacity: 0.45 });
+  g2.plot(fa, { color: '#e65100', width: 2, dash: '4 6' });                              // 全体はうすい点線
+  g2.plot(fa, { color: '#e65100', width: 5, from: -1, to: 2, ends: ['closed', 'closed'], label: 'y=ax²' }); // 変域
+  const inv = g2.plot(x => 6 / x, { color: '#1565c0', hidden: true, label: 'y=6/x' });
+  const aR = document.getElementById('aR'), aN = document.getElementById('aN');
+  function setA(v) {
+    a = F.from(v); aR.value = aN.value = v;
+    g2.redraw();
+    document.getElementById('parab').innerHTML = M.html('y=' + M.terms([[a, 'x^2']]), big) +
+      '<br>x = 2 のとき y = ' + M.html(a.mul(4).toString(), big);
+  }
+  aR.addEventListener('input', () => setA(aR.value));
+  aN.addEventListener('change', () => setA(Math.min(3, Math.max(-3, +aN.value || 0))));
+  document.getElementById('tArea').addEventListener('click', e => {
+    area.set(null, { hidden: !area.style.hidden });
+    e.target.textContent = 'ぬり（x軸との間）：' + (area.style.hidden ? 'なし' : 'あり');
+  });
+  document.getElementById('tInv').addEventListener('click', e => {
+    inv.set(null, { hidden: !inv.style.hidden });
+    e.target.textContent = '反比例 y = 6/x：' + (inv.style.hidden ? 'なし' : 'あり');
+  });
+  setA(1);
+
+  // ===== ③ ドラッグ点 =====
+  const g3 = G.create(document.getElementById('g3'), { xmin: -5, xmax: 5, ymin: -5, ymax: 5, controls: true });
+  const START = { A: [-3, -2], B: [3, -1], C: [0, 3] };
+  const A = g3.draggable(...START.A, { label: 'A' }), B = g3.draggable(...START.B, { label: 'B' }), C = g3.draggable(...START.C, { label: 'C' });
+  g3.polygon([A, B, C], { color: '#2e7d32', fill: '#a5d6a7', fillOpacity: 0.4 });
+  g3.line(F.from('1/2'), 0, { color: '#8e24aa', width: 2, dash: '2 6', label: 'y=x/2' });
+  // 直線 y = x/2 の上だけ動く点（constrain で y を x から決める）
+  const R = g3.draggable(2, 1, { label: 'R', showCoords: true, color: '#8e24aa', constrain: (x, y) => [x, x.div(2)] });
+  let count = 0;
+  function show3() {
+    // 面積（座標から厳密に）＝ |(B−A)×(C−A)| ÷ 2
+    const s = B.x.sub(A.x).mul(C.y.sub(A.y)).sub(C.x.sub(A.x).mul(B.y.sub(A.y))).abs().div(2);
+    document.getElementById('area').innerHTML = M.html(s.toString(), big);
+    document.getElementById('rpos').innerHTML = M.html(`(${R.x}, ${R.y})`, big);
+  }
+  g3.onChange(() => { count++; document.getElementById('cnt').textContent = count; show3(); });
+  document.getElementById('reset3').addEventListener('click', () => {
+    A.set(...START.A); B.set(...START.B); C.set(...START.C); R.set(2, 1);
+  });
+  show3();
+
+  // ===== ④ 計算のチェック =====
+  const s = v => v && v.kind === 'point' ? `(${v.x}, ${v.y})` : (v ? v.kind : 'null');
+  const CHECKS = [
+    ['y=2x−1 と y=−x+5 の交点', () => s(G.intersect(G.lineFromSlope(2, -1), G.lineFromSlope(-1, 5))), '(2, 3)'],
+    ['y=x/2+1 と y=−x/3 の交点', () => s(G.intersect(G.lineFromSlope('1/2', 1), G.lineFromSlope('-1/3', 0))), '(-6/5, 2/5)'],
+    ['平行な2直線', () => s(G.intersect(G.lineFromSlope(2, 1), G.lineFromSlope(2, 3))), 'parallel'],
+    ['同じ直線', () => s(G.intersect({ a: 1, b: 1 }, { a: '2/2', b: 1 })), 'same'],
+    ['x=2 と y=3x+1', () => s(G.intersect({ x: 2 }, G.lineFromSlope(3, 1))), '(2, 7)'],
+    ['(1,2)(3,7) を通る直線', () => G.lineText(G.lineFromPoints([1, 2], [3, 7])), 'y=5/2 x-1/2'],
+    ['(1,2)(1,5) を通る直線', () => G.lineText(G.lineFromPoints([1, 2], [1, 5])), 'x=1'],
+    ['(0,1)(2,0) を通る直線', () => G.lineText(G.lineFromPoints([0, 1], [2, 0])), 'y=-1/2 x+1'],
+    ['同じ2点', () => String(G.lineFromPoints([1, 2], [1, 2])), 'null'],
+    ['傾き3・切片−2 で x=1/3', () => G.evalLine(G.lineFromSlope(3, -2), F.from('1/3')).toString(), '-1'],
+    ['ドラッグ点の座標は分数', () => (P.x instanceof Fraction) + '', 'true'],
+    ['R は y=x/2 の上', () => (R.set(3, 0), `(${R.x}, ${R.y})`), '(3, 3/2)'],
+  ];
+  let ok = 0;
+  document.querySelector('#checks tbody').innerHTML = CHECKS.map(([name, fn, want]) => {
+    let got; try { got = fn(); } catch (e) { got = 'エラー: ' + e.message; }
+    const pass = got === want; if (pass) ok++;
+    return `<tr><td>${name}</td><td><code>${got}</code></td><td><code>${want}</code></td><td class="${pass ? 'ok' : 'ng'}">${pass ? '○ OK' : '✕ ちがう'}</td></tr>`;
+  }).join('');
+  R.set(2, 1, true); count = 0; document.getElementById('cnt').textContent = 0; show3();
+  document.getElementById('summary').innerHTML = ok === CHECKS.length
+    ? `<span class="ok">○ ${CHECKS.length}こ ぜんぶ OK</span>` : `<span class="ng">✕ ${CHECKS.length - ok}こ ちがう</span>`;
+</script>
+</body>
+</html>
