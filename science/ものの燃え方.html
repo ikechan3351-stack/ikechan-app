@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ものの燃え方</title>
+<!--
+  ものの燃え方（小学6年 理科「燃焼の仕組み」）
+  ・① びんをかぶせる：集気びんのふた（する／すき間／なし）と、びんの下のすき間（なし／あり）を選び、
+      ろうそくにびんをかぶせる。ほのおがだんだん小さくなって消えるか、燃え続けるかを見る。
+      線香のけむり（指で動かせる）で空気の流れ、つぶ（100こで表した空気）と円グラフで気体の割合を見える化。
+      「記録する」で、ワークシート（worksheet.js）の表に入る。
+  ・② 気体をしらべる：燃やす前（A）と燃やした後（B）の空気を、気体検知管（酸素用・二酸化炭素用2種類）と石灰水でしらべる。
+      検知管は大きくした目もりを読んで答える。
+  ・③ 気体だけのびん：空気・酸素・ちっ素・二酸化炭素のびんに、火のついたろうそくを入れてくらべる。
+  ・④ いろいろな物：木（わりばし）・紙・スチールウールをびんの中で燃やし、石灰水でしらべる。
+  ・⑤ 火を消すゲーム：場面ごとに消し方をえらび、「燃える物・酸素・温度」のどれをなくしたかを答える。
+  ・先生モード（?teacher=1）：先生用のメモが出る。
+  ・しくみ：びんの中の酸素の割合 o と二酸化炭素の割合 c を、燃える速さ（K）と空気の入れかわり（exch()）で計算する。
+      酸素が O_OUT（17％）まで減ると、ほのおが消える。数を変えたいときは、下の「数の設定」を書きかえる。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #f1f8e9 0%, #dcedc8 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #558b2f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #33691e; text-align: center; }
+  .subtitle { margin: 0 0 8px; color: #558b2f; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+  .hidden { display: none !important; }
+
+  /* タブ（①〜⑤） */
+  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .tabs .chip { padding: 4px 6px; font-size: 17px; }
+  @media (max-width: 700px) { .tabs { grid-template-columns: 1fr 1fr 1fr; } }
+  @media (max-width: 460px) { .tabs { grid-template-columns: 1fr 1fr; } }
+
+  /* 条件をえらぶところ */
+  .set-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
+  .set-grid .lbl { font-weight: bold; color: #33691e; white-space: nowrap; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    min-height: 48px; border: 3px solid #c5e1a5; background: #fff; color: #33691e; border-radius: 12px;
+    padding: 4px 14px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: #558b2f; border-color: #558b2f; color: #fff; }
+  .chip:disabled { opacity: 0.4; cursor: default; }
+  .chip.ok { background: #e3f2fd; border-color: #1565c0; color: #0d47a1; }
+  .chip.ng { background: #fbe9e7; border-color: #bf360c; color: #bf360c; text-decoration: line-through; }
+  @media (max-width: 560px) { .set-grid { grid-template-columns: 1fr; } }
+
+  .btn-row { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .go-btn {
+    min-height: 48px; border: none; background: #558b2f; color: #fff; border-radius: 12px;
+    padding: 8px 18px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn.orange { background: #e65100; }
+  .go-btn.blue { background: #1565c0; }
+  .go-btn:disabled { opacity: 0.4; cursor: default; }
+  .btn-row label { font-size: 17px; display: flex; align-items: center; gap: 4px; cursor: pointer; min-height: 44px; }
+  .btn-row input[type=checkbox] { width: 24px; height: 24px; }
+  .btn-row .lbl { font-weight: bold; color: #33691e; }
+
+  .scene-card { border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); background: #fff; }
+  canvas#cv { width: 100%; height: auto; display: block; }
+
+  .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 150px; border-radius: 12px; padding: 6px 10px; font-weight: bold; text-align: center; line-height: 1.5; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .stat .big { font-size: 1.3rem; color: #33691e; }
+
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #558b2f; line-height: 1.6; }
+  .ask { font-weight: bold; color: #33691e; text-align: center; margin: 8px 0 2px; line-height: 1.6; }
+  .help { line-height: 1.7; }
+  .help h2 { font-size: 1.1rem; margin: 0 0 4px; color: #33691e; }
+  .help ul { margin: 0; padding-left: 1.3em; }
+  .safety { border: 3px solid #ef6c00; background: #fff8e1; }
+  .safety h2 { color: #e65100; }
+  .diff-note { font-size: 15px; color: #666; margin: 0; line-height: 1.6; }
+  .teacher-note { background: #f3e5f5; border: 2px solid #ab47bc; border-radius: 10px; padding: 8px 10px; font-size: 15px; line-height: 1.6; margin: 0; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1 data-j>🕯️ ものの燃え方</h1>
+<p class="subtitle" data-j>ものが燃えると、空気はどう変わるのだろうか？</p>
+
+<div class="panel" data-j>
+
+  <!-- タブ -->
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button class="chip active" data-tab="jar">① びんをかぶせる</button>
+      <button class="chip" data-tab="gas">② 気体をしらべる</button>
+      <button class="chip" data-tab="pure">③ 気体だけのびん</button>
+      <button class="chip" data-tab="mat">④ いろいろな物</button>
+      <button class="chip" data-tab="fire">⑤ 火を消すゲーム</button>
+    </div>
+  </div>
+
+  <!-- ① びんをかぶせる -->
+  <div class="card" id="pJar">
+    <div class="set-grid">
+      <span class="lbl">びんのふた</span>
+      <span class="chips" id="cLid">
+        <button class="chip active" data-lid="closed">ふたをする</button>
+        <button class="chip" data-lid="gap">すき間をあける</button>
+        <button class="chip" data-lid="none">ふたなし</button>
+      </span>
+      <span class="lbl">びんの下</span>
+      <span class="chips" id="cBot">
+        <button class="chip active" data-bot="0">すき間なし</button>
+        <button class="chip" data-bot="1">すき間あり</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn orange" id="btnLight">🔥 火をつける</button>
+      <button class="go-btn" id="btnCover">⬇ びんをかぶせる</button>
+      <button class="go-btn blue" id="btnRec">📝 記録する</button>
+      <button class="go-btn sub" id="btnReset">もういちど</button>
+    </div>
+  </div>
+
+  <!-- ② 気体をしらべる -->
+  <div class="card hidden" id="pGas">
+    <div class="set-grid">
+      <span class="lbl">しらべる空気</span>
+      <span class="chips" id="cJarG">
+        <button class="chip active" data-jar="A">A 燃やす前</button>
+        <button class="chip" data-jar="B">B 燃やした後</button>
+      </span>
+      <span class="lbl">使う物</span>
+      <span class="chips" id="cTool">
+        <button class="chip active" data-tool="o2">検知管（酸素用）</button>
+        <button class="chip" data-tool="co2L">検知管（二酸化炭素用 0.03〜1％）</button>
+        <button class="chip" data-tool="co2H">検知管（二酸化炭素用 0.5〜8％）</button>
+        <button class="chip" data-tool="lime">石灰水</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn" id="btnTest">🔍 しらべる</button>
+      <button class="go-btn sub" id="btnResetG">もういちど</button>
+    </div>
+    <div id="readBox" class="hidden">
+      <p class="ask">目もりを読もう。何％かな？</p>
+      <div class="chips" id="readChoices" style="justify-content:center"></div>
+    </div>
+  </div>
+
+  <!-- ③ 気体だけのびん -->
+  <div class="card hidden" id="pPure">
+    <div class="set-grid">
+      <span class="lbl">入れるびん</span>
+      <span class="chips" id="cPure">
+        <button class="chip active" data-g="air">空気</button>
+        <button class="chip" data-g="o2">酸素だけ</button>
+        <button class="chip" data-g="n2">ちっ素だけ</button>
+        <button class="chip" data-g="co2">二酸化炭素だけ</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn orange" id="btnPutP">🕯️ 火のついたろうそくを入れる</button>
+      <button class="go-btn" id="btnAllP">4つぜんぶに入れる</button>
+      <button class="go-btn sub" id="btnResetP">もういちど</button>
+    </div>
+  </div>
+
+  <!-- ④ いろいろな物 -->
+  <div class="card hidden" id="pMat">
+    <div class="set-grid">
+      <span class="lbl">燃やす物</span>
+      <span class="chips" id="cMat">
+        <button class="chip active" data-m="wood">木（わりばし）</button>
+        <button class="chip" data-m="paper">紙</button>
+        <button class="chip" data-m="steel">スチールウール（鉄）</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn orange" id="btnBurnM">🔥 火をつけて、びんに入れる</button>
+      <button class="go-btn blue" id="btnLimeM">🥛 石灰水を入れてふる</button>
+      <button class="go-btn sub" id="btnResetM">もういちど</button>
+    </div>
+  </div>
+
+  <!-- ⑤ 火を消すゲーム -->
+  <div class="card hidden" id="pFire">
+    <p class="ask" id="gQ"></p>
+    <div class="chips" id="gOpts" style="justify-content:center"></div>
+    <div id="gElemBox" class="hidden">
+      <p class="ask">これは、火が燃えるための3つのうち、どれをなくしたのかな？</p>
+      <div class="chips" id="gElems" style="justify-content:center">
+        <button class="chip" data-e="fuel">🪵 燃える物をなくす</button>
+        <button class="chip" data-e="oxygen">💨 酸素（空気）をなくす</button>
+        <button class="chip" data-e="heat">🌡️ 温度を下げる</button>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn hidden" id="btnNextF">つぎへ ▶</button>
+      <button class="go-btn sub" id="btnResetF">はじめから</button>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <canvas id="cv" width="800" height="440" aria-label="実験の図"></canvas>
+  </div>
+
+  <div class="card" id="speedCard">
+    <div class="btn-row" style="margin-top:0">
+      <span class="lbl">はやさ</span>
+      <span class="chips" id="cSpeed">
+        <button class="chip" data-speed="fast">はやおくり</button>
+        <button class="chip active" data-speed="normal">ふつう</button>
+        <button class="chip" data-speed="slow">ゆっくり</button>
+      </span>
+      <label id="lblSmoke"><input type="checkbox" id="chkSmoke" checked> 線香のけむり</label>
+      <label id="lblDots"><input type="checkbox" id="chkDots" checked> 空気のつぶを見る</label>
+    </div>
+  </div>
+
+  <div class="status-row">
+    <div class="stat"><span id="lA"></span><br><span class="big" id="sA"></span></div>
+    <div class="stat"><span id="lB"></span><br><span class="big" id="sB"></span></div>
+    <div class="stat"><span id="lC"></span><br><span class="big" id="sC"></span></div>
+  </div>
+  <div class="msg" id="msg"></div>
+
+  <div class="card help" id="help"></div>
+
+  <div class="card help safety" id="safety"></div>
+
+  <p class="teacher-note hidden" id="tNote"></p>
+
+  <div class="card">
+    <p class="diff-note">※じっさいとのちがい：気体の割合（燃やした後、酸素 約17％・二酸化炭素 約3〜4％）は、実験のめやすです。びんの大きさ・ろうそくの太さ・はかるときの混ざり方で、数は少しちがいます。ろうそくが消えても、酸素はぜんぶなくなるわけではありません。上だけあいたびん（下にすき間なし）は、びんの口の広さや高さによって、燃え続けることも、消えることもあります。燃える時間は、本物とだいたい同じくらいにしていますが、スチールウールや酸素だけのびんの時間は短くしています。空気のつぶ（●■・）は、空気を100こ（③は40こ）で表したイメージで、本物のつぶはとても小さくて見えません。気体検知管の色は、会社や種類によってちがいます。</p>
+  </div>
+
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// =====================================================================
+// ふりがな辞書：{漢字|よみ} の形で書いておくと、画面の文字に自動でふりがなが付きます。
+// （長いことばから先に当てはめます。足りないことばは、ここに足してください）
+// =====================================================================
+const DICT_SRC = [
+  '{二酸化炭素|にさんかたんそ}', '{酸素|さんそ}', '{気体検知管|きたいけんちかん}', '{検知管|けんちかん}', '{石灰水|せっかいすい}', '{集気|しゅうき}びん',
+  '{線香|せんこう}', '{燃焼|ねんしょう}さじ', '{燃|も}え', '{燃|も}や', '{燃|も}す', '{空気|くうき}', '{気体|きたい}', '{割合|わりあい}', '{円|えん}グラフ',
+  '{予想|よそう}', '{実験|じっけん}', '{結果|けっか}', '{記録|きろく}', '{考察|こうさつ}', '{消|け}え', '{消|け}す', '{消|け}し', '{消防車|しょうぼうしゃ}', '{消火器|しょうかき}',
+  '{温度|おんど}', '{下|さ}げ', '{下|さ}が', '{上|あ}げ', '{上|うえ}', '{下|した}', '{物|もの}', '{木|き}', '{紙|かみ}', '{鉄|てつ}', '{金属|きんぞく}',
+  '{安全|あんぜん}', '{注意|ちゅうい}', '{水|みず}', '{入|い}れ', '{入|はい}', '{出|で}', '{白|しろ}く', '{白|しろ}い', '{変|か}わ', '{変|か}え', '{色|いろ}',
+  '{目|め}もり', '{読|よ}', '{時間|じかん}', '{大|おお}き', '{小|ちい}さ', '{明|あか}る', '{中|なか}', '{前|まえ}', '{後|あと}', '{熱|あつ}く', '{熱|あつ}い', '{熱|ねつ}',
+  '{光|ひか}', '{赤|あか}く', '{黒|くろ}', '{灰|はい}', '{炭|すみ}', '{元|もと}せん', '{油|あぶら}', '{山火事|やまかじ}', '{火事|かじ}', '{家|いえ}', '{息|いき}',
+  '{帰|かえ}', '{草|くさ}', '{進|すす}', '{先|さき}', '{送|おく}', '{流|なが}れ', '{通|とお}り', '{方法|ほうほう}', '{全部|ぜんぶ}', '{少|すこ}し', '{多|おお}', '{残|のこ}',
+  '{火|ひ}', '{間|ま}', '{何|なん}', '{同|おな}じ', '{見|み}', '{気|き}を', '{近|ちか}く', '{動|うご}', '{指|ゆび}', '{使|つか}', '{用|よう}', '{答|こた}え',
+  '{続|つづ}', '{最後|さいご}', '{手|て}', '{目|め}', '{次|つぎ}', '{知|し}らせ', '{大声|おおごえ}', '{本物|ほんもの}', '{場面|ばめん}', '{形|かたち}',
+  '{全体|ぜんたい}', '{一部|いちぶ}', '{保護|ほご}めがね', '{開|あ}け', '{閉|し}め', '{重|おも}', '{外|そと}', '{内側|うちがわ}', '{冷|ひ}や', '{答|こた}',
+  '{役|やく}', '{理由|りゆう}', '{点|てん}', '{近|ちか}', '{用意|ようい}', '{結|むす}ぶ', '{起|お}こ', '{絶対|ぜったい}'
+];
+const DICT = {};
+DICT_SRC.forEach(s => {
+  DICT[s.replace(/\{([^|}]+)\|[^}]+\}/g, '$1')] = s.replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>');
+});
+const DICT_RE = new RegExp(Object.keys(DICT).sort((a, b) => b.length - a.length)
+  .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+// 文字列にふりがなを付ける（タグの入っていない文字列に使う）
+const J = s => String(s).replace(DICT_RE, m => DICT[m]);
+// 画面の中の文字（data-j を付けたところ）に、まとめてふりがなを付ける
+function rubyfy(root) {
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const list = [];
+  while (w.nextNode()) {
+    const n = w.currentNode;
+    if (n.parentElement.closest('ruby, script, style, canvas, .teacher-note')) continue;
+    if (J(n.nodeValue) !== n.nodeValue) list.push(n);
+  }
+  list.forEach(n => {
+    const t = document.createElement('template');
+    t.innerHTML = J(n.nodeValue);
+    n.replaceWith(t.content);
+  });
+}
+document.querySelectorAll('[data-j]').forEach(rubyfy);
+
+// =====================================================================
+// 数の設定（ここを書きかえると、燃え方が変わる）
+// =====================================================================
+const AIR_O = 0.209;   // ふつうの空気の酸素の割合（約21％）
+const AIR_C = 0.0004;  // ふつうの空気の二酸化炭素の割合（約0.04％）
+const N2 = 0.781;      // ちっ素の割合（約78％）。燃えても変わらないことにしている
+const O_OUT = 0.170;   // 酸素がこの割合（約17％）まで減ると、ろうそくのほのおが消える
+const K = 0.0044;      // ろうそくが酸素を使う速さ（1秒あたり、割合で）。大きくすると早く消える
+const R_CANDLE = 0.87; // 使った酸素1に対して、できる二酸化炭素の量（ろうそく）
+// 空気の入れかわりやすさ（1秒あたり）。この数が大きいほど、外から新しい空気が入る
+//   top：ふたのようす、bot：下のすき間
+function exchOf(lid, bot) {
+  if (bot && lid === 'none') return 0.8;   // 下から入って、上から出ていく「通り道」ができる
+  if (bot && lid === 'gap') return 0.25;
+  if (lid === 'none') return 0.12;         // 上の口で、出ていく空気と入ってくる空気がすれちがう
+  if (lid === 'gap') return 0.02;
+  if (bot) return 0.008;                   // 下だけあいていても、空気はほとんど入れかわらない
+  return 0;
+}
+// 酸素の割合から、ほのおの大きさ（0〜1）を出す
+const flameF = o => Math.pow(clamp((o - O_OUT) / (AIR_O - O_OUT), 0, 1), 0.5);
+
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: J('ものの燃え方'),
+  question: J('びんの中のろうそくは、最後にどうなるだろうか？'),
+  predictionChoices: [J('ずっと燃え続ける'), J('だんだん小さくなって、消える'), J('すぐに消える'), J('もっと大きく燃える')],
+  experimentNote: J('①で、ふたとびんの下のすき間を変えて、びんをかぶせる。ろうそくが消えたら（または30秒以上燃え続けたら）「記録する」をおすと、表に入るよ。線香のけむりの動きにも注目しよう。'),
+  columns: [
+    { key: 'lid', label: J('ふた') },
+    { key: 'bot', label: J('びんの下') },
+    { key: 'res', label: J('ろうそく') },
+    { key: 'time', label: J('燃えた時間'), unit: '秒' },
+    { key: 'o', label: J('酸素'), unit: '%', digits: 1 },
+    { key: 'c', label: J('二酸化炭素'), unit: '%', digits: 1 }
+  ],
+  chart: false,
+  hint: 'まず「ふたをする・下すき間なし」でかぶせ、ほのおがだんだん小さくなって消えることを確かめます（約15秒）。次に「ふたなし・下すき間あり」にすると燃え続けることとくらべ、線香のけむりが下から入って上から出ていくことに注目させます。「消えたのは、びんの中の空気がどう変わったから？」と問い、円グラフで酸素が約21％→約17％に減り、二酸化炭素が約0.04％→約3〜4％にふえたことを読み取らせます。酸素がなくなったのではなく、一部が使われたことがポイントです（②の検知管で確かめます）。',
+  answer: 'ふたをしたびんの中では、ろうそくのほのおはだんだん小さくなって、やがて消える。下にすき間があり、上もあいていると、空気が下から入って上から出ていくので、新しい空気が入れかわり、燃え続ける。ものが燃えるには、新しい空気（酸素）が必要である。燃えると、空気中の酸素の一部が使われて減り（約21％→約17％）、二酸化炭素ができる（約0.04％→約3〜4％）。酸素がぜんぶなくなるわけではない。'
+});
+
+const $ = (id) => document.getElementById(id);
+const TEACHER = Worksheet.isTeacher();
+const cv = $('cv'), ctx = cv.getContext('2d');
+const W = 800, H = 440;
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+const SPEEDS = { slow: 0.4, normal: 1, fast: 3 };   // はやさ（時間の進み方の倍率）
+let speed = 1, showDots = true, showSmoke = true, tab = 'jar', clock = 0;
+const setMsg = s => { $('msg').innerHTML = s ? J(s) : ''; };
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+const hash = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }; // いつも同じになる「ばらばら」の数
+// 割合（0〜1）を「○○％」の数の文字にする（小さいときは小数第2位まで）
+const pct = v => { const p = v * 100; return p < 1 ? p.toFixed(2) : p.toFixed(1); };
+
+// ===== Canvas の大きさ（高解像度の画面でもくっきり） =====
+function fitCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+fitCanvas();
+
+// =====================================================================
+// 絵をかく道具
+// =====================================================================
+function text(s, x, y, size, color, align, bold) {
+  ctx.font = (bold === false ? '' : 'bold ') + size + 'px ' + FONT;
+  ctx.fillStyle = color || '#333'; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(s, x, y);
+}
+// 字のまわりを白くふちどって、何の上でも読めるようにする
+function labelText(s, x, y, size, color, align) {
+  ctx.font = 'bold ' + size + 'px ' + FONT; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineJoin = 'round'; ctx.strokeText(s, x, y);
+  ctx.fillStyle = color || '#333'; ctx.fillText(s, x, y);
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function drawTable(y) {
+  ctx.fillStyle = '#d7ccc8'; ctx.fillRect(0, y, W, H - y);
+  ctx.fillStyle = '#a1887f'; ctx.fillRect(0, y, W, 3);
+}
+
+// ----- 気体の色ともよう（色だけで見分けなくてよいように、もようも変える） -----
+//   ちっ素：灰色（もようなし）、酸素：青（ななめのしま）、二酸化炭素：オレンジ（水玉）、そのほか：うすい灰色（あみ目）
+function makePat(bg, fg, kind) {
+  const p = document.createElement('canvas'); p.width = p.height = 12;
+  const g = p.getContext('2d');
+  g.fillStyle = bg; g.fillRect(0, 0, 12, 12);
+  g.strokeStyle = fg; g.fillStyle = fg; g.lineWidth = 2.5;
+  if (kind === 'stripe') { g.beginPath(); g.moveTo(-3, 3); g.lineTo(3, -3); g.moveTo(0, 12); g.lineTo(12, 0); g.moveTo(9, 15); g.lineTo(15, 9); g.stroke(); }
+  else if (kind === 'dot') { g.beginPath(); g.arc(3, 3, 2, 0, Math.PI * 2); g.fill(); g.beginPath(); g.arc(9, 9, 2, 0, Math.PI * 2); g.fill(); }
+  else if (kind === 'grid') { g.lineWidth = 1; g.beginPath(); g.moveTo(6, 0); g.lineTo(6, 12); g.moveTo(0, 6); g.lineTo(12, 6); g.stroke(); }
+  return ctx.createPattern(p, 'repeat');
+}
+const PAT = {
+  n: makePat('#b0bec5', '#b0bec5', 'none'),
+  o: makePat('#0072B2', '#7cc4ee', 'stripe'),
+  c: makePat('#D55E00', '#ffd5b0', 'dot'),
+  x: makePat('#eceff1', '#90a4ae', 'grid')
+};
+const GN = { n: 'ちっ素', o: '酸素', c: '二酸化炭素', x: 'そのほか' };
+
+// 円グラフ（o：酸素、c：二酸化炭素の割合。ちっ素は N2 のまま、のこりは「そのほか」）
+function drawPie(cx, cy, r, o, c) {
+  const parts = [['n', N2], ['o', o], ['c', c], ['x', Math.max(0, 1 - N2 - o - c)]];
+  let a = -Math.PI / 2;
+  parts.forEach(([k, v]) => {
+    const b = a + v * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, a, b); ctx.closePath();
+    ctx.fillStyle = PAT[k]; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    a = b;
+  });
+  // 二酸化炭素は小さいので、場所に印を付ける
+  if (c > 0.002) {
+    const mid = -Math.PI / 2 + (N2 + o + c / 2) * Math.PI * 2;
+    const x1 = cx + Math.cos(mid) * r, y1 = cy + Math.sin(mid) * r;
+    const x2 = cx + Math.cos(mid) * (r + 16), y2 = cy + Math.sin(mid) * (r + 16);
+    ctx.strokeStyle = '#D55E00'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+  // 中に大きく割合を書く
+  labelText('ちっ素', cx - r * 0.12, cy + r * 0.25, 15, '#37474f');
+  if (o > 0.05) labelText('酸素', cx + r * 0.0 - r * 0.45, cy - r * 0.45, 15, '#003f6b');
+}
+// 気体の表（はじめ と いま）。x,y：左上
+function drawGasTable(x, y, o0, c0, o, c, head1, head2) {
+  const rows = [['o', o0, o], ['c', c0, c], ['n', N2, N2]];
+  text(head1 || 'はじめ', x + 168, y, 14, '#555');
+  text(head2 || 'いま', x + 232, y, 14, '#555');
+  rows.forEach(([k, a, b], i) => {
+    const yy = y + 26 + i * 30;
+    ctx.fillStyle = PAT[k]; ctx.fillRect(x, yy - 10, 22, 20);
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.strokeRect(x, yy - 10, 22, 20);
+    text(GN[k], x + 30, yy, 16, '#333', 'left');
+    text(k === 'n' ? '約78％' : pct(a) + '％', x + 168, yy, 15, '#555');
+    const chg = k !== 'n' && Math.abs(b - a) > 0.0005;
+    text(k === 'n' ? '約78％' : pct(b) + '％', x + 232, yy, 16, chg ? (b < a ? '#0072B2' : '#bf360c') : '#333');
+    if (chg) text(b < a ? '↓' : '↑', x + 264, yy, 16, b < a ? '#0072B2' : '#bf360c');
+  });
+}
+// 空気のつぶ1こ（酸素：青い●、二酸化炭素：オレンジの■、ちっ素など：灰色の小さい・）
+function mol(type, x, y) {
+  if (type === 'o') { ctx.fillStyle = '#0072B2'; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.stroke(); }
+  else if (type === 'c') { ctx.fillStyle = '#D55E00'; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeStyle = '#5d2a00'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); }
+  else { ctx.fillStyle = '#90a4ae'; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); }
+}
+// つぶの場所（いつも同じになるように、hash で決める）
+function makeDots(n, seed) { return Array.from({ length: n }, (_, i) => ({ u: hash(seed + i * 3.1), v: hash(seed + i * 7.7 + 1), ph: hash(seed + i) * 6.28 })); }
+// つぶをかく。box：かく場所 {x0,y0,x1,y1}、o・c：酸素と二酸化炭素の割合
+function drawDots(dots, box, o, c) {
+  const n = dots.length, nO = Math.round(o * n), nC = Math.round(c * n);
+  dots.forEach((d, i) => {
+    const t = i < nO ? 'o' : i < nO + nC ? 'c' : 'n';
+    const x = box.x0 + 6 + d.u * (box.x1 - box.x0 - 12) + Math.sin(clock * 1.7 + d.ph) * 4;
+    const y = box.y0 + 6 + d.v * (box.y1 - box.y0 - 12) + Math.cos(clock * 1.3 + d.ph * 2) * 4;
+    mol(t, x, y);
+  });
+}
+
+// ----- ほのお -----
+// x：しんの先、y：しんの先の高さ、s：大きさ（1がふつう）、bright：酸素の中の明るいほのお
+function drawFlame(x, y, s, bright) {
+  if (s <= 0.03) return;
+  const fl = 1 + Math.sin(clock * 17 + x) * 0.05 + Math.sin(clock * 29) * 0.04 * (1.3 - Math.min(s, 1));
+  const sway = Math.sin(clock * 9 + x * 0.1) * 2.2 * (1.2 - Math.min(s, 1));
+  const h = 46 * s * fl, w = 13 * s;
+  // まわりの光
+  const glow = ctx.createRadialGradient(x, y - h * 0.4, 2, x, y - h * 0.4, h * 1.3 + 10);
+  glow.addColorStop(0, bright ? 'rgba(255,255,220,0.55)' : 'rgba(255,200,80,0.35)');
+  glow.addColorStop(1, 'rgba(255,200,80,0)');
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y - h * 0.4, h * 1.3 + 10, 0, Math.PI * 2); ctx.fill();
+  const tear = (sc, dy) => {
+    const hh = h * sc, ww = w * sc, tx = x + sway * sc;
+    ctx.beginPath(); ctx.moveTo(tx, y - hh + dy);
+    ctx.bezierCurveTo(x + ww * 0.5, y - hh * 0.6 + dy, x + ww * 1.15, y - hh * 0.25 + dy, x + ww * 0.8, y - hh * 0.02 + dy);
+    ctx.quadraticCurveTo(x, y + hh * 0.14 + dy, x - ww * 0.8, y - hh * 0.02 + dy);
+    ctx.bezierCurveTo(x - ww * 1.15, y - hh * 0.25 + dy, x - ww * 0.5, y - hh * 0.6 + dy, tx, y - hh + dy);
+  };
+  const g = ctx.createLinearGradient(x, y, x, y - h);
+  if (bright) { g.addColorStop(0, '#ffe082'); g.addColorStop(0.5, '#fffde7'); g.addColorStop(1, '#ffffff'); }
+  else { g.addColorStop(0, '#ff8f00'); g.addColorStop(0.45, '#ffb300'); g.addColorStop(1, '#ffe082'); }
+  tear(1, 0); ctx.fillStyle = g; ctx.fill();
+  tear(0.55, -2); ctx.fillStyle = bright ? '#ffffff' : '#fff8d6'; ctx.fill();
+  // いちばん下の青いところ
+  ctx.fillStyle = 'rgba(66,135,245,0.55)'; ctx.beginPath(); ctx.ellipse(x, y - 2, w * 0.55, h * 0.08 + 1, 0, 0, Math.PI * 2); ctx.fill();
+}
+// ろうそく。x：まん中、yb：下、h：高さ、w：はば。しんの先の y を返す
+function drawCandle(x, yb, h, w) {
+  ctx.fillStyle = '#fffaf0'; ctx.strokeStyle = '#bcaaa4'; ctx.lineWidth = 2;
+  ctx.fillRect(x - w / 2, yb - h, w, h); ctx.strokeRect(x - w / 2, yb - h, w, h);
+  ctx.fillStyle = '#fff3e0'; ctx.beginPath(); ctx.ellipse(x, yb - h, w / 2, 3, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x, yb - h); ctx.lineTo(x + 1, yb - h - 8); ctx.stroke();
+  return yb - h - 8;
+}
+// ----- 集気びん（底なし） -----
+// cx：まん中、yb：びんの下のはし、w：はば、h：高さ。形の数を返す
+function jarGeo(cx, yb, w, h) {
+  const mw = w * 0.62;
+  return { cx, yb, w, h, x0: cx - w / 2, x1: cx + w / 2, my: yb - h, sh: yb - h + h * 0.16, mx0: cx - mw / 2, mx1: cx + mw / 2 };
+}
+// lid：'closed'（ふた）・'gap'（すき間）・'none'（なし）、fog：くもり 0〜1
+function drawJar(g, lid, fog, lime) {
+  const { cx, yb, x0, x1, my, sh, mx0, mx1 } = g;
+  ctx.beginPath();
+  ctx.moveTo(x0, yb); ctx.lineTo(x0, sh + 14); ctx.quadraticCurveTo(x0, sh - 4, mx0, sh - 8); ctx.lineTo(mx0, my);
+  ctx.lineTo(mx1, my); ctx.lineTo(mx1, sh - 8); ctx.quadraticCurveTo(x1, sh - 4, x1, sh + 14); ctx.lineTo(x1, yb);
+  ctx.fillStyle = 'rgba(200,230,255,0.22)'; ctx.fill();
+  ctx.strokeStyle = '#78909c'; ctx.lineWidth = 3; ctx.stroke();
+  // 口のふち
+  ctx.fillStyle = '#90a4ae'; ctx.fillRect(mx0 - 4, my - 2, 8, 10); ctx.fillRect(mx1 - 4, my - 2, 8, 10);
+  // 光のすじ
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(x0 + 12, sh + 20); ctx.lineTo(x0 + 12, yb - 20); ctx.stroke();
+  // 石灰水（lime = {lv：量 0〜1, cloud：にごり 0〜1}）
+  if (lime && lime.lv > 0) {
+    const lh = 34 * lime.lv;
+    ctx.fillStyle = 'rgba(225,240,250,0.7)'; ctx.fillRect(x0 + 2, yb - lh, x1 - x0 - 4, lh);
+    if (lime.cloud > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.85 * lime.cloud) + ')'; ctx.fillRect(x0 + 2, yb - lh, x1 - x0 - 4, lh);
+      ctx.fillStyle = 'rgba(160,160,160,' + (0.6 * lime.cloud) + ')';
+      for (let i = 0; i < 40 * lime.cloud; i++) ctx.fillRect(x0 + 6 + hash(i) * (x1 - x0 - 12), yb - lh + 3 + hash(i + 50) * (lh - 6), 2, 2);
+    }
+    ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x0 + 2, yb - lh); ctx.lineTo(x1 - 2, yb - lh); ctx.stroke();
+  }
+  // くもり（びんの内側に水てき）
+  if (fog > 0.01) {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    const n = Math.floor(60 * fog);
+    for (let i = 0; i < n; i++) {
+      const side = i % 2 ? x0 + 5 + hash(i) * 14 : x1 - 5 - hash(i) * 14;
+      ctx.beginPath(); ctx.arc(side, sh + 10 + hash(i + 9) * (yb - sh - 20), 1.5 + hash(i + 3) * 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // ふた（ガラスの板）
+  if (lid !== 'none') {
+    const off = lid === 'gap' ? 22 : 0;
+    ctx.fillStyle = 'rgba(176,216,240,0.85)'; ctx.strokeStyle = '#607d8b'; ctx.lineWidth = 2;
+    ctx.fillRect(mx0 - 14 + off, my - 9, mx1 - mx0 + 28, 8); ctx.strokeRect(mx0 - 14 + off, my - 9, mx1 - mx0 + 28, 8);
+  }
+}
+
+// =====================================================================
+// ① びんをかぶせる
+// =====================================================================
+const CX = 230, TABLE = 400, CLAYT = 388;   // ろうそくのまん中・机の高さ・ねん土の上
+const JW = 190, JH = 250;                   // びんのはばと高さ
+const D = {
+  lid: 'closed', bot: false,
+  lit: false, f: 0,            // 火がついているか・ほのおの大きさ
+  lift: 1, dropping: false, covered: false,
+  o: AIR_O, c: AIR_C, t: 0, outT: null, fog: 0,
+  changed: false, recorded: false, toldLong: false,
+  inc: { x: 70, y: 368 }, drag: false,   // 線香の先の場所
+  smoke: [], spawn: 0, wick: 0
+};
+const dotsJar = makeDots(100, 11);
+function jarBottom() { return D.bot ? CLAYT - 14 : CLAYT; }
+function curJar() { return jarGeo(CX, jarBottom() - D.lift * 240, JW, JH); }
+function resetJar() {
+  Object.assign(D, { lit: false, f: 0, lift: 1, dropping: false, covered: false, o: AIR_O, c: AIR_C, t: 0, outT: null, fog: 0,
+    changed: false, recorded: false, toldLong: false, smoke: [], wick: 0 });
+}
+const WICK_Y = CLAYT - 78 - 8;  // ろうそくのしんの先の高さ
+
+// 線香のけむりの動き（場所によって、風の向きを決める）
+function smokeVel(p) {
+  let vx = Math.sin(p.y * 0.05 + clock * 2 + p.s) * 7, vy = -18;
+  const g = curJar(), dx = p.x - CX;
+  const s = D.lit ? 0.3 + 0.7 * D.f : 0.12;     // ほのおが大きいほど、空気の流れが強い
+  if (!D.covered) {
+    // びんをかぶせていないとき：ほのおの上は、あたたまった空気が上がる
+    if (D.lit && D.lift > 0.5) {
+      if (p.y < WICK_Y + 25 && Math.abs(dx) < 40 + (WICK_Y - p.y) * 0.15) { vx -= dx * 1.2; vy -= 75 * D.f; }
+      if (p.y > WICK_Y - 10 && Math.abs(dx) < 150) vx -= Math.sign(dx) * 28 * D.f;
+    }
+    return [vx, vy];
+  }
+  const ins = p.x > g.x0 && p.x < g.x1 && p.y > g.my && p.y < g.yb;
+  const top = D.lid === 'none' ? [g.mx0, g.mx1] : D.lid === 'gap' ? [g.mx0, g.mx0 + 20] : null;
+  const tc = top ? (top[0] + top[1]) / 2 : CX;
+  if (ins) {
+    if (D.bot && top) {
+      // 通り道：下から入って、ほのおであたためられて、上から出ていく
+      vx = -dx * 0.9 * s + (p.y < g.sh + 20 ? (tc - p.x) * 1.5 * s : 0);
+      vy = -75 * s;
+    } else {
+      // 中でぐるぐる回る（まん中は上へ、かべのそばは下へ）
+      const k = Math.cos(Math.PI * clamp(dx / 60, -1, 1));
+      vy = -55 * s * k;
+      vx = (p.y > WICK_Y ? -dx : dx) * 0.45 * s;
+      if (top && p.y < g.sh + 10 && p.x > top[0] && p.x < top[1]) vy -= 30 * s;
+    }
+  } else {
+    // びんの外：下のすき間から、すいこまれる
+    if (D.bot && D.lit && p.y > g.yb - 45 && p.y < CLAYT && ((p.x < g.x0 && p.x > g.x0 - 100) || (p.x > g.x1 && p.x < g.x1 + 100))) {
+      const pull = top ? 1 : 0.12;
+      vx = -Math.sign(dx) * 60 * s * pull; vy = (g.yb + 7 - p.y) * 2.5 * pull;
+    }
+    // 上だけあいているとき：口のはしから、少しずつ入る
+    if (top && !D.bot && D.lit && p.y < g.my && p.y > g.my - 80 && Math.abs(p.x - tc) < (top[1] - top[0]) / 2 + 60) {
+      if (Math.abs(p.x - tc) > (top[1] - top[0]) * 0.25) { vy = 35 * s; vx = Math.sign(p.x - tc) * 4; }
+    }
+    // 口から出ていくけむりは上へ
+    const exitHalf = D.bot ? (top ? (top[1] - top[0]) / 2 + 10 : 0) : (top ? (top[1] - top[0]) * 0.25 : 0);
+    if (top && p.y < g.my + 5 && Math.abs(p.x - tc) < exitHalf && p.y > g.my - 120) vy -= 40 * s;
+  }
+  return [vx, vy];
+}
+function stepSmoke(dt) {
+  const g = curJar();
+  // 線香からけむりを出す
+  if (showSmoke) {
+    D.spawn += dt * 14;
+    while (D.spawn >= 1) { D.spawn--; D.smoke.push({ x: D.inc.x + (Math.random() - 0.5) * 3, y: D.inc.y - 2, a: 0, s: Math.random() * 6, w: false }); }
+  }
+  // 火が消えたあとの、しんからの白いけむり
+  if (D.wick > 0) {
+    D.wick -= dt;
+    if (Math.random() < dt * 18) D.smoke.push({ x: CX + (Math.random() - 0.5) * 3, y: WICK_Y - 2, a: 0, s: Math.random() * 6, w: true });
+  }
+  const top = D.lid === 'none' ? [g.mx0, g.mx1] : D.lid === 'gap' ? [g.mx0, g.mx0 + 20] : null;
+  D.smoke.forEach(p => {
+    const [vx, vy] = smokeVel(p);
+    let nx = p.x + vx * dt, ny = p.y + vy * dt;
+    if (D.covered) {
+      // かべ：横から通りぬけられない
+      const inY = ny > g.my + 2 && ny < g.yb;
+      if (inY && ((p.x < g.x0) !== (nx < g.x0) || (p.x > g.x1) !== (nx > g.x1))) nx = p.x;
+      // 上：ふたのところは通れない
+      const inX = nx > g.x0 && nx < g.x1;
+      if (inX && (p.y > g.my) !== (ny > g.my)) { if (!top || nx < top[0] || nx > top[1]) ny = p.y; }
+      // 下：すき間がなければ通れない
+      if (inX && !D.bot && (p.y < g.yb) !== (ny < g.yb)) ny = p.y;
+    }
+    if (ny > CLAYT - 2 && nx > CX - 125 && nx < CX + 125) ny = CLAYT - 2;
+    if (ny > TABLE - 2) ny = TABLE - 2;
+    p.x = nx; p.y = ny; p.a += dt;
+  });
+  D.smoke = D.smoke.filter(p => p.a < 9 && p.y > -20 && p.x > -10 && p.x < 495);
+  if (D.smoke.length > 420) D.smoke.splice(0, D.smoke.length - 420);
+}
+function stepJar(dt, sdt) {
+  if (D.dropping) {
+    D.lift = Math.max(0, D.lift - sdt * 1.1);
+    if (D.lift === 0) {
+      D.dropping = false; D.covered = true;
+      if (tab === 'jar') setMsg('びんをかぶせたよ。ほのおはどうなるかな？ 線香のけむりの動きも見てみよう。');
+    }
+  }
+  if (D.covered) {
+    const E = exchOf(D.lid, D.bot);
+    let use = 0;
+    if (D.lit) { use = K * Math.max(D.f, 0.3); D.t += sdt; }
+    D.o += (-use + E * (AIR_O - D.o)) * sdt;
+    D.c += (use * R_CANDLE + E * (AIR_C - D.c)) * sdt;
+    D.fog = Math.min(1, D.fog + use * sdt * 18 - E * D.fog * sdt * 0.3);
+    if (D.lit) {
+      D.f = flameF(D.o);
+      if (D.o <= O_OUT + 0.0003) {
+        D.lit = false; D.f = 0; D.outT = D.t; D.wick = 2.5;
+        if (tab === 'jar') setMsg('ほのおが消えた！（' + Math.round(D.t) + '秒）　円グラフで、びんの中の空気がどう変わったか見てみよう。');
+      } else if (D.t > 40 && !D.toldLong) {
+        D.toldLong = true;
+        if (tab === 'jar') setMsg('40秒たっても燃え続けているね。「記録する」をおそう。けむりはどこから入って、どこから出ている？');
+      }
+    }
+  } else if (D.lit) {
+    D.f = Math.min(1, D.f + sdt * 2);
+  }
+  stepSmoke(sdt);
+}
+function drawJarTab() {
+  drawTable(TABLE);
+  // ねん土
+  ctx.fillStyle = '#8d6e63'; roundRect(CX - 120, CLAYT, 240, TABLE - CLAYT + 2, 5); ctx.fill();
+  const g = curJar();
+  // すき間のための小さなねん土
+  if (D.bot) { ctx.fillStyle = '#6d4c41'; [CX - 60, CX + 40].forEach(x => ctx.fillRect(x, CLAYT - 14, 20, 14)); }
+  // つぶ（びんの中）
+  if (showDots && D.covered) drawDots(dotsJar, { x0: g.x0 + 4, y0: g.sh + 8, x1: g.x1 - 4, y1: g.yb - 4 }, D.o, D.c);
+  // ろうそく
+  drawCandle(CX, CLAYT, 78, 22);
+  if (D.lit) drawFlame(CX + 1, WICK_Y, 0.3 + 0.75 * D.f, false);
+  // 線香のけむり
+  D.smoke.forEach(p => {
+    const al = (p.w ? 0.5 : 0.3) * (1 - p.a / 9);
+    ctx.fillStyle = p.w ? 'rgba(250,250,250,' + al + ')' : 'rgba(120,120,120,' + al + ')';
+    if (p.w) { ctx.strokeStyle = 'rgba(150,150,150,' + al * 0.6 + ')'; ctx.lineWidth = 1; }
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.5 + p.a * 1.1, 0, Math.PI * 2); ctx.fill(); if (p.w) ctx.stroke();
+  });
+  drawJar(g, D.lid, D.fog);
+  // 線香
+  if (showSmoke) {
+    const t = D.inc;
+    ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(t.x - 60, t.y + 30); ctx.stroke(); ctx.lineCap = 'butt';
+    ctx.fillStyle = '#ff5722'; ctx.beginPath(); ctx.arc(t.x, t.y, 4, 0, Math.PI * 2); ctx.fill();
+    labelText('線香（指で動かせる）', Math.max(4, t.x - 80), t.y + 34 > TABLE + 30 ? t.y - 22 : t.y + 34, 13, '#5d4037', 'left');
+  }
+  // 右がわ：空気の割合
+  ctx.fillStyle = '#fff'; roundRect(505, 12, 285, 416, 12); ctx.fill();
+  ctx.strokeStyle = '#c5e1a5'; ctx.lineWidth = 3; ctx.stroke();
+  text(D.covered ? 'びんの中の空気の割合' : 'まわりの空気の割合', 647, 36, 18, '#33691e');
+  drawPie(647, 138, 78, D.o, D.c);
+  drawGasTable(518, 246, AIR_O, AIR_C, D.o, D.c, 'かぶせる前', 'いま');
+  if (D.outT !== null && D.covered) {
+    labelText('酸素は 0 にはならない！', 647, 368, 17, '#0072B2');
+    labelText('約' + Math.round(D.o * 100) + '％ のこっている', 647, 392, 16, '#0072B2');
+  } else if (showDots && D.covered) {
+    mol('o', 525, 382); text('酸素', 535, 382, 14, '#333', 'left');
+    mol('c', 590, 382); text('二酸化炭素', 600, 382, 14, '#333', 'left');
+    mol('n', 692, 382); text('ちっ素など', 700, 382, 14, '#333', 'left');
+    text('（空気を100こで表すと）', 647, 406, 13, '#666');
+  }
+  // 左上の説明
+  const lidT = { closed: 'ふたあり', gap: 'ふたにすき間', none: 'ふたなし' }[D.lid];
+  labelText(lidT + '・下のすき間' + (D.bot ? 'あり' : 'なし'), 12, 22, 16, '#33691e', 'left');
+  if (D.covered && D.lit) labelText('燃えている時間 ' + Math.floor(D.t) + '秒', 12, 46, 16, '#bf360c', 'left');
+}
+function canvasXY(ev) { const r = cv.getBoundingClientRect(); return { x: (ev.clientX - r.left) * W / r.width, y: (ev.clientY - r.top) * H / r.height }; }
+// 線香をびんのかべの中に入れないようにする
+function placeIncense(p) {
+  let x = clamp(p.x, 70, 485), y = clamp(p.y, 40, TABLE - 8);
+  if (y > CLAYT - 6 && x > CX - 125 && x < CX + 125) y = CLAYT - 6;
+  const g = curJar();
+  if (D.covered && x > g.x0 - 4 && x < g.x1 + 4 && y > g.my - 4 && y < g.yb) {
+    // いちばん近い外がわへ出す
+    const dl = x - (g.x0 - 6), dr = (g.x1 + 6) - x, du = y - (g.my - 12);
+    const m = Math.min(dl, dr, du);
+    if (m === dl) x = g.x0 - 6; else if (m === dr) x = g.x1 + 6; else y = g.my - 12;
+  }
+  D.inc.x = x; D.inc.y = y;
+}
+
+// =====================================================================
+// ② 気体をしらべる
+// =====================================================================
+// 検知管の種類。pos：その％が、目もりのどこ（0〜1）にあたるか
+const TUBES = {
+  o2:   { name: '酸素用 6〜24％', gas: 'o', min: 6, max: 24, pos: v => (v - 6) / 18, labels: [6, 9, 12, 15, 18, 21, 24], minor: [7, 8, 10, 11, 13, 14, 16, 17, 19, 20, 22, 23], choices: [15, 17, 19, 21], col: '#795548' },
+  co2L: { name: '二酸化炭素用 0.03〜1％', gas: 'c', min: 0.03, max: 1, pos: v => Math.log(v / 0.03) / Math.log(1 / 0.03), labels: [0.03, 0.05, 0.1, 0.2, 0.5, 1], minor: [0.04, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9], choices: [0.04, 0.1, 0.5, 1], col: '#7b1fa2' },
+  co2H: { name: '二酸化炭素用 0.5〜8％', gas: 'c', min: 0.5, max: 8, pos: v => (v - 0.5) / 7.5, labels: [0.5, 1, 2, 3, 4, 5, 6, 7, 8], minor: [1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5], choices: [1, 2.5, 3.5, 5], col: '#7b1fa2' }
+};
+const VAL = { A: { o: 21, c: 0.04 }, B: { o: 17, c: 3.5 } };   // AとBの空気の割合（％）のめやす
+const G = { jar: 'A', tool: 'o2', phase: 'idle', t: 0, prog: 0, lime: { A: { lv: 0, cloud: 0 }, B: { lv: 0, cloud: 0 } }, res: { A: {}, B: {} }, shake: 0, cur: null };
+function resetGas() {
+  Object.assign(G, { phase: 'idle', t: 0, prog: 0, lime: { A: { lv: 0, cloud: 0 }, B: { lv: 0, cloud: 0 } }, res: { A: {}, B: {} }, shake: 0, cur: null });
+  $('readBox').classList.add('hidden');
+}
+function gasJarGeo(j) { return jarGeo(j === 'A' ? 110 : 300, TABLE, 140, 200); }
+function startTest() {
+  if (G.phase !== 'idle' && G.phase !== 'done' && G.phase !== 'read') return;
+  $('readBox').classList.add('hidden');
+  G.cur = { jar: G.jar, tool: G.tool };
+  G.t = 0; G.prog = 0;
+  if (G.tool === 'lime') {
+    if (G.lime[G.jar].lv > 0) { setMsg('このびんには、もう石灰水が入っているよ。結果を見てみよう。'); G.phase = 'done'; return; }
+    G.phase = 'pour'; setMsg('びん' + G.jar + 'に石灰水を入れて、ふたをしてよくふるよ。');
+  } else {
+    G.phase = 'insert'; setMsg('検知管の両はしを折って、ポンプに付けて、びん' + G.jar + 'の中の気体をすいこむよ。');
+  }
+}
+function stepGas(dt, sdt) {
+  if (G.phase === 'idle' || G.phase === 'done' || G.phase === 'read') return;
+  G.t += sdt;
+  const c = G.cur;
+  if (G.phase === 'pour') {
+    G.lime[c.jar].lv = Math.min(1, G.t);
+    if (G.t >= 1) { G.phase = 'shake'; G.t = 0; }
+  } else if (G.phase === 'shake') {
+    G.shake = G.t < 2 ? Math.sin(G.t * 22) * 0.06 : 0;
+    if (c.jar === 'B') G.lime.B.cloud = clamp((G.t - 0.6) / 1.4, 0, 1);
+    if (G.t >= 2) {
+      G.phase = 'done'; G.shake = 0;
+      G.res[c.jar].l = c.jar === 'B' ? '白くにごった' : '変わらない';
+      if (tab === 'gas') setMsg(c.jar === 'B' ? '石灰水が白くにごった！ 燃やした後の空気には、二酸化炭素が多くふくまれている。' : '石灰水は、とうめいのまま。燃やす前の空気には、二酸化炭素が少ししかない。');
+    }
+  } else if (G.phase === 'insert') {
+    if (G.t >= 1) { G.phase = 'react'; G.t = 0; }
+  } else if (G.phase === 'react') {
+    G.prog = clamp(G.t / 2.5, 0, 1);
+    if (G.t >= 2.5) finishTube();
+  }
+}
+function finishTube() {
+  const c = G.cur, T = TUBES[c.tool], v = VAL[c.jar][T.gas];
+  if (T.pos(v) > 1) {
+    G.phase = 'done';
+    setMsg('ぜんぶの色が変わった！ 1％より多いので、この検知管でははかれない。「0.5〜8％」の検知管を使おう。');
+  } else if (T.pos(v) < 0) {
+    G.phase = 'done';
+    setMsg('色がほとんど変わらない。0.5％より少ないので、この検知管でははかれない。「0.03〜1％」の検知管を使おう。');
+  } else {
+    G.phase = 'read';
+    const box = $('readChoices'); box.innerHTML = '';
+    T.choices.forEach(ch => {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.textContent = '約' + ch + '％'; b.dataset.v = ch;
+      box.appendChild(b);
+    });
+    $('readBox').classList.remove('hidden');
+    setMsg('右の大きな図で、色が変わったところの、いちばん先の目もりを読もう。');
+  }
+}
+$('readChoices').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b || G.phase !== 'read') return;
+  const c = G.cur, T = TUBES[c.tool], v = VAL[c.jar][T.gas];
+  if (+b.dataset.v === v) {
+    b.classList.add('ok');
+    G.res[c.jar][T.gas] = '約' + v + '％';
+    G.phase = 'done';
+    let m = '正かい！ 約' + v + '％。';
+    if (T.gas === 'o') m += '　⚠ 酸素用の検知管は、使ったあと熱くなるので、すぐにさわらないでね。';
+    if (c.jar === 'B' && T.gas === 'o') m = '正かい！ 約17％。燃やした後も、酸素はなくなっていない。' + m.slice(m.indexOf('⚠') - 1);
+    setMsg(m);
+    setTimeout(() => { if (G.phase === 'done') $('readBox').classList.add('hidden'); }, 1500);
+  } else {
+    b.classList.add('ng'); b.disabled = true;
+    setMsg('おしい！ 色が変わったところと、変わっていないところの「さかい目」の目もりを読もう。');
+  }
+});
+// 検知管を大きくかく。x0〜x1：管のはば、y：まん中、frac：色が変わった長さ（0〜1）
+function drawTubeZoom(T, frac, x0, x1, y) {
+  const L = x1 - x0;
+  roundRect(x0 - 12, y - 18, L + 24, 36, 16); ctx.fillStyle = 'rgba(230,245,255,0.9)'; ctx.fill(); ctx.strokeStyle = '#607d8b'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#fff3c4'; ctx.fillRect(x0, y - 11, L, 22);
+  if (frac > 0) {
+    const f = Math.min(frac, 1) * L;
+    ctx.fillStyle = T.col; ctx.fillRect(x0, y - 11, f, 22);
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 2;
+    ctx.save(); ctx.beginPath(); ctx.rect(x0, y - 11, f, 22); ctx.clip();
+    for (let i = -30; i < f + 30; i += 9) { ctx.beginPath(); ctx.moveTo(x0 + i, y + 11); ctx.lineTo(x0 + i + 14, y - 11); ctx.stroke(); }
+    ctx.restore();
+  }
+  // 目もり
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5;
+  T.labels.forEach(v => { const x = x0 + T.pos(v) * L; ctx.beginPath(); ctx.moveTo(x, y + 11); ctx.lineTo(x, y + 24); ctx.stroke(); text(String(v), x, y + 34, 14, '#333'); });
+  T.minor.forEach(v => { const x = x0 + T.pos(v) * L; ctx.beginPath(); ctx.moveTo(x, y + 11); ctx.lineTo(x, y + 18); ctx.stroke(); });
+  text('すいこむ口 →', x0 - 4, y - 30, 13, '#666', 'left');
+  text('（％）', x1 + 6, y + 34, 13, '#666', 'left');
+}
+function drawGasTab() {
+  drawTable(TABLE);
+  ['A', 'B'].forEach(j => {
+    const g = gasJarGeo(j);
+    const sh = G.cur && G.cur.jar === j && G.phase === 'shake' ? G.shake : 0;
+    ctx.save(); ctx.translate(g.cx, g.yb); ctx.rotate(sh); ctx.translate(-g.cx, -g.yb);
+    if (j === 'B') {   // 燃やしたあとのろうそく（火は消えている）
+      ctx.fillStyle = '#8d6e63'; ctx.fillRect(g.cx - 25, TABLE - 10, 50, 10);
+      drawCandle(g.cx, TABLE - 10, 40, 14);
+    }
+    drawJar(g, 'closed', j === 'B' ? 0.5 : 0, G.lime[j]);
+    ctx.restore();
+    // ふだ
+    ctx.fillStyle = j === 'A' ? '#e3f2fd' : '#fff3e0'; roundRect(g.cx - 85, 406, 170, 30, 10); ctx.fill();
+    ctx.strokeStyle = (G.jar === j) ? '#33691e' : '#bbb'; ctx.lineWidth = G.jar === j ? 4 : 2; ctx.stroke();
+    text(j + '　' + (j === 'A' ? '燃やす前の空気' : '燃やした後の空気'), g.cx, 421, 15, '#333');
+  });
+  // 検知管とポンプ
+  const c = G.cur;
+  if (c && c.tool !== 'lime' && G.phase !== 'idle') {
+    const g = gasJarGeo(c.jar), T = TUBES[c.tool];
+    const down = G.phase === 'insert' ? clamp(G.t, 0, 1) : 1;
+    const tx = g.cx + 18, ty0 = g.my - 70 - (1 - down) * 60, ty1 = ty0 + 170;
+    ctx.fillStyle = '#fff3c4'; ctx.fillRect(tx - 4, ty0, 8, ty1 - ty0);
+    const fr = G.phase === 'insert' ? 0 : G.prog * clamp(T.pos(VAL[c.jar][T.gas]), 0, 1);
+    ctx.fillStyle = T.col; ctx.fillRect(tx - 4, ty1 - fr * (ty1 - ty0), 8, fr * (ty1 - ty0));
+    ctx.strokeStyle = '#607d8b'; ctx.lineWidth = 1.5; ctx.strokeRect(tx - 4, ty0, 8, ty1 - ty0);
+    // ポンプ
+    const pull = G.phase === 'react' ? Math.min(1, G.t * 3) : G.phase === 'insert' ? 0 : 1;
+    ctx.fillStyle = '#eceff1'; ctx.strokeStyle = '#546e7a'; ctx.lineWidth = 2;
+    ctx.fillRect(tx - 14, ty0 - 70, 28, 70); ctx.strokeRect(tx - 14, ty0 - 70, 28, 70);
+    ctx.fillStyle = '#546e7a'; ctx.fillRect(tx - 3, ty0 - 70 - 30 * pull - 10, 6, 30 * pull + 10);
+    ctx.fillRect(tx - 16, ty0 - 70 - 30 * pull - 16, 32, 8);
+    labelText('検知管', tx + 34, ty0 + 40, 14, '#333', 'left');
+  }
+  // 右上：大きくした図
+  ctx.fillStyle = '#fff'; roundRect(420, 12, 370, 196, 12); ctx.fill(); ctx.strokeStyle = '#c5e1a5'; ctx.lineWidth = 3; ctx.stroke();
+  if (c && c.tool !== 'lime' && G.phase !== 'idle' && G.phase !== 'insert') {
+    const T = TUBES[c.tool];
+    text('検知管を大きくすると（' + T.name + '）', 605, 38, 15, '#33691e');
+    drawTubeZoom(T, G.prog * clamp(T.pos(VAL[c.jar][T.gas]), -1, 2), 450, 760, 100);
+    if (G.phase === 'done' && G.res[c.jar][T.gas]) labelText('→ ' + G.res[c.jar][T.gas], 605, 172, 20, '#bf360c');
+  } else if (G.tool === 'lime' || (c && c.tool === 'lime')) {
+    text('石灰水のせいしつ', 605, 38, 17, '#33691e');
+    [[520, 0, 'とうめいのまま'], [690, 1, '白くにごる']].forEach(([x, cl, s]) => {
+      ctx.fillStyle = 'rgba(225,240,250,0.8)'; ctx.fillRect(x - 18, 70, 36, 70);
+      if (cl) { ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fillRect(x - 18, 90, 36, 50); ctx.fillStyle = '#aaa'; for (let i = 0; i < 20; i++) ctx.fillRect(x - 15 + hash(i) * 30, 93 + hash(i + 7) * 44, 2, 2); }
+      ctx.strokeStyle = '#78909c'; ctx.lineWidth = 2; ctx.strokeRect(x - 18, 70, 36, 70);
+      text(s, x, 160, 15, '#333');
+    });
+    text('二酸化炭素が', 605, 98, 15, '#555'); text('多いと →', 605, 118, 15, '#555');
+  } else {
+    text('検知管を使うと、気体の割合（％）が', 605, 80, 16, '#555');
+    text('目もりで読めるよ', 605, 104, 16, '#555');
+    text('上でびんと使う物をえらんで「しらべる」', 605, 150, 15, '#33691e');
+  }
+  // 右下：結果の表
+  ctx.fillStyle = '#fff'; roundRect(420, 218, 370, 172, 12); ctx.fill(); ctx.strokeStyle = '#c5e1a5'; ctx.lineWidth = 3; ctx.stroke();
+  text('わかったこと', 605, 240, 16, '#33691e');
+  const cx = [470, 560, 660, 745];
+  ['', '酸素', '二酸化炭素', '石灰水'].forEach((s, i) => text(s, cx[i], 270, 15, '#555'));
+  ['A', 'B'].forEach((j, r) => {
+    const y = 310 + r * 50;
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(430, y - 25); ctx.lineTo(780, y - 25); ctx.stroke();
+    text(j === 'A' ? 'A 前' : 'B 後', cx[0], y, 16, '#333');
+    const R = G.res[j];
+    text(R.o || '？', cx[1], y, 16, R.o ? '#0072B2' : '#bbb');
+    text(R.c || '？', cx[2], y, 16, R.c ? '#bf360c' : '#bbb');
+    text(R.l || '？', cx[3], y, R.l && R.l.length > 4 ? 13 : 16, R.l ? '#333' : '#bbb');
+  });
+}
+
+// =====================================================================
+// ③ 気体だけのびん
+// =====================================================================
+const PURE = {
+  air: { name: '空気', o: AIR_O, c: AIR_C, x: 100 },
+  o2:  { name: '酸素', o: 0.97, c: 0, x: 295 },
+  n2:  { name: 'ちっ素', o: 0, c: 0, x: 490 },
+  co2: { name: '二酸化炭素', o: 0, c: 1, x: 685 }
+};
+const P = { sel: 'air', j: {} };
+const dotsPure = makeDots(40, 77);
+function resetPure() {
+  Object.keys(PURE).forEach(k => { P.j[k] = { phase: 'idle', t: 0, f: 1, o: PURE[k].o, c: PURE[k].c, res: '', lit: false, out: 0 }; });
+}
+function pureGeo(k) { return jarGeo(PURE[k].x, TABLE, 150, 240); }
+function putPure(k) {
+  const s = P.j[k];
+  if (s.phase !== 'idle') return false;
+  Object.assign(s, { phase: 'open', t: 0, f: 1, lit: true });
+  return true;
+}
+function stepPure(dt, sdt) {
+  Object.keys(P.j).forEach(k => {
+    const s = P.j[k]; if (s.phase === 'idle') return;
+    s.t += sdt;
+    // ふたをあける(0.4秒) → さじを下ろす(1.2秒) → ふたをもどす
+    if (s.phase === 'open' && s.t > 0.4) { s.phase = 'lower'; s.t = 0; }
+    else if (s.phase === 'lower' && s.t > 1.2) { s.phase = 'in'; s.t = 0; }
+    const inside = s.phase === 'in' || (s.phase === 'lower' && s.t > 0.5);
+    if (!s.lit || !inside) return;
+    if (k === 'n2' || k === 'co2') {
+      s.out += sdt;
+      s.f = Math.max(0, 1 - s.out / 0.35);
+      if (s.out > 0.35) { s.lit = false; s.res = 'すぐに消えた'; s.f = 0; }
+    } else if (k === 'air') {
+      const use = 0.012 * Math.max(s.f, 0.3);
+      s.o -= use * sdt; s.c += use * R_CANDLE * sdt;
+      s.f = flameF(s.o);
+      if (s.o <= O_OUT + 0.0003) { s.lit = false; s.res = 'しばらく燃えて消えた'; s.f = 0; }
+    } else {   // 酸素だけ：大きく明るく燃える
+      const use = 0.016;
+      s.o -= use * sdt; s.c += use * R_CANDLE * sdt;
+      s.f = 1.8 * clamp((s.o - 0.55) / 0.12, 0, 1);
+      if (!s.res) s.res = 'はげしく燃えた';
+      if (s.f <= 0.05) { s.lit = false; s.f = 0; s.res = 'はげしく燃えて、やがて消えた'; }
+    }
+  });
+}
+function drawPureTab() {
+  drawTable(TABLE);
+  Object.keys(PURE).forEach(k => {
+    const g = pureGeo(k), s = P.j[k], info = PURE[k];
+    if (showDots) drawDots(dotsPure, { x0: g.x0 + 4, y0: g.sh + 8, x1: g.x1 - 4, y1: g.yb - 4 }, s.o, s.c);
+    // 燃焼さじとろうそく
+    if (s.phase !== 'idle') {
+      const p = s.phase === 'open' ? 0 : s.phase === 'lower' ? clamp(s.t / 1.2, 0, 1) : 1;
+      const yb = (g.my - 30) + p * (g.yb - 70 - (g.my - 30));
+      ctx.strokeStyle = '#546e7a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(g.cx, 0); ctx.lineTo(g.cx, yb); ctx.stroke();
+      ctx.fillStyle = '#78909c'; ctx.beginPath(); ctx.ellipse(g.cx, yb + 2, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
+      const wy = drawCandle(g.cx, yb, 32, 12);
+      if (s.lit) drawFlame(g.cx + 1, wy, (0.3 + 0.7 * Math.min(s.f, 1)) * (s.f > 1 ? s.f * 0.85 : 0.8), k === 'o2');
+    }
+    const lid = s.phase === 'idle' ? 'closed' : s.phase === 'in' ? 'closed' : 'none';
+    drawJar(g, lid, 0);
+    // ふだと結果
+    ctx.fillStyle = P.sel === k ? '#dcedc8' : '#fff'; roundRect(g.cx - 72, 14, 144, 34, 10); ctx.fill();
+    ctx.strokeStyle = P.sel === k ? '#33691e' : '#bbb'; ctx.lineWidth = P.sel === k ? 4 : 2; ctx.stroke();
+    text(info.name === '空気' ? '空気' : info.name + 'だけ', g.cx, 31, 17, '#333');
+    if (s.res) labelText(s.res, g.cx, 422, s.res.length > 9 ? 13 : 16, s.res.indexOf('はげしく') >= 0 ? '#bf360c' : '#0d47a1');
+    else labelText('？', g.cx, 422, 18, '#999');
+  });
+  if (showDots) {
+    mol('o', 20, 64); text('酸素', 30, 64, 13, '#333', 'left');
+    mol('c', 76, 64); text('二酸化炭素', 86, 64, 13, '#333', 'left');
+    mol('n', 168, 64); text('ちっ素', 176, 64, 13, '#333', 'left');
+  }
+}
+
+// =====================================================================
+// ④ いろいろな物
+// =====================================================================
+const MATS = {
+  wood:  { name: '木（わりばし）', r: 1.0 },   // r：使った酸素1に対して、できる二酸化炭素の量
+  paper: { name: '紙', r: 1.0 },
+  steel: { name: 'スチールウール', r: 0 }      // 鉄は炭素をふくまないので、二酸化炭素はできない
+};
+const M = { mat: 'wood', phase: 'idle', t: 0, o: AIR_O, c: AIR_C, f: 0, b: 0, lime: { lv: 0, cloud: 0 }, shake: 0, sparks: [] };
+const dotsMat = makeDots(60, 33);
+function resetMat() { Object.assign(M, { phase: 'idle', t: 0, o: AIR_O, c: AIR_C, f: 0, b: 0, lime: { lv: 0, cloud: 0 }, shake: 0, sparks: [] }); }
+const MCX = 220;
+function stepMat(dt, sdt) {
+  if (M.phase === 'idle' || M.phase === 'done' || M.phase === 'out') { M.sparks = M.sparks.filter(s => (s.t += sdt) < 0.6); return; }
+  M.t += sdt;
+  if (M.phase === 'lower') { M.f = 1; M.b = Math.min(0.15, M.b + sdt * 0.05); if (M.t > 1.2) { M.phase = 'burn'; M.t = 0; } }
+  else if (M.phase === 'burn') {
+    const use = 0.0055 * Math.max(M.f, 0.3);
+    M.o -= use * sdt; M.c += use * MATS[M.mat].r * sdt;
+    M.f = flameF(M.o);
+    M.b = Math.min(1, M.b + use * sdt * 20);
+    if (M.o <= O_OUT + 0.0003) {
+      M.phase = 'out'; M.f = 0;
+      if (tab === 'mat') setMsg(M.mat === 'steel' ? '火が消えた。スチールウールは、黒っぽくなった。次は「石灰水を入れてふる」で、二酸化炭素ができたかしらべよう。' : '火が消えた。' + MATS[M.mat].name + 'は黒くこげて、炭や灰になった。次は「石灰水を入れてふる」でしらべよう。');
+    }
+  } else if (M.phase === 'pour') { M.lime.lv = Math.min(1, M.t); if (M.t >= 1) { M.phase = 'shake'; M.t = 0; } }
+  else if (M.phase === 'shake') {
+    M.shake = Math.sin(M.t * 22) * 0.05;
+    if (M.c > 0.005) M.lime.cloud = clamp((M.t - 0.6) / 1.4, 0, 1);
+    if (M.t >= 2) {
+      M.phase = 'done'; M.shake = 0;
+      if (tab === 'mat') setMsg(M.c > 0.005 ? '石灰水が白くにごった！ ' + MATS[M.mat].name + 'が燃えると、二酸化炭素ができる。' : '石灰水は、にごらない！ スチールウール（鉄）が燃えても、二酸化炭素はできない。でも、酸素は使われている。');
+    }
+  }
+  // スチールウールの火花
+  if (M.mat === 'steel' && (M.phase === 'burn' || M.phase === 'lower') && Math.random() < sdt * 25 * Math.max(M.f, 0.2)) {
+    M.sparks.push({ x: MCX + (Math.random() - 0.5) * 30, y: 280 + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 100, t: 0 });
+  }
+  M.sparks.forEach(s => { s.t += sdt; s.x += s.vx * sdt; s.y += s.vy * sdt; s.vy += 300 * sdt; });
+  M.sparks = M.sparks.filter(s => s.t < 0.6);
+}
+// 燃やす物をかく（x,y：燃焼さじの上）
+function drawMaterial(x, y) {
+  const b = M.b, burning = M.phase === 'lower' || M.phase === 'burn';
+  if (M.mat === 'wood') {
+    const h = 70;
+    ctx.fillStyle = '#d7b98e'; ctx.fillRect(x - 6, y - h, 12, h);
+    ctx.fillStyle = '#2b1d16'; ctx.fillRect(x - 6, y - h, 12, h * b * 0.8);     // こげて炭になったところ
+    if (b > 0.3) { ctx.fillStyle = '#9e9e9e'; ctx.fillRect(x - 5, y - h, 10, 5); }  // 灰
+    ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 6, y - h, 12, h);
+    if (burning) drawFlame(x, y - h + 4, 0.35 + 0.75 * M.f, false);
+  } else if (M.mat === 'paper') {
+    const h = 64 * (1 - 0.55 * b);
+    ctx.fillStyle = '#fafafa'; ctx.fillRect(x - 12, y - h, 24, h);
+    ctx.strokeStyle = '#bdbdbd'; ctx.lineWidth = 1; for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x - 12, y - h + i * h / 4); ctx.lineTo(x + 12, y - h + i * h / 4); ctx.stroke(); }
+    // 灰（黒くちぢれた紙）
+    if (b > 0.05) {
+      ctx.fillStyle = b > 0.6 ? '#616161' : '#212121';
+      ctx.beginPath(); ctx.moveTo(x - 13, y - h);
+      for (let i = 0; i <= 6; i++) ctx.lineTo(x - 13 + i * 26 / 6, y - h - 6 - hash(i) * 14 * Math.min(1, b * 2));
+      ctx.lineTo(x + 13, y - h); ctx.closePath(); ctx.fill();
+    }
+    ctx.strokeStyle = '#9e9e9e'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 12, y - h, 24, h);
+    if (burning) drawFlame(x, y - h - 4, 0.5 + 0.9 * M.f, false);
+  } else {
+    // スチールウール：細い鉄の糸がからまったもの
+    const glow = burning ? Math.max(M.f, 0.25) : 0;
+    for (let i = 0; i < 70; i++) {
+      const a = hash(i) * Math.PI * 2, r = 6 + hash(i + 40) * 22;
+      const px = x + Math.cos(a) * r, py = y - 26 + Math.sin(a) * r * 0.75;
+      const hot = burning && hash(i + 99) < b + 0.2;
+      ctx.strokeStyle = hot ? 'rgba(255,' + Math.floor(120 + 100 * glow * hash(i + 3)) + ',40,' + (0.6 + 0.4 * glow) + ')' : (b > 0.5 ? '#3e3e3e' : '#9e9e9e');
+      ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(px, py, 4 + hash(i + 7) * 8, a, a + 2.5); ctx.stroke();
+    }
+    if (burning) {
+      const gr = ctx.createRadialGradient(x, y - 26, 2, x, y - 26, 50);
+      gr.addColorStop(0, 'rgba(255,140,40,' + 0.45 * glow + ')'); gr.addColorStop(1, 'rgba(255,140,40,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y - 26, 50, 0, Math.PI * 2); ctx.fill();
+    }
+    M.sparks.forEach(s => { ctx.fillStyle = 'rgba(255,220,120,' + (1 - s.t / 0.6) + ')'; ctx.fillRect(s.x - 1.5, s.y - 1.5, 3, 3); });
+  }
+}
+function drawMatTab() {
+  drawTable(TABLE);
+  const g = jarGeo(MCX, TABLE, 210, 290);
+  ctx.save(); ctx.translate(g.cx, g.yb); ctx.rotate(M.shake); ctx.translate(-g.cx, -g.yb);
+  if (showDots) drawDots(dotsMat, { x0: g.x0 + 4, y0: g.sh + 8, x1: g.x1 - 4, y1: g.yb - 40 }, M.o, M.c);
+  // 燃焼さじ
+  if (M.phase !== 'idle') {
+    const p = M.phase === 'lower' ? clamp(M.t / 1.2, 0, 1) : 1;
+    const sy = 120 + p * 190;
+    ctx.strokeStyle = '#546e7a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(g.cx + 30, 0); ctx.lineTo(g.cx + 30, sy); ctx.lineTo(g.cx + 14, sy); ctx.stroke();
+    ctx.fillStyle = '#78909c'; ctx.beginPath(); ctx.ellipse(g.cx, sy + 2, 18, 6, 0, 0, Math.PI * 2); ctx.fill();
+    drawMaterial(g.cx, sy);
+  } else {
+    // まだ入れていない物を、横に置いておく
+    drawMaterial(g.x1 + 60, TABLE - 4);
+  }
+  drawJar(g, 'closed', M.mat !== 'steel' ? Math.min(1, M.b) * 0.7 : 0, M.lime);
+  ctx.restore();
+  // 右がわ
+  ctx.fillStyle = '#fff'; roundRect(430, 12, 360, 416, 12); ctx.fill(); ctx.strokeStyle = '#c5e1a5'; ctx.lineWidth = 3; ctx.stroke();
+  text(MATS[M.mat].name + 'を燃やすと', 610, 36, 18, '#33691e');
+  drawPie(530, 130, 66, M.o, M.c);
+  drawGasTable(442, 230, AIR_O, AIR_C, M.o, M.c, '燃やす前', 'いま');
+  // まとめ
+  const done = M.phase === 'out' || M.phase === 'pour' || M.phase === 'shake' || M.phase === 'done';
+  const lines = [];
+  if (M.phase !== 'idle') lines.push(M.mat === 'steel' ? '・ほのおを出さずに、赤く光って燃えた' : '・ほのおを出して燃えた');
+  if (done) lines.push(M.mat === 'steel' ? '・燃えた後は、黒っぽくなった' : '・燃えた後は、炭や灰になった');
+  if (M.phase === 'done') lines.push(M.c > 0.005 ? '・石灰水が白くにごった → 二酸化炭素ができた' : '・石灰水はにごらない → 二酸化炭素はできない');
+  lines.forEach((s, i) => text(s, 442, 345 + i * 26, 15, '#333', 'left'));
+  // 円グラフの横の印
+  const lx = 620;
+  [['n', 'ちっ素'], ['o', '酸素'], ['c', '二酸化炭素']].forEach(([k, s], i) => {
+    ctx.fillStyle = PAT[k]; ctx.fillRect(lx, 92 + i * 28, 20, 18); ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.strokeRect(lx, 92 + i * 28, 20, 18);
+    text(s, lx + 28, 101 + i * 28, 15, '#333', 'left');
+  });
+}
+
+// =====================================================================
+// ⑤ 火を消すゲーム
+//   opts：[ボタンの文字, 正しいか, まちがえたときの説明]、elem：なくしたもの（fuel・oxygen・heat）
+// =====================================================================
+const FQ = [
+  { scene: 'lamp', q: 'アルコールランプの火を消したい。どうする？',
+    opts: [['ふたをかぶせる', 1], ['息でふき消す', 0, 'ランプの火を、息でふき消してはいけないよ。中のアルコールに火がうつることがあって、あぶない。'], ['水をかける', 0, '水をかけると、熱いガラスがわれることがあって、あぶない。']],
+    elem: 'oxygen', why: 'ふたをかぶせると、新しい空気（酸素）が入らなくなって、火が消える。' },
+  { scene: 'bonfire', q: 'キャンプのたき火を、帰る前に消したい。どうする？',
+    opts: [['うちわであおぐ', 0, 'あおぐと、新しい空気（酸素）が送られて、もっと燃えてしまうよ。'], ['水をたっぷりかける', 1], ['そのままにして帰る', 0, '火が残っていると、火事になることがあるよ。必ず消してから帰ろう。']],
+    elem: 'heat', why: '水をかけると、燃えている物が冷やされて、燃えるのに必要な温度より低くなる。' },
+  { scene: 'gas', q: 'ガスコンロの火を消したい。どうする？',
+    opts: [['フライパンでたたく', 0, 'たたいても、ガスが出続けるので、火は消えないよ。'], ['水をかける', 0, 'ガスコンロに水をかけると、火が消えてもガスだけ出続けて、あぶない。'], ['ガスのつまみ（元せん）をしめる', 1]],
+    elem: 'fuel', why: 'ガスを止めると、燃える物（ガス）が来なくなって、火が消える。' },
+  { scene: 'oil', q: 'てんぷらなべの油に火がついた！ どうする？',
+    opts: [['コップの水をかける', 0, '油の火に水をかけると、水が一気に湯気になって、燃えている油が飛びちり、火が大きくなる。絶対にしてはいけない！'], ['なべにふたをして、コンロの火を止める', 1], ['うちわであおぐ', 0, 'あおぐと、酸素が送られて、火がもっと大きくなるよ。']],
+    elem: 'oxygen', why: 'ふたをすると、酸素が入らなくなって、火が消える。コンロの火も止めて、油が熱くならないようにする。' },
+  { scene: 'forest', q: '山火事が、町のほうへ広がってきた。広がるのを止めるには？',
+    opts: [['火の進む先の、木や草をかりとる', 1], ['大きなせんぷうきで風を送る', 0, '風を送ると、酸素が送られて、火がもっと広がってしまうよ。'], ['火が通りすぎるのを待つ', 0, '待っていると、町まで燃えてしまうかもしれないよ。']],
+    elem: 'fuel', why: '火の進む先に燃える物がなければ、火はそこで止まる。' },
+  { scene: 'house', q: '家が燃えている。消防車は、何をする？',
+    opts: [['大きな布でつつむ', 0, '家ほど大きいものを、布でつつむことはできないね。'], ['ホースでたくさんの水をかける', 1], ['まどをあけて風を通す', 0, '風が通ると、酸素が送られて、火がもっと強くなるよ。']],
+    elem: 'heat', why: 'たくさんの水で、燃えている物の温度を下げて、火を消す。（※119番に電話するのは、大人に知らせてから）' }
+];
+const ELEM_NAME = { fuel: '燃える物', oxygen: '酸素（空気）', heat: '温度' };
+const GM = { i: 0, step: 'act', score: 0, miss: false, et: 0, fire: 1, gone: null };
+function resetGame() { Object.assign(GM, { i: 0, step: 'act', score: 0, miss: false, et: 0, fire: 1, gone: null }); showQ(); }
+function showQ() {
+  const q = FQ[GM.i];
+  $('gQ').innerHTML = J('もんだい ' + (GM.i + 1) + '／' + FQ.length + '：' + q.q);
+  const box = $('gOpts'); box.innerHTML = '';
+  q.opts.forEach((o, k) => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = o[0]; b.dataset.k = k;
+    box.appendChild(b);
+  });
+  rubyfy(box);
+  $('gElemBox').classList.add('hidden');
+  $('gElems').querySelectorAll('.chip').forEach(b => { b.classList.remove('ok', 'ng'); b.disabled = false; });
+  $('btnNextF').classList.add('hidden');
+  GM.step = 'act'; GM.miss = false; GM.fire = 1; GM.gone = null; GM.et = 0;
+  if (tab === 'fire') setMsg('');
+}
+$('gOpts').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b || GM.step !== 'act') return;
+  const q = FQ[GM.i], o = q.opts[+b.dataset.k];
+  if (o[1]) {
+    b.classList.add('ok');
+    $('gOpts').querySelectorAll('.chip').forEach(x => { x.disabled = true; });
+    if (!GM.miss) GM.score++;
+    GM.step = 'anim'; GM.et = 0; GM.miss = false;
+    setMsg('火が消えていく…');
+  } else {
+    b.classList.add('ng'); b.disabled = true; GM.miss = true;
+    setMsg('⚠ ' + o[2]);
+  }
+});
+$('gElems').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b || GM.step !== 'elem') return;
+  const q = FQ[GM.i];
+  if (b.dataset.e === q.elem) {
+    b.classList.add('ok');
+    $('gElems').querySelectorAll('.chip').forEach(x => { x.disabled = true; });
+    if (!GM.miss) GM.score++;
+    GM.gone = q.elem; GM.step = 'done';
+    setMsg('正かい！ ' + q.why);
+    const last = GM.i === FQ.length - 1;
+    $('btnNextF').textContent = last ? 'けっかを見る ▶' : 'つぎへ ▶';
+    $('btnNextF').classList.remove('hidden');
+  } else {
+    b.classList.add('ng'); b.disabled = true; GM.miss = true;
+    setMsg('ちがうよ。火を消すために、何が「なくなった」のか考えよう。');
+  }
+});
+function stepGame(dt, sdt) {
+  if (GM.step === 'anim') {
+    GM.et += sdt; GM.fire = Math.max(0, 1 - GM.et / 1.6);
+    if (GM.et > 1.8) {
+      GM.step = 'elem'; GM.miss = false;
+      $('gElemBox').classList.remove('hidden');
+      if (tab === 'fire') setMsg('火が消えた！ では、何をなくしたのかな？');
+    }
+  }
+}
+// 場面の絵。fs：火の大きさ（0〜1）
+function drawFireScene(kind, fs, act, et) {
+  const gy = 380;
+  ctx.fillStyle = kind === 'forest' ? '#c5e1a5' : '#e0e0e0'; ctx.fillRect(0, gy, 470, H - gy);
+  const fireAt = (x, y, s) => drawFlame(x, y, s * fs, false);
+  if (kind === 'lamp') {
+    ctx.fillStyle = 'rgba(200,230,255,0.6)'; ctx.strokeStyle = '#607d8b'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(235, 330, 70, 50, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(180,220,255,0.7)'; ctx.fillRect(220, 260, 30, 30); ctx.strokeRect(220, 260, 30, 30);
+    ctx.fillStyle = 'rgba(120,180,240,0.4)'; ctx.fillRect(170, 335, 130, 30);
+    ctx.fillStyle = '#fff'; ctx.fillRect(230, 248, 10, 14);
+    fireAt(235, 250, 1.4);
+    if (act) { const y = 120 + Math.min(1, et * 1.5) * 118; ctx.fillStyle = '#b0bec5'; ctx.strokeStyle = '#546e7a'; ctx.fillRect(212, y, 46, 40); ctx.strokeRect(212, y, 46, 40); labelText('ふた', 235, y - 14, 15, '#333'); }
+  } else if (kind === 'bonfire') {
+    ctx.fillStyle = '#795548'; [[-1, 0.3], [1, -0.3]].forEach(([d, a]) => { ctx.save(); ctx.translate(235, 360); ctx.rotate(a); ctx.fillRect(-90, -10, 180, 20); ctx.restore(); });
+    ctx.fillStyle = '#9e9e9e'; for (let i = 0; i < 9; i++) { ctx.beginPath(); ctx.arc(150 + i * 21, 378, 10, 0, Math.PI * 2); ctx.fill(); }
+    fireAt(205, 350, 2.2); fireAt(265, 352, 2.0); fireAt(235, 345, 2.8);
+  } else if (kind === 'gas' || kind === 'oil') {
+    ctx.fillStyle = '#eceff1'; ctx.strokeStyle = '#78909c'; ctx.lineWidth = 3; ctx.fillRect(110, 300, 250, 80); ctx.strokeRect(110, 300, 250, 80);
+    ctx.fillStyle = '#455a64'; ctx.beginPath(); ctx.arc(160, 345, 16, 0, Math.PI * 2); ctx.fill();
+    const rot = act && kind === 'gas' ? Math.min(1, et * 1.5) * 1.6 : 0;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(160, 345); ctx.lineTo(160 + Math.sin(rot) * 13, 345 - Math.cos(rot) * 13); ctx.stroke();
+    if (kind === 'gas') {
+      for (let i = 0; i < 7; i++) {
+        const x = 220 + i * 14, h = 18 * fs * (0.8 + 0.2 * Math.sin(clock * 20 + i));
+        ctx.fillStyle = 'rgba(41,121,255,0.8)'; ctx.beginPath(); ctx.moveTo(x - 5, 300); ctx.quadraticCurveTo(x, 300 - h * 2, x + 5, 300); ctx.fill();
+      }
+      ctx.fillStyle = '#263238'; ctx.fillRect(200, 296, 130, 6);
+      if (act) labelText('つまみをしめる', 160, 400, 15, '#333');
+    } else {
+      ctx.fillStyle = '#424242'; ctx.beginPath(); ctx.moveTo(180, 270); ctx.lineTo(340, 270); ctx.lineTo(325, 300); ctx.lineTo(195, 300); ctx.closePath(); ctx.fill();
+      ctx.fillRect(340, 274, 70, 8);
+      fireAt(225, 268, 1.8); fireAt(260, 268, 2.4); fireAt(295, 268, 1.8);
+      if (act) { const y = 120 + Math.min(1, et * 1.5) * 135; ctx.fillStyle = '#90a4ae'; ctx.beginPath(); ctx.ellipse(260, y, 90, 14, 0, Math.PI, 0); ctx.fill(); ctx.fillRect(250, y - 26, 20, 14); labelText('ふた', 260, y - 40, 15, '#333'); }
+    }
+  } else if (kind === 'forest') {
+    for (let i = 0; i < 9; i++) {
+      const x = 40 + i * 50, cut = act && i >= 5 && i <= 6;
+      if (cut) { ctx.fillStyle = 'rgba(121,85,72,' + (1 - Math.min(1, et)) + ')'; ctx.fillRect(x - 5, 360, 10, 20); continue; }
+      ctx.fillStyle = '#795548'; ctx.fillRect(x - 5, 340, 10, 40);
+      ctx.fillStyle = i < 4 ? '#5d4037' : '#388e3c'; ctx.beginPath(); ctx.moveTo(x, 260); ctx.lineTo(x + 26, 345); ctx.lineTo(x - 26, 345); ctx.closePath(); ctx.fill();
+      if (i < 4) fireAt(x, 300, 1.6 + 0.3 * (i % 2));
+      if (i === 4 && !act) fireAt(x, 300, 1.0);
+    }
+    if (act) labelText('かりとった', 315, 330, 16, '#33691e');
+    labelText('← 火', 60, 240, 16, '#bf360c', 'left'); labelText('町 →', 460, 240, 16, '#333', 'right');
+  } else if (kind === 'house') {
+    ctx.fillStyle = '#ffe0b2'; ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 3; ctx.fillRect(170, 250, 170, 130); ctx.strokeRect(170, 250, 170, 130);
+    ctx.fillStyle = '#a1887f'; ctx.beginPath(); ctx.moveTo(150, 252); ctx.lineTo(255, 175); ctx.lineTo(360, 252); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#5d4037'; ctx.fillRect(200, 280, 40, 36); ctx.fillRect(270, 280, 40, 36); ctx.fillRect(235, 330, 36, 50);
+    fireAt(220, 290, 1.5); fireAt(290, 285, 1.8); fireAt(255, 195, 2.4);
+  }
+  // 水がかかる（温度を下げる）
+  if (act && (kind === 'bonfire' || kind === 'house')) {
+    ctx.fillStyle = 'rgba(30,136,229,0.75)';
+    for (let i = 0; i < 40; i++) {
+      const tt = (et * 1.4 + hash(i)) % 1, x = (kind === 'house' ? 30 + tt * 220 : 150 + hash(i + 5) * 170), y = kind === 'house' ? 330 - Math.sin(tt * Math.PI) * 160 + hash(i + 2) * 20 : 200 + tt * 160;
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    labelText('水', kind === 'house' ? 40 : 150, kind === 'house' ? 300 : 190, 18, '#0d47a1');
+  }
+}
+// 火が燃えるための3つ（燃える物・酸素・温度）の三角形
+function drawTriangle(gone) {
+  const A = [630, 100], B = [515, 320], C = [745, 320];   // A：燃える物、B：酸素、C：温度
+  const pts = { fuel: A, oxygen: B, heat: C };
+  const edges = [['fuel', 'oxygen'], ['oxygen', 'heat'], ['heat', 'fuel']];
+  edges.forEach(([p, q]) => {
+    const broken = gone && (p === gone || q === gone);
+    ctx.strokeStyle = broken ? '#bdbdbd' : '#e65100'; ctx.lineWidth = broken ? 3 : 7;
+    ctx.setLineDash(broken ? [8, 8] : []);
+    ctx.beginPath(); ctx.moveTo(pts[p][0], pts[p][1]); ctx.lineTo(pts[q][0], pts[q][1]); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  const info = { fuel: ['🪵', '燃える物'], oxygen: ['💨', '酸素（空気）'], heat: ['🌡️', '高い温度'] };
+  Object.keys(pts).forEach(k => {
+    const [x, y] = pts[k], off = gone === k;
+    ctx.fillStyle = off ? '#eeeeee' : '#fff3e0'; ctx.beginPath(); ctx.arc(x, y, 34, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = off ? '#9e9e9e' : '#e65100'; ctx.lineWidth = 3; ctx.stroke();
+    text(info[k][0], x, y, 28, '#333', 'center', false);
+    labelText(info[k][1], x, y + (k === 'fuel' ? -50 : 52), 16, off ? '#9e9e9e' : '#333');
+    if (off) { ctx.strokeStyle = '#c62828'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x - 24, y - 24); ctx.lineTo(x + 24, y + 24); ctx.moveTo(x + 24, y - 24); ctx.lineTo(x - 24, y + 24); ctx.stroke(); }
+  });
+  const fs = gone ? 0 : (GM.step === 'anim' ? GM.fire : 1);
+  if (fs > 0) drawFlame(630, 268, 1.5 * fs, false);
+  else labelText('火が消えた', 630, 250, 18, '#0d47a1');
+  text('3つがそろうと、火は燃える', 630, 410, 16, '#bf360c');
+}
+function drawFireTab() {
+  if (GM.step === 'end') {
+    ctx.fillStyle = '#fffde7'; ctx.fillRect(0, 0, W, H);
+    text('けっか', 400, 70, 30, '#33691e');
+    text(GM.score + ' ／ ' + FQ.length * 2 + ' てん', 400, 140, 40, '#e65100');
+    const st = GM.score >= FQ.length * 2 ? 3 : GM.score >= FQ.length * 1.4 ? 2 : 1;
+    text('★'.repeat(st) + '☆'.repeat(3 - st), 400, 210, 48, '#f9a825', 'center', false);
+    text('火を消すには、3つのうちどれか1つをなくせばよい', 400, 280, 20, '#333');
+    text('燃える物をなくす ・ 酸素（空気）をなくす ・ 温度を下げる', 400, 316, 18, '#bf360c');
+    text('「はじめから」で、もういちどできるよ', 400, 380, 16, '#666');
+    return;
+  }
+  const q = FQ[GM.i];
+  const act = GM.step !== 'act';
+  drawFireScene(q.scene, act ? GM.fire : 1, act, act ? (GM.step === 'anim' ? GM.et : 2) : 0);
+  ctx.strokeStyle = '#ddd'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(475, 20); ctx.lineTo(475, 420); ctx.stroke();
+  drawTriangle(GM.step === 'done' ? GM.gone : null);
+  labelText('もんだい ' + (GM.i + 1) + '／' + FQ.length + '　てん：' + GM.score, 12, 24, 16, '#33691e', 'left');
+}
+$('btnNextF').addEventListener('click', () => {
+  if (GM.i < FQ.length - 1) { GM.i++; showQ(); }
+  else {
+    GM.step = 'end'; $('btnNextF').classList.add('hidden'); $('gOpts').innerHTML = ''; $('gElemBox').classList.add('hidden');
+    $('gQ').innerHTML = J('ぜんぶできたね！');
+    setMsg('火を消すには、燃える物・酸素・温度のどれか1つをなくせばよい。');
+  }
+});
+$('btnResetF').addEventListener('click', () => { resetGame(); setMsg(''); });
+
+// =====================================================================
+// 状態の表示（下の3つのわく）
+// =====================================================================
+function setStat(i, label, val) { $('l' + i).innerHTML = J(label); $('s' + i).innerHTML = J(val); }
+let lastStat = '';
+function updateStats() {
+  let a, b, c;
+  if (tab === 'jar') {
+    a = ['ほのお', !D.lit ? (D.outT !== null ? '消えた' : 'ついていない') : D.f > 0.8 ? '大きい' : D.f > 0.4 ? '少し小さい' : 'とても小さい'];
+    b = ['燃えた時間', D.covered ? Math.floor(D.outT !== null ? D.outT : D.t) + '秒' : '−'];
+    c = ['酸素／二酸化炭素', pct(D.o) + '％／' + pct(D.c) + '％'];
+  } else if (tab === 'gas') {
+    a = ['しらべる空気', G.jar === 'A' ? 'A 燃やす前' : 'B 燃やした後'];
+    b = ['使う物', G.tool === 'lime' ? '石灰水' : '検知管'];
+    c = ['わかった数', ['A', 'B'].reduce((n, j) => n + Object.keys(G.res[j]).length, 0) + '／6'];
+  } else if (tab === 'pure') {
+    const s = P.j[P.sel];
+    a = ['えらんだびん', PURE[P.sel].name + (P.sel === 'air' ? '' : 'だけ')];
+    b = ['ほのお', s.lit ? (s.f > 1.2 ? 'とても大きく明るい' : 'ついている') : s.res ? '消えた' : '−'];
+    c = ['しらべたびん', Object.values(P.j).filter(x => x.res).length + '／4'];
+  } else if (tab === 'mat') {
+    a = ['燃やす物', MATS[M.mat].name];
+    b = ['酸素', pct(M.o) + '％'];
+    c = ['二酸化炭素', pct(M.c) + '％'];
+  } else {
+    a = ['もんだい', Math.min(GM.i + 1, FQ.length) + '／' + FQ.length];
+    b = ['てん', GM.score + '／' + FQ.length * 2];
+    c = ['火が燃えるには', '3つが必要'];
+  }
+  const key = [a, b, c].join('|');
+  if (key === lastStat) return;
+  lastStat = key;
+  setStat('A', a[0], a[1]); setStat('B', b[0], b[1]); setStat('C', c[0], c[1]);
+}
+
+// =====================================================================
+// 説明（タブごと）
+// =====================================================================
+const HELP = {
+  jar: '<h2>やってみよう</h2><ul>' +
+    '<li>「火をつける」→「びんをかぶせる」。ほのおはどうなるかな？</li>' +
+    '<li>ふたやびんの下のすき間を変えて、くらべよう。燃え続けるのは、どんなとき？</li>' +
+    '<li>線香を指で動かして、けむりがどこから入って、どこから出ていくか見よう。</li>' +
+    '<li>円グラフで、燃える前と後の空気の割合をくらべよう。酸素はぜんぶなくなったかな？</li></ul>',
+  gas: '<h2>やってみよう</h2><ul>' +
+    '<li>気体検知管で、AとBの酸素と二酸化炭素の割合をはかろう。目もりを読んで答えよう。</li>' +
+    '<li>二酸化炭素の検知管は2種類ある。はかれる範囲に合ったものを使おう。</li>' +
+    '<li>石灰水を入れてふると、二酸化炭素が多いときは白くにごる。</li></ul>',
+  pure: '<h2>やってみよう</h2><ul>' +
+    '<li>4つのびんに、火のついたろうそくを入れて、燃え方をくらべよう。</li>' +
+    '<li>空気の約78％はちっ素。でも、ちっ素だけのびんでは…？ ものを燃やすはたらきがあるのは、どの気体かな？</li></ul>',
+  mat: '<h2>やってみよう</h2><ul>' +
+    '<li>木・紙・スチールウール（鉄）を、ふたをしたびんの中で燃やそう。</li>' +
+    '<li>火が消えたら、石灰水を入れてふろう。二酸化炭素ができたのは、どれかな？</li>' +
+    '<li>どれも、燃えると酸素が使われることを、円グラフで確かめよう。</li></ul>',
+  fire: '<h2>やってみよう</h2><ul>' +
+    '<li>火が燃えるには、<b>燃える物</b>・<b>酸素（空気）</b>・<b>高い温度</b>の3つがそろうことが必要。</li>' +
+    '<li>場面ごとに、正しい消し方をえらぼう。次に、3つのうちどれをなくしたのか答えよう。</li></ul>'
+};
+const SAFETY = {
+  jar: '<h2>⚠ 本物の実験では</h2><ul><li>火のまわりに燃えやすい物を置かない。かみの毛が長い人は結ぶ。</li><li>ぬれぞうきんを用意しておく。</li><li>使ったびんは熱くなっていることがある。窓をあけて、かん気をしながら実験する。</li></ul>',
+  gas: '<h2>⚠ 本物の実験では</h2><ul><li>検知管の先は折るとするどいので、ゴムのカバーを付ける。</li><li>酸素用の検知管は、使ったあと熱くなるので、すぐにさわらない。</li><li>石灰水が目に入らないように、保護めがねをかける。</li></ul>',
+  pure: '<h2>⚠ 本物の実験では</h2><ul><li>酸素の中では、ものがはげしく燃える。顔を近づけない。</li><li>燃焼さじは熱くなるので、さわらない。かん気をしながら実験する。</li></ul>',
+  mat: '<h2>⚠ 本物の実験では</h2><ul><li>スチールウールは火花が飛ぶ。保護めがねをかけ、下に燃えない物（アルミニウムはくなど）をしく。</li><li>燃えた後も熱いので、すぐにさわらない。かん気をしながら実験する。</li></ul>',
+  fire: '<h2>⚠ 本当に火事を見つけたら</h2><ul><li>大声で「火事だ！」と知らせて、すぐに大人をよぶ。</li><li>自分で消そうとしないで、にげることを先にする。</li></ul>'
+};
+function setHelp() {
+  $('help').innerHTML = HELP[tab]; rubyfy($('help'));
+  $('safety').innerHTML = SAFETY[tab]; rubyfy($('safety'));
+}
+
+// =====================================================================
+// ボタン
+// =====================================================================
+function chipSelect(group, btn) { group.querySelectorAll('.chip').forEach(b => b.classList.toggle('active', b === btn)); }
+const PANELS = { jar: 'pJar', gas: 'pGas', pure: 'pPure', mat: 'pMat', fire: 'pFire' };
+$('tabs').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  tab = b.dataset.tab; chipSelect($('tabs'), b);
+  Object.keys(PANELS).forEach(k => $(PANELS[k]).classList.toggle('hidden', k !== tab));
+  $('lblSmoke').classList.toggle('hidden', tab !== 'jar');
+  $('lblDots').classList.toggle('hidden', tab === 'gas' || tab === 'fire');
+  cv.style.touchAction = tab === 'jar' ? 'none' : 'manipulation';   // ①では線香を指で動かすので、画面が動かないようにする
+  setHelp(); setMsg(''); lastStat = '';
+});
+$('cSpeed').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  speed = SPEEDS[b.dataset.speed]; chipSelect($('cSpeed'), b);
+});
+$('chkDots').addEventListener('change', e => { showDots = e.target.checked; });
+$('chkSmoke').addEventListener('change', e => { showSmoke = e.target.checked; });
+
+// ----- ① -----
+$('cLid').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b || b.dataset.lid === D.lid) return;
+  D.lid = b.dataset.lid; chipSelect($('cLid'), b);
+  if (D.covered) {
+    D.changed = true;
+    setMsg(D.lid === 'closed' ? 'ふたをしたよ。' : D.lid === 'gap' ? 'ふたを少しずらして、すき間をあけたよ。' : 'ふたをとったよ。');
+  }
+});
+$('cBot').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  const v = b.dataset.bot === '1'; if (v === D.bot) return;
+  if (D.covered || D.dropping) { setMsg('びんをかぶせたままでは、下のすき間は変えられないよ。「もういちど」からやり直そう。'); return; }
+  D.bot = v; chipSelect($('cBot'), b);
+});
+$('btnLight').addEventListener('click', () => {
+  if (D.lit) { setMsg('もう火はついているよ。'); return; }
+  if (D.covered) { setMsg('びんの中のろうそくには、火をつけられないよ。「もういちど」でやり直そう。'); return; }
+  D.lit = true; D.f = 0.2;
+  setMsg('ろうそくに火をつけたよ。次は「びんをかぶせる」。');
+});
+$('btnCover').addEventListener('click', () => {
+  if (D.covered || D.dropping) { setMsg('もう、びんをかぶせているよ。'); return; }
+  if (!D.lit) { setMsg('先に「火をつける」をおそう。'); return; }
+  D.dropping = true; D.t = 0;
+  // 線香がかぶせるびんの中に入らないように、外に出しておく
+  const g = jarGeo(CX, jarBottom(), JW, JH);
+  if (D.inc.x > g.x0 - 6 && D.inc.x < g.x1 + 6) D.inc.x = g.x0 - 20;
+});
+$('btnRec').addEventListener('click', () => {
+  if (!D.covered) { setMsg('びんをかぶせてから、記録しよう。'); return; }
+  if (D.recorded) { setMsg('この実験は、もう記録したよ。「もういちど」で、条件を変えてやってみよう。'); return; }
+  if (D.lit && D.t < 30) { setMsg('まだ燃えているね。消えるか、30秒たつまで、ようすを見よう。'); return; }
+  const lidT = { closed: 'あり', gap: 'すき間', none: 'なし' }[D.lid];
+  Worksheet.addRecord({
+    lid: lidT + (D.changed ? '（とちゅうで変えた）' : ''), bot: D.bot ? 'すき間あり' : 'すき間なし',
+    res: D.lit ? '燃え続けた' : '消えた', time: D.lit ? Math.floor(D.t) + '以上' : Math.round(D.outT),
+    o: Math.round(D.o * 1000) / 10, c: Math.round(D.c * 1000) / 10
+  });
+  D.recorded = true;
+  setMsg('ワークシートに記録したよ。');
+});
+$('btnReset').addEventListener('click', () => { resetJar(); setMsg(''); });
+cv.addEventListener('pointerdown', ev => {
+  if (tab !== 'jar' || !showSmoke) return;
+  const p = canvasXY(ev);
+  if (Math.hypot(p.x - D.inc.x, p.y - D.inc.y) < 45 || Math.hypot(p.x - (D.inc.x - 30), p.y - (D.inc.y + 15)) < 30) {
+    D.drag = true; cv.setPointerCapture(ev.pointerId); placeIncense(p);
+  }
+});
+cv.addEventListener('pointermove', ev => { if (D.drag) placeIncense(canvasXY(ev)); });
+['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { D.drag = false; }));
+
+// ----- ② -----
+$('cJarG').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b || ['insert', 'react', 'pour', 'shake'].includes(G.phase)) return;
+  G.jar = b.dataset.jar; chipSelect($('cJarG'), b);
+});
+$('cTool').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b || ['insert', 'react', 'pour', 'shake'].includes(G.phase)) return;
+  G.tool = b.dataset.tool; chipSelect($('cTool'), b);
+  if (G.phase === 'read' || G.phase === 'done') { G.phase = 'idle'; G.cur = null; $('readBox').classList.add('hidden'); }
+});
+$('btnTest').addEventListener('click', startTest);
+$('btnResetG').addEventListener('click', () => { resetGas(); setMsg(''); });
+
+// ----- ③ -----
+$('cPure').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  P.sel = b.dataset.g; chipSelect($('cPure'), b);
+});
+$('btnPutP').addEventListener('click', () => {
+  if (!putPure(P.sel)) setMsg('このびんには、もう入れたよ。ほかのびんをえらぶか、「もういちど」をおそう。');
+  else setMsg((P.sel === 'air' ? '空気' : PURE[P.sel].name + 'だけ') + 'のびんに、火のついたろうそくを入れるよ。');
+});
+$('btnAllP').addEventListener('click', () => {
+  let n = 0; Object.keys(PURE).forEach(k => { if (putPure(k)) n++; });
+  setMsg(n ? '4つのびんに、同時に入れるよ。燃え方をくらべよう。' : 'もう、ぜんぶに入れたよ。「もういちど」でやり直せるよ。');
+});
+$('btnResetP').addEventListener('click', () => { resetPure(); setMsg(''); });
+
+// ----- ④ -----
+$('cMat').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  M.mat = b.dataset.m; chipSelect($('cMat'), b); resetMat(); setMsg('');
+});
+$('btnBurnM').addEventListener('click', () => {
+  if (M.phase !== 'idle') { setMsg('もう燃やしたよ。「もういちど」で、新しいびんにしよう。'); return; }
+  M.phase = 'lower'; M.t = 0;
+  setMsg(MATS[M.mat].name + 'に火をつけて、びんに入れて、ふたをするよ。');
+});
+$('btnLimeM').addEventListener('click', () => {
+  if (M.phase === 'idle') { setMsg('先に「火をつけて、びんに入れる」をしよう。'); return; }
+  if (M.phase === 'lower' || M.phase === 'burn') { setMsg('火が消えるまで待とう。'); return; }
+  if (M.phase !== 'out') { setMsg('もう石灰水を入れたよ。'); return; }
+  M.phase = 'pour'; M.t = 0; setMsg('石灰水を入れて、ふたをしてよくふるよ。');
+});
+$('btnResetM').addEventListener('click', () => { resetMat(); setMsg(''); });
+
+// =====================================================================
+// アニメーション（いつも動かしておく）
+// =====================================================================
+let last = performance.now();
+function frame(now) {
+  const dt = clamp((now - last) / 1000, 0, 0.05);
+  last = now; clock += dt;
+  const sdt = dt * speed;
+  // 見えていないタブも、とちゅうのものは進めておく
+  stepJar(dt, sdt); stepGas(dt, sdt); stepPure(dt, sdt); stepMat(dt, sdt); stepGame(dt, sdt);
+  ctx.fillStyle = '#fbfdff'; ctx.fillRect(0, 0, W, H);
+  if (tab === 'jar') drawJarTab(); else if (tab === 'gas') drawGasTab(); else if (tab === 'pure') drawPureTab(); else if (tab === 'mat') drawMatTab(); else drawFireTab();
+  updateStats();
+  requestAnimationFrame(frame);
+}
+
+// ===== 先生モード =====
+if (TEACHER) {
+  $('tNote').classList.remove('hidden');
+  $('tNote').innerHTML = '👩‍🏫 <b>先生へ</b>：①では、ふたあり・下すき間なしで約15秒で消えるようにしています（K と O_OUT で変えられます）。燃えた後の割合は、酸素 約17％・二酸化炭素 約3〜4％をめやすにしています。教科書によって数がちがうので、使っている教科書に合わせて説明してください。「酸素がなくなったから消えた」ではなく「酸素の一部が使われて、割合が少なくなると燃えなくなる」をおさえます。<br>' +
+    '・びんの内側がくもるのは、ろうそくが燃えて水（水蒸気）ができたためです（中学校の内容。気づいた子がいたら取り上げる程度に）。<br>' +
+    '・②の検知管は、気体を1回すいこんで、決められた時間待ってから読みます。色の境目がななめのときは、まん中を読みます。二酸化炭素用は、はかれる範囲に合わせて、0.03〜1％用と0.5〜8％用を使い分けることを体験させます。<br>' +
+    '・③の酸素は、二酸化マンガンとうすい過酸化水素水で発生させ、水上置換で集めるのが一般的です（発生のさせ方は中学校の内容）。<br>' +
+    '・④発展：スチールウール（鉄）は炭素をふくまないので、燃えても二酸化炭素はできませんが、酸素とむすびついて別の物（酸化鉄）になり、燃やす前より重くなります（中学校の内容）。木や紙・ろうそくは炭素をふくむので、燃えると二酸化炭素ができます。<br>' +
+    '・⑤の「燃焼の三要素（可燃物・酸素供給源・熱）」は、小学校では「燃える物・新しい空気（酸素）・高い温度」と言いかえています。';
+}
+
+// ===== はじめ =====
+resetPure(); resetGame(); setHelp();
+cv.style.touchAction = 'none';
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
