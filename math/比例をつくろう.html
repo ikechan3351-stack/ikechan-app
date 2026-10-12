@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>比例をつくろう</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：正（＋）・増える＝オレンジ、負（−）・減る＝青
+     正解＝緑（○）、まちがい・注意＝赤紫（×）。色だけでなく、記号・線の種類でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457; --dom: #6a1b9a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.ng { border-color: var(--ng); background: #fce4ec; }
+  .op-btn.ng::before { content: "× "; color: var(--ng); }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 表・グラフ・式（広い画面は 左・中央・右の3列） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start;
+    grid-template-areas: "graph" "form" "tbl"; }
+  .tbl-card { grid-area: tbl; }
+  .graph-card { grid-area: graph; padding: 8px; }
+  .form-card { grid-area: form; }
+  @container (min-width: 640px) {
+    .board-in { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); grid-template-areas: "graph graph" "tbl form"; }
+  }
+  @container (min-width: 1000px) {
+    .board-in { grid-template-columns: 230px minmax(0, 1fr) 300px; grid-template-areas: "tbl graph form"; }
+  }
+
+  /* 表（たて向き：x と y の2列。比例定数がわかると y÷x の列が出る） */
+  .vt { width: 100%; border-collapse: collapse; font-size: 22px; text-align: center; }
+  .vt th { background: #eceff1; font-size: 1rem; padding: 4px; border: 2px solid #b0bec5; }
+  .vt td { border: 2px solid #cfd8dc; padding: 3px 4px; height: 44px; }
+  .vt td.q { color: #90a4ae; font-weight: bold; }
+  .vt tr.given td { background: #fffde7; font-weight: bold; }
+  .vt tr.end td:first-child { position: relative; }
+  .vt td.ratio { color: var(--ok); font-size: 18px; background: #f1f8e9; }
+  .vt td.pop { animation: pop .5s ease-out both; }
+  @keyframes pop { 0% { background: #c8e6c9; transform: scale(.7); opacity: 0; } 100% { opacity: 1; transform: scale(1); } }
+  .vt .neg { color: var(--neg); }
+  .vt .pos { color: var(--pos); }
+  .vt .mark { font-size: .75rem; color: var(--dom); display: block; line-height: 1; }
+  .tbl-note { font-size: .88rem; color: #546e7a; margin-top: 6px; line-height: 1.6; }
+  .tbl-scroll { max-height: 520px; overflow: auto; }
+
+  #graph { width: 100%; }
+  .graph-opts { display: flex; gap: 6px 12px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+
+  /* 式 */
+  .formula { text-align: center; font-size: 34px; font-weight: bold; min-height: 56px; line-height: 1.5; }
+  .formula .lbl { font-size: 1rem; color: #546e7a; display: block; }
+  .formula .row { display: block; }
+  .form-note { text-align: center; font-size: .95rem; line-height: 1.7; color: #37474f; margin: 4px 0 8px; }
+  .slider-row { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 6px 0; font-weight: bold; }
+  .slider-row input[type=range] { flex: 1; min-width: 160px; height: 36px; }
+  .slider-row input[type=text], .slider-row input[type=number] { width: 84px; font-size: 1.3rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+
+  /* 答える欄とキーパッド */
+  .ask { border-top: 2px dashed #cfd8dc; padding-top: 8px; margin-top: 6px; }
+  .ask-q { text-align: center; font-weight: bold; margin-bottom: 6px; line-height: 1.6; }
+  .ans-line { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; font-size: 28px; font-weight: bold; }
+  .box {
+    min-width: 88px; min-height: 58px; border: 3px solid var(--soft); border-radius: 14px; background: #fafafa;
+    font-size: 30px; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation; padding: 0 8px;
+  }
+  .box.active { border-color: #fbc02d; background: #fffde7; box-shadow: 0 0 0 4px rgba(251,192,45,.35); }
+  .sym { min-width: 54px; min-height: 54px; border: 3px solid var(--dom); border-radius: 12px; background: #f3e5f5; color: var(--dom); font-size: 28px; font-weight: bold; cursor: pointer; touch-action: manipulation; }
+  @media (max-width: 420px) {
+    .ans-line { gap: 4px; font-size: 24px; }
+    .box { min-width: 66px; font-size: 26px; }
+    .sym { min-width: 44px; }
+  }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 8px; }
+  .key {
+    min-height: 48px; border: 2px solid #b0bec5; background: #fff; border-radius: 12px; font-size: 1.35rem; font-weight: bold;
+    color: var(--ink); cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .key:active { transform: translateY(1px); box-shadow: none; }
+  .key small { font-size: .7rem; }
+  .go {
+    width: 100%; margin-top: 8px; min-height: 54px; border: none; border-radius: 14px; background: var(--ok); color: #fff;
+    font-size: 1.2rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go.next { background: var(--accent); }
+  .cmp-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .cmp-btns .wide { grid-column: 1 / -1; }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .mark-ok { color: var(--ok); font-weight: 900; }
+  .mark-ng { color: var(--ng); font-weight: 900; }
+
+  /* 場面（⑤）の動画 */
+  .scene-card svg { width: 100%; height: auto; display: block; background: #f5f9fc; border-radius: 12px; }
+  .scene-ctrl { display: flex; gap: 6px 12px; flex-wrap: wrap; justify-content: center; align-items: center; margin-top: 6px; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>📈 比例をつくろう</h1>
+<p class="subtitle">表・式・グラフがつながって動く。比例定数 a のひみつをさがそう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- パート：① 表から式 ② 式からグラフ ③ グラフから式 ④ 変域 ⑤ 場面 -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">🎲 新しい問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <!-- ⑤ 場面の動画 -->
+  <div class="card scene-card" id="sceneCard" hidden>
+    <div class="chip-row" id="sceneRow"></div>
+    <svg id="scene" viewBox="0 0 900 230" aria-label="場面の動画"></svg>
+    <div class="scene-ctrl">
+      <button class="op-btn action" id="scPlay">▶ スタート</button>
+      <button class="op-btn" id="scBack">⏮ 0 にもどす</button>
+      <div class="slider-row" style="margin:0">
+        <span id="scALabel">a</span>
+        <input type="range" id="scA" min="1" max="5" step="1">
+        <input type="number" id="scAnum" min="1" max="5" step="1" aria-label="比例定数">
+      </div>
+      <div class="slider-row" style="margin:0">
+        <span>x</span>
+        <input type="range" id="scT" min="0" max="10" step="0.1">
+        <input type="number" id="scTnum" min="0" max="10" step="0.1" aria-label="x の値">
+      </div>
+    </div>
+  </div>
+
+  <div class="board"><div class="board-in">
+    <div class="card tbl-card">
+      <h2>📋 表</h2>
+      <div class="tbl-scroll"><div id="tbl"></div></div>
+      <div class="tbl-note" id="tblNote"></div>
+    </div>
+    <div class="card graph-card">
+      <div id="graph"></div>
+      <div class="graph-opts" id="graphOpts"></div>
+    </div>
+    <div class="card form-card">
+      <h2>✏️ 式</h2>
+      <div class="formula" id="formula"></div>
+      <div class="form-note" id="formNote"></div>
+      <div id="ctrl"></div>
+      <div class="ask" id="ask"></div>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools">
+      <button class="op-btn action" id="tStep">⏭ 答えを入れて進める</button>
+    </div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>比例</b>：y が x に比例するとき、式は <b>y ＝ a x</b>。この a を<b>比例定数</b>という。</li>
+      <li>表で見ると：<b>y ÷ x</b> がいつも同じ数（＝ a）。x が 1 のときの y が a。</li>
+      <li>グラフで見ると：<b>原点を通る直線</b>。a が正なら右上がり、負なら右下がり。a の絶対値（符号をとった大きさ）が大きいほど急になる。</li>
+      <li><b>変域</b>：x や y のとりうる値のはんい。−2 ≦ x ≦ 3 のように書く。≦ は「その数をふくむ（グラフでは ●）」、＜ は「ふくまない（○）」。</li>
+      <li>答えはキーパッドで入れる。分数は <b>／</b>、小数は <b>．</b>、負の数は <b>−</b>（符号の切りかえ）。キーボードでも入れられる。</li>
+      <li>まちがえたら <b>↶ ひとつもどす</b>、はじめからは <b>⟲ もういちど</b>。<b>💡 ヒント</b> は押すたびにくわしくなる。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：⑤ の水そうは、水が毎分同じ量ずつ入り、こぼれないものとしています。速さは、とちゅうで止まったりせず、ずっと同じ速さで進むものとしています。② の直線のグラフは、x を小数・分数もふくむすべての数として、切れ目なく描いています。<br>
+    つながる教材：<a href="まぜて のばして 比と比例.html">小6 まぜて のばして 比と比例</a>／<a href="座標でお宝さがし.html">中1 座標でお宝さがし</a>／<a href="関数グラフ.html">関数グラフツール（反比例・一次関数などもスライダーで）</a></p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="graph-engine.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（答え・答えを入れて進める・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const F = (v) => Fraction.from(v);
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const num = (f) => { f = F(f); return f.n / f.d; };
+  // 分数・負の数を、表や文の中で見やすく出す
+  const mr = (f, size) => MathRender.html(F(f).toString(), { size: size || 'inherit' });
+  const mrs = (s, size) => MathRender.html(s, { size: size || 'inherit' });
+  const lineStr = (a) => GraphEngine.lineText({ a: F(a), b: 0 });       // "y=3/2 x" の形
+  const cls = (f) => { const s = F(f).sign(); return s > 0 ? 'pos' : s < 0 ? 'neg' : ''; };
+  const nm = (v) => String(v).replace('-', '−');                        // 表示用（マイナスは「−」）
+  const signWord = (a) => F(a).sign() > 0 ? '右上がり' : F(a).sign() < 0 ? '右下がり' : '水平（x軸と重なる）';
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  /* =====================================================================
+     1. パートとつまずきの型
+     ===================================================================== */
+  const PARTS = [null,
+    { name: '① 表から式', note: '表の一部から、比例定数 a を求めよう。正解すると、表の残りのマスがうまり、式とグラフが出る。' },
+    { name: '② 式からグラフ', note: 'a をスライダーや数で変えると、原点を通る直線が回る。表と式もいっしょに変わるよ。' },
+    { name: '③ グラフから式', note: '直線が通る格子点（方眼の交わる点）を見つけて、a を読もう。2本の直線をくらべよう。' },
+    { name: '④ 変域', note: 'x の変域から、y の変域を求めよう。はしの点が ●（ふくむ）か ○（ふくまない）かに気をつけて。' },
+    { name: '⑤ 場面', note: '水を入れる・同じ速さで進む。動画とグラフ・表・式がいっしょに動くよ。' },
+  ];
+  // つまずきの型（名前・説明・練習するパート）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    divFlip:  { name: 'x÷y と y÷x のとりちがえ', part: 1,
+                exp: '比例定数は <b>y ÷ x</b>（y を x でわる）。x ÷ y だと、逆数（分子と分母が逆の数）になってしまう。グラフでは「右へ1 進むと、上へ a」。' },
+    signA:    { name: '比例定数の符号のまちがい', part: 1,
+                exp: 'x と y の符号がちがう（一方が負）なら、a は<b>負</b>。グラフが右下がりなら a は負。' },
+    steep:    { name: '急さを a の大きさ（符号つき）でくらべた', part: 3,
+                exp: 'グラフの急さは、a の<b>絶対値</b>（符号をとった大きさ）でくらべる。y＝−3x は y＝2x より急（|−3| ＞ |2|）。' },
+    endSym:   { name: '変域の端の記号（≦ と ＜）', part: 4,
+                exp: 'x の端が ●（≦ ふくむ）なら、対応する y の端も ●（≦）。○（＜）なら ○（＜）。a が負のときは、<b>左右が入れかわる</b>ので、記号もいっしょに入れかわる。' },
+    rangeOrder: { name: 'a が負のときの y の変域の大小', part: 4,
+                exp: 'a が負だと、x が大きいほど y は小さい。y の変域は「<b>小さいほう ≦ y ≦ 大きいほう</b>」の順に書く。' },
+    rangeCalc: { name: 'y の変域の値のまちがい', part: 4,
+                exp: '端の x を式 y＝ax に<b>代入</b>して、y の端の値を出そう。' },
+  };
+
+  /* =====================================================================
+     2. 状態（P はいまの問題。分数は文字列 "3/2" で持つ＝ひとつもどす で写しやすい）
+     ===================================================================== */
+  const st = {
+    part: 1, P: null, P0: null, hist: [], hintLv: 0, g: null, inp: {}, act: null,
+    focus: null, sessTrips: {}, timer: null, last: {},
+  };
+
+  /* =====================================================================
+     3. 入力（キーパッド）
+     ===================================================================== */
+  const KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '−', '0', '⌫', '/', '.', 'C'];
+  function keypadHTML() {
+    return '<div class="keypad">' + KEYS.map(k => {
+      const lab = k === '−' ? '−<small>符号</small>' : k === '/' ? '／<small>分数</small>' : k === '.' ? '．<small>小数</small>' : k === 'C' ? '<small>ぜんぶ消す</small>' : k;
+      return `<button class="key" data-k="${k}" aria-label="${k}">${lab}</button>`;
+    }).join('') + '</div>';
+  }
+  function press(k) {
+    const f = st.act;
+    if (!f || !(f in st.inp)) return;
+    let v = st.inp[f];
+    if (k === '⌫') v = v.slice(0, -1);
+    else if (k === 'C') v = '';
+    else if (k === '−') v = v.startsWith('-') ? v.slice(1) : '-' + v;
+    else if (k === '/') { if (!v.includes('/') && /\d$/.test(v)) v += '/'; }
+    else if (k === '.') { const last = v.split('/').pop(); if (!last.includes('.') && /\d$/.test(v)) v += '.'; }
+    else if (v.replace(/[-./]/g, '').length < 5) v += k;
+    st.inp[f] = v;
+    paintBoxes();
+  }
+  function boxHTML(f, ph) { return `<button class="box" data-f="${f}" aria-label="${ph || f}"><span class="bv"></span></button>`; }
+  function paintBoxes() {
+    document.querySelectorAll('#ask .box').forEach(b => {
+      const v = st.inp[b.dataset.f] || '';
+      b.querySelector('.bv').textContent = v === '' ? '　' : v.replace('-', '−');
+      b.classList.toggle('active', st.act === b.dataset.f);
+    });
+  }
+  function wireAsk() {
+    document.querySelectorAll('#ask .key').forEach(b => b.addEventListener('click', () => press(b.dataset.k)));
+    document.querySelectorAll('#ask .box').forEach(b => b.addEventListener('click', () => { st.act = b.dataset.f; paintBoxes(); }));
+    const go = document.querySelector('#ask .go');
+    if (go) go.addEventListener('click', go_);
+    paintBoxes();
+  }
+  // 入れた文字を分数にする（"3/2"・"-1.5"・"4"）。読めなければ null
+  function parseF(s) {
+    if (!s || !/^-?\d+(\.\d+)?(\/\d+(\.\d+)?)?$/.test(s)) return null;
+    try { return F(s); } catch (e) { return null; }
+  }
+  document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('.ws-panel, input, textarea')) return;
+    if (e.target.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+    if (!st.act) { if (e.key === 'Enter') { const go = document.querySelector('#ask .go'); if (go) { e.preventDefault(); go.click(); } } return; }
+    const map = { '-': '−', '/': '/', '.': '.', 'Backspace': '⌫' };
+    if (/^[0-9]$/.test(e.key)) { press(e.key); e.preventDefault(); }
+    else if (map[e.key]) { press(map[e.key]); e.preventDefault(); }
+    else if (e.key === 'Tab') {
+      const fs = [...document.querySelectorAll('#ask .box')].map(b => b.dataset.f);
+      if (fs.length > 1) { st.act = fs[(fs.indexOf(st.act) + 1) % fs.length]; paintBoxes(); }
+      e.preventDefault();
+    } else if (e.key === 'Enter') { const go = document.querySelector('#ask .go'); if (go) go.click(); e.preventDefault(); }
+  });
+
+  /* =====================================================================
+     4. 座標平面（パートごとに作り直す）
+     ===================================================================== */
+  function makeGraph(o) {
+    st.g = GraphEngine.create($('graph'), Object.assign({ xmin: -6.5, xmax: 6.5, ymin: -6.5, ymax: 6.5, grid: true, controls: true, coords: true }, o || {}));
+    return st.g;
+  }
+  // 格子点（x も y も整数の点）で、直線 y＝ax の上にあるもの
+  function latticePts(a, lim) {
+    const out = [];
+    for (let x = -lim; x <= lim; x++) { const y = F(a).mul(x); if (y.d === 1 && Math.abs(y.n) <= lim && x !== 0) out.push([x, y.n]); }
+    return out;
+  }
+  // 「右へ1、上へ a」の三角形（d が分母のときは 右へ d、上へ a×d）
+  function stepTri(g, a, d, color) {
+    const A = F(a), y = A.mul(d);
+    g.segment([0, 0], [d, 0], { color: color || '#6a1b9a', width: 3, dash: '6 5' });
+    g.segment([d, 0], [d, y], { color: color || '#6a1b9a', width: 3, dash: '6 5' });
+    g.text(d / 2, -0.55, '右へ' + d, { color: color || '#6a1b9a', anchor: 'middle' });
+    g.text(d + 0.2, num(y) / 2, (y.sign() < 0 ? '下へ' : '上へ') + y.abs().toString(), { color: color || '#6a1b9a' });
+  }
+
+  /* =====================================================================
+     5. パート① 表から式
+     P = { a, xs:[表の x], shown:[見せる x], solved, tries }
+     ===================================================================== */
+  const POOL1 = ['2', '3', '4', '5', '-2', '-3', '-4', '-5', '1/2', '-1/2', '3/2', '-3/2', '2/3', '-2/3', '5/2', '-5/2'];
+  function gen1() {
+    let a;
+    do { a = pick(POOL1); } while (a === st.last[1]);
+    st.last[1] = a;
+    const A = F(a), d = A.d;
+    const xs = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+    // 見せる x は、y が整数になるもの（分母の倍数）から2つ。±1 は a がすぐわかるので外す
+    const cand = xs.filter(x => x !== 0 && Math.abs(x) !== 1 && x % d === 0);
+    const s1 = pick(cand);
+    let s2; do { s2 = pick(cand); } while (s2 === s1 && cand.length > 1);
+    return { a, xs, shown: [s1, s2].sort((p, q) => p - q), solved: false, tries: 0 };
+  }
+  function render1() {
+    const P = st.P, A = F(P.a);
+    // 表
+    let h = `<table class="vt"><tr><th>x</th><th>y</th>${P.solved ? '<th>y÷x</th>' : ''}</tr>`;
+    P.xs.forEach((x, i) => {
+      const given = P.shown.includes(x), y = A.mul(x);
+      const yc = given || P.solved ? `<td class="${cls(y)}${P.solved && !given ? ' pop' : ''}" style="animation-delay:${i * 0.06}s">${mr(y)}</td>` : '<td class="q">?</td>';
+      const rc = P.solved ? `<td class="ratio pop" style="animation-delay:${0.5 + i * 0.05}s">${x === 0 ? '—' : mr(A)}</td>` : '';
+      h += `<tr class="${given ? 'given' : ''}"><td class="${cls(x)}">${mr(x)}</td>${yc}${rc}</tr>`;
+    });
+    $('tbl').innerHTML = h + '</table>';
+    $('tblNote').innerHTML = P.solved ? `どの行でも <b>y ÷ x ＝ ${mr(A)}</b>。これが比例定数。<br>x ＝ 0 のとき y ＝ 0（原点を通る）。` : '黄色の行は わかっている x と y。y は x に比例しているよ。';
+    // グラフ
+    const g = st.g;
+    g.clear();
+    if (P.solved) {
+      g.line(() => ({ a: A, b: F(0) }), { color: '#e65100' });
+      P.xs.forEach(x => { const y = A.mul(x); if (Math.abs(num(y)) <= 6.4) g.point(x, y, '', { color: '#e65100', r: 5 }); });
+    }
+    P.shown.forEach(x => g.point(x, A.mul(x), '', { color: '#263238', r: 7, showCoords: true }));
+    if (!P.solved && st.hintLv >= 3) stepTri(g, A, A.d === 1 ? 1 : A.d);
+    // 式
+    $('formula').innerHTML = P.solved ? mrs(lineStr(A), 'normal') : mrs('y = ') + '<span style="color:#90a4ae"> ? </span>' + mrs('x');
+    $('formNote').innerHTML = P.solved ? `a ＝ ${mr(A)} なので グラフは<b>${signWord(A)}</b>の直線。` : '比例の式 y ＝ a x の <b>a（比例定数）</b> を、表から求めよう。';
+    $('ctrl').innerHTML = '';
+    if (P.solved) $('ask').innerHTML = '<button class="go next">🎲 つぎの問題へ</button>';
+    else $('ask').innerHTML = `<div class="ask-q">比例定数 a は？</div><div class="ans-line">a ＝ ${boxHTML('a', '比例定数')}</div>${keypadHTML()}<button class="go">✔ こたえる</button>`;
+    st.act = P.solved ? null : 'a';
+    wireAsk();
+  }
+  function check1() {
+    const P = st.P, A = F(P.a);
+    if (P.solved) { newProblem(); return; }
+    const v = parseF(st.inp.a);
+    if (!v) { setMsg('a を 数（分数・小数・負の数もOK）で入れよう。'); return; }
+    pushHist();
+    const [x1] = P.shown, y1 = A.mul(x1);
+    if (v.equals(A)) {
+      P.solved = true;
+      sndDone(); bumpClear(1);
+      setMsg(`<span class="mark-ok">○</span> 正解！ a ＝ ${mr(A)}。たとえば ${mr(y1)} ÷ ${mrs(paren(x1))} ＝ ${mr(A)}。<br>表の残りのマスは、y ＝ ${mr(A)} × x で計算できる。`, 'ok');
+      st.inp.a = '';
+    } else {
+      sndNG(); P.tries++;
+      const types = [];
+      if (v.equals(A.inv())) types.push('divFlip');
+      else if (v.equals(A.neg())) types.push('signA');
+      else if (v.equals(A.inv().neg())) types.push('divFlip', 'signA');
+      types.forEach(addTrip);
+      let t = `<span class="mark-ng">×</span> a ＝ ${mr(v)} ではないよ。`;
+      if (types.includes('divFlip')) t += `<br><b>x ÷ y</b> を計算していないかな？ ${mrs(paren(x1))} ÷ ${mrs(paren(y1.toString()))} ＝ ${mr(A.inv())}。比例定数は <b>y ÷ x</b>。`;
+      else if (types.includes('signA')) t += `<br><b>符号</b>をたしかめよう。x ＝ ${mr(x1)} のとき y ＝ ${mr(y1)}。符号が${Math.sign(x1) === y1.sign() ? '同じ' : 'ちがう'}ね。`;
+      else t += `<br>比例定数は <b>y ÷ x</b>。黄色の行の数で計算しよう。`;
+      if (types.includes('divFlip') && types.includes('signA')) t += '<br>符号もたしかめよう。';
+      setMsg(t, 'ng');
+    }
+    render();
+  }
+  const paren = (x) => { const s = F(x).toString(); return s[0] === '-' ? '(' + s + ')' : s; };
+
+  /* =====================================================================
+     6. パート② 式からグラフ
+     P = { a, kept:[残した a], target:{x,y}|null, cleared }
+     ===================================================================== */
+  const TGT_A = ['1/2', '-1/2', '1', '-1', '3/2', '-3/2', '2', '-2', '3', '-3', '4', '-4', '5', '-5', '5/2', '-5/2'];
+  function gen2(a) { return { a: a || '2', kept: [], target: newTarget(), cleared: 0 }; }
+  function newTarget(prev) {
+    let a, x, y, n = 0;
+    do {
+      a = F(pick(TGT_A)); x = rnd(1, 4) * pick([1, -1]); y = a.mul(x); n++;
+    } while (n < 100 && (y.d !== 1 || Math.abs(y.n) > 6 || (prev && prev.x === x && prev.y === y.n)));
+    return { x, y: y.n };
+  }
+  function setA2(v, silent) {
+    const P = st.P;
+    let f = F(v);
+    if (f.cmp(-10) < 0) f = F(-10);
+    if (f.cmp(10) > 0) f = F(10);
+    if (P.a === f.toString()) return;
+    if (!silent) pushHist(true);
+    P.a = f.toString();
+    // チャレンジ：点を通ったか
+    const T = P.target;
+    if (T && f.mul(T.x).equals(T.y)) {
+      P.cleared++;
+      sndDone(); bumpClear(2);
+      setMsg(`<span class="mark-ok">○</span> 点 (${nm(T.x)}, ${nm(T.y)}) を通った！ a ＝ ${mr(f)}（${nm(T.y)} ÷ ${nm(paren(T.x))} ＝ ${mr(f)}）。<br>つぎの点にちょうせんしよう。`, 'ok');
+      P.target = newTarget(T);
+    }
+    render();
+  }
+  function render2() { render2Graph(); render2Side(); }
+  function render2Side() {
+    const P = st.P, A = F(P.a);
+    // 表（x −3〜3）
+    let h = '<table class="vt"><tr><th>x</th><th>y</th><th>y÷x</th></tr>';
+    for (let x = -3; x <= 3; x++) { const y = A.mul(x); h += `<tr class="${x === 1 ? 'given' : ''}"><td class="${cls(x)}">${mr(x)}</td><td class="${cls(y)}">${mr(y)}</td><td class="ratio">${x === 0 ? '—' : mr(A)}</td></tr>`; }
+    $('tbl').innerHTML = h + '</table>';
+    $('tblNote').innerHTML = `x が 1 増えると、y は ${mr(A)} ずつ${A.sign() >= 0 ? '増える' : '増える（つまり減る）'}。<br>x ＝ 1 のときの y（黄色）が比例定数。`;
+    // 式
+    $('formula').innerHTML = A.sign() === 0 ? mrs('y = 0') : mrs(lineStr(A), 'normal');
+    $('formNote').innerHTML = A.sign() === 0 ? '<span class="bad">a ＝ 0 は比例とはいわない</span>（y がいつも 0）。'
+      : `a ${A.sign() > 0 ? '＞' : '＜'} 0 → <b>${signWord(A)}</b>　|a| ＝ ${mr(A.abs())}<br><span class="small">|a|（a の絶対値）が大きいほど、グラフは急。</span>`;
+    if ($('aRange')) {
+      $('aRange').value = Math.max(-5, Math.min(5, num(A)));
+      if (document.activeElement !== $('aText')) $('aText').value = nm(P.a);
+    }
+  }
+  function render2Graph() {
+    const P = st.P, A = F(P.a);
+    const g = st.g;
+    g.clear();
+    P.kept.forEach((k, i) => g.line(() => ({ a: F(k), b: F(0) }), { color: '#90a4ae', width: 2.5, dash: '7 6', label: lineStr(k).replace(/ /g, '') }));
+    if (P.target) {
+      g.point(P.target.x, P.target.y, '🎯', { color: '#d81b60', r: 8, showCoords: true });
+    }
+    g.line(() => ({ a: F(st.P.a), b: F(0) }), { color: '#e65100', width: 4.5 });
+    // 「右へ1、上へ a」（点 P といっしょに動く）
+    g.segment([0, 0], [1, 0], { color: '#6a1b9a', width: 3, dash: '6 5' });
+    g.segment([1, 0], () => [1, F(st.P.a)], { color: '#6a1b9a', width: 3, dash: '6 5' });
+    g.text(0.5, A.sign() >= 0 ? -1.15 : 0.3, '右へ1', { color: '#6a1b9a', anchor: 'middle' });
+    // 点 P：x＝1 の線の上だけ動く（0.1 きざみ）。P の y が比例定数 a
+    const D = g.draggable(1, A, {
+      label: 'P', showCoords: true,
+      constrain: (x, y) => [1, Math.max(-6, Math.min(6, Math.round(num(y) * 10) / 10))],
+    });
+    const before = P.a;
+    D.onChange = () => { st.P.a = D.y.toString(); render2Side(); };
+    D.onEnd = () => { const now = st.P.a; st.P.a = before; if (now !== before) setA2(now); };
+    // スライダーと数の入力
+    if (!$('aRange')) {
+      $('ctrl').innerHTML = `<div class="slider-row">a <input type="range" id="aRange" min="-5" max="5" step="0.5" aria-label="比例定数 a">
+        <input type="text" id="aText" aria-label="比例定数 a を数で入れる" inputmode="decimal"></div>
+        <div class="tools"><button class="op-btn" id="btnKeep">📌 この直線を残す</button><button class="op-btn" id="btnKeepClr">消す</button></div>`;
+      $('aRange').addEventListener('input', e => setA2(e.target.value));
+      $('aText').addEventListener('change', e => { const v = parseF(e.target.value.replace('−', '-').trim()); if (v) setA2(v); else { setMsg('a は 2、−1.5、3/4 のように入れよう。'); render(); } });
+      $('btnKeep').addEventListener('click', () => { const P2 = st.P; if (P2.kept.length >= 4) P2.kept.shift(); if (!P2.kept.includes(P2.a)) { pushHist(true); P2.kept.push(P2.a); } render(); });
+      $('btnKeepClr').addEventListener('click', () => { pushHist(true); st.P.kept = []; render(); });
+    }
+    render2Side();
+    const T = P.target;
+    $('ask').innerHTML = T ? `<div class="ask-q">🎯 チャレンジ（${P.cleared}こ クリア）<br>直線が 点 ${mrs(`(${T.x}, ${T.y})`)} を通るように、a を決めよう。</div>` : '';
+    st.act = null;
+    wireAsk();
+  }
+
+  /* =====================================================================
+     7. パート③ グラフから式（2本の直線）
+     P = { L:[{a,name}], k:0, phase:'a'|'cmp'|'done', wrong:[] }
+     ===================================================================== */
+  const POOL3 = ['1', '2', '3', '4', '-1', '-2', '-3', '-4', '1/2', '-1/2', '1/3', '-1/3', '2/3', '-2/3', '3/2', '-3/2', '3/4', '-3/4', '4/3', '-4/3', '5/2', '-5/2'];
+  function gen3() {
+    let a, b, n = 0;
+    do {
+      a = pick(POOL3); b = pick(POOL3); n++;
+      if (st.focus === 'steep' && !(F(a).sign() !== F(b).sign() && !F(a).abs().equals(F(b).abs()))) continue;
+      if (st.focus === 'divFlip' && (F(a).d === 1 || F(b).d === 1)) continue;
+    } while (n < 300 && (a === b || (F(a).sign() === F(b).sign() && Math.random() < 0.6) || F(a).abs().equals(F(b).abs()) && Math.random() < 0.7));
+    return { L: [{ a, name: 'ℓ' }, { a: b, name: 'm' }], k: 0, phase: 'a', wrong: [] };
+  }
+  const LC = ['#e65100', '#1565c0'];
+  function render3() {
+    const P = st.P, g = st.g;
+    g.clear();
+    P.L.forEach((l, i) => {
+      const known = i < P.k || P.phase !== 'a';
+      g.line(() => ({ a: F(l.a), b: F(0) }), { color: LC[i], width: 4, dash: i ? '12 7' : '', label: l.name });
+    });
+    if (P.phase === 'a') {
+      const cur = P.L[P.k], A = F(cur.a);
+      if (st.hintLv >= 2) latticePts(A, 6).forEach(([x, y]) => g.point(x, y, '', { color: '#6a1b9a', r: 5 }));
+      if (st.hintLv >= 3) stepTri(g, A, A.d);
+    }
+    // 表（いま答えている直線。答えるまでは ?）
+    const cur = P.L[Math.min(P.k, 1)];
+    const A = F(cur.a), known = P.k > 0 && P.phase === 'a' ? false : P.phase !== 'a';
+    let h = `<table class="vt"><tr><th>x</th><th>${cur.name} の y</th></tr>`;
+    for (let x = -3; x <= 3; x++) { const y = A.mul(x); h += `<tr><td class="${cls(x)}">${mr(x)}</td>${known || x === 0 ? `<td class="${cls(y)}">${mr(y)}</td>` : '<td class="q">?</td>'}</tr>`; }
+    $('tbl').innerHTML = h + '</table>';
+    $('tblNote').innerHTML = known ? '' : 'グラフから a がわかると、表もうまるよ。';
+    // 式
+    $('formula').innerHTML = P.L.map((l, i) => `<span class="row" style="color:${LC[i]}">${l.name}：${(i < P.k || P.phase !== 'a') ? mrs(lineStr(l.a)) : mrs('y = ') + ' ? ' + mrs('x')}</span>`).join('');
+    $('formNote').innerHTML = 'グラフが<b>格子点</b>（x も y も整数の点）を通るところをさがそう。';
+    $('ctrl').innerHTML = '';
+    if (P.phase === 'a') {
+      $('ask').innerHTML = `<div class="ask-q">直線 <b style="color:${LC[P.k]}">${P.L[P.k].name}</b> の比例定数 a は？</div><div class="ans-line">a ＝ ${boxHTML('a')}</div>${keypadHTML()}<button class="go">✔ こたえる</button>`;
+      st.act = 'a';
+    } else if (P.phase === 'cmp') {
+      $('ask').innerHTML = `<div class="ask-q">ℓ と m、グラフが<b>急</b>なのはどっち？</div><div class="cmp-btns">` +
+        ['ℓ', 'm', '同じ'].map(c => `<button class="op-btn${P.wrong.includes(c) ? ' ng' : ''}${c === '同じ' ? ' wide' : ''}" data-c="${c}">${c === '同じ' ? '同じ急さ' : c + ' のほうが急'}</button>`).join('') + '</div>';
+      st.act = null;
+      document.querySelectorAll('#ask [data-c]').forEach(b => b.addEventListener('click', () => cmp3(b.dataset.c)));
+    } else {
+      $('ask').innerHTML = '<button class="go next">🎲 つぎの問題へ</button>';
+      st.act = null;
+    }
+    wireAsk();
+  }
+  function check3() {
+    const P = st.P;
+    if (P.phase === 'done') { newProblem(); return; }
+    const v = parseF(st.inp.a);
+    if (!v) { setMsg('a を 数（分数・負の数もOK）で入れよう。'); return; }
+    pushHist();
+    const A = F(P.L[P.k].a);
+    if (v.equals(A)) {
+      sndOK();
+      const [lx, ly] = [A.d, A.mul(A.d).n];
+      setMsg(`<span class="mark-ok">○</span> 正解！ ${P.L[P.k].name} は 点 (${nm(lx)}, ${nm(ly)}) を通るから a ＝ ${nm(ly)} ÷ ${lx} ＝ ${mr(A)}。`, 'ok');
+      P.k++; st.hintLv = 0;
+      if (P.k >= 2) P.phase = 'cmp';
+      st.inp.a = '';
+    } else {
+      sndNG();
+      const types = [];
+      if (A.n !== 0 && v.equals(A.inv())) types.push('divFlip');
+      else if (v.equals(A.neg())) types.push('signA');
+      else if (A.n !== 0 && v.equals(A.inv().neg())) types.push('divFlip', 'signA');
+      types.forEach(addTrip);
+      let t = `<span class="mark-ng">×</span> a ＝ ${mr(v)} ではないよ。`;
+      if (types.includes('divFlip')) t += '<br>よこ と たて が逆になっていないかな？ a は「<b>右へ 1 進んだとき、上へいくつ</b>」＝ たての変化 ÷ よこの変化。';
+      if (types.includes('signA')) t += `<br>直線は<b>${signWord(A)}</b>。符号をたしかめよう。`;
+      if (!types.length) t += '<br>直線が通る格子点を1つ見つけて、y ÷ x を計算しよう。';
+      setMsg(t, 'ng');
+    }
+    render();
+  }
+  function cmp3(c) {
+    const P = st.P, a = F(P.L[0].a), b = F(P.L[1].a);
+    const d = a.abs().cmp(b.abs()), ans = d > 0 ? 'ℓ' : d < 0 ? 'm' : '同じ';
+    if (c === ans) {
+      P.phase = 'done';
+      sndDone(); bumpClear(3);
+      setMsg(`<span class="mark-ok">○</span> そのとおり！ |${mr(a)}| ＝ ${mr(a.abs())}、|${mr(b)}| ＝ ${mr(b.abs())}。` +
+        (ans === '同じ' ? '<br>a の絶対値が同じなので急さは同じ。符号がちがうと向きが反対。' : `<br>a の<b>絶対値</b>が大きい ${ans} のほうが急。`), 'ok');
+    } else {
+      sndNG();
+      P.wrong.push(c);
+      // 符号つきの a の大小で選んでしまったとき
+      const bySigned = a.cmp(b) > 0 ? 'ℓ' : a.cmp(b) < 0 ? 'm' : '同じ';
+      if (c === bySigned && bySigned !== ans) addTrip('steep');
+      setMsg(`<span class="mark-ng">×</span> ちがうよ。急さは、a の符号ではなく<b>絶対値</b>（符号をとった大きさ）でくらべよう。`, 'ng');
+    }
+    render();
+  }
+
+  /* =====================================================================
+     8. パート④ 変域
+     P = { a, p, q, inL, inR, phase:'ask'|'done' }  inL/inR … x の端をふくむか
+     ===================================================================== */
+  const POOL4 = ['1', '2', '3', '-1', '-2', '-3', '1/2', '-1/2', '3/2', '-3/2'];
+  function gen4() {
+    let a, p, q, n = 0;
+    do {
+      a = pick(POOL4);
+      if (st.focus === 'rangeOrder' || st.focus === 'endSym') a = pick(POOL4.filter(s => s[0] === '-'));
+      const d = F(a).d;
+      p = rnd(-4, 2); q = rnd(p + 2, 4);
+      if (d === 2) { p = p - (((p % 2) + 2) % 2); q = q + (((q % 2) + 2) % 2); if (q > 4) q = 4; }
+      n++;
+    } while (n < 200 && (q - p < 2 || Math.abs(num(F(a).mul(p))) > 6 || Math.abs(num(F(a).mul(q))) > 6 || (p + ',' + q + a) === st.last[4]));
+    st.last[4] = p + ',' + q + a;
+    const strict = st.focus === 'endSym' ? 0.9 : 0.35;
+    return { a, p, q, inL: Math.random() > strict, inR: Math.random() > strict, phase: 'ask', wrongs: 0 };
+  }
+  const symOf = (inc) => inc ? '≦' : '＜';
+  // 正しい y の変域 { lo, hi, inLo, inHi }
+  function yRange(P) {
+    const A = F(P.a), yp = A.mul(P.p), yq = A.mul(P.q);
+    return A.sign() >= 0 ? { lo: yp, hi: yq, inLo: P.inL, inHi: P.inR } : { lo: yq, hi: yp, inLo: P.inR, inHi: P.inL };
+  }
+  function render4() {
+    const P = st.P, A = F(P.a), g = st.g, R = yRange(P);
+    g.clear();
+    g.line(() => ({ a: A, b: F(0) }), { color: '#ffab91', width: 2.5, dash: '7 6' });
+    g.line(() => ({ a: A, b: F(0) }), { color: '#e65100', width: 5.5, from: P.p, to: P.q, ends: [P.inL ? 'closed' : 'open', P.inR ? 'closed' : 'open'] });
+    // x の変域（x軸の上の紫の帯）
+    g.line({ a: 0, b: 0 }, { color: '#6a1b9a', width: 7, opacity: 0.65, from: P.p, to: P.q, ends: [P.inL ? 'closed' : 'open', P.inR ? 'closed' : 'open'] });
+    if (P.phase === 'done' || st.hintLv >= 2) {
+      g.segment([P.p, 0], [P.p, A.mul(P.p)], { color: '#6a1b9a', width: 2, dash: '5 5' });
+      g.segment([P.q, 0], [P.q, A.mul(P.q)], { color: '#6a1b9a', width: 2, dash: '5 5' });
+    }
+    if (P.phase === 'done' || st.hintLv >= 3) {
+      g.segment([0, A.mul(P.p)], [P.p, A.mul(P.p)], { color: '#2e7d32', width: 2, dash: '5 5' });
+      g.segment([0, A.mul(P.q)], [P.q, A.mul(P.q)], { color: '#2e7d32', width: 2, dash: '5 5' });
+    }
+    if (P.phase === 'done') {
+      // y の変域（y軸の上の緑の帯）
+      g.segment([0, R.lo], [0, R.hi], { color: '#2e7d32', width: 7, opacity: 0.7 });
+      g.point(0, R.lo, '', { color: '#2e7d32', r: 7, open: !R.inLo });
+      g.point(0, R.hi, '', { color: '#2e7d32', r: 7, open: !R.inHi });
+    }
+    // 表（x の変域の整数）
+    let h = '<table class="vt"><tr><th>x</th><th>y</th></tr>';
+    for (let x = P.p; x <= P.q; x++) {
+      const y = A.mul(x), end = x === P.p ? P.inL : x === P.q ? P.inR : null;
+      const mark = end === null ? '' : `<span class="mark">${end ? '● ふくむ' : '○ ふくまない'}</span>`;
+      const show = P.phase === 'done' || st.hintLv >= 1 || end === null;
+      h += `<tr class="${end !== null ? 'given' : ''}"><td class="${cls(x)}">${mr(x)}${mark}</td><td class="${show ? cls(y) : 'q'}">${show ? mr(y) : '?'}</td></tr>`;
+    }
+    $('tbl').innerHTML = h + '</table>';
+    $('tblNote').innerHTML = 'x の端（黄色の行）の y を、式に代入して求めよう。';
+    // 式
+    $('formula').innerHTML = `<span class="row">${mrs(lineStr(A))}</span><span class="row" style="color:#6a1b9a;font-size:28px">${mrs(String(P.p))} ${symOf(P.inL)} x ${symOf(P.inR)} ${mrs(String(P.q))}</span>`;
+    $('formNote').innerHTML = `x の変域が上のとき、y の変域は？<br><span class="small">≦ …ふくむ（●）　＜ …ふくまない（○）</span>`;
+    $('ctrl').innerHTML = '';
+    if (P.phase === 'done') {
+      $('ask').innerHTML = '<button class="go next">🎲 つぎの問題へ</button>';
+      st.act = null;
+    } else {
+      $('ask').innerHTML = `<div class="ask-q">y の変域は？（記号のボタンを押すと ≦ と ＜ がかわる）</div>
+        <div class="ans-line">${boxHTML('lo', '小さいほうの端')}<button class="sym" data-s="sL">${st.inp.sL}</button> y <button class="sym" data-s="sR">${st.inp.sR}</button>${boxHTML('hi', '大きいほうの端')}</div>
+        ${keypadHTML()}<button class="go">✔ こたえる</button>`;
+      if (!st.act) st.act = 'lo';
+      document.querySelectorAll('#ask .sym').forEach(b => b.addEventListener('click', () => { st.inp[b.dataset.s] = st.inp[b.dataset.s] === '≦' ? '＜' : '≦'; b.textContent = st.inp[b.dataset.s]; }));
+    }
+    wireAsk();
+  }
+  function check4() {
+    const P = st.P;
+    if (P.phase === 'done') { newProblem(); return; }
+    const lo = parseF(st.inp.lo), hi = parseF(st.inp.hi);
+    if (!lo || !hi) { setMsg('左と右の欄に、y の端の数を入れよう。'); st.act = !lo ? 'lo' : 'hi'; paintBoxes(); return; }
+    pushHist();
+    const R = yRange(P), sL = st.inp.sL === '≦', sR = st.inp.sR === '≦';
+    const valOK = lo.equals(R.lo) && hi.equals(R.hi), symOK = sL === R.inLo && sR === R.inHi;
+    const txt = (a, b, c, d) => `${mr(a)} ${symOf(b)} y ${symOf(c)} ${mr(d)}`;
+    if (valOK && symOK) {
+      P.phase = 'done';
+      sndDone(); bumpClear(4);
+      const A = F(P.a);
+      setMsg(`<span class="mark-ok">○</span> 正解！ <b>${txt(R.lo, R.inLo, R.inHi, R.hi)}</b><br>x ＝ ${mr(P.p)} のとき y ＝ ${mr(A.mul(P.p))}、x ＝ ${mr(P.q)} のとき y ＝ ${mr(A.mul(P.q))}。` +
+        (A.sign() < 0 ? '<br>a が負なので、<b>左右が入れかわって</b>、x の右はし（' + symOf(P.inR) + '）が y の小さいほうの端になる。' : ''), 'ok');
+      st.inp = { lo: '', hi: '', sL: '≦', sR: '≦' }; st.act = null;
+    } else {
+      sndNG(); P.wrongs++;
+      let type, t;
+      if (lo.equals(R.hi) && hi.equals(R.lo)) { type = 'rangeOrder'; t = '左と右が逆だよ。y の変域は <b>小さいほう ≦ y ≦ 大きいほう</b> の順。'; }
+      else if (valOK) { type = 'endSym'; t = `数は合っている！ <b>記号</b>をたしかめよう。${F(P.a).sign() < 0 ? 'a が負なので、x の右はしの記号が y の左はし（小さいほう）に来るよ。' : 'x の端が ● なら ≦、○ なら ＜。'}`; }
+      else { type = 'rangeCalc'; t = '端の x を y ＝ ax に代入して、y の端の値をもう一度計算しよう。'; }
+      addTrip(type);
+      if (!valOK && !(lo.equals(R.hi) && hi.equals(R.lo)) && !symOK && P.wrongs >= 2) t += '<br><span class="small">（記号もたしかめよう）</span>';
+      setMsg(`<span class="mark-ng">×</span> ${t}`, 'ng');
+    }
+    render();
+  }
+
+  /* =====================================================================
+     9. パート⑤ 場面（水を入れる／同じ速さで進む）
+     P = { sc:'water'|'speed', a, t, qx, phase:'ask'|'done' }
+     ===================================================================== */
+  const SC = {
+    water: { name: '💧 水を入れる', amin: 1, amax: 5, xmax: 10, ymax: 50, xu: '分', yu: 'L',
+             aWord: a => `毎分 ${a} L`, words: '水の量 ＝ 毎分の量 × 時間', xName: '時間 x（分）', yName: '水の量 y（L）' },
+    speed: { name: '🚶 速さ（歩く）', amin: 2, amax: 6, xmax: 5, ymax: 30, xu: '時間', yu: 'km',
+             aWord: a => `時速 ${a} km`, words: '道のり ＝ 速さ × 時間', xName: '時間 x（時間）', yName: '道のり y（km）' },
+  };
+  function gen5(sc) {
+    sc = sc || (st.P && st.P.sc) || 'water';
+    const S = SC[sc];
+    const a = st.P && st.P.sc === sc ? st.P.a : (sc === 'water' ? 3 : 4);
+    return { sc, a, t: 0, qx: rnd(2, S.xmax - 1), phase: 'ask' };
+  }
+  function makeGraph5() {
+    const S = SC[st.P.sc];
+    makeGraph({ xmin: -S.xmax * 0.08, xmax: S.xmax * 1.08, ymin: -S.ymax * 0.08, ymax: S.ymax * 1.08, equalScale: false, step: null, snap: false, controls: false });
+  }
+  function drawScene() {
+    const P = st.P, S = SC[P.sc], y = P.a * P.t;
+    let h = '';
+    if (P.sc === 'water') {
+      // 水そう（容量 50 L）：水の高さが y に比例
+      const X0 = 330, Y0 = 30, W = 240, H = 180, lv = Math.min(1, y / S.ymax);
+      h += `<rect x="${X0}" y="${Y0}" width="${W}" height="${H}" fill="#fff" stroke="#546e7a" stroke-width="4"/>`;
+      h += `<rect x="${X0 + 2}" y="${Y0 + H - lv * H}" width="${W - 4}" height="${Math.max(0, lv * H - 2)}" fill="#4fc3f7" fill-opacity=".75"/>`;
+      for (let k = 10; k <= S.ymax; k += 10) { const yy = Y0 + H - k / S.ymax * H; h += `<path d="M${X0 + W},${yy}h-14" stroke="#546e7a" stroke-width="2"/><text x="${X0 + W + 6}" y="${yy + 6}" font-size="16" fill="#546e7a">${k} L</text>`; }
+      h += `<path d="M${X0 - 70},10h60v26" stroke="#78909c" stroke-width="10" fill="none" stroke-linecap="round"/>`;
+      if (P.timerOn && P.t < S.xmax) h += `<path d="M${X0 - 10},40V${Y0 + H - lv * H}" stroke="#29b6f6" stroke-width="8"/>`;
+      h += `<text x="40" y="70" font-size="26" font-weight="bold" fill="#263238">${S.aWord(P.a)} で 水を入れる</text>`;
+      h += `<text x="40" y="120" font-size="30" font-weight="bold" fill="#e65100">x ＝ ${P.t.toFixed(1)} 分</text>`;
+      h += `<text x="40" y="170" font-size="30" font-weight="bold" fill="#1565c0">y ＝ ${(+y.toFixed(1))} L</text>`;
+      h += `<text x="655" y="110" font-size="22" fill="#37474f">${S.words}</text><text x="655" y="150" font-size="24" font-weight="bold" fill="#37474f">y ＝ ${P.a} × x</text>`;
+    } else {
+      // 道：0〜30 km の目もり。人が同じ速さで歩く
+      const L = 60, R = 860, Yr = 150, k = (R - L) / S.ymax;
+      h += `<rect x="${L - 10}" y="${Yr - 22}" width="${R - L + 20}" height="44" rx="10" fill="#cfd8dc"/>`;
+      h += `<path d="M${L},${Yr}H${R}" stroke="#fff" stroke-width="4" stroke-dasharray="16 12"/>`;
+      for (let d = 0; d <= S.ymax; d += 5) h += `<path d="M${L + d * k},${Yr + 22}v10" stroke="#546e7a" stroke-width="2"/><text x="${L + d * k}" y="${Yr + 52}" font-size="16" text-anchor="middle" fill="#546e7a">${d} km</text>`;
+      h += `<path d="M${L},${Yr - 30}H${L + Math.min(y, S.ymax) * k}" stroke="#e65100" stroke-width="6" stroke-linecap="round"/>`;
+      h += `<text x="${L + Math.min(y, S.ymax) * k}" y="${Yr - 2}" font-size="64" text-anchor="middle" transform="scale(-1,1) translate(${-2 * (L + Math.min(y, S.ymax) * k)},0)">🚶</text>`;
+      h += `<text x="40" y="40" font-size="24" font-weight="bold" fill="#263238">${S.aWord(P.a)} で進む</text>`;
+      h += `<text x="40" y="80" font-size="26" font-weight="bold" fill="#e65100">x ＝ ${P.t.toFixed(1)} 時間</text><text x="300" y="80" font-size="26" font-weight="bold" fill="#1565c0">y ＝ ${(+y.toFixed(1))} km</text>`;
+      h += `<text x="560" y="40" font-size="20" fill="#37474f">${S.words}</text><text x="560" y="80" font-size="22" font-weight="bold" fill="#37474f">y ＝ ${P.a} × x</text>`;
+    }
+    $('scene').innerHTML = h;
+  }
+  function render5(full) {
+    const P = st.P, S = SC[P.sc];
+    if (full) {
+      makeGraph5();
+      const g = st.g;
+      g.line(() => ({ a: F(st.P.a), b: F(0) }), { color: '#e65100', width: 4, from: 0, to: S.xmax, ends: ['closed', 'closed'] });
+      g.segment(() => [st.P.t, 0], () => [st.P.t, st.P.a * st.P.t], { color: '#6a1b9a', width: 2, dash: '5 5' });
+      g.point(() => [st.P.t, st.P.a * st.P.t], null, '', { color: '#d81b60', r: 8 });
+      $('sceneRow').innerHTML = Object.keys(SC).map(k => `<button class="chip${k === P.sc ? ' active' : ''}" data-sc="${k}">${SC[k].name}</button>`).join('');
+      $('sceneRow').querySelectorAll('[data-sc]').forEach(b => b.addEventListener('click', () => { stopTimer(); st.P = gen5(b.dataset.sc); st.P0 = clone(st.P); st.hist = []; render(true); setMsg(introOf()); }));
+      $('scALabel').textContent = P.sc === 'water' ? '毎分(L)' : '時速(km)';
+      ['scA', 'scAnum'].forEach(id => { $(id).min = S.amin; $(id).max = S.amax; });
+      ['scT', 'scTnum'].forEach(id => { $(id).max = S.xmax; });
+    }
+    $('scA').value = P.a; $('scAnum').value = P.a;
+    $('scT').value = P.t; $('scTnum').value = (+P.t.toFixed(1));
+    $('scPlay').textContent = st.timer ? '⏸ とめる' : (P.t >= S.xmax ? '▶ もう一度' : '▶ スタート');
+    drawScene();
+    st.g.redraw();
+    // 表：とおりすぎた整数の x
+    let h = `<table class="vt"><tr><th>x（${S.xu}）</th><th>y（${S.yu}）</th></tr>`;
+    for (let x = 0; x <= S.xmax; x++) {
+      const passed = x <= P.t + 1e-9;
+      h += `<tr class="${x === P.qx && P.phase === 'ask' ? 'given' : ''}"><td>${x}</td>${passed ? `<td class="pos">${P.a * x}</td>` : '<td class="q">…</td>'}</tr>`;
+    }
+    $('tbl').innerHTML = h + '</table>';
+    $('tblNote').innerHTML = `y ÷ x はいつも ${P.a}（${S.aWord(P.a)}）。<br>変域：0 ≦ x ≦ ${S.xmax}`;
+    $('formula').innerHTML = mrs(`y = ${P.a}x`, 'normal');
+    $('formNote').innerHTML = `${S.words}<br>比例定数 ${P.a} は「${S.aWord(P.a)}」のこと。`;
+    $('ctrl').innerHTML = '';
+    if (full || !document.querySelector('#ask .box') !== (P.phase === 'done')) {
+      if (P.phase === 'done') { $('ask').innerHTML = '<button class="go next">🎲 つぎの問題へ</button>'; st.act = null; }
+      else { $('ask').innerHTML = `<div class="ask-q">x ＝ ${P.qx}（${S.xu}）のとき、y は何 ${S.yu}？<br><span class="small">予想して答えてから、動画でたしかめよう</span></div><div class="ans-line">y ＝ ${boxHTML('y')} ${S.yu}</div>${keypadHTML()}<button class="go">✔ こたえる</button>`; st.act = 'y'; }
+      wireAsk();
+    }
+  }
+  function check5() {
+    const P = st.P, S = SC[P.sc];
+    if (P.phase === 'done') { stopTimer(); st.P = gen5(P.sc); st.P0 = clone(st.P); st.hist = []; render(true); setMsg(introOf()); return; }
+    const v = parseF(st.inp.y);
+    if (!v) { setMsg('y を 数で入れよう。'); return; }
+    pushHist();
+    const ans = P.a * P.qx;
+    if (v.equals(ans)) {
+      P.phase = 'done'; P.t = P.qx;
+      sndDone(); bumpClear(5);
+      setMsg(`<span class="mark-ok">○</span> 正解！ y ＝ ${P.a} × ${P.qx} ＝ ${ans}（${S.yu}）。動画とグラフの点もそこにいるよ。`, 'ok');
+      st.inp.y = '';
+    } else {
+      sndNG();
+      let t = `<span class="mark-ng">×</span> ${mr(v)} ${S.yu} ではないよ。`;
+      if (v.equals(F(P.qx).div(P.a))) t += '<br>わり算になっていないかな？ ' + S.words + '（かけ算）。';
+      else if (v.equals(P.a + P.qx)) t += '<br>たし算ではなく<b>かけ算</b>。y ＝ ' + P.a + ' × x。';
+      else t += `<br>y ＝ ${P.a} × x の x に ${P.qx} を代入しよう。`;
+      setMsg(t, 'ng');
+    }
+    render(true);
+  }
+  function startTimer() {
+    const P = st.P, S = SC[P.sc];
+    if (P.t >= S.xmax) P.t = 0;
+    P.timerOn = true;
+    st.timer = setInterval(() => {
+      const Q = st.P;
+      Q.t = Math.min(S.xmax, Q.t + S.xmax / 160);
+      if (Q.t >= S.xmax) stopTimer();
+      render5(false);
+    }, 50);
+    render5(false);
+  }
+  function stopTimer() {
+    const was = !!st.timer;
+    if (st.timer) clearInterval(st.timer);
+    st.timer = null;
+    if (st.P) st.P.timerOn = false;
+    if (was && st.part === 5 && st.P && st.P.sc) render5(false);
+  }
+  $('scPlay').addEventListener('click', () => { if (st.timer) stopTimer(); else startTimer(); });
+  $('scBack').addEventListener('click', () => { stopTimer(); st.P.t = 0; render5(false); });
+  const setScA = (v) => { const S = SC[st.P.sc]; v = Math.max(S.amin, Math.min(S.amax, Math.round(+v || S.amin))); if (v === st.P.a) return; st.P.a = v; st.P.phase = 'ask'; render5(true); };
+  $('scA').addEventListener('input', e => setScA(e.target.value));
+  $('scAnum').addEventListener('change', e => setScA(e.target.value));
+  const setScT = (v) => { const S = SC[st.P.sc]; stopTimer(); st.P.t = Math.max(0, Math.min(S.xmax, +v || 0)); render5(false); };
+  $('scT').addEventListener('input', e => setScT(e.target.value));
+  $('scTnum').addEventListener('change', e => setScT(e.target.value));
+
+  /* =====================================================================
+     10. 共通の動き
+     ===================================================================== */
+  function go_() {
+    if (st.part === 1) check1();
+    else if (st.part === 3) check3();
+    else if (st.part === 4) check4();
+    else if (st.part === 5) check5();
+  }
+  function pushHist(keepMsg) { st.hist.push(clone({ P: st.P, hintLv: st.hintLv })); if (st.hist.length > 50) st.hist.shift(); }
+  function undo() {
+    if (!st.hist.length) return;
+    stopTimer();
+    const h = st.hist.pop();
+    st.P = h.P; st.hintLv = h.hintLv;
+    setMsg('↶ ひとつもどした。');
+    render(st.part === 5);
+  }
+  function resetProblem() {
+    stopTimer();
+    st.P = clone(st.P0); st.hist = []; st.hintLv = 0;
+    resetInputs();
+    setMsg('はじめからやりなおそう。');
+    render(true);
+  }
+  function resetInputs() { st.inp = { a: '', lo: '', hi: '', y: '', sL: '≦', sR: '≦' }; st.act = null; }
+  function introOf() {
+    return {
+      1: '黄色の行の x と y から、<b>比例定数 a</b> を求めよう。',
+      2: 'スライダーを動かすか、グラフの点 P をドラッグしよう。🎯 の点を通る直線にできるかな？',
+      3: '直線 ℓ の a から答えよう。<b>格子点</b>をさがすのがコツ。',
+      4: 'x の変域の両はしの y を求めて、y の変域を書こう。',
+      5: '▶ で動画が動くよ。グラフの点・表・動画がいっしょに動く。',
+    }[st.part];
+  }
+  function newProblem(opt = {}) {
+    stopTimer();
+    st.hist = []; st.hintLv = 0;
+    resetInputs();
+    if (st.part === 1) {
+      st.P = gen1();
+      // 表の y がぜんぶ見えるように、y のはんいを広げる（x と y の1目もりの長さはちがってよい）
+      const Y = Math.max(6.5, num(F(st.P.a).abs()) * 4 + 1.5);
+      makeGraph(Y > 6.5 ? { ymin: -Y, ymax: Y, equalScale: false } : {});
+    }
+    if (st.part === 2) st.P = gen2(opt.a);
+    if (st.part === 3) st.P = gen3();
+    if (st.part === 4) st.P = gen4();
+    if (st.part === 5) st.P = gen5();
+    st.P0 = clone(st.P);
+    setMsg(introOf());
+    render(true);
+  }
+  function setPart(n, opt = {}) {
+    stopTimer();
+    st.part = n;
+    if (!opt.keepFocus) { st.focus = null; $('focusBar').hidden = true; }
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === n));
+    $('partNote').textContent = PARTS[n].note;
+    $('sceneCard').hidden = n !== 5;
+    $('ctrl').innerHTML = '';
+    st.P = null;
+    if (n !== 5) makeGraph(n === 2 ? { snap: 0.5 } : {});
+    newProblem(opt);
+  }
+  function render(full) {
+    if (st.part === 5) render5(full);
+    else if (st.part === 1) render1();
+    else if (st.part === 2) render2();
+    else if (st.part === 3) render3();
+    else render4();
+    renderTrips();
+    renderTeacher();
+    $('btnUndo').disabled = !st.hist.length;
+  }
+  function setMsg(html, c) {
+    const el = $('msg');
+    el.innerHTML = html;
+    el.className = 'msg' + (c ? ' ' + c : '');
+  }
+  function hint() {
+    const P = st.P;
+    st.hintLv = Math.min(3, st.hintLv + 1);
+    const lv = st.hintLv;
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    let t = '';
+    if (st.part === 1) {
+      const x1 = P.shown[0], y1 = F(P.a).mul(x1);
+      t = ['', '比例 y ＝ ax では、<b>y ÷ x</b> がいつも a になる。', `x ＝ ${mr(x1)} のとき y ＝ ${mr(y1)} だから、a ＝ ${mr(y1)} ÷ ${mrs(paren(x1))}。`, 'グラフの紫の線：右へ進んだぶんと、上（下）へ進んだぶんをくらべよう。'][lv];
+    } else if (st.part === 2) t = ['', 'x ＝ 1 のときの y が a。点 P を 🎯 の点に合わせるには…', `🎯 の点の y ÷ x を計算しよう。`, `a ＝ ${P.target ? mr(F(P.target.y).div(P.target.x)) : '?'} にしよう。`][lv];
+    else if (st.part === 3) {
+      if (P.phase !== 'a') t = '急さは a の<b>絶対値</b>でくらべる。';
+      else t = ['', '直線が方眼の交わる点（<b>格子点</b>）を通るところをさがそう。', '紫の点が格子点。どれか1つで y ÷ x を計算しよう。', '紫の三角形：右へ何目もり進むと、上（下）へ何目もり？'][lv];
+    } else if (st.part === 4) t = ['', '表の黄色の行（x の端）の y を求めよう。表に y が出たよ。', 'グラフの紫の点線：x の端から直線までのびている。', `緑の点線で y軸 の値を読もう。${F(P.a).sign() < 0 ? 'a が負なので、左右が入れかわるよ。' : ''}`][lv];
+    else t = `y ＝ ${P.a} × x。x に ${P.qx} を入れよう。`;
+    setMsg('💡 ' + t);
+    render();
+  }
+
+  /* =====================================================================
+     11. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(p) { bumpRec(r => r.clear[p] = (r.clear[p] || 0) + 1); }
+  function addTrip(type) { st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><button class="op-btn" data-prac="${k}">🔁 この型を練習（${PARTS[TRIPS[k].part].name}）</button></div>`).join('')
+      : '<div class="small">まだ ありません。まちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = `この端末のきろく：正解 ① ${c[1] || 0}　② ${c[2] || 0}　③ ${c[3] || 0}　④ ${c[4] || 0}　⑤ ${c[5] || 0}　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    setPart(TRIPS[type].part, { keepFocus: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     12. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const P = st.P;
+    if (!P) return '';
+    if (st.part === 1) return P.solved ? '（つぎの問題へ）' : '答え：a ＝ ' + P.a;
+    if (st.part === 2) return P.target ? `🎯 の答え：a ＝ ${F(P.target.y).div(P.target.x)}` : '';
+    if (st.part === 3) { if (P.phase === 'a') return `答え：${P.L[P.k].name} の a ＝ ${P.L[P.k].a}`; if (P.phase === 'cmp') { const d = F(P.L[0].a).abs().cmp(F(P.L[1].a).abs()); return '答え：' + (d > 0 ? 'ℓ' : d < 0 ? 'm' : '同じ'); } return '（つぎの問題へ）'; }
+    if (st.part === 4) { const R = yRange(P); return P.phase === 'done' ? '（つぎの問題へ）' : `答え：${R.lo} ${symOf(R.inLo)} y ${symOf(R.inHi)} ${R.hi}`; }
+    return P.phase === 'done' ? '（つぎの問題へ）' : `答え：y ＝ ${P.a * P.qx}`;
+  }
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText().replace(/-/g, '−');
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function teacherStep() {
+    const P = st.P;
+    if (st.part === 2) { if (P.target) setA2(F(P.target.y).div(P.target.x)); return; }
+    if (st.part === 3 && P.phase === 'cmp') { const d = F(P.L[0].a).abs().cmp(F(P.L[1].a).abs()); cmp3(d > 0 ? 'ℓ' : d < 0 ? 'm' : '同じ'); return; }
+    if (st.part === 1 && !P.solved) st.inp.a = P.a;
+    if (st.part === 3 && P.phase === 'a') st.inp.a = P.L[P.k].a;
+    if (st.part === 4 && P.phase !== 'done') { const R = yRange(P); st.inp.lo = R.lo.toString(); st.inp.hi = R.hi.toString(); st.inp.sL = symOf(R.inLo); st.inp.sR = symOf(R.inHi); }
+    if (st.part === 5 && P.phase !== 'done') st.inp.y = String(P.a * P.qx);
+    go_();
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     13. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3, 4, 5].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnNew').addEventListener('click', () => newProblem());
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetProblem);
+  $('btnHint').addEventListener('click', hint);
+  $('btnWs').addEventListener('click', () => {
+    setPart(2, { a: '1' });
+    setMsg('📄 ワークシートの問題：a ＝ −2 のグラフは、右上がり？ 右下がり？ 予想してから、a を <b>−2</b> にしてみよう。');
+  });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '比例をつくろう',
+    question: '比例 y ＝ −2x のグラフは、右上がりだろうか？ 右下がりだろうか？',
+    predictions: ['右上がり', '右下がり', '水平（横にまっすぐ）', 'わからない'],
+    operationNote: '② 式からグラフ で a を変えて、グラフの向きを調べよう。a ＝ −2 や、ほかの a（正・負の両方）で「＋ 記録する」。',
+    fields: [
+      { key: 'a', label: '比例定数 a' },
+      { key: 'shiki', label: '式' },
+      { key: 'y1', label: 'x＝1 のときの y' },
+      { key: 'muki', label: 'グラフの向き', math: false }
+    ],
+    capture: () => {
+      if (st.part !== 2) { setMsg('② 式からグラフ にして、a を決めてから記録しよう。'); return null; }
+      const A = F(st.P.a);
+      return { a: A.toString(), shiki: lineStr(A), y1: A.toString(), muki: signWord(A) };
+    },
+    summaryHint: '「比例 y＝ax のグラフは原点を通る直線で、a が正のとき〜、a が負のとき〜。a の絶対値が大きいほど〜」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集めてから a を −2 にさせる。x＝1 のとき y＝−2 なので、原点から右へ1 進むと下へ2。表で x が増えると y が減ることも確認する。a を −1、−3 などにも変えさせ、急さは絶対値で決まることに気づかせる。',
+      answer: '右下がり。<br>x ＝ 1 のとき y ＝ −2、x ＝ 2 のとき y ＝ −4 … x が増えると y は減る。<br>まとめ：比例 y ＝ ax のグラフは原点を通る直線。a ＞ 0 のとき右上がり、a ＜ 0 のとき右下がり。a の絶対値が大きいほど、グラフは急になる。'
+    }
+  });
+
+  setupTeacher();
+  setPart(1);
+})();
+</script>
+
+</body>
+</html>
