@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>正負の数チップ</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり：正の数＝オレンジ、負の数＝青、正解＝緑、まちがい＝赤紫（記号もつける）
+     ＋チップは「丸に＋」、−チップは「四角に−」。色だけでなく形でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457;
+    --cs: 48px;            /* チップの大きさ */
+    --anim: 700ms;         /* 消えるアニメの長さ（はやさで変わる） */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3faf8 0%, #d9efea 100%);
+    min-height: 100vh; padding: 10px 16px 28px; font-size: 18px;
+  }
+  button { font-family: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  .topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; }
+  h1 { margin: 0; flex: 1; text-align: center; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--accent-dark); }
+  .subtitle { margin: -6px 0 0; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .card { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.05rem; color: var(--accent-dark); }
+  .note { font-size: 0.9rem; color: #546e7a; margin: 6px 0 0; line-height: 1.6; }
+  .lbl { font-weight: 900; color: var(--accent-dark); }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; }
+
+  /* ===== モードのタブ ===== */
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tab {
+    min-height: 56px; border: 3px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: 1.1rem; font-weight: bold; cursor: pointer; touch-action: manipulation; padding: 2px 4px;
+  }
+  .tab small { display: block; font-size: 0.75rem; font-weight: normal; color: #78909c; }
+  .tab.on { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .tab.on small { color: #e0f2f1; }
+
+  /* ===== 3つの場所：チップの置き場（左）・式（中）・結果（右） ===== */
+  .main { container-type: inline-size; }
+  .grid { display: grid; gap: 12px; grid-template-columns: 1fr; grid-template-areas: "expr" "board" "result"; }
+  @container (min-width: 700px) {
+    .grid { grid-template-columns: minmax(0, 1fr) 270px; grid-template-areas: "board expr" "board result"; align-items: start; }
+  }
+  @container (min-width: 960px) {
+    .grid { grid-template-columns: minmax(0, 1fr) 230px 230px; grid-template-areas: "board expr result"; }
+  }
+  .a-board { grid-area: board; }
+  .a-expr { grid-area: expr; }
+  .a-result { grid-area: result; }
+
+  /* ===== 式 ===== */
+  .expr { text-align: center; font-weight: 900; font-size: clamp(30px, 5vw, 46px); line-height: 1.35; }
+  .a-expr { container-type: inline-size; }
+  @container (min-width: 1px) { .expr { font-size: clamp(26px, 14cqi, 46px); } }   /* 式の入れ物の幅に合わせる */
+  .expr .row1 { white-space: nowrap; }
+  .expr .op { margin: 0 .12em; }
+  .expr .q { color: #90a4ae; }
+  .n.p { color: var(--pos); }
+  .n.m { color: var(--neg); }
+  .expr .ans { border-bottom: .08em solid var(--ok); padding: 0 .08em; white-space: nowrap; }
+  .expr .eq { font-size: .7em; }
+  .expr2 { margin-top: 6px; text-align: center; font-weight: 900; font-size: clamp(22px, 3.2vw, 28px); color: #33691e;
+    background: #f1f8e9; border: 3px dashed #9ccc65; border-radius: 12px; padding: 4px 6px; }
+
+  /* ===== チップの置き場 ===== */
+  .board { position: relative; display: flex; flex-direction: column; gap: 10px; }
+  .lane { border-radius: 14px; padding: 6px 8px 8px; }
+  .lane.lp { background: #fff3e0; border: 2px solid #ffcc80; }
+  .lane.lm { background: #e3f2fd; border: 2px solid #90caf9; }
+  .lane.tray { background: #f5f5f5; border: 2px dashed #b0bec5; }
+  .lane-h { font-weight: 900; font-size: 1rem; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; }
+  .lane.lp .lane-h { color: #bf360c; }
+  .lane.lm .lane-h { color: #0d47a1; }
+  .chips { display: grid; grid-template-columns: repeat(var(--cols, 10), var(--cs)); gap: 6px; min-height: var(--cs); }
+  .chip {
+    width: var(--cs); height: var(--cs); display: flex; align-items: center; justify-content: center;
+    font-size: calc(var(--cs) * 0.62); font-weight: 900; color: #fff; line-height: 1; position: relative;
+    cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
+    transition: transform var(--anim) ease, opacity var(--anim) ease, box-shadow .15s;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.25);
+  }
+  .chip.p { background: radial-gradient(circle at 35% 30%, #ff9e40, var(--pos)); border-radius: 50%; border: 3px solid #bf360c; }
+  .chip.m { background: linear-gradient(150deg, #42a5f5, var(--neg)); border-radius: 6px; border: 3px solid #0d47a1; }
+  .chip.z { border-style: dashed; }                     /* あとから足したゼロ対のチップ */
+  .chip .tag {
+    position: absolute; right: -6px; top: -6px; min-width: 20px; height: 20px; border-radius: 10px; padding: 0 4px;
+    background: #fff; color: #33691e; border: 2px solid #9ccc65; font-size: 12px; display: flex; align-items: center; justify-content: center;
+  }
+  .chip.sel { outline: 5px solid #43a047; outline-offset: 2px; transform: scale(1.08); }
+  .chip.gone { opacity: 0; transform: scale(.2) rotate(90deg); pointer-events: none; }
+  .chip.taking { opacity: 0; transform: translateY(40px) scale(.6); pointer-events: none; }
+  .chip.drag { transition: none; z-index: 20; box-shadow: 0 10px 18px rgba(0,0,0,0.3); pointer-events: none; }
+  .chip.drop { outline: 5px dashed #43a047; outline-offset: 2px; }
+  .chip.mini { width: 30px; height: 30px; font-size: 20px; display: inline-flex; vertical-align: middle; cursor: default; box-shadow: none; border-width: 2px; }
+  .tray .chip { cursor: default; opacity: .75; }
+  .pop {
+    position: absolute; z-index: 15; pointer-events: none; font-weight: 900; font-size: 34px; color: var(--ok);
+    background: #fff; border: 4px solid var(--ok); border-radius: 50%; width: 52px; height: 52px;
+    display: flex; align-items: center; justify-content: center; transform: translate(-50%, -50%) scale(.4); opacity: 0;
+    transition: transform calc(var(--anim) * .5) ease, opacity calc(var(--anim) * .5) ease;
+  }
+  .pop.on { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  .empty { color: #90a4ae; font-size: .95rem; align-self: center; grid-column: 1 / -1; }
+
+  /* ===== ボタン ===== */
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .act {
+    min-height: 52px; padding: 4px 14px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: 1.02rem; font-weight: 900; cursor: pointer; touch-action: manipulation;
+  }
+  .act:disabled { opacity: .45; cursor: default; }
+  .act.primary { background: linear-gradient(150deg, #009688 0%, #00695c 100%); color: #fff; border: none; box-shadow: 0 4px 0 rgba(0,70,60,0.35); }
+  .act.primary:disabled { background: #b0bec5; box-shadow: none; }
+  .act.zero { border-color: #9ccc65; background: #f1f8e9; color: #33691e; }
+  .act.blink { animation: blink 1s ease 3; }
+  @keyframes blink { 50% { box-shadow: 0 0 0 6px #ffeb3b; } }
+  .chipbtn { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ===== 式を作るところ ===== */
+  .build { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 18px; align-items: flex-start; }
+  .numbox { flex: 1 1 200px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .opmark { font-size: 2.2rem; font-weight: 900; align-self: center; padding: 0 4px; }
+  .seg { display: flex; gap: 6px; }
+  .sbtn {
+    min-height: 52px; min-width: 64px; padding: 4px 12px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: 1.15rem; font-weight: 900; cursor: pointer; touch-action: manipulation; white-space: nowrap;
+  }
+  .sbtn.on { color: #fff; }
+  .sbtn.on::before { content: "✔ "; }
+  .sbtn[data-s="1"].on { background: var(--pos); border-color: var(--pos); }
+  .sbtn[data-s="-1"].on { background: var(--neg); border-color: var(--neg); }
+  .stepper { display: flex; gap: 6px; align-items: center; }
+  .stepper button {
+    min-width: 52px; min-height: 52px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: 1.1rem; font-weight: 900; cursor: pointer; touch-action: manipulation;
+  }
+  .stepper input {
+    width: 3.2em; min-height: 52px; font-size: 1.5rem; font-weight: 900; text-align: center; font-family: inherit;
+    border: 3px solid #4db6ac; border-radius: 12px;
+  }
+  .row { display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .chip-s {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip-s.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip-s.on::before { content: "✔ "; }
+  .warn { color: var(--ng); font-weight: bold; margin-top: 6px; }
+  .warn::before { content: "⚠ "; }
+
+  /* ===== 結果 ===== */
+  .res-cnt { display: flex; flex-direction: column; gap: 6px; font-size: 1.1rem; font-weight: bold; }
+  .res-cnt b { font-size: 1.4rem; }
+  .res-val { margin-top: 8px; font-size: 1.05rem; }
+  .res-val .big { font-size: 2.2rem; font-weight: 900; }
+  .goal { margin-top: 8px; border: 3px solid #66bb6a; background: #e8f5e9; border-radius: 14px; padding: 8px 10px; }
+  .goal .big { color: var(--ok); font-size: 1.8rem; font-weight: 900; }
+  .explain {
+    margin-top: 10px; font-size: clamp(1rem, 2.2vw, 1.15rem); line-height: 1.7; min-height: 2.2em;
+    background: #f7fbfa; border-radius: 12px; padding: 8px 12px;
+  }
+  .explain ol { margin: 0; padding-left: 1.6em; }
+  .msg { margin-top: 8px; border-radius: 12px; padding: 8px 12px; line-height: 1.7; }
+  .msg.info { background: #f1f8e9; border: 2px solid #9ccc65; }
+  .msg.info::before { content: "💡 "; }
+  .trip { margin-top: 8px; background: #fce4ec; border-radius: 12px; padding: 8px 12px; border-left: 8px solid var(--ng); line-height: 1.7; }
+  .trip h3 { margin: 0; font-size: 1.1rem; color: var(--ng); }
+  .stats { margin-top: 10px; font-size: 0.95rem; color: #455a64; line-height: 1.7; }
+
+  /* ===== ことば・リンク ===== */
+  .words { font-size: 0.95rem; line-height: 1.7; margin: 8px 0 0; }
+  .words dt { font-weight: 900; display: inline; }
+  .words dd { display: inline; margin: 0 0 0 .3em; }
+  .words dd::after { content: ""; display: block; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+  .links a { color: var(--accent-dark); font-weight: bold; }
+
+  @media (max-width: 520px) {
+    :root { --cs: 40px; }
+    .numbox { flex: 1 1 100%; }
+    .tab { font-size: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← もどる</a>
+    <h1>➕ 正負の数チップ</h1>
+  </div>
+  <p class="subtitle">＋チップと−チップの「ゼロ対」を消して、正負の数のたし算・ひき算を目で見よう</p>
+  <div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" data-mode="add" role="tab">➕ たし算<small>チップを合わせる</small></button>
+    <button class="tab" data-mode="sub" role="tab">➖ ひき算<small>チップを取る</small></button>
+    <button class="tab" data-mode="free" role="tab">🧩 じゆう<small>置いて数を作る</small></button>
+  </div>
+
+  <!-- 式を作る（たし算・ひき算） -->
+  <div class="card" id="buildBox">
+    <div class="build">
+      <div class="numbox" data-k="a">
+        <div class="lbl">最初の数</div>
+        <div class="seg"><button class="sbtn" data-s="1">＋ 正</button><button class="sbtn" data-s="-1">− 負</button></div>
+        <div class="stepper">
+          <button data-d="-1" aria-label="最初の数の大きさを1へらす">▼</button>
+          <input type="number" min="0" max="15" inputmode="numeric" aria-label="最初の数の大きさ（0〜15）">
+          <button data-d="1" aria-label="最初の数の大きさを1ふやす">▲</button>
+        </div>
+      </div>
+      <div class="opmark" id="opMark">＋</div>
+      <div class="numbox" data-k="b">
+        <div class="lbl">次の数</div>
+        <div class="seg"><button class="sbtn" data-s="1">＋ 正</button><button class="sbtn" data-s="-1">− 負</button></div>
+        <div class="stepper">
+          <button data-d="-1" aria-label="次の数の大きさを1へらす">▼</button>
+          <input type="number" min="0" max="15" inputmode="numeric" aria-label="次の数の大きさ（0〜15）">
+          <button data-d="1" aria-label="次の数の大きさを1ふやす">▲</button>
+        </div>
+      </div>
+    </div>
+    <div class="warn" id="limitWarn" hidden></div>
+    <div class="row" id="presets"></div>
+  </div>
+
+  <!-- 置き場・式・結果 -->
+  <div class="main">
+    <div class="grid">
+      <div class="card a-board">
+        <h2>🧺 チップの置き場</h2>
+        <div class="board" id="board">
+          <div class="lane lp"><div class="lane-h"><span><span class="chip p mini" aria-hidden="true">＋</span> ＋1 のチップ（丸）</span><span id="cntP"></span></div><div class="chips" id="laneP"></div></div>
+          <div class="lane lm"><div class="lane-h"><span><span class="chip m mini" aria-hidden="true">－</span> −1 のチップ（四角）</span><span id="cntM"></span></div><div class="chips" id="laneM"></div></div>
+          <div class="lane tray" id="trayLane" hidden><div class="lane-h"><span>🫳 取ったチップ</span><span id="cntT"></span></div><div class="chips" id="laneT"></div></div>
+        </div>
+        <p class="small" id="howto"></p>
+
+        <!-- たし算・ひき算のボタン -->
+        <div class="acts" id="calcActs">
+          <button class="act" id="takeBtn" data-lock>🫳 <span id="takeLabel">取る</span></button>
+          <button class="act zero" id="addPairBtn" data-lock>＋ ゼロ対を1つ足す</button>
+          <button class="act zero" id="addNeedBtn" data-lock>＋ 足りない分だけゼロ対を足す</button>
+          <button class="act primary" id="cancelAllBtn" data-lock>✨ ゼロ対をぜんぶ消す</button>
+          <button class="act" id="autoBtn" data-lock hidden>▶ 手順を自動再生</button>
+        </div>
+        <!-- じゆうのボタン -->
+        <div class="acts" id="freeActs" hidden>
+          <button class="act chipbtn" id="putP" data-lock><span class="chip p mini" aria-hidden="true">＋</span>＋1 を置く</button>
+          <button class="act chipbtn" id="putM" data-lock><span class="chip m mini" aria-hidden="true">－</span>−1 を置く</button>
+          <button class="act zero" id="putZ" data-lock>＋ ゼロ対を置く（0 を足す）</button>
+          <button class="act primary" id="freeCancelBtn" data-lock>✨ ゼロ対をぜんぶ消す</button>
+          <button class="act" id="odaiBtn" data-lock>🎲 おだい</button>
+        </div>
+        <div class="acts">
+          <button class="act" id="undoBtn" data-lock>↶ ひとつもどす</button>
+          <button class="act" id="resetBtn" data-lock>⟲ もういちど</button>
+        </div>
+        <div id="msg"></div>
+      </div>
+
+      <div class="card a-expr">
+        <h2>🧮 式</h2>
+        <div class="expr" id="expr" aria-live="polite"></div>
+        <div class="expr2" id="expr2" hidden></div>
+        <div class="explain" id="explain"></div>
+      </div>
+
+      <div class="card a-result">
+        <h2>📋 結果</h2>
+        <div id="result"></div>
+        <div class="stats" id="stats"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- はやさ・ことば・リンク -->
+  <div class="card">
+    <div class="row" style="margin-top:0">
+      <span class="lbl">消えるはやさ：</span>
+      <button class="chip-s" data-speed="1">ゆっくり</button>
+      <button class="chip-s" data-speed="2.5">はやい</button>
+      <button class="chip-s" data-speed="0">アニメなし</button>
+    </div>
+    <dl class="words">
+      <dt>ゼロ対</dt><dd>＋1 のチップと −1 のチップの1組。(+1)+(−1)＝0 なので、いっしょに消しても、足しても、数は変わらない。</dd>
+      <dt>符号</dt><dd>数の前につく ＋（正の数）や −（負の数）のしるし。</dd>
+    </dl>
+    <p class="note">※じっさいとのちがい：チップは整数だけ、1つの列に15個までです。ほんとうの正負の数には、小数や分数、もっと大きな数もあります。</p>
+    <div class="links">
+      <a href="ブロック・おはじき操作盤.html">🧮 小学校のブロック・おはじきにもどる</a>
+      <a href="数直線ジャンプ.html">🦘 数直線ジャンプ（同じ計算を数直線で）</a>
+    </div>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   正負の数チップ（中1 正負の数の加法・減法、ゼロ対）
+   ・＋チップ（丸に＋）＝ +1、−チップ（四角に−）＝ −1。
+   ・＋チップと−チップの1組＝「ゼロ対」＝ 0。消しても足しても、数は変わらない。
+   ・たし算：2つの数のチップを合わせて、ゼロ対を消す。残りが答え。
+   ・ひき算：最初の数のチップから、ひく数のチップを「取る」。
+            足りないときは、ゼロ対を足してから取る（0 を足しても数は同じ）。
+   ・計算は整数だけなので、ふつうの数の計算で厳密に行える。
+   ===================================================================== */
+
+const MAXC = 15;               // 1つの列（＋・−）に置けるチップの数
+const $ = s => document.querySelector(s);
+const sgn = n => n > 0 ? '+' + n : n < 0 ? '−' + (-n) : '0';
+const par = n => n === 0 ? '0' : '(' + sgn(n) + ')';
+const opStr = op => op === '+' ? '+' : '−';
+const exprText = (a, op, b) => par(a) + opStr(op) + par(b);
+const cls = n => n > 0 ? 'p' : n < 0 ? 'm' : 'z';
+const numHTML = (n, paren = true) => '<span class="n ' + cls(n) + '">' + (paren ? par(n) : sgn(n)) + '</span>';
+const chipWord = s => s > 0 ? '＋チップ' : '−チップ';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ri = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+
+const params = new URLSearchParams(location.search);
+const TEACHER = params.get('teacher') === '1';
+
+// ===== アプリの状態 =====
+// chips：置き場のチップ { id, s:+1/−1, src:'a'（最初の数）/'b'（次の数）/'z'（足したゼロ対）/'f'（じゆう） }
+const st = {
+  mode: ['add', 'sub', 'free'].includes(params.get('mode')) ? params.get('mode') : 'add',
+  expr: { add: { a: 3, b: -5 }, sub: { a: 2, b: -3 } },
+  chips: [], taken: [], sel: null,
+  canceled: 0, added: 0,       // 消したゼロ対・足したゼロ対の数
+  hist: [], busy: false, speed: 1,
+  odai: null,                  // じゆうモードのおだい { t, n }
+  steps: []                    // 説明の手順
+};
+let nextId = 1;
+const op = () => st.mode === 'sub' ? '-' : '+';
+const cur = () => st.expr[st.mode] || { a: 0, b: 0 };
+const countS = s => st.chips.filter(c => c.s === s).length;
+const value = () => countS(1) - countS(-1);
+const pairsLeft = () => Math.min(countS(1), countS(-1));
+const ans = () => { const e = cur(); return op() === '+' ? e.a + e.b : e.a - e.b; };
+
+/* =====================================================================
+   1. 式を作る・チップを置く
+   ===================================================================== */
+// その式で必要なチップの数（＋の列・−の列）と、ひき算で足すゼロ対の数
+function plan(mode, a, b) {
+  if (mode === 'add') {
+    return { p: Math.max(a, 0) + Math.max(b, 0), m: Math.max(-a, 0) + Math.max(-b, 0), need: 0 };
+  }
+  const have = b === 0 ? 0 : (Math.sign(a) === Math.sign(b) ? Math.abs(a) : 0);
+  const need = Math.max(0, Math.abs(b) - have);
+  return { p: Math.max(a, 0) + need, m: Math.max(-a, 0) + need, need };
+}
+const mk = (s, src) => ({ id: nextId++, s, src });
+
+// 式のとおりにチップを並べ直す（はじめの状態）
+function setup() {
+  st.chips = []; st.taken = []; st.sel = null; st.canceled = 0; st.added = 0; st.hist = []; st.steps = [];
+  setMsg('');
+  if (st.mode === 'free') { render(); return; }
+  const { a, b } = cur();
+  const pl = plan(st.mode, a, b);
+  const over = pl.p > MAXC || pl.m > MAXC;
+  $('#limitWarn').hidden = !over;
+  if (over) {
+    $('#limitWarn').textContent = 'チップが15個をこえるので置けません（＋' + pl.p + '個・−' + pl.m + '個になる）。数を小さくしよう。';
+    render(); return;
+  }
+  for (let i = 0; i < Math.abs(a); i++) st.chips.push(mk(Math.sign(a), 'a'));
+  if (st.mode === 'add') {
+    for (let i = 0; i < Math.abs(b); i++) st.chips.push(mk(Math.sign(b), 'b'));
+    st.steps.push(numHTML(a) + ' のチップと ' + numHTML(b) + ' のチップを合わせて置いた。');
+  } else {
+    st.steps.push(numHTML(a) + ' のチップを置いた。ここから ' + numHTML(b) + ' を<b>取る</b>。');
+  }
+  render();
+}
+
+/* =====================================================================
+   2. 描く
+   ===================================================================== */
+function chipEl(c, inTray) {
+  const d = document.createElement('div');
+  d.className = 'chip ' + (c.s > 0 ? 'p' : 'm') + (c.src === 'z' ? ' z' : '') + (st.sel === c.id ? ' sel' : '');
+  d.dataset.id = c.id;
+  d.textContent = c.s > 0 ? '＋' : '－';
+  d.setAttribute('role', 'button');
+  d.setAttribute('aria-label', (c.s > 0 ? '+1' : '−1') + ' のチップ' + (c.src === 'z' ? '（足したゼロ対）' : ''));
+  if (!inTray) d.tabIndex = 0;
+  if (c.src === 'z') { const t = document.createElement('span'); t.className = 'tag'; t.textContent = '0'; d.appendChild(t); }
+  return d;
+}
+// 列の数（＋の列と−の列で同じにして、ゼロ対がたてにそろうようにする）
+function setCols() {
+  const w = $('#laneP').clientWidth;
+  const cs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cs')) || 48;
+  const cols = Math.max(4, Math.min(MAXC, Math.floor((w + 6) / (cs + 6))));
+  $('#board').style.setProperty('--cols', cols);
+}
+function render() {
+  setCols();
+  const fill = (lane, list, inTray, emptyText) => {
+    lane.innerHTML = '';
+    list.forEach(c => lane.appendChild(chipEl(c, inTray)));
+    if (!list.length) lane.innerHTML = '<span class="empty">' + emptyText + '</span>';
+  };
+  fill($('#laneP'), st.chips.filter(c => c.s > 0), false, '（なし）');
+  fill($('#laneM'), st.chips.filter(c => c.s < 0), false, '（なし）');
+  fill($('#laneT'), st.taken, true, '（まだ取っていない）');
+  $('#cntP').textContent = countS(1) + ' 個';
+  $('#cntM').textContent = countS(-1) + ' 個';
+  $('#cntT').textContent = st.taken.length + ' 個';
+  $('#trayLane').hidden = st.mode !== 'sub';
+  renderExpr();
+  renderResult();
+  renderButtons();
+  setExplain();
+}
+
+// ひき算で、まだ取るチップが残っているか
+const toTake = () => st.mode === 'sub' ? Math.abs(cur().b) - st.taken.length : 0;
+// 式のチップが15個をこえて置けないとき
+const blocked = () => st.mode !== 'free' && !$('#limitWarn').hidden;
+// 答えが出たか（取りおわって、ゼロ対がもうない）
+const isDone = () => st.mode !== 'free' && !blocked() && toTake() === 0 && pairsLeft() === 0;
+
+function renderExpr() {
+  const e2 = $('#expr2');
+  if (st.mode === 'free') {
+    const v = value();
+    $('#expr').innerHTML = '<div class="eq">チップの表す数</div><div class="row1">' + numHTML(v, false) + '</div>';
+    e2.hidden = !st.odai;
+    if (st.odai) e2.innerHTML = '🎲 おだい：チップ <b>' + st.odai.n + '</b> 個で ' + numHTML(st.odai.t, false) + ' を作ろう';
+    return;
+  }
+  const { a, b } = cur();
+  const done = isDone();
+  $('#expr').innerHTML = '<div class="row1">' + numHTML(a) + '<span class="op">' + opStr(op()) + '</span>' + numHTML(b) + '</div>' +
+    '<div class="row1"><span class="op">=</span>' + (done ? '<span class="ans">' + numHTML(ans(), false) + '</span>' : '<span class="q">？</span>') + '</div>';
+  // ひき算で、ゼロ対を足したことを式でも見せる
+  if (st.mode === 'sub' && st.added > 0) {
+    e2.hidden = false;
+    e2.innerHTML = numHTML(a) + ' + ' + Array(Math.min(st.added, 4)).fill('0').join(' + ') + (st.added > 4 ? ' + …' : '') +
+      '<div class="small">ゼロ対を ' + st.added + ' 組 足した（0 を足しても ' + numHTML(a, false) + ' のまま）</div>';
+  } else e2.hidden = true;
+}
+
+function renderResult() {
+  const P = countS(1), M = countS(-1);
+  let h = '<div class="res-cnt">' +
+    '<div><span class="chip p mini" aria-hidden="true">＋</span> ＋チップ <b>' + P + '</b> 個</div>' +
+    '<div><span class="chip m mini" aria-hidden="true">－</span> −チップ <b>' + M + '</b> 個</div>' +
+    '<div class="small">消したゼロ対 ' + st.canceled + ' 組' + (st.mode !== 'add' ? '・足したゼロ対 ' + st.added + ' 組' : '') + '</div>' +
+    '</div>';
+  if (st.mode === 'free') {
+    h += '<div class="res-val">表す数：<span class="big">' + numHTML(value(), false) + '</span><div class="small">＋の数 ' + P + ' − −の数 ' + M + '</div></div>';
+    if (st.odai) {
+      const ok = st.chips.length === st.odai.n && value() === st.odai.t;
+      h += ok ? '<div class="goal"><span class="big">○</span> おだいクリア！</div>'
+        : '<div class="small" style="margin-top:6px">おだい：' + st.odai.n + ' 個で ' + sgn(st.odai.t) + '（今 ' + st.chips.length + ' 個）</div>';
+    }
+  } else if (isDone()) {
+    const { a, b } = cur(), v = ans();
+    h += '<div class="goal">のこったチップ：' + (v === 0 ? 'なし' : (v > 0 ? '＋' : '−') + 'チップ ' + Math.abs(v) + ' 個') +
+      '<div>答え <span class="big">' + sgn(v) + '</span></div><div>' + exprText(a, op(), b) + ' = ' + sgn(v) + '</div></div>';
+  } else if (!blocked()) {
+    h += '<div class="small" style="margin-top:8px">' + (toTake() > 0 ? 'まず ' + par(cur().b) + ' を取ろう。' : 'ゼロ対を消すと、答えが見えるよ。') + '</div>';
+  }
+  $('#result').innerHTML = h;
+}
+
+function renderButtons() {
+  const sub = st.mode === 'sub';
+  $('#calcActs').hidden = st.mode === 'free';
+  $('#freeActs').hidden = st.mode !== 'free';
+  $('#buildBox').hidden = st.mode === 'free';
+  $('#opMark').textContent = sub ? '−' : '＋';
+  const { b } = cur();
+  $('#takeBtn').hidden = !sub;
+  $('#addNeedBtn').hidden = !sub;
+  $('#takeLabel').textContent = sub ? par(b) + ' を取る（' + chipWord(Math.sign(b) || 1) + ' ' + Math.abs(b) + ' 個）' : '';
+  if (!st.busy) {
+    $('#takeBtn').disabled = toTake() <= 0;
+    $('#addNeedBtn').disabled = !sub || toTake() <= 0 || countS(Math.sign(b)) >= toTake();
+    $('#cancelAllBtn').disabled = pairsLeft() === 0 || toTake() > 0;
+    $('#freeCancelBtn').disabled = pairsLeft() === 0;
+    $('#undoBtn').disabled = st.hist.length === 0;
+  }
+  $('#howto').textContent = st.mode === 'free'
+    ? '下のボタンでチップを置こう。＋チップと−チップをタップ（またはドラッグして重ねる）すると、ゼロ対が消える。'
+    : sub && toTake() > 0
+      ? '取りたいチップをタップするか、「取る」ボタンを押そう。足りないときは、ゼロ対を足してから取る。'
+      : '＋チップと−チップを1つずつタップ（またはドラッグして重ねる）すると、ゼロ対が消える。';
+}
+
+function setExplain() {
+  $('#explain').innerHTML = st.steps.length ? '<ol>' + st.steps.map(s => '<li>' + s + '</li>').join('') + '</ol>' : '';
+}
+function setMsg(html, kind = 'info') {
+  $('#msg').innerHTML = html ? '<div class="msg ' + kind + '">' + html + '</div>' : '';
+}
+
+/* =====================================================================
+   3. アニメーション
+   ===================================================================== */
+const animMs = () => st.speed === 0 ? 0 : 700 / st.speed;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function applySpeed() { document.documentElement.style.setProperty('--anim', animMs() + 'ms'); }
+function setBusy(b) {
+  st.busy = b;
+  document.querySelectorAll('[data-lock]').forEach(x => x.disabled = b);
+  if (!b) renderButtons();
+}
+const elOf = id => document.querySelector('.board .chip[data-id="' + id + '"]');
+// 2つのチップの間に「0」を出す
+async function popZero(e1, e2) {
+  const bd = $('#board').getBoundingClientRect();
+  const r1 = e1.getBoundingClientRect(), r2 = e2.getBoundingClientRect();
+  const p = document.createElement('div');
+  p.className = 'pop'; p.textContent = '0';
+  p.style.left = ((r1.left + r1.right + r2.left + r2.right) / 4 - bd.left) + 'px';
+  p.style.top = ((r1.top + r1.bottom + r2.top + r2.bottom) / 4 - bd.top) + 'px';
+  $('#board').appendChild(p);
+  if (animMs()) { await sleep(20); p.classList.add('on'); }
+  return p;
+}
+
+/* =====================================================================
+   4. 操作（ひとつもどす用に、操作の前の状態をとっておく）
+   ===================================================================== */
+function snapshot() {
+  st.hist.push(JSON.stringify({ chips: st.chips, taken: st.taken, canceled: st.canceled, added: st.added, steps: st.steps }));
+  if (st.hist.length > 80) st.hist.shift();
+}
+function undo() {
+  const s = st.hist.pop();
+  if (!s) return;
+  Object.assign(st, JSON.parse(s), { sel: null });
+  setMsg('');
+  render();
+}
+
+// ゼロ対を1組消す（ゆっくり消えるアニメ）
+async function cancelPair(id1, id2, record = true) {
+  const c1 = st.chips.find(c => c.id === id1), c2 = st.chips.find(c => c.id === id2);
+  if (!c1 || !c2 || c1.s === c2.s) return;
+  if (record) snapshot();
+  const e1 = elOf(id1), e2 = elOf(id2);
+  let p = null;
+  if (e1 && e2 && animMs()) {
+    p = await popZero(e1, e2);
+    e1.classList.add('gone'); e2.classList.add('gone');
+    await sleep(animMs());
+    p.remove();
+  }
+  st.chips = st.chips.filter(c => c.id !== id1 && c.id !== id2);
+  st.canceled++;
+  st.sel = null;
+  render();
+  afterChange();
+}
+// のこりのゼロ対をぜんぶ（1組ずつ）消す
+async function cancelAll() {
+  if (st.busy || pairsLeft() === 0) return;
+  if (toTake() > 0) { setMsg('先に ' + par(cur().b) + ' を取ろう。'); return; }
+  snapshot();
+  setBusy(true);
+  const n = pairsLeft();
+  while (pairsLeft() > 0) {
+    const p = st.chips.find(c => c.s > 0), m = st.chips.find(c => c.s < 0);
+    await cancelPair(p.id, m.id, false);
+  }
+  if (st.mode !== 'free') st.steps.push('ゼロ対を ' + n + ' 組 消した（0 を消しても数は変わらない）。');
+  setBusy(false);
+  render();
+  afterChange();
+}
+
+// ゼロ対を1組足す（数は変わらない）
+function addPair(record = true, src = 'z') {
+  if (countS(1) >= MAXC || countS(-1) >= MAXC) { setMsg('1つの列には15個までしか置けません。'); return false; }
+  if (record) snapshot();
+  st.chips.push(mk(1, src), mk(-1, src));
+  st.added++;
+  render();
+  return true;
+}
+// 「0 を足しても同じ」のお知らせ
+function zeroMsg() {
+  const v = st.mode === 'sub' ? numHTML(cur().a, false) : st.mode === 'free' ? numHTML(value(), false) : null;
+  setMsg('ゼロ対（＋1 と −1）を足した。(+1)+(−1)＝0 だから、<b>0 を足しても数は変わらない</b>' + (v ? '（' + v + ' のまま）' : '') + '。');
+}
+async function addNeeded() {
+  if (st.busy || st.mode !== 'sub') return;
+  const s = Math.sign(cur().b);
+  const need = toTake() - countS(s);
+  if (need <= 0) return;
+  snapshot();
+  setBusy(true);
+  for (let i = 0; i < need; i++) {
+    if (!addPair(false)) break;
+    zeroMsg();
+    await sleep(animMs() * 0.6);
+  }
+  st.steps.push(chipWord(s) + 'が足りないので、ゼロ対を ' + need + ' 組 足した（0 を足しても ' + numHTML(cur().a, false) + ' のまま）。');
+  setBusy(false);
+  render();
+}
+
+// ひき算：チップを1つ取る
+async function takeChip(id, record = true) {
+  const c = st.chips.find(x => x.id === id);
+  if (!c) return;
+  if (record) snapshot();
+  const e = elOf(id);
+  if (e && animMs()) { e.classList.add('taking'); await sleep(animMs() * 0.7); }
+  st.chips = st.chips.filter(x => x.id !== id);
+  st.taken.push(c);
+  st.sel = null;
+  if (toTake() === 0) st.steps.push(numHTML(cur().b) + ' を取った（' + chipWord(c.s) + ' ' + Math.abs(cur().b) + ' 個）。');
+  render();
+  afterChange();
+}
+// 「取る」ボタン：取れるだけ取る。足りなければ、つまずき「取れないのに取ろうとした」
+async function takeAll() {
+  if (st.busy || toTake() <= 0) return;
+  const s = Math.sign(cur().b);
+  if (countS(s) < toTake()) { trip('cantTake'); return; }
+  snapshot();
+  setBusy(true);
+  while (toTake() > 0) {
+    const c = st.chips.slice().reverse().find(x => x.s === s);   // あとから置いたチップから取る
+    await takeChip(c.id, false);
+  }
+  setBusy(false);
+  render();
+}
+
+// 操作のあとで：答えが出たら手順を足す・おだいの判定
+function afterChange() {
+  if (st.mode === 'free') { render(); return; }
+  if (isDone() && !st.steps.some(s => s.startsWith('<b>のこり'))) {
+    const v = ans(), { a, b } = cur();
+    st.steps.push('<b>のこり</b>は ' + (v === 0 ? 'なし → 0' : chipWord(Math.sign(v)) + ' ' + Math.abs(v) + ' 個 → ' + numHTML(v, false)) + '。');
+    if (st.mode === 'sub') {
+      st.steps.push('<b>' + exprText(a, '-', b) + ' = ' + exprText(a, '+', -b) + ' = ' + sgn(v) + '</b>　' +
+        par(b) + ' を取ることは、' + par(-b) + ' を足すのと同じ（取ったあとに、足したゼロ対の ' + chipWord(-Math.sign(b) || 1) + 'が残る）。');
+    }
+    render();
+  }
+}
+
+/* =====================================================================
+   5. つまずき検知
+   ===================================================================== */
+const TRIPS = {
+  cantTake: { name: '取れないのに取ろうとした', icon: '🫳' },
+  wrongTake: { name: '取るチップのまちがい', icon: '±' },
+  same: { name: '同じ符号どうしを消そうとした', icon: '＝' }
+};
+function tripMsg(type) {
+  const { a, b } = cur(), s = Math.sign(b);
+  if (type === 'cantTake') {
+    const have = countS(s), need = toTake() - have;
+    return numHTML(a) + ' のチップには ' + chipWord(s) + 'が ' + have + ' 個しかないので、' + par(b) + '（' + chipWord(s) + ' ' + toTake() + ' 個）は、このままでは取れません。<br>' +
+      '<b>ゼロ対（＋1 と −1 の1組＝0）を足す</b>と、数を変えずに ' + chipWord(s) + 'をふやせます。足りない ' + need + ' 個ぶん、ゼロ対を ' + need + ' 組 足してから取ろう。';
+  }
+  if (type === 'wrongTake')
+    return 'ひくのは ' + par(b) + ' だから、取るのは <b>' + chipWord(s) + '</b>です。' + chipWord(-s) + 'を取ると、' + par(-b) + ' をひいたことになります。';
+  return '＋と＋、−と−はゼロ対になりません。ゼロ対は <b>＋1 と −1 の1組</b>（(+1)+(−1)＝0）です。';
+}
+function trip(type) {
+  const t = TRIPS[type];
+  setMsg('<div class="trip"><h3>あなたのつまずき：' + t.icon + ' ' + t.name + '</h3><div>' + tripMsg(type) + '</div>' +
+    (type === 'cantTake' ? '<div class="acts"><button class="act zero" data-act="showAdd" data-lock>▶ ゼロ対を足すところを見る</button><button class="act" data-act="similar" data-lock>🔁 類題</button></div>' : '') +
+    '</div>', 'none');
+  if (type === 'cantTake') { const b = $('#addNeedBtn'); b.classList.remove('blink'); void b.offsetWidth; b.classList.add('blink'); }
+  // 記録（ワークシートと同じ保存キーの中）
+  const s = Worksheet.appData('trips') || {};
+  s[type] = (s[type] || 0) + 1;
+  Worksheet.appData('trips', s);
+  renderStats();
+}
+function renderStats() {
+  const s = Worksheet.appData('trips') || {};
+  const list = Object.keys(TRIPS).filter(k => s[k]);
+  $('#stats').innerHTML = list.length
+    ? '<b>📒 つまずきの記録</b><br>' + list.map(k => TRIPS[k].icon + ' ' + TRIPS[k].name + '：' + s[k] + ' 回').join('<br>') +
+      '<br><button class="act" id="clearStats" style="min-height:44px;margin-top:4px">記録を消す</button>'
+    : '';
+}
+// 類題：ゼロ対を足さないと取れないひき算（答えを先に決めてから式を作る）
+let lastSimilar = '';
+function similar() {
+  for (let i = 0; i < 500; i++) {
+    const v = ri(-9, 9), b = (Math.random() < 0.6 ? -1 : 1) * ri(1, 9), a = v + b;
+    if (a === 0 || Math.abs(a) > 9) continue;
+    const pl = plan('sub', a, b);
+    if (pl.need === 0 || pl.p > MAXC || pl.m > MAXC) continue;
+    if (a + ',' + b === lastSimilar || (a === cur().a && b === cur().b)) continue;
+    lastSimilar = a + ',' + b;
+    st.expr.sub = { a, b };
+    syncBuilder(); setup();
+    setMsg('類題：' + exprText(a, '-', b) + '。取る前に、足りるかどうか見てみよう。');
+    return;
+  }
+}
+
+/* =====================================================================
+   6. チップのタップ・ドラッグ
+   ===================================================================== */
+async function tapChip(id) {
+  if (st.busy) return;
+  const c = st.chips.find(x => x.id === id);
+  if (!c) return;
+  // じゆう・たし算では「えらぶ → 反対のチップ」でゼロ対を消す
+  if (st.mode === 'sub' && toTake() > 0) {
+    const s = Math.sign(cur().b);
+    if (c.s !== s) { trip('wrongTake'); return; }
+    setMsg('');
+    await takeChip(id);
+    return;
+  }
+  if (st.sel == null || st.sel === id) { st.sel = st.sel === id ? null : id; render(); return; }
+  const other = st.chips.find(x => x.id === st.sel);
+  if (!other) { st.sel = id; render(); return; }
+  if (other.s === c.s) { trip('same'); st.sel = id; render(); return; }
+  setMsg('');
+  await cancelPair(other.id, id);
+}
+
+// ドラッグ：チップを反対の符号のチップに重ねると、ゼロ対が消える（ひき算で取るときは「取ったチップ」へ）
+let drag = null;
+document.addEventListener('pointerdown', ev => {
+  const e = ev.target.closest('.board .lane:not(.tray) .chip');
+  if (!e || st.busy) return;
+  drag = { id: +e.dataset.id, el: e, x: ev.clientX, y: ev.clientY, moved: false, pid: ev.pointerId };
+  try { e.setPointerCapture(ev.pointerId); } catch (err) { /* つかめないときも動くように */ }
+});
+document.addEventListener('pointermove', ev => {
+  if (!drag || ev.pointerId !== drag.pid) return;
+  const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 8) return;
+  drag.moved = true;
+  drag.el.classList.add('drag');
+  drag.el.style.transform = `translate(${dx}px, ${dy}px) scale(1.1)`;
+  document.querySelectorAll('.chip.drop').forEach(x => x.classList.remove('drop'));
+  const t = targetAt(ev.clientX, ev.clientY);
+  if (t && t.classList.contains('chip')) t.classList.add('drop');
+});
+function targetAt(x, y) {
+  const under = document.elementFromPoint(x, y);
+  if (!under) return null;
+  return under.closest('.board .lane:not(.tray) .chip') || under.closest('#trayLane');
+}
+async function endDrag(ev) {
+  if (!drag || ev.pointerId !== drag.pid) return;
+  const d = drag; drag = null;
+  document.querySelectorAll('.chip.drop').forEach(x => x.classList.remove('drop'));
+  if (!d.moved) { tapChip(d.id); return; }
+  const t = ev.type === 'pointerup' ? targetAt(ev.clientX, ev.clientY) : null;
+  d.el.classList.remove('drag');
+  d.el.style.transform = '';
+  if (!t) return;
+  if (t.id === 'trayLane') { if (st.mode === 'sub' && toTake() > 0) tapChip(d.id); return; }
+  const tid = +t.dataset.id;
+  if (tid === d.id) return;
+  if (st.mode === 'sub' && toTake() > 0) { setMsg('先に ' + par(cur().b) + ' を取ろう（取りたいチップをタップ、または「取ったチップ」へドラッグ）。'); return; }
+  const a = st.chips.find(x => x.id === d.id), b = st.chips.find(x => x.id === tid);
+  if (a && b && a.s === b.s) { trip('same'); return; }
+  setMsg('');
+  st.sel = null;
+  await cancelPair(d.id, tid);
+}
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+// キーボード：Enter・スペースでタップと同じ
+$('#board').addEventListener('keydown', ev => {
+  const e = ev.target.closest('.chip');
+  if (e && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); tapChip(+e.dataset.id); }
+});
+
+/* =====================================================================
+   7. 式を作るところ・モード
+   ===================================================================== */
+const PRESETS = {
+  add: [[3, -5], [-2, -4], [4, -4], [-6, 2], [5, 3]],
+  sub: [[2, -3], [5, 2], [2, 5], [-3, -5], [-4, 3]]
+};
+const signMemo = { a: 1, b: -1 };
+function syncBuilder() {
+  if (st.mode === 'free') return;
+  const e = cur();
+  ['a', 'b'].forEach(k => {
+    const box = document.querySelector(`.numbox[data-k="${k}"]`);
+    box.querySelector('input').value = Math.abs(e[k]);
+    box.querySelectorAll('[data-s]').forEach(btn => {
+      const on = e[k] !== 0 && Math.sign(e[k]) === +btn.dataset.s;
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on);
+    });
+  });
+  $('#presets').innerHTML = '<span class="lbl">ためしてみよう：</span>' + PRESETS[st.mode].map(([a, b]) =>
+    '<button class="chip-s" data-pre="' + a + ',' + b + '">' + exprText(a, op(), b) + '</button>').join('');
+}
+function setExpr(ch) {
+  if (st.busy) return;
+  Object.assign(st.expr[st.mode], ch);
+  syncBuilder();
+  setup();
+}
+document.querySelectorAll('.numbox').forEach(box => {
+  const k = box.dataset.k;
+  const setAbs = n => {
+    n = Math.max(0, Math.min(MAXC, n | 0));
+    const v = cur()[k], sg = v !== 0 ? Math.sign(v) : signMemo[k];
+    setExpr({ [k]: sg * n });
+  };
+  box.querySelectorAll('[data-s]').forEach(btn => btn.addEventListener('click', () => {
+    const s = +btn.dataset.s;
+    signMemo[k] = s;
+    setExpr({ [k]: s * (Math.abs(cur()[k]) || 1) });
+  }));
+  box.querySelectorAll('[data-d]').forEach(btn => btn.addEventListener('click', () => setAbs(Math.abs(cur()[k]) + +btn.dataset.d)));
+  const inp = box.querySelector('input');
+  inp.addEventListener('change', () => {
+    let v = parseInt(inp.value, 10);
+    if (isNaN(v)) { syncBuilder(); return; }
+    if (v < 0) { signMemo[k] = -1; setExpr({ [k]: Math.max(-MAXC, v) }); return; }   // −5 と打ってもよい
+    setAbs(v);
+  });
+});
+$('#presets').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-pre]');
+  if (!b) return;
+  const [a, bb] = b.dataset.pre.split(',').map(Number);
+  setExpr({ a, b: bb });
+});
+
+function setMode(m) {
+  if (st.busy) return;
+  st.mode = m;
+  st.odai = null;
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('on', t.dataset.mode === m);
+    t.setAttribute('aria-selected', t.dataset.mode === m);
+  });
+  $('#limitWarn').hidden = true;
+  syncBuilder();
+  setup();
+  if (m === 'free') setMsg('チップを置いて、いろいろな数を作ろう。同じ数でも、チップの置き方はいくつもある。');
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { if (st.mode !== t.dataset.mode) setMode(t.dataset.mode); }));
+
+// ボタン
+$('#takeBtn').addEventListener('click', takeAll);
+$('#addPairBtn').addEventListener('click', () => { if (st.busy) return; if (addPair()) zeroMsg(); });
+$('#addNeedBtn').addEventListener('click', addNeeded);
+$('#cancelAllBtn').addEventListener('click', cancelAll);
+$('#freeCancelBtn').addEventListener('click', cancelAll);
+$('#undoBtn').addEventListener('click', () => { if (!st.busy) undo(); });
+$('#resetBtn').addEventListener('click', () => { if (st.busy) return; if (st.mode === 'free') st.odai = null; setup(); });
+$('#putP').addEventListener('click', () => putChip(1));
+$('#putM').addEventListener('click', () => putChip(-1));
+$('#putZ').addEventListener('click', () => { if (st.busy) return; if (addPair(true, 'f')) zeroMsg(); });
+$('#odaiBtn').addEventListener('click', () => {
+  // おだい：表す数 t を、チップ n 個で作る（n は |t| より 2・4・6 多い → ゼロ対が必要）
+  const t = ri(-6, 6), n = Math.abs(t) + 2 * ri(1, 3);
+  st.odai = { t, n };
+  render();
+  setMsg('おだい：チップを <b>' + n + '</b> 個使って ' + numHTML(t, false) + ' を作ろう。ゼロ対を使うのがコツ。');
+});
+function putChip(s) {
+  if (st.busy) return;
+  if (countS(s) >= MAXC) { setMsg('1つの列には15個までしか置けません。'); return; }
+  snapshot();
+  st.chips.push(mk(s, 'f'));
+  setMsg('');
+  render();
+}
+$('#autoBtn').addEventListener('click', autoPlay);
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('[data-act]');
+  if (b) {
+    if (b.dataset.act === 'showAdd') { setMsg(''); addNeeded(); }
+    else if (b.dataset.act === 'similar') similar();
+  }
+  if (ev.target.id === 'clearStats' && confirm('つまずきの記録を消しますか？')) { Worksheet.appData('trips', {}); renderStats(); }
+});
+document.querySelectorAll('[data-speed]').forEach(btn => btn.addEventListener('click', () => { st.speed = +btn.dataset.speed; syncSpeed(); }));
+function syncSpeed() {
+  applySpeed();
+  document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed === st.speed));
+}
+
+// 先生モード：はじめから手順を自動で見せる（ひき算：ゼロ対を足す → 取る → ゼロ対を消す）
+async function autoPlay() {
+  if (st.busy) return;
+  setup();
+  await sleep(animMs());
+  if (st.mode === 'sub') { await addNeeded(); await sleep(animMs()); await takeAll(); await sleep(animMs()); }
+  await cancelAll();
+}
+
+let rz;
+window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
+
+/* =====================================================================
+   8. ワークシート
+   ===================================================================== */
+Worksheet.init({
+  title: '正負の数チップ',
+  question: '(+2)−(−3) は、いくつだろうか？　チップでたしかめて、ひき算の意味を考えよう。',
+  predictions: ['−1', '+5', '−5', 'わからない'],
+  operationNote: '「➖ ひき算」で (+2)−(−3) を出し、「取る」を押してみよう。取れないときは、ゼロ対を足してから取る。ゼロ対を消して答えが出たら「＋ 記録する」。(+5)−(+2) や (+2)−(+5) もためそう。',
+  fields: [
+    { key: 'shiki', label: '式', math: false },
+    { key: 'zero', label: '足したゼロ対', math: false },
+    { key: 'ans', label: '答え', math: false }
+  ],
+  capture: () => {
+    if (st.mode === 'free' || !isDone()) { setMsg('ゼロ対を消して答えが出てから記録しよう。'); return null; }
+    const { a, b } = cur();
+    return { shiki: exprText(a, op(), b), zero: st.added + ' 組', ans: sgn(ans()) };
+  },
+  summaryHint: '「ある数をひくことは、〜を足すことと同じ」の形で。ゼロ対を足した理由も書こう。',
+  teacher: {
+    hint: '(+2)−(−3) で「−チップがないから取れない」と困らせてから、「0 を足しても数は変わらない」をヒントにする。(+5)−(+2)（そのまま取れる）と比べるとよい。',
+    answer: '式：(+2)−(−3) = (+2)+(+3) = +5<br>ことば：−3 を取ると、足したゼロ対の ＋チップ 3 個が残る。だから、ある数をひくことは、その数の符号を変えた数を足すことと同じ。'
+  }
+});
+
+// ===== はじめ =====
+if (TEACHER) { $('#teacherBadge').hidden = false; $('#autoBtn').hidden = false; }
+syncSpeed();
+setMode(st.mode);
+renderStats();
+</script>
+</body>
+</html>
