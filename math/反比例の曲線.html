@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>反比例の曲線</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：正（＋）・増える＝オレンジ、負（−）・減る＝青
+     正解＝緑（○）、まちがい・注意＝赤紫（×）。色だけでなく、記号・線の種類でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457; --inv: #6a1b9a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.ng { border-color: var(--ng); background: #fce4ec; }
+  .op-btn.ng::before { content: "× "; color: var(--ng); }
+  .op-btn.ok { border-color: var(--ok); background: #e8f5e9; }
+  .op-btn.ok::before { content: "○ "; color: var(--ok); }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 表・グラフ・式（広い画面は 左・中央・右の3列） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start;
+    grid-template-areas: "graph" "form" "tbl"; }
+  .tbl-card { grid-area: tbl; }
+  .graph-card { grid-area: graph; padding: 8px; }
+  .form-card { grid-area: form; }
+  @container (min-width: 640px) {
+    .board-in { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); grid-template-areas: "graph graph" "tbl form"; }
+  }
+  @container (min-width: 1000px) {
+    .board-in { grid-template-columns: 250px minmax(0, 1fr) 300px; grid-template-areas: "tbl graph form"; }
+  }
+
+  /* 表（たて向き） */
+  .vt { width: 100%; border-collapse: collapse; font-size: 21px; text-align: center; }
+  .vt th { background: #eceff1; font-size: .92rem; padding: 4px; border: 2px solid #b0bec5; }
+  .vt td { border: 2px solid #cfd8dc; padding: 3px 4px; height: 42px; }
+  .vt td.q { color: #90a4ae; font-weight: bold; }
+  .vt tr.cur td { background: #fffde7; font-weight: bold; }
+  .vt tr.pick td { background: #e1f5fe; }
+  .vt tr.tap { cursor: pointer; }
+  .vt td.prod { color: var(--ok); font-size: 18px; background: #f1f8e9; }
+  .vt td.pop { animation: pop .5s ease-out both; }
+  @keyframes pop { 0% { background: #c8e6c9; transform: scale(.7); opacity: 0; } 100% { opacity: 1; transform: scale(1); } }
+  .vt .neg { color: var(--neg); }
+  .vt .pos { color: var(--pos); }
+  .vt .pr { color: var(--pos); }
+  .vt .iv { color: var(--inv); }
+  .tbl-note { font-size: .88rem; color: #546e7a; margin-top: 6px; line-height: 1.6; }
+  .tbl-scroll { max-height: 560px; overflow: auto; }
+
+  #graph { width: 100%; }
+  .graph-opts { display: flex; gap: 6px 12px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+  .opt-check { font-size: 0.92rem; font-weight: bold; color: #37474f; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+  .opt-check input { width: 22px; height: 22px; }
+
+  /* 式 */
+  .formula { text-align: center; font-size: 34px; font-weight: bold; min-height: 56px; line-height: 1.5; }
+  .formula .row { display: block; }
+  .form-note { text-align: center; font-size: .95rem; line-height: 1.7; color: #37474f; margin: 4px 0 8px; }
+  .big-area { text-align: center; font-size: 26px; font-weight: bold; color: var(--ok); background: #f1f8e9; border-radius: 12px; padding: 6px; margin: 6px 0; }
+  .slider-row { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 6px 0; font-weight: bold; }
+  .slider-row input[type=range] { flex: 1; min-width: 150px; height: 36px; }
+  .slider-row input[type=number] { width: 84px; font-size: 1.2rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .slider-row .val { min-width: 7em; text-align: center; color: var(--inv); }
+
+  /* 答える欄とキーパッド */
+  .ask { border-top: 2px dashed #cfd8dc; padding-top: 8px; margin-top: 6px; }
+  .ask-q { text-align: center; font-weight: bold; margin-bottom: 6px; line-height: 1.6; }
+  .ans-line { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; font-size: 28px; font-weight: bold; }
+  .box {
+    min-width: 96px; min-height: 58px; border: 3px solid var(--soft); border-radius: 14px; background: #fafafa;
+    font-size: 30px; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation; padding: 0 8px;
+  }
+  .box.active { border-color: #fbc02d; background: #fffde7; box-shadow: 0 0 0 4px rgba(251,192,45,.35); }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 8px; }
+  .key {
+    min-height: 48px; border: 2px solid #b0bec5; background: #fff; border-radius: 12px; font-size: 1.35rem; font-weight: bold;
+    color: var(--ink); cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .key:active { transform: translateY(1px); box-shadow: none; }
+  .key small { font-size: .7rem; }
+  .go {
+    width: 100%; margin-top: 8px; min-height: 54px; border: none; border-radius: 14px; background: var(--ok); color: #fff;
+    font-size: 1.2rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go.next { background: var(--accent); }
+  .choice-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .choice-btns .wide { grid-column: 1 / -1; }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .mark-ok { color: var(--ok); font-weight: 900; }
+  .mark-ng { color: var(--ng); font-weight: 900; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  @media (max-width: 420px) { .box { min-width: 76px; font-size: 26px; } }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🌀 反比例の曲線</h1>
+<p class="subtitle">反比例 y ＝ a/x を、表・式・グラフ（双曲線）で見よう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- パート：① 点を打つ ② 面積一定 ③ 比例とくらべる ④ a が負 -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">🎲 新しい問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <div class="board"><div class="board-in">
+    <div class="card tbl-card">
+      <h2>📋 表</h2>
+      <div class="tbl-scroll"><div id="tbl"></div></div>
+      <div class="tbl-note" id="tblNote"></div>
+    </div>
+    <div class="card graph-card">
+      <div id="graph"></div>
+      <div class="graph-opts">
+        <label class="opt-check"><input type="checkbox" id="optAsym" checked> 軸を点線で強調（曲線がくっつかない線）</label>
+      </div>
+      <div class="graph-opts" id="graphOpts"></div>
+    </div>
+    <div class="card form-card">
+      <h2>✏️ 式</h2>
+      <div class="formula" id="formula"></div>
+      <div class="form-note" id="formNote"></div>
+      <div id="ctrl"></div>
+      <div class="ask" id="ask"></div>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 答えを入れて進める</button></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>反比例</b>：y が x に反比例するとき、式は <b>y ＝ a/x</b>（a は比例定数）。</li>
+      <li>表で見ると：<b>x × y</b> がいつも同じ数（＝ a）。x が 2倍、3倍…になると、y は 1/2倍、1/3倍…になる。</li>
+      <li>グラフは<b>双曲線</b>という、2つに分かれたなめらかな曲線。a が正なら第1・第3象限、a が負なら第2・第4象限。</li>
+      <li><b>x ＝ 0 のとき</b>：0 でわることはできないので、y は決まらない。だからグラフは y軸 と交わらない。x がとても大きくなると y は 0 に近づくけれど、0 にはならない（x軸 とも交わらない）。</li>
+      <li><b>漸近線</b>（ぜんきんせん）：曲線がどこまでも近づくけれど、くっつかない直線。反比例のグラフでは x軸 と y軸。※高校で学ぶことば（発展）。</li>
+      <li>答えはキーパッドで入れる。分数は <b>／</b>、小数は <b>．</b>、負の数は <b>−</b>（符号の切りかえ）。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：グラフは画面の中だけ描いています。本当の曲線は、軸に近づきながら、画面の外までどこまでも続きます。② の点 P は、すいつかないときは 0.01 きざみで動きます。③ の交点で、ぴったりの値が分数で表せないときは、小数のおよその値（約）で出しています。<br>
+    つながる教材：<a href="のばして ちぢめて 反比例.html">小6 のばして ちぢめて 反比例</a>／<a href="比例をつくろう.html">中1 比例をつくろう</a>／<a href="関数グラフ.html">関数グラフツール</a></p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="graph-engine.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（答え・答えを入れて進める・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const F = (v) => Fraction.from(v);
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const num = (f) => { f = F(f); return f.n / f.d; };
+  const nm = (v) => String(v).replace('-', '−');
+  const mr = (f, size) => MathRender.html(F(f).toString(), { size: size || 'inherit' });
+  const mrs = (s, size) => MathRender.html(s, { size: size || 'inherit' });
+  const cls = (f) => { const s = F(f).sign(); return s > 0 ? 'pos' : s < 0 ? 'neg' : ''; };
+  const invStr = (a) => 'y = ' + (F(a).sign() < 0 ? '-' : '') + '{' + F(a).abs().toString() + '}/x';   // y = 12/x の形
+  const paren = (x) => { const s = F(x).toString(); return s[0] === '-' ? '(' + s + ')' : s; };
+  const divisors = (n) => { const r = []; for (let k = 1; k <= n; k++) if (n % k === 0) r.push(k); return r; };
+  const dec = (v, d = 2) => nm(+v.toFixed(d));
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  /* =====================================================================
+     1. パートとつまずきの型
+     ===================================================================== */
+  const PARTS = [null,
+    { name: '① 点を打つ', note: 'x のときの y を求めて点を打とう。点を結ぶと曲線に。きざみを細かくすると、なめらかな双曲線になる。' },
+    { name: '② 面積一定', note: '原点と点 P でできる長方形の面積は、いつも a。P をドラッグすると、通ったあとが双曲線になる。' },
+    { name: '③ 比例とくらべる', note: '比例 y＝ax と反比例 y＝b/x を同じ平面に。交点と、表の変わり方のちがいを見よう。' },
+    { name: '④ a が負', note: 'a が負の反比例。y の符号に気をつけて表をうめ、グラフがどの象限に出るか見よう。' },
+  ];
+  // つまずきの型（名前・説明・練習するパート）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    mulInstead: { name: '比例とまぜた（a × x にした）', part: 1,
+                  exp: '反比例は <b>y ＝ a ÷ x</b>（a を x でわる）。a × x は比例の式。' },
+    divFlip:    { name: 'わる数とわられる数が逆', part: 1,
+                  exp: 'y ＝ a/x は「<b>a ÷ x</b>」。x ÷ a ではない。x × y ＝ a になるか、たしかめよう。' },
+    subInstead: { name: 'ひき算にした', part: 1,
+                  exp: '反比例は x × y ＝ a（<b>積</b>が一定）。x ＋ y が一定（a − x）ではない。' },
+    zeroDiv:    { name: 'x ＝ 0 のときの y', part: 1,
+                  exp: '0 でわることはできないので、<b>x ＝ 0 のときの y は決まらない（ない）</b>。だからグラフは y軸 と交わらない。' },
+    sameRatio:  { name: '反比例も「x が2倍→y も2倍」とした', part: 3,
+                  exp: '比例は x が k倍 → y も k倍。反比例は x が k倍 → y は <b>1/k倍</b>（x × y が一定だから）。' },
+    signInv:    { name: 'a が負のときの y の符号', part: 4,
+                  exp: '負 ÷ 正 ＝ 負、負 ÷ 負 ＝ 正。a が負のとき、x が正なら y は負、x が負なら y は正。' },
+    quadNeg:    { name: 'a が負のときのグラフの象限', part: 4,
+                  exp: 'a が負だと、x と y の符号はいつも反対。だから曲線は<b>第2象限と第4象限</b>に出る。' },
+  };
+
+  /* =====================================================================
+     2. 状態（P はいまの問題。分数は文字列で持つ＝ひとつもどす で写しやすい）
+     ===================================================================== */
+  const st = { part: 1, P: null, P0: null, hist: [], hintLv: 0, g: null, inp: { v: '' }, act: null, sessTrips: {}, timer: null, last: {}, focus: null };
+
+  /* =====================================================================
+     3. 入力（キーパッド）
+     ===================================================================== */
+  const KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '−', '0', '⌫', '/', '.', 'C'];
+  function keypadHTML() {
+    return '<div class="keypad">' + KEYS.map(k => {
+      const lab = k === '−' ? '−<small>符号</small>' : k === '/' ? '／<small>分数</small>' : k === '.' ? '．<small>小数</small>' : k === 'C' ? '<small>ぜんぶ消す</small>' : k;
+      return `<button class="key" data-k="${k}" aria-label="${k}">${lab}</button>`;
+    }).join('') + '</div>';
+  }
+  function press(k) {
+    if (!st.act) return;
+    let v = st.inp.v;
+    if (k === '⌫') v = v.slice(0, -1);
+    else if (k === 'C') v = '';
+    else if (k === '−') v = v.startsWith('-') ? v.slice(1) : '-' + v;
+    else if (k === '/') { if (!v.includes('/') && /\d$/.test(v)) v += '/'; }
+    else if (k === '.') { const last = v.split('/').pop(); if (!last.includes('.') && /\d$/.test(v)) v += '.'; }
+    else if (v.replace(/[-./]/g, '').length < 5) v += k;
+    st.inp.v = v;
+    paintBox();
+  }
+  function paintBox() {
+    const b = document.querySelector('#ask .box');
+    if (b) { b.querySelector('.bv').textContent = st.inp.v === '' ? '　' : nm(st.inp.v); b.classList.toggle('active', !!st.act); }
+  }
+  function askHTML(q, pre, post) {
+    return `<div class="ask-q">${q}</div><div class="ans-line">${pre || ''}<button class="box" aria-label="答え"><span class="bv"></span></button>${post || ''}</div>${keypadHTML()}<button class="go">✔ こたえる</button>`;
+  }
+  function wireAsk(onGo) {
+    document.querySelectorAll('#ask .key').forEach(b => b.addEventListener('click', () => press(b.dataset.k)));
+    const go = document.querySelector('#ask .go');
+    if (go) go.addEventListener('click', onGo);
+    st.onGo = onGo;
+    paintBox();
+  }
+  function parseF(s) {
+    if (!s || !/^-?\d+(\.\d+)?(\/\d+(\.\d+)?)?$/.test(s)) return null;
+    try { return F(s); } catch (e) { return null; }
+  }
+  document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('.ws-panel, input, textarea')) return;
+    if (e.target.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+    if (e.key === 'Enter') { const go = document.querySelector('#ask .go'); if (go) { go.click(); e.preventDefault(); } return; }
+    if (!st.act) return;
+    const map = { '-': '−', '/': '/', '.': '.', 'Backspace': '⌫' };
+    if (/^[0-9]$/.test(e.key)) { press(e.key); e.preventDefault(); }
+    else if (map[e.key]) { press(map[e.key]); e.preventDefault(); }
+  });
+
+  /* =====================================================================
+     4. 座標平面
+     ===================================================================== */
+  function makeGraph(o) {
+    st.g = GraphEngine.create($('graph'), Object.assign({ xmin: -6.5, xmax: 6.5, ymin: -6.5, ymax: 6.5, grid: true, controls: true, coords: true }, o || {}));
+    return st.g;
+  }
+  // 軸を点線で強調（反比例のグラフがどこまでも近づくけれど、くっつかない線）
+  function asymLines(g) {
+    if (!$('optAsym').checked) return;
+    g.line({ x: 0 }, { color: '#ad1457', width: 3, dash: '4 7' });
+    g.line({ a: 0, b: 0 }, { color: '#ad1457', width: 3, dash: '4 7' });
+  }
+  // 反比例のグラフ（x の正と負の2つの枝）
+  function hyper(g, a, style) {
+    const A = num(a);
+    g.plot(x => (Math.abs(x) < 1e-9 ? NaN : A / x), Object.assign({ color: '#6a1b9a', width: 4 }, style || {}));
+  }
+
+  /* =====================================================================
+     5. パート① 点を打つ
+     P = { a, xs:[x], filled:n, phase:'fill'|'zero'|'curve', step, neg, zeroWrong:[] }
+     ===================================================================== */
+  const POOL1 = [12, 6, 8, 18, 16, 10];
+  function gen1(a) {
+    if (!a) { do { a = pick(POOL1); } while (a === st.last[1]); }
+    st.last[1] = a;
+    const xs = divisors(a).filter(x => x <= 12 || x === a);
+    return { a, xs, filled: 0, phase: 'fill', step: 0, neg: false, zeroWrong: [], approach: null, lastRow: null };
+  }
+  // きざみのスライダーの段階（0＝点だけ … 5＝なめらかな曲線）
+  const STEPS = [
+    { label: '点だけ', s: null }, { label: '1 きざみで結ぶ', s: 1 }, { label: '0.5 きざみ', s: 0.5 },
+    { label: '0.25 きざみ', s: 0.25 }, { label: '0.1 きざみ', s: 0.1 }, { label: 'なめらかな曲線', s: 0 },
+  ];
+  function view1(P) { const M = Math.max(12, P.a) + 1; return P.neg ? { xmin: -M, xmax: M, ymin: -M, ymax: M } : { xmin: -1.5, xmax: M, ymin: -1.5, ymax: M }; }
+  function render1() {
+    const P = st.P, A = F(P.a), g = st.g;
+    // 表
+    let h = '<table class="vt"><tr><th>x</th><th>y</th><th>x × y</th></tr>';
+    P.xs.forEach((x, i) => {
+      const done = i < P.filled, cur = i === P.filled && P.phase === 'fill';
+      const y = A.div(x);
+      h += `<tr class="${cur ? 'cur' : ''}"><td>${x}</td>${done ? `<td class="pos">${mr(y)}</td><td class="prod">${P.a}</td>` : `<td class="q">${cur ? '？' : ''}</td><td></td>`}</tr>`;
+    });
+    if (P.phase !== 'fill') h += `<tr><td>0</td><td class="${P.phase === 'zero' ? 'q' : ''}" colspan="2">${P.phase === 'zero' ? '？' : 'ない（決まらない）'}</td></tr>`;
+    if (P.approach) P.approach.forEach(r => { h += `<tr><td>${r[0]}</td><td class="pos" colspan="2">${r[1]}</td></tr>`; });
+    $('tbl').innerHTML = h + '</table>';
+    $('tblNote').innerHTML = P.filled ? `x × y はいつも <b>${P.a}</b>。` : 'y ＝ a ÷ x で y を求めよう。';
+    // グラフ
+    g.clear();
+    asymLines(g);
+    const step = STEPS[P.step];
+    if (P.phase === 'curve' && step.s === 0) { hyper(g, P.a, { from: P.neg ? null : 0.01 }); }
+    else if (P.phase === 'curve' && step.s) {
+      // きざみ s で計算した点を、直線でつなぐ（細かくするほど、曲線に近づく）
+      const pts = [];
+      const M = view1(P).xmax;
+      for (let x = step.s; x <= M + 1e-9; x += step.s) pts.push([x, P.a / x]);
+      const vis = pts.filter(p => p[1] <= M + 2);
+      for (let i = 1; i < vis.length; i++) g.segment(vis[i - 1], vis[i], { color: '#6a1b9a', width: 3 });
+      if (P.neg) for (let i = 1; i < vis.length; i++) g.segment([-vis[i - 1][0], -vis[i - 1][1]], [-vis[i][0], -vis[i][1]], { color: '#6a1b9a', width: 3 });
+      if (step.s < 1) vis.forEach(p => g.point(p[0], p[1], '', { color: '#ba68c8', r: 3 }));
+    }
+    P.xs.slice(0, P.filled).forEach(x => {
+      g.point(x, A.div(x), '', { color: '#e65100', r: 6.5, showCoords: P.filled <= 3 || x === P.xs[P.filled - 1] });
+      if (P.neg) g.point(-x, A.div(-x), '', { color: '#1565c0', r: 6.5 });
+    });
+    if (P.approachPt) g.point(P.approachPt[0], Math.min(P.approachPt[1], view1(P).ymax - 0.3), P.approachPt[1] > view1(P).ymax ? '↑ y はもっと大きい' : '', { color: '#d81b60', r: 8 });
+    // 式
+    $('formula').innerHTML = mrs(invStr(A), 'normal');
+    $('formNote').innerHTML = `比例定数 a ＝ ${P.a}。<b>x × y ＝ ${P.a}</b>（積が一定）。`;
+    // 操作
+    let c = '';
+    if (P.phase === 'curve') {
+      c = `<div class="slider-row">点の結び方 <input type="range" id="stepR" min="0" max="5" step="1" value="${P.step}" aria-label="点の結び方"><span class="val">${step.label}</span></div>
+        <div class="slider-row">きざみ <input type="number" id="stepN" min="0.05" max="1" step="0.05" value="${step.s || ''}" placeholder="—" aria-label="x のきざみ（数）"></div>
+        <div class="tools"><button class="op-btn" id="btnNear0">🔍 x を 0 に近づける</button><button class="op-btn" id="btnFar">🔍 x を大きくする</button>
+        <label class="opt-check"><input type="checkbox" id="optNeg"${P.neg ? ' checked' : ''}> x が負のときも</label></div>`;
+    }
+    $('ctrl').innerHTML = c;
+    if (P.phase === 'curve') {
+      $('stepR').addEventListener('input', e => { pushHist(); st.P.step = +e.target.value; render(); });
+      $('stepN').addEventListener('change', e => {
+        // 数で入れたきざみに近い段階にする（0.05〜1）。なければ、そのきざみをそのまま使う
+        const v = Math.max(0.05, Math.min(1, +e.target.value || 1));
+        const i = STEPS.findIndex(s => s.s === v);
+        pushHist();
+        if (i >= 0) st.P.step = i; else { STEPS[6] = { label: v + ' きざみ', s: v }; st.P.step = 6; }
+        render();
+      });
+      $('btnNear0').addEventListener('click', () => approach(true));
+      $('btnFar').addEventListener('click', () => approach(false));
+      $('optNeg').addEventListener('change', e => { pushHist(); st.P.neg = e.target.checked; makeGraph(view1(st.P)); render(); });
+    }
+    // 答える欄
+    if (P.phase === 'fill') {
+      const x = P.xs[P.filled];
+      $('ask').innerHTML = askHTML(`x ＝ ${x} のとき、y は？`, 'y ＝ ');
+      st.act = 'v'; wireAsk(check1);
+    } else if (P.phase === 'zero') {
+      $('ask').innerHTML = `<div class="ask-q">では、<b>x ＝ 0</b> のとき、y は？</div><div class="choice-btns">` +
+        [['0', 'y ＝ 0'], [String(P.a), 'y ＝ ' + P.a], ['none', 'ない（決まらない）']].map(([k, t]) => `<button class="op-btn${P.zeroWrong.includes(k) ? ' ng' : ''}${k === 'none' ? ' wide' : ''}" data-z="${k}">${t}</button>`).join('') + '</div>';
+      st.act = null;
+      document.querySelectorAll('#ask [data-z]').forEach(b => b.addEventListener('click', () => zero1(b.dataset.z)));
+    } else {
+      $('ask').innerHTML = '<button class="go next">🎲 つぎの問題へ（ほかの a）</button>';
+      st.act = null; wireAsk(() => newProblem());
+    }
+  }
+  function check1() {
+    const P = st.P, A = F(P.a), x = P.xs[P.filled], y = A.div(x);
+    const v = parseF(st.inp.v);
+    if (!v) { setMsg('y を数で入れよう（分数・小数もOK）。'); return; }
+    pushHist();
+    if (v.equals(y)) {
+      P.filled++; P.lastRow = { x, y: y.toString() };
+      st.inp.v = ''; st.hintLv = 0;
+      if (P.filled >= P.xs.length) { P.phase = 'zero'; sndDone(); setMsg(`<span class="mark-ok">○</span> 表がうまった！ どの点も x × y ＝ ${P.a}。`, 'ok'); }
+      else { sndOK(); setMsg(`<span class="mark-ok">○</span> y ＝ ${P.a} ÷ ${x} ＝ ${mr(y)}。点を打ったよ。`, 'ok'); }
+    } else {
+      sndNG();
+      let type = null;
+      if (v.equals(A.mul(x))) type = 'mulInstead';
+      else if (v.equals(F(x).div(A))) type = 'divFlip';
+      else if (v.equals(A.sub(x))) type = 'subInstead';
+      if (type) addTrip(type);
+      setMsg(`<span class="mark-ng">×</span> ${mr(v)} ではないよ。` + (type ? '<br>' + TRIPS[type].exp : `<br>y ＝ ${P.a} ÷ ${x} を計算しよう。`), 'ng');
+    }
+    render();
+  }
+  function zero1(k) {
+    const P = st.P;
+    if (k === 'none') {
+      P.phase = 'curve'; P.step = 1;
+      sndDone(); bumpClear(1);
+      setMsg(`<span class="mark-ok">○</span> そのとおり！ ${P.a} ÷ 0 は計算できない（0 でわることはできない）。<br>だからグラフは <b>y軸と交わらない</b>。<br>「点の結び方」のスライダーで、きざみを細かくしてみよう。`, 'ok');
+    } else {
+      sndNG(); P.zeroWrong.push(k); addTrip('zeroDiv');
+      setMsg(`<span class="mark-ng">×</span> ${k === '0' ? 'y ＝ 0 にすると x × y ＝ 0 になって、' + P.a + ' にならない。' : 'y ＝ ' + P.a + ' だと x × y ＝ 0 × ' + P.a + ' ＝ 0 になってしまう。'}<br>${P.a} ÷ 0 を考えてみよう。`, 'ng');
+    }
+    render();
+  }
+  // x を 0 に近づける／大きくする（点が曲線の上を動き、表に値がふえる）
+  function approach(toZero) {
+    if (st.timer) return;
+    const P = st.P;
+    const xsList = toZero ? [2, 1, 0.5, 0.2, 0.1, 0.05, 0.01, 0.001] : [12, 24, 50, 100, 1000, 10000];
+    P.approach = [];
+    let i = 0;
+    st.timer = setInterval(() => {
+      const x = xsList[i], y = P.a / x;
+      P.approach.push([String(x), dec(y, 4)]);
+      P.approachPt = [Math.min(x, view1(P).xmax - 0.3), y];
+      render();
+      i++;
+      if (i >= xsList.length) {
+        clearInterval(st.timer); st.timer = null;
+        setMsg(toZero ? `x を 0 に近づけると、y は <b>どんどん大きく</b>なる（x ＝ 0.001 なら y ＝ ${P.a * 1000}）。<br>でも x ＝ 0 にはならないので、曲線は <b>y軸 にくっつかない</b>。`
+          : `x を大きくすると、y は <b>0 に近づく</b>（x ＝ 10000 なら y ＝ ${dec(P.a / 10000, 4)}）。<br>でも 0 にはならないので、曲線は <b>x軸 にくっつかない</b>。`, 'ok');
+      }
+    }, 650);
+  }
+
+  /* =====================================================================
+     6. パート② 面積一定（長方形の角 P をドラッグ）
+     P = { a, x, trail:[[x,y]], showCurve, stamps:[x], target, cleared, neg }
+     ===================================================================== */
+  function gen2(a) {
+    a = a || 12;
+    return { a, x: '3', trail: [], showCurve: false, stamps: [], target: newTarget2(a), cleared: 0, neg: false };
+  }
+  function newTarget2(a, prev) {
+    const ds = divisors(a).filter(x => x <= 12 && a / x <= 12 && x !== prev);
+    const x = pick(ds.length ? ds : [1]);
+    return x;
+  }
+  function render2() {
+    const P = st.P, A = F(P.a), g = st.g, X = F(P.x), Y = A.div(X);
+    g.clear();
+    asymLines(g);
+    if (P.showCurve) hyper(g, P.a, { color: '#ce93d8', width: 3 });
+    // 残した長方形（うすい色）
+    P.stamps.forEach(sx => { const x = F(sx), y = A.div(x); g.polygon([[0, 0], [x, 0], [x, y], [0, y]], { color: '#90a4ae', width: 1.5, fill: '#b0bec5', fillOpacity: 0.18 }); });
+    // 通ったあと
+    P.trail.forEach(p => g.point(p[0], p[1], '', { color: '#ba68c8', r: 3 }));
+    // いまの長方形（P といっしょに動く）
+    let D = null;
+    g.polygon(() => { const x = D ? D.x : X, y = D ? D.y : Y; return [[0, 0], [x, 0], [x, y], [0, y]]; }, { color: '#2e7d32', width: 3, fill: '#a5d6a7', fillOpacity: 0.35 });
+    // チャレンジの目じるし（y ＝ target の横の点線）
+    if (P.target) { const ty = A.div(P.target); g.line({ a: 0, b: ty }, { color: '#d81b60', width: 2, dash: '8 6', label: 'y＝' + ty.toString() }); }
+    const lim = view2(P).xmax - 0.3;
+    D = g.draggable(X, Y, {
+      label: 'P', showCoords: true,
+      // x はそのまま、y はいつも a ÷ x（面積が a のまま）。x ＝ 0 はこえない
+      constrain: (x, y) => {
+        let v = num(x);
+        if (P.neg) { if (Math.abs(v) < 0.3) v = num(st.P.x) < 0 ? -0.3 : 0.3; }
+        else if (v < 0.3) v = 0.3;
+        v = Math.max(-lim, Math.min(lim, v));
+        const fx = F(Math.round(v * 100) / 100);
+        return [fx, A.div(fx)];
+      },
+    });
+    D.onChange = () => {
+      st.P.x = D.x.toString();
+      const tr = st.P.trail, p = [num(D.x), num(D.y)];
+      if (!tr.length || Math.abs(tr[tr.length - 1][0] - p[0]) > 0.12) { tr.push(p); if (tr.length > 400) tr.shift(); g.point(p[0], p[1], '', { color: '#ba68c8', r: 3 }); }
+      side2();
+    };
+    // つかんだときの状態をおぼえておき、はなしたときに「ひとつもどす」の記録にする
+    D.el.addEventListener('pointerdown', () => { st.dragSnap = clone({ P: st.P, hintLv: st.hintLv }); }, true);
+    D.onEnd = () => {
+      if (st.dragSnap && st.dragSnap.P.x !== st.P.x) { st.hist.push(st.dragSnap); $('btnUndo').disabled = false; }
+      st.dragSnap = null;
+      // チャレンジ：y ＝ 目じるし の高さにぴったり合ったか
+      const P2 = st.P;
+      if (P2.target && F(P2.x).equals(P2.target)) {
+        P2.cleared++; sndDone(); bumpClear(2);
+        setMsg(`<span class="mark-ok">○</span> ぴったり！ x ＝ ${P2.target}、y ＝ ${mr(A.div(P2.target))}。x × y ＝ ${P2.a} のまま。<br>つぎの高さにちょうせん。`, 'ok');
+        P2.target = newTarget2(P2.a, P2.target);
+        render();
+      }
+    };
+    side2();
+    // 操作
+    if (!$('aR2')) {
+      $('ctrl').innerHTML = `<div class="slider-row">a（面積）<input type="range" id="aR2" min="1" max="24" step="1"><input type="number" id="aN2" min="1" max="24" step="1" aria-label="比例定数 a"></div>
+        <div class="tools"><button class="op-btn" id="btnStamp">📌 長方形を残す</button><button class="op-btn" id="btnCurve">〰 曲線を見せる</button><button class="op-btn" id="btnTrailClr">あとを消す</button>
+        <label class="opt-check"><input type="checkbox" id="optNeg2"> x が負も</label></div>`;
+      const setA = (v) => { v = Math.max(1, Math.min(24, Math.round(+v || 1))); if (v === st.P.a) return; pushHist(); st.P.a = v; st.P.trail = []; st.P.stamps = []; st.P.target = newTarget2(v); render(); };
+      $('aR2').addEventListener('input', e => setA(e.target.value));
+      $('aN2').addEventListener('change', e => setA(e.target.value));
+      $('btnStamp').addEventListener('click', () => { pushHist(); const s = st.P.stamps; if (s.length >= 6) s.shift(); s.push(st.P.x); render(); });
+      $('btnCurve').addEventListener('click', () => { pushHist(); st.P.showCurve = !st.P.showCurve; render(); });
+      $('btnTrailClr').addEventListener('click', () => { pushHist(); st.P.trail = []; render(); });
+      $('optNeg2').addEventListener('change', e => { pushHist(); st.P.neg = e.target.checked; makeGraph(Object.assign(view2(st.P), { snap: true })); render(); });
+    }
+    $('aR2').value = P.a; $('aN2').value = P.a; $('optNeg2').checked = P.neg;
+    $('btnCurve').textContent = P.showCurve ? '〰 曲線をかくす' : '〰 曲線を見せる';
+    $('ask').innerHTML = P.target ? `<div class="ask-q">🎯 チャレンジ（${P.cleared}こ クリア）<br>面積 ${P.a} のまま、P を 点線（y ＝ ${mr(A.div(P.target))}）の高さに合わせよう。</div>` : '';
+    st.act = null;
+  }
+  function view2(P) { const M = 13; return P.neg ? { xmin: -M, xmax: M, ymin: -M, ymax: M } : { xmin: -1, xmax: M, ymin: -1, ymax: M }; }
+  function side2() {
+    const P = st.P, A = F(P.a), X = F(P.x), Y = A.div(X);
+    const fx = (f) => f.d <= 12 ? mr(f) : dec(num(f));
+    $('formula').innerHTML = mrs(invStr(A), 'normal');
+    $('formNote').innerHTML = `<div class="big-area">たて × よこ ＝ ${fx(Y)} × ${fx(X)} ＝ ${P.a}</div>長方形の面積は、いつも <b>${P.a}</b>（x × y ＝ ${P.a}）。<br><span class="small">x を大きくすると y は小さくなる。</span>`;
+    let h = '<table class="vt"><tr><th>x</th><th>y</th><th>x × y</th></tr>';
+    const rows = P.stamps.concat([P.x]);
+    rows.forEach((sx, i) => { const x = F(sx), y = A.div(x); h += `<tr class="${i === rows.length - 1 ? 'cur' : ''}"><td class="${cls(x)}">${fx(x)}</td><td class="${cls(y)}">${fx(y)}</td><td class="prod">${P.a}</td></tr>`; });
+    $('tbl').innerHTML = h + '</table>';
+    $('tblNote').innerHTML = '黄色＝いまの P。「📌 長方形を残す」で行がふえる。';
+  }
+
+  /* =====================================================================
+     7. パート③ 比例とくらべる
+     P = { a:比例定数（比例）, b:比例定数（反比例）, picks:[i,j], q:{k}, phase:'ask'|'done', wrong:[] }
+     ===================================================================== */
+  const XS3 = [1, 2, 3, 4, 6, 12];
+  function gen3() {
+    const k = pick([2, 3, 4, 6]);
+    return { a: '2', b: '6', picks: [0, 1], q: { k }, phase: 'ask', wrong: [] };
+  }
+  // 交点（x² ＝ b/a）。分数でぴったり表せるときは分数、そうでなければ小数（約）
+  function cross3(a, b) {
+    const r = F(b).div(a);
+    if (r.sign() <= 0) return null;
+    const sn = Math.round(Math.sqrt(r.n)), sd = Math.round(Math.sqrt(r.d));
+    if (sn * sn === r.n && sd * sd === r.d) { const x = new Fraction(sn, sd); return { exact: true, x, y: F(a).mul(x) }; }
+    const x = Math.sqrt(num(r));
+    return { exact: false, x, y: num(a) * x };
+  }
+  function render3() {
+    const P = st.P, A = F(P.a), B = F(P.b), g = st.g;
+    g.clear();
+    asymLines(g);
+    g.line(() => ({ a: A, b: F(0) }), { color: '#e65100', width: 4, label: '比例' });
+    hyper(g, P.b, { label: '反比例' });
+    const c = cross3(A, B);
+    if (c) {
+      const lab = c.exact ? `(${c.x}, ${c.y})` : `(約${dec(c.x, 1)}, 約${dec(c.y, 1)})`;
+      const labN = c.exact ? `(${nm(c.x.neg())}, ${nm(c.y.neg())})` : `(約−${dec(c.x, 1)}, 約−${dec(c.y, 1)})`;
+      g.point(c.x, c.y, lab, { color: '#2e7d32', r: 7 });
+      g.point(c.exact ? c.x.neg() : -c.x, c.exact ? c.y.neg() : -c.y, labN, { color: '#2e7d32', r: 7 });
+    }
+    // 表（比例と反比例をならべる。行を2つタップすると、何倍になるかをくらべる）
+    const [i, j] = P.picks;
+    let h = '<table class="vt"><tr><th>x</th><th>比例<br>y＝ax</th><th>反比例<br>y＝b/x</th></tr>';
+    XS3.forEach((x, r) => {
+      h += `<tr class="tap${r === i || r === j ? ' pick' : ''}" data-r="${r}"><td>${x}</td><td class="pr">${mr(A.mul(x))}</td><td class="iv">${mr(B.div(x))}</td></tr>`;
+    });
+    $('tbl').innerHTML = h + '</table>';
+    const x1 = XS3[i], x2 = XS3[j], k = F(x2).div(x1);
+    $('tblNote').innerHTML = `<b>x：${x1} → ${x2}</b>（${mr(k)}倍）<br><span class="pr">比例の y：${mr(k)}倍</span><br><span class="iv">反比例の y：${mr(k.inv())}倍</span><br><span class="small">表の行を2つタップすると、くらべる行がかわるよ。</span>`;
+    document.querySelectorAll('#tbl tr[data-r]').forEach(tr => tr.addEventListener('click', () => {
+      const r = +tr.dataset.r, Q = st.P;
+      if (r === Q.picks[1]) return;
+      Q.picks = [Q.picks[1], r].sort((p, q) => p - q);
+      render();
+    }));
+    // 式
+    $('formula').innerHTML = `<span class="row" style="color:#e65100">${mrs('y = ' + MathRender.terms([[A, 'x']]))}</span><span class="row" style="color:#6a1b9a">${mrs(invStr(B))}</span>`;
+    $('formNote').innerHTML = c ? `交点は ${c.exact ? `(${nm(c.x)}, ${nm(c.y)}) と (${nm(c.x.neg())}, ${nm(c.y.neg())})` : `約(${dec(c.x, 1)}, ${dec(c.y, 1)}) と 約(−${dec(c.x, 1)}, −${dec(c.y, 1)})`}。<br><span class="small">比例：y ÷ x が一定（${mr(A)}）　反比例：x × y が一定（${mr(B)}）</span>` : '';
+    // 操作
+    if (!$('aR3')) {
+      $('ctrl').innerHTML = `<div class="slider-row"><span class="pr" style="color:#e65100">比例 a</span><input type="range" id="aR3" min="0.5" max="4" step="0.5"><input type="number" id="aN3" min="0.5" max="4" step="0.5" aria-label="比例の比例定数"></div>
+        <div class="slider-row"><span style="color:#6a1b9a">反比例 b</span><input type="range" id="bR3" min="1" max="24" step="1"><input type="number" id="bN3" min="1" max="24" step="1" aria-label="反比例の比例定数"></div>`;
+      const setV = (key, v, lo, hi) => { v = Math.max(lo, Math.min(hi, +v || lo)); const s = F(String(v)).toString(); if (s === st.P[key]) return; pushHist(); st.P[key] = s; render(); };
+      $('aR3').addEventListener('input', e => setV('a', e.target.value, 0.5, 4));
+      $('aN3').addEventListener('change', e => setV('a', e.target.value, 0.5, 4));
+      $('bR3').addEventListener('input', e => setV('b', e.target.value, 1, 24));
+      $('bN3').addEventListener('change', e => setV('b', e.target.value, 1, 24));
+    }
+    $('aR3').value = num(A); $('aN3').value = num(A); $('bR3').value = num(B); $('bN3').value = num(B);
+    // 問題：x が k 倍になると、反比例の y は？
+    if (P.phase === 'ask') {
+      const k = P.q.k;
+      const ch = shuffle([['inv', `1/${k} 倍`], ['same', `${k} 倍`], ['sub', `${k} へる`], ['keep', 'かわらない']]);
+      $('ask').innerHTML = `<div class="ask-q">反比例で、x が <b>${k} 倍</b>になると、y は？</div><div class="choice-btns">` +
+        ch.map(([c, t]) => `<button class="op-btn${P.wrong.includes(c) ? ' ng' : ''}" data-c="${c}">${t}</button>`).join('') + '</div>';
+      document.querySelectorAll('#ask [data-c]').forEach(b => b.addEventListener('click', () => ans3(b.dataset.c)));
+    } else {
+      $('ask').innerHTML = '<button class="go next">🎲 つぎの問題へ</button>';
+      wireAsk(() => { pushHist(); st.P.q = { k: pick([2, 3, 4, 6].filter(v => v !== st.P.q.k)) }; st.P.phase = 'ask'; st.P.wrong = []; setMsg('つぎの問題！'); render(); });
+    }
+    st.act = null;
+  }
+  function ans3(c) {
+    const P = st.P, k = P.q.k;
+    pushHist();
+    if (c === 'inv') {
+      P.phase = 'done';
+      sndDone(); bumpClear(3);
+      // 表で、x が k 倍になっている行を選んで見せる
+      const i = XS3.findIndex(x => XS3.includes(x * k));
+      if (i >= 0) P.picks = [i, XS3.indexOf(XS3[i] * k)];
+      setMsg(`<span class="mark-ok">○</span> そのとおり！ x × y が一定なので、x が ${k} 倍なら y は <b>1/${k} 倍</b>。<br>表の水色の行でたしかめよう（比例なら ${k} 倍）。`, 'ok');
+    } else {
+      sndNG(); P.wrong.push(c);
+      if (c === 'same') addTrip('sameRatio');
+      setMsg(`<span class="mark-ng">×</span> ${c === 'same' ? `${k} 倍になるのは<b>比例</b>。` : ''}表で x が ${k} 倍になっている2つの行をタップして、反比例の y をくらべよう。`, 'ng');
+    }
+    render();
+  }
+
+  /* =====================================================================
+     8. パート④ a が負
+     P = { a, xs, ask:[x...], k, phase:'fill'|'quad'|'done', qWrong:[] }
+     ===================================================================== */
+  const POOL4 = [-6, -12, -4, -8];
+  function gen4(a) {
+    if (!a) { do { a = pick(POOL4); } while (a === st.last[4]); }
+    st.last[4] = a;
+    const ds = divisors(-a).filter(x => x <= 6);
+    const xs = ds.map(x => -x).reverse().concat(ds);
+    // 答える x：正と負をまぜて3つ
+    const pos = shuffle(ds), negs = shuffle(ds.map(x => -x));
+    const ask = shuffle([negs[0], pos[0], st.focus === 'signInv' ? negs[1] : pick([negs[1], pos[1]])].filter(v => v !== undefined));
+    return { a, xs, ask, k: 0, phase: 'fill', qWrong: [], cmp: false };
+  }
+  function render4() {
+    const P = st.P, A = F(P.a), g = st.g;
+    g.clear();
+    asymLines(g);
+    const known = P.xs.filter(x => !P.ask.includes(x) || P.ask.indexOf(x) < P.k || P.phase !== 'fill');
+    if (P.phase !== 'fill') hyper(g, P.a, { color: '#1565c0' });
+    if (P.cmp) hyper(g, -P.a, { color: '#e65100', width: 2.5, dash: '8 6', label: 'y＝' + (-P.a) + '/x' });
+    known.forEach(x => g.point(x, A.div(x), '', { color: '#1565c0', r: 6 }));
+    // 表
+    let h = '<table class="vt"><tr><th>x</th><th>y</th><th>x × y</th></tr>';
+    P.xs.forEach(x => {
+      const y = A.div(x), cur = P.phase === 'fill' && P.ask[P.k] === x;
+      const show = known.includes(x);
+      h += `<tr class="${cur ? 'cur' : ''}"><td class="${cls(x)}">${mr(x)}</td>${show ? `<td class="${cls(y)}">${mr(y)}</td><td class="prod">${mr(P.a)}</td>` : `<td class="q">${cur ? '？' : '?'}</td><td></td>`}</tr>`;
+      if (x === -1) h += `<tr><td>0</td><td colspan="2" class="small">ない（決まらない）</td></tr>`;
+    });
+    $('tbl').innerHTML = h + '</table>';
+    $('tblNote').innerHTML = `x × y はいつも <b>${nm(P.a)}</b>。x と y の符号はいつも反対。`;
+    $('formula').innerHTML = mrs(invStr(A), 'normal');
+    $('formNote').innerHTML = `比例定数 a ＝ ${nm(P.a)}（負の数）`;
+    if (!$('aR4')) {
+      $('ctrl').innerHTML = `<div class="slider-row">a <input type="range" id="aR4" min="-12" max="12" step="1"><input type="number" id="aN4" min="-12" max="12" step="1" aria-label="比例定数 a"></div>
+        <div class="tools"><label class="opt-check"><input type="checkbox" id="optCmp"> 符号を反対にした曲線もかく</label></div>`;
+      const setA = (v) => { v = Math.round(+v || -6); if (v === 0) v = -1; v = Math.max(-12, Math.min(12, v)); if (v === st.P.a) return; pushHist(); st.P.a = v; st.P.phase = 'done'; st.P.xs = (() => { const ds = divisors(Math.abs(v)).filter(x => x <= 6); return ds.map(x => -x).reverse().concat(ds); })(); render(); setMsg(v > 0 ? 'a が正だと、第1・第3象限に出るね。' : 'a が負だと、第2・第4象限。'); };
+      $('aR4').addEventListener('input', e => setA(e.target.value));
+      $('aN4').addEventListener('change', e => setA(e.target.value));
+      $('optCmp').addEventListener('change', e => { pushHist(); st.P.cmp = e.target.checked; render(); });
+    }
+    $('aR4').value = P.a; $('aN4').value = P.a; $('optCmp').checked = P.cmp;
+    $('aR4').disabled = $('aN4').disabled = P.phase !== 'done';
+    if (P.phase === 'fill') {
+      const x = P.ask[P.k];
+      $('ask').innerHTML = askHTML(`x ＝ ${nm(x)} のとき、y は？`, 'y ＝ ');
+      st.act = 'v'; wireAsk(check4);
+    } else if (P.phase === 'quad') {
+      const ch = [['24', '第2象限と第4象限'], ['13', '第1象限と第3象限'], ['12', '第1象限と第2象限'], ['34', '第3象限と第4象限']];
+      $('ask').innerHTML = `<div class="ask-q">y ＝ ${nm(P.a)}/x のグラフは、どの象限にある？</div><div class="choice-btns">` +
+        ch.map(([c, t]) => `<button class="op-btn${P.qWrong.includes(c) ? ' ng' : ''}" data-q="${c}">${t}</button>`).join('') + '</div>';
+      st.act = null;
+      document.querySelectorAll('#ask [data-q]').forEach(b => b.addEventListener('click', () => quad4(b.dataset.q)));
+    } else {
+      $('ask').innerHTML = '<div class="ask-q small">a のスライダーで、a を正にしたり負にしたりしてみよう。</div><button class="go next">🎲 つぎの問題へ</button>';
+      st.act = null; wireAsk(() => newProblem());
+    }
+  }
+  function check4() {
+    const P = st.P, A = F(P.a), x = P.ask[P.k], y = A.div(x);
+    const v = parseF(st.inp.v);
+    if (!v) { setMsg('y を数で入れよう（負の数は −）。'); return; }
+    pushHist();
+    if (v.equals(y)) {
+      P.k++; st.inp.v = '';
+      sndOK();
+      setMsg(`<span class="mark-ok">○</span> y ＝ ${nm(P.a)} ÷ ${nm(paren(x))} ＝ ${mr(y)}。${x < 0 ? '負 ÷ 負 ＝ 正。' : '負 ÷ 正 ＝ 負。'}`, 'ok');
+      if (P.k >= P.ask.length) { P.phase = 'quad'; setMsg(`<span class="mark-ok">○</span> 表がうまった！ 点を見て、グラフの場所を考えよう。`, 'ok'); }
+    } else {
+      sndNG();
+      let type = null;
+      if (v.equals(y.neg())) type = 'signInv';
+      else if (v.equals(A.mul(x))) type = 'mulInstead';
+      if (type) addTrip(type);
+      setMsg(`<span class="mark-ng">×</span> ${mr(v)} ではないよ。` + (type ? '<br>' + TRIPS[type].exp : `<br>y ＝ ${nm(P.a)} ÷ ${nm(paren(x))} を計算しよう。`), 'ng');
+    }
+    render();
+  }
+  function quad4(c) {
+    const P = st.P;
+    pushHist();
+    if (c === '24') {
+      P.phase = 'done';
+      sndDone(); bumpClear(4);
+      setMsg(`<span class="mark-ok">○</span> そのとおり！ a が負なので、x が正なら y は負（第4象限）、x が負なら y は正（第2象限）。<br>「符号を反対にした曲線」と重ねると、x軸（y軸）について対称だね。`, 'ok');
+    } else {
+      sndNG(); P.qWrong.push(c);
+      if (c === '13') addTrip('quadNeg');
+      setMsg(`<span class="mark-ng">×</span> ちがうよ。表の x と y の符号を見てみよう。${c === '13' ? '<br>第1・第3象限は a が<b>正</b>のとき。' : ''}`, 'ng');
+    }
+    render();
+  }
+
+  /* =====================================================================
+     9. 共通の動き
+     ===================================================================== */
+  function stopTimer() { if (st.timer) { clearInterval(st.timer); st.timer = null; } }
+  function pushHist() { st.hist.push(clone({ P: st.P, hintLv: st.hintLv })); if (st.hist.length > 60) st.hist.shift(); }
+  function undo() {
+    if (!st.hist.length) return;
+    stopTimer();
+    const h = st.hist.pop();
+    const needView = (st.part === 1 && h.P.neg !== st.P.neg) || (st.part === 2 && h.P.neg !== st.P.neg);
+    st.P = h.P; st.hintLv = h.hintLv;
+    if (needView) makeGraph(st.part === 1 ? view1(st.P) : Object.assign(view2(st.P), { snap: true }));
+    setMsg('↶ ひとつもどした。');
+    render();
+  }
+  function resetProblem() {
+    stopTimer();
+    st.P = clone(st.P0); st.hist = []; st.hintLv = 0; st.inp.v = '';
+    makeGraphFor();
+    setMsg('はじめからやりなおそう。');
+    render();
+  }
+  function makeGraphFor() {
+    if (st.part === 1) makeGraph(view1(st.P));
+    else if (st.part === 2) makeGraph(Object.assign(view2(st.P), { snap: true }));
+    else if (st.part === 3) makeGraph({ xmin: -7, xmax: 7, ymin: -7, ymax: 7 });
+    else makeGraph({ xmin: -7, xmax: 7, ymin: -7, ymax: 7 });
+  }
+  function introOf() {
+    return {
+      1: `y ＝ ${st.P.a}/x。表の x のときの y を求めて、点を打とう。`,
+      2: '点 P をドラッグしよう。緑の長方形の面積は、いつも同じ。通ったあとに点が残るよ。',
+      3: '比例（オレンジ）と反比例（紫）。交点はどこ？ 表の変わり方をくらべよう。',
+      4: '黄色の行の y を求めよう。符号に気をつけて。',
+    }[st.part];
+  }
+  function newProblem(opt = {}) {
+    stopTimer();
+    st.hist = []; st.hintLv = 0; st.inp.v = '';
+    $('ctrl').innerHTML = '';
+    if (st.part === 1) st.P = gen1(opt.a);
+    if (st.part === 2) st.P = gen2(st.P && st.P.a && st.part === 2 ? st.P.a : 12);
+    if (st.part === 3) st.P = gen3();
+    if (st.part === 4) st.P = gen4();
+    st.P0 = clone(st.P);
+    makeGraphFor();
+    setMsg(introOf());
+    render();
+  }
+  function setPart(n, opt = {}) {
+    stopTimer();
+    st.part = n;
+    st.P = null;
+    if (!opt.keepFocus) { st.focus = null; $('focusBar').hidden = true; }
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === n));
+    $('partNote').textContent = PARTS[n].note;
+    newProblem(opt);
+  }
+  function render() {
+    if (st.part === 1) render1();
+    else if (st.part === 2) render2();
+    else if (st.part === 3) render3();
+    else render4();
+    renderTrips(); renderTeacher();
+    $('btnUndo').disabled = !st.hist.length;
+  }
+  function setMsg(html, c) { const el = $('msg'); el.innerHTML = html; el.className = 'msg' + (c ? ' ' + c : ''); }
+  function hint() {
+    const P = st.P;
+    st.hintLv = Math.min(3, st.hintLv + 1);
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    const lv = st.hintLv;
+    let t = '';
+    if (st.part === 1) {
+      if (P.phase === 'fill') { const x = P.xs[P.filled]; t = ['', '反比例は x × y ＝ a。', `y ＝ a ÷ x ＝ ${P.a} ÷ ${x}。`, `${x} × □ ＝ ${P.a} の □ をさがそう。`][lv]; }
+      else if (P.phase === 'zero') t = `0 × □ ＝ ${P.a} になる □ はある？`;
+      else t = 'きざみを細かくすると、折れ線がなめらかな曲線に近づく。「🔍 x を 0 に近づける」も押してみよう。';
+    } else if (st.part === 2) t = P.target ? `y ＝ ${mr(F(P.a).div(P.target))} のとき、x × ${mr(F(P.a).div(P.target))} ＝ ${P.a}。x はいくつ？` : 'P をドラッグしよう。';
+    else if (st.part === 3) t = P.phase === 'ask' ? `表で x ＝ 1 と x ＝ ${P.q.k} の行をタップして、反比例の y をくらべよう。` : '交点は、比例と反比例の y が同じになる点。';
+    else t = P.phase === 'fill' ? ['', '反比例は x × y ＝ a（負の数）。', 'x と y の符号は反対になる。', `y ＝ ${nm(P.a)} ÷ ${nm(paren(P.ask[P.k]))}。`][lv] : '表の点が、どの象限にあるかを見よう。';
+    setMsg('💡 ' + t);
+  }
+
+  /* =====================================================================
+     10. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(p) { bumpRec(r => r.clear[p] = (r.clear[p] || 0) + 1); }
+  function addTrip(type) { st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><button class="op-btn" data-prac="${k}">🔁 この型を練習（${PARTS[TRIPS[k].part].name}）</button></div>`).join('')
+      : '<div class="small">まだ ありません。まちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = `この端末のきろく：正解 ① ${c[1] || 0}　② ${c[2] || 0}　③ ${c[3] || 0}　④ ${c[4] || 0}　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    setPart(TRIPS[type].part, { keepFocus: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     11. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const P = st.P;
+    if (!P) return '';
+    if (st.part === 1) return P.phase === 'fill' ? `答え：y ＝ ${F(P.a).div(P.xs[P.filled])}` : P.phase === 'zero' ? '答え：ない（決まらない）' : '（きざみのスライダー・🔍 を見せる）';
+    if (st.part === 2) return P.target ? `🎯 の答え：x ＝ ${P.target}` : '';
+    if (st.part === 3) return P.phase === 'ask' ? `答え：1/${P.q.k} 倍` : '（つぎの問題へ）';
+    return P.phase === 'fill' ? `答え：y ＝ ${F(P.a).div(P.ask[P.k])}` : P.phase === 'quad' ? '答え：第2象限と第4象限' : '（つぎの問題へ）';
+  }
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText().replace(/-/g, '−');
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function teacherStep() {
+    const P = st.P;
+    if (st.part === 1) {
+      if (P.phase === 'fill') { st.inp.v = F(P.a).div(P.xs[P.filled]).toString(); check1(); }
+      else if (P.phase === 'zero') zero1('none');
+      else if (P.step < 5) { pushHist(); P.step++; render(); }
+      return;
+    }
+    if (st.part === 2) {
+      if (!P.target) return;
+      pushHist();
+      const t = P.target;
+      P.x = String(t); P.cleared++; bumpClear(2); sndDone();
+      setMsg(`P を x ＝ ${t}、y ＝ ${mr(F(P.a).div(t))} に動かしたよ（${t} × ${mr(F(P.a).div(t))} ＝ ${P.a}）。`, 'ok');
+      P.target = newTarget2(P.a, t);
+      render();
+      return;
+    }
+    if (st.part === 3) { if (P.phase === 'ask') ans3('inv'); return; }
+    if (P.phase === 'fill') { st.inp.v = F(P.a).div(P.ask[P.k]).toString(); check4(); }
+    else if (P.phase === 'quad') quad4('24');
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     12. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3, 4].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnNew').addEventListener('click', () => newProblem());
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetProblem);
+  $('btnHint').addEventListener('click', hint);
+  $('optAsym').addEventListener('change', () => render());
+  $('btnWs').addEventListener('click', () => {
+    setPart(1, { a: 20 });
+    setMsg('📄 ワークシートの問題：y ＝ 20/x。x ＝ 1 と x ＝ 10、x ＝ 2 と x ＝ 20 のように、<b>x が10倍</b>になると y はどうなる？ 予想してから表をうめよう。');
+  });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '反比例の曲線',
+    question: '反比例の関係で、x が 10倍になったら、y はどうなるだろうか？',
+    predictions: ['10倍になる', '1/10倍になる', '10 へる', 'かわらない', 'わからない'],
+    operationNote: '「📄 ワークシートの問題」で y＝20/x の表をうめよう。1行うめるたびに「＋ 記録する」。x ＝ 1 と 10、2 と 20 の y をくらべよう。',
+    fields: [
+      { key: 'shiki', label: '式' },
+      { key: 'x', label: 'x' },
+      { key: 'y', label: 'y' },
+      { key: 'xy', label: 'x × y' }
+    ],
+    capture: () => {
+      const P = st.P;
+      if (st.part === 1 && P.lastRow) return { shiki: `y = {${P.a}}/x`, x: String(P.lastRow.x), y: P.lastRow.y, xy: String(P.a) };
+      if (st.part === 2) { const X = F(P.x), Y = F(P.a).div(X); return { shiki: `y = {${P.a}}/x`, x: X.toString(), y: Y.toString(), xy: String(P.a) }; }
+      setMsg('① で表の y を入れてから（または ② で P を動かしてから）記録しよう。');
+      return null;
+    },
+    summaryHint: '「反比例 y＝a/x では、x × y が〜。x が 2倍、3倍…になると y は〜。グラフは〜で、x軸・y軸とは〜」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める（10倍と答える生徒が多い）。表で x＝1→10（y：20→2）、x＝2→20（y：10→1）を確かめさせ、x × y がいつも 20 だから 1/10 倍になることを説明させる。比例（x が10倍→y も10倍）とくらべる。',
+      answer: '1/10倍になる。<br>y＝20/x で x＝1 のとき y＝20、x＝10 のとき y＝2（20 の 1/10）。<br>まとめ：反比例 y＝a/x では x × y がいつも a。x が 2倍、3倍…になると y は 1/2倍、1/3倍…になる。グラフは双曲線で、x＝0 のときの y はないので、x軸・y軸とは交わらない。'
+    }
+  });
+
+  setupTeacher();
+  setPart(1);
+})();
+</script>
+
+</body>
+</html>
