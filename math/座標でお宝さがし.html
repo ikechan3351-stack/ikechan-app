@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>座標でお宝さがし</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：正（＋）＝オレンジ・実線、負（−）＝青・点線
+     正解＝緑（○）、まちがい・注意＝赤紫（×）。色だけでなく、記号・線の種類でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+  .focus-bar button { margin-left: 8px; }
+
+  /* ===== 地図と入力（広い画面は左右、せまい画面は上下） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @container (min-width: 760px) {
+    .board-in { grid-template-columns: minmax(0, 1.5fr) minmax(290px, 1fr); }
+  }
+  .map-card { padding: 10px; }
+  .mission { text-align: center; font-size: 1.12rem; font-weight: bold; line-height: 1.6; min-height: 2.2rem; margin-bottom: 6px; }
+  .mission .big { font-size: 1.5rem; }
+  #map { width: 100%; }
+  #map svg { border-radius: 12px; }
+  .map-opts { display: flex; gap: 6px 16px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
+  .opt-check { font-size: 0.92rem; font-weight: bold; color: #37474f; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+  .opt-check input { width: 22px; height: 22px; }
+  .side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+  /* 座標の入力欄 ( x , y ) */
+  .coord-line, .dist-line { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 40px; font-weight: bold; }
+  .dist-line { font-size: 26px; }
+  .box {
+    min-width: 92px; min-height: 64px; border: 3px solid var(--soft); border-radius: 14px; background: #fafafa;
+    font-size: 38px; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation; padding: 0 8px;
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;
+  }
+  .box .bl { font-size: 13px; color: #78909c; font-style: italic; margin-bottom: 2px; }
+  .box.active { border-color: #fbc02d; background: #fffde7; box-shadow: 0 0 0 4px rgba(251,192,45,.35); }
+  .box.neg { color: var(--neg); }
+  .box.pos { color: var(--pos); }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+  .key {
+    min-height: 52px; border: 2px solid #b0bec5; background: #fff; border-radius: 12px; font-size: 1.5rem; font-weight: bold;
+    color: var(--ink); cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .key:active { transform: translateY(1px); box-shadow: none; }
+  .key.sign { color: var(--neg); }
+  .key:disabled { opacity: .35; }
+  .go {
+    width: 100%; margin-top: 10px; min-height: 58px; border: none; border-radius: 14px; background: var(--ok); color: #fff;
+    font-size: 1.3rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go:active { transform: translateY(2px); box-shadow: none; }
+  .go.next { background: var(--accent); }
+  .tap-note { text-align: center; font-weight: bold; color: #37474f; background: #e3f2fd; border-radius: 12px; padding: 10px; line-height: 1.6; }
+  .quad-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .quad-btns button { min-height: 54px; }
+  .quad-btns .wide { grid-column: 1 / -1; }
+  .quad-btns button.ng { border-color: var(--ng); background: #fce4ec; }
+  .quad-btns button.ng::before { content: "× "; color: var(--ng); }
+  .compass { display: block; width: 100%; max-width: 300px; margin: 8px auto 0; }
+
+  .msg { text-align: center; font-size: 1.05rem; line-height: 1.7; min-height: 3.4rem; padding: 6px 8px; border-radius: 12px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .msg .rule { display: inline-block; margin-top: 4px; padding: 2px 10px; background: #fff; border: 2px solid #a5d6a7; border-radius: 10px; color: var(--ink); }
+  .mark-ok { color: var(--ok); font-weight: 900; }
+  .mark-ng { color: var(--ng); font-weight: 900; }
+  .score { text-align: center; font-weight: bold; color: #37474f; }
+  .score .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
+  .score .q { display: inline-block; min-width: 30px; height: 30px; line-height: 26px; border-radius: 8px; border: 2px solid #cfd8dc; font-size: .9rem; }
+  .score .q.o { border-color: var(--ok); color: var(--ok); background: #e8f5e9; }
+  .score .q.t { border-color: #fbc02d; background: #fffde7; }
+  .score .q.cur { border-color: #37474f; border-width: 3px; }
+  .score .q.x { border-color: var(--ng); color: var(--ng); background: #fce4ec; }
+  .sum-table { margin: 6px auto 0; border-collapse: collapse; font-size: 1rem; }
+  .sum-table td { border: 1px solid #c8e6c9; padding: 3px 10px; background: #fff; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🏴‍☠️ 座標でお宝さがし</h1>
+<p class="subtitle">座標 (x, y) で船を動かして、島の宝を見つけよう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- パート：① 象限めぐり ② 対称な点 ③ 2点を通る道 ④ 宝の地図クイズ -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">🎲 新しい問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <div class="board"><div class="board-in">
+    <!-- 地図（graph-engine.js の座標平面の上に、島・宝・船を重ねて描く） -->
+    <div class="card map-card">
+      <div class="mission" id="mission"></div>
+      <div id="map"></div>
+      <div class="map-opts">
+        <label class="opt-check"><input type="checkbox" id="optQuad"> 象限の名前を出す</label>
+        <label class="opt-check"><input type="checkbox" id="optTap"> 📍 地図をタップして入力</label>
+      </div>
+    </div>
+
+    <!-- 入力・メッセージ -->
+    <div class="side">
+      <div class="card" id="inputCard">
+        <div class="coord-line" id="coordLine">
+          <span>(</span>
+          <button class="box" data-f="x" aria-label="x 座標"><span class="bl">x</span><span class="bv"></span></button>
+          <span>,</span>
+          <button class="box" data-f="y" aria-label="y 座標"><span class="bl">y</span><span class="bv"></span></button>
+          <span>)</span>
+        </div>
+        <div class="dist-line" id="distLine" hidden>
+          <span>道のり</span>
+          <button class="box" data-f="d" aria-label="道のり"><span class="bl">目もり</span><span class="bv"></span></button>
+          <span>目もり</span>
+        </div>
+        <div class="tap-note" id="tapNote" hidden>👆 地図の、その場所をタップしよう</div>
+        <div class="quad-btns" id="quadBtns" hidden></div>
+        <div class="keypad" id="keypad"></div>
+        <button class="go" id="btnGo">⛵ 出航</button>
+        <!-- 方角のめやす（x が負なら左、y が負なら下） -->
+        <svg class="compass" viewBox="0 0 300 120" aria-label="x が負なら左、正なら右。y が正なら上、負なら下">
+          <line x1="150" y1="60" x2="40" y2="60" stroke="#1565c0" stroke-width="4" stroke-dasharray="8 6"/>
+          <path d="M28,60 l16,-8 v16 z" fill="#1565c0"/>
+          <line x1="150" y1="60" x2="260" y2="60" stroke="#e65100" stroke-width="4"/>
+          <path d="M272,60 l-16,-8 v16 z" fill="#e65100"/>
+          <line x1="150" y1="60" x2="150" y2="18" stroke="#e65100" stroke-width="4"/>
+          <path d="M150,8 l-8,14 h16 z" fill="#e65100"/>
+          <line x1="150" y1="60" x2="150" y2="102" stroke="#1565c0" stroke-width="4" stroke-dasharray="8 6"/>
+          <path d="M150,112 l-8,-14 h16 z" fill="#1565c0"/>
+          <circle cx="150" cy="60" r="5" fill="#263238"/>
+          <text x="40" y="48" font-size="15" font-weight="bold" fill="#1565c0">x が負 ← 左</text>
+          <text x="262" y="48" font-size="15" font-weight="bold" fill="#e65100" text-anchor="end">右 → x が正</text>
+          <text x="160" y="22" font-size="15" font-weight="bold" fill="#e65100">↑ 上 y が正</text>
+          <text x="160" y="108" font-size="15" font-weight="bold" fill="#1565c0">↓ 下 y が負</text>
+        </svg>
+      </div>
+      <div class="card"><div class="msg" id="msg"></div></div>
+      <div class="card score" id="score"></div>
+    </div>
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools">
+      <button class="op-btn action" id="tStep">⏭ つぎの1手を自動で</button>
+      <button class="op-btn" id="tAuto">▶ 最後まで自動で見せる</button>
+      <button class="op-btn" id="tStop">■ とめる</button>
+    </div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>座標</b>：点の位置を (x, y) の2つの数の組で表したもの。x は<b>よこ（左右）</b>、y は<b>たて（上下）</b>。かならず x が先。</li>
+      <li><b>x軸</b>（よこの数直線）と <b>y軸</b>（たての数直線）が交わる点が<b>原点 O</b>（0, 0）。この島では原点が船の港。</li>
+      <li><b>x が負なら左、y が負なら下</b>。(−3, 2) は「O から左へ3、上へ2」。</li>
+      <li><b>象限</b>：x軸と y軸で分けられた4つの部分。右上が<b>第1象限</b>で、そこから左回りに第2・第3・第4象限。軸の上の点はどの象限にも入らない。</li>
+      <li>座標はキーパッドで入れる。<b>−</b> を押すと符号がかわる。x・y の欄をタップすると、入れる欄がかわる（キーボードの数字・−・Tab・Enter も使える）。</li>
+      <li>「📍 地図をタップして入力」にチェックすると、地図をタップした点の座標が欄に入る（③ でははじめからオン）。</li>
+      <li>まちがえたら <b>↶ ひとつもどす</b>、はじめからは <b>⟲ もういちど</b>。<b>💡 ヒント</b> は押すたびにくわしくなる。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：船は O から「よこ → たて」の順に進むように描いています（座標の読み方を見せるため。本当の船はまっすぐ進めます）。③ の道のりは、方眼にそって たて・よこ だけに進んだ長さで、1目もりを 1 としています。座標は整数だけです。<br>
+    つながる教材：<a href="おって まわして 対称な図形.html">小6 おって まわして 対称な図形</a>／<a href="まぜて のばして 比と比例.html">小6 まぜて のばして 比と比例（グラフ）</a>／<a href="数直線ジャンプ.html">中1 数直線ジャンプ</a></p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="graph-engine.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（答え・自動で解く・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const same = (p, x, y) => !!p && p.x === x && p.y === y;
+  const nm = (v) => String(v).replace('-', '−');             // 表示用（マイナスは「−」）
+  const cs = (x, y) => `(${nm(x)}, ${nm(y)})`;               // 座標の文字 (3, −2)
+  const csp = (p) => cs(p.x, p.y);
+  const dirX = (v) => v > 0 ? `右へ${v}` : v < 0 ? `左へ${-v}` : 'よこには動かない';
+  const dirY = (v) => v > 0 ? `上へ${v}` : v < 0 ? `下へ${-v}` : 'たてには動かない';
+  const quadOf = (x, y) => (x === 0 || y === 0) ? 0 : (x > 0 ? (y > 0 ? 1 : 4) : (y > 0 ? 2 : 3));   // 0＝軸の上
+  const QNAME = ['軸の上（どの象限でもない）', '第1象限', '第2象限', '第3象限', '第4象限'];
+  const QSIGN = ['', '(＋, ＋)', '(−, ＋)', '(−, −)', '(＋, −)'];
+  const LIM = 6;          // 入力できる座標のはんい（−6〜6）
+  const VIEW = 6.6;       // 地図に見えるはんい
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndSail = () => beep([[392, 0, 0.1, 'triangle'], [523, 0.1, 0.12, 'triangle']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  /* =====================================================================
+     1. パートとつまずきの型
+     ===================================================================== */
+  const PARTS = [null,
+    { name: '① 象限めぐり', go: '⛵ 出航',
+      note: '⭐ の宝の座標を (x, y) で入れて、港（原点 O）から船を出そう。宝を取ったら、第何象限かも答えよう。' },
+    { name: '② 対称な点', go: '⛵ 出航',
+      note: '宝は 点 P と対称な位置にある。x軸・y軸・原点 について対称な点の座標を答えよう。' },
+    { name: '③ 2点を通る道', go: '⛵ ここへ進む',
+      note: 'たて・よこ だけに進んで宝をめぐろう。通ったあとの線の長さ（道のり）を、方眼の目もりで数えよう。' },
+    { name: '④ 宝の地図クイズ', go: '✔ こたえる',
+      note: '10問チャレンジ。✖ の座標を答える「よむ」と、座標の場所をタップする「うめる」が出るよ。' },
+  ];
+
+  // つまずきの型（名前・説明・練習するパート）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    swap:      { name: 'x と y の入れかえ', part: 4,
+                 exp: '(x, y) は <b>x（よこ）が先、y（たて）が後</b>。(3, 2) は「右へ3、上へ2」で、(2, 3) とはちがう点。' },
+    signX:     { name: 'x の符号の読みまちがい', part: 4,
+                 exp: 'x が<b>負なら原点より左</b>、正なら右。x＝−3 は「左へ3」。' },
+    signY:     { name: 'y の符号の読みまちがい', part: 4,
+                 exp: 'y が<b>負なら原点より下</b>、正なら上。y＝−2 は「下へ2」。' },
+    count:     { name: '目もりの数えまちがい', part: 4,
+                 exp: '目もりは原点 O（0）から数える。マス（すき間）ではなく、<b>線が交わる点</b>を読もう。' },
+    quadOrder: { name: '象限の番号のまちがい', part: 1,
+                 exp: '第1象限は<b>右上</b>（x も y も正）。そこから<b>左回り（反時計回り）</b>に 第2（左上）・第3（左下）・第4（右下）。' },
+    axisQuad:  { name: '軸の上の点と象限', part: 1,
+                 exp: 'x軸・y軸の上の点は<b>どの象限にもふくまれない</b>。x軸の上は y＝0、y軸の上は x＝0。' },
+    symMix:    { name: '対称の種類のとりちがえ', part: 2,
+                 exp: '<b>x軸</b>について対称 → y の符号だけかわる。<b>y軸</b>について対称 → x の符号だけかわる。<b>原点</b>について対称 → 両方かわる。' },
+    symHalf:   { name: '原点対称で片方だけ符号をかえた', part: 2,
+                 exp: '原点について対称な点は、<b>x も y も</b>符号がかわる。片方だけだと、x軸か y軸について対称な点になってしまう。' },
+    negDist:   { name: '負の数をまたぐ長さのまちがい', part: 3,
+                 exp: '−3 から 4 までの長さは、−3→0 で 3、0→4 で 4、あわせて <b>7</b>。4−3＝1 ではない（4 −（−3）＝ 7）。' },
+    distCount: { name: '道のりの数えまちがい', part: 3,
+                 exp: 'まっすぐな部分を1本ずつ、目もりの数を数えて、ぜんぶたそう。' },
+  };
+
+  // ① のヒント札（船で札の上に行くと読める）
+  const CARDS = [
+    'x 座標は よこ（左右）。<b>x が負なら 左</b>へ。',
+    'y 座標は たて（上下）。<b>y が負なら 下</b>へ。',
+    '(x, y) は <b>x が先</b>。「よこ → たて」の順に読む。',
+    'x軸の上の点は <b>y が 0</b>、y軸の上の点は <b>x が 0</b>。',
+    '第1象限は<b>右上</b>。そこから<b>左回り</b>に 第2・第3・第4。',
+  ];
+
+  /* =====================================================================
+     2. 状態
+     st.P …… いまの問題（パートごとに形がちがう。ひとつもどす で前の形にもどせる）
+     ===================================================================== */
+  const st = {
+    part: 1, P: null, P0: null, ship: { x: 0, y: 0 }, hist: [],
+    busy: false, hintLv: 0, inp: { x: '', y: '', d: '' }, act: 'x', preview: null,
+    focus: null, round1: 0, n3: 0, lastP2: null, lastSym: null, sessTrips: {}, sessChests: 0, auto: false,
+  };
+
+  /* =====================================================================
+     3. 地図（graph-engine.js の座標平面）と、その上に重ねる絵
+     ===================================================================== */
+  const NS = 'http://www.w3.org/2000/svg';
+  const g = GraphEngine.create($('map'), {
+    xmin: -VIEW, xmax: VIEW, ymin: -VIEW, ymax: VIEW, grid: true, step: 1,   // 方眼はいつも1目もりごと
+    controls: false, pan: false, coords: false,      // マウスを重ねても座標を出さない（答えが見えてしまうため）
+  });
+  g.svg.style.background = '#b3e5fc';                 // 海
+  g.svg.setAttribute('aria-label', '島の座標平面');
+  const gIsland = document.createElementNS(NS, 'g');  // 島（方眼の下）
+  g.svg.insertBefore(gIsland, g.svg.firstChild);
+  const gOver = document.createElementNS(NS, 'g');    // 宝・矢印・道など（方眼の上）
+  const gShip = document.createElementNS(NS, 'g');    // 船
+  const readLayer = g.svg.querySelector('[data-layer="read"]');
+  g.svg.insertBefore(gOver, readLayer);
+  g.svg.insertBefore(gShip, readLayer);
+  gOver.setAttribute('pointer-events', 'none');
+  gShip.setAttribute('pointer-events', 'none');
+
+  // 数学の座標 → 画面の位置
+  const dims = () => { const vb = g.svg.viewBox.baseVal; return { W: vb.width || 600, H: vb.height || 600 }; };
+  const PX = (x, y) => { const { W, H } = dims(); return [(x + VIEW) / (2 * VIEW) * W, H - (y + VIEW) / (2 * VIEW) * H]; };
+  const UNIT = () => dims().W / (2 * VIEW);           // 1目もりの長さ(px)
+  const f1 = (v) => v.toFixed(1);
+  const T = (x, y, text, o = {}) => {                 // 白いふちどりの文字
+    const [px, py] = PX(x, y);
+    return `<text x="${f1(px + (o.dx || 0))}" y="${f1(py + (o.dy || 0))}" text-anchor="${o.anchor || 'middle'}" font-size="${o.size || 18}" ` +
+      `font-weight="bold" fill="${o.color || '#263238'}" stroke="#fff" stroke-width="${o.sw == null ? 5 : o.sw}" paint-order="stroke" stroke-linejoin="round">${text}</text>`;
+  };
+  const EMO = (x, y, ch, k = 0.78, dy = 0) => {       // 絵文字（点の上に中心を合わせる）
+    const [px, py] = PX(x, y), s = Math.max(18, UNIT() * k);
+    return `<text x="${f1(px)}" y="${f1(py + dy)}" font-size="${f1(s)}" text-anchor="middle" dominant-baseline="central">${ch}</text>`;
+  };
+  const DOT = (x, y, c = '#263238', r = 4) => { const [px, py] = PX(x, y); return `<circle cx="${f1(px)}" cy="${f1(py)}" r="${r}" fill="${c}" stroke="#fff" stroke-width="2"/>`; };
+  const LINE = (x1, y1, x2, y2, c, w = 3, dash = '') => {
+    const [a, b] = PX(x1, y1), [cc, d] = PX(x2, y2);
+    return `<path d="M${f1(a)},${f1(b)}L${f1(cc)},${f1(d)}" stroke="${c}" stroke-width="${w}" fill="none" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
+  };
+  // 矢印（正の向き＝オレンジ実線、負の向き＝青点線）。label は線の横に出す
+  function ARROW(x1, y1, x2, y2, label) {
+    const negDir = (x2 - x1) + (y2 - y1) < 0;
+    const c = negDir ? '#1565c0' : '#e65100';
+    const [a, b] = PX(x1, y1), [cc, d] = PX(x2, y2);
+    const ang = Math.atan2(d - b, cc - a), L = 15;
+    const hx = cc - L * Math.cos(ang), hy = d - L * Math.sin(ang);
+    const s = Math.sin(ang) * 8, co = Math.cos(ang) * 8;
+    let h = `<path d="M${f1(a)},${f1(b)}L${f1(hx)},${f1(hy)}" stroke="${c}" stroke-width="5" fill="none" stroke-linecap="round"${negDir ? ' stroke-dasharray="10 7"' : ''}/>` +
+      `<path d="M${f1(cc)},${f1(d)}L${f1(hx + s)},${f1(hy - co)}L${f1(hx - s)},${f1(hy + co)}Z" fill="${c}"/>`;
+    if (label) {
+      const mx = (a + cc) / 2, my = (b + d) / 2, horiz = Math.abs(cc - a) > Math.abs(d - b);
+      h += `<text x="${f1(horiz ? mx : mx + 12)}" y="${f1(horiz ? my - 12 : my + 6)}" text-anchor="${horiz ? 'middle' : 'start'}" font-size="19" font-weight="bold" fill="${c}" stroke="#fff" stroke-width="5" paint-order="stroke">${label}</text>`;
+    }
+    return h;
+  }
+  // 宝箱（とじた箱／あいた箱）。点の位置にまん中の黒い点
+  function CHEST(x, y, open, o = {}) {
+    const [px, py] = PX(x, y), u = UNIT(), s = Math.max(22, u * 0.74), w = s, hh = s * 0.42, top = py - s * 0.08;
+    let h = '';
+    if (o.target) {
+      h += `<circle cx="${f1(px)}" cy="${f1(py)}" r="${f1(u * 0.55)}" fill="#fff59d" fill-opacity=".5" stroke="#f9a825" stroke-width="4">` +
+        `<animate attributeName="r" values="${f1(u * 0.42)};${f1(u * 0.62)};${f1(u * 0.42)}" dur="1.3s" repeatCount="indefinite"/></circle>`;
+    }
+    if (open) {
+      h += `<path d="M${f1(px - w / 2)},${f1(top)} l${f1(s * 0.08)},${f1(-s * 0.42)} h${f1(w - s * 0.16)} l${f1(s * 0.08)},${f1(s * 0.42)} z" fill="#6d4c41" stroke="#3e2723" stroke-width="2"/>`;
+    }
+    h += `<rect x="${f1(px - w / 2)}" y="${f1(top)}" width="${f1(w)}" height="${f1(hh)}" rx="3" fill="#8d6e63" stroke="#3e2723" stroke-width="2"/>`;
+    if (open) {
+      h += `<ellipse cx="${f1(px)}" cy="${f1(top + 1)}" rx="${f1(w * 0.42)}" ry="${f1(s * 0.11)}" fill="#ffd54f" stroke="#f57f17" stroke-width="1.5"/>` +
+        `<circle cx="${f1(px - w * 0.16)}" cy="${f1(top - 2)}" r="${f1(s * 0.07)}" fill="#e91e63"/><circle cx="${f1(px + w * 0.14)}" cy="${f1(top - 3)}" r="${f1(s * 0.07)}" fill="#00bcd4"/>` +
+        `<text x="${f1(px + w * 0.5)}" y="${f1(top - s * 0.42)}" font-size="${f1(s * 0.5)}" text-anchor="middle">✨</text>`;
+    } else {
+      h += `<path d="M${f1(px - w / 2)},${f1(top)} v${f1(-s * 0.16)} q0,${f1(-s * 0.2)} ${f1(s * 0.2)},${f1(-s * 0.2)} h${f1(w - s * 0.4)} q${f1(s * 0.2)},0 ${f1(s * 0.2)},${f1(s * 0.2)} v${f1(s * 0.16)} z" fill="#a1887f" stroke="#3e2723" stroke-width="2"/>` +
+        `<rect x="${f1(px - s * 0.07)}" y="${f1(top - s * 0.36)}" width="${f1(s * 0.14)}" height="${f1(s * 0.36 + hh)}" fill="#ffca28" stroke="#3e2723" stroke-width="1"/>`;
+    }
+    h += DOT(x, y, '#263238', 4);
+    if (o.label) h += T(x, y, o.label, { anchor: 'start', dx: s * 0.55, dy: -s * 0.35, size: 18, color: o.labelColor || '#4e342e' });
+    if (o.star) h += `<text x="${f1(px - s * 0.62)}" y="${f1(py - s * 0.42)}" font-size="${f1(s * 0.55)}" text-anchor="middle">⭐</text>`;
+    return h;
+  }
+  // まちがえた場所の ✕（赤紫）と、その座標
+  function GHOST(x, y) {
+    const [px, py] = PX(x, y);
+    return `<path d="M${f1(px - 9)},${f1(py - 9)}l18,18M${f1(px + 9)},${f1(py - 9)}l-18,18" stroke="#ad1457" stroke-width="4.5" stroke-linecap="round"/>` +
+      T(x, y, cs(x, y), { anchor: 'start', dx: 12, dy: 22, size: 15, color: '#ad1457' });
+  }
+  // 宝の地図の ✖ 印
+  function XMARK(x, y) {
+    const [px, py] = PX(x, y), s = Math.max(12, UNIT() * 0.32);
+    return `<path d="M${f1(px - s)},${f1(py - s)}L${f1(px + s)},${f1(py + s)}M${f1(px + s)},${f1(py - s)}L${f1(px - s)},${f1(py + s)}" stroke="#fff" stroke-width="11" stroke-linecap="round"/>` +
+      `<path d="M${f1(px - s)},${f1(py - s)}L${f1(px + s)},${f1(py + s)}M${f1(px + s)},${f1(py - s)}L${f1(px - s)},${f1(py + s)}" stroke="#b71c1c" stroke-width="6" stroke-linecap="round"/>`;
+  }
+  // 島のかたち（角の丸い四角に、少しでこぼこをつけた形）
+  function drawIsland() {
+    const pts = [];
+    for (let i = 0; i < 144; i++) {
+      const t = i / 144 * Math.PI * 2, c = Math.cos(t), s = Math.sin(t);
+      const r = 6.05 / Math.pow(Math.pow(Math.abs(c), 4) + Math.pow(Math.abs(s), 4), 0.25) + 0.18 * Math.sin(5 * t) + 0.1 * Math.cos(9 * t);
+      pts.push(PX(r * c, r * s).map(f1).join(','));
+    }
+    const wave = (x, y) => { const [px, py] = PX(x, y); return `<path d="M${f1(px - 14)},${f1(py)} q7,-7 14,0 t14,0" stroke="#4fc3f7" stroke-width="3" fill="none"/>`; };
+    gIsland.innerHTML = `<polygon points="${pts.join(' ')}" fill="#fff3e0" stroke="#ffcc80" stroke-width="8" stroke-linejoin="round"/>` +
+      wave(-6.1, 6.25) + wave(6.1, -6.25) + wave(-6.2, -6.1);
+  }
+
+  /* ---- 地図をかき直す（いまの問題 st.P から、ぜんぶ作り直す） ---- */
+  function renderMap() {
+    drawIsland();
+    const P = st.P, u = UNIT();
+    let h = '';
+    // 軸の名前
+    h += T(VIEW - 0.4, 0.42, 'x軸', { anchor: 'end', size: 15, color: '#546e7a' });
+    h += T(-0.3, VIEW - 0.85, 'y軸', { anchor: 'end', size: 15, color: '#546e7a' });
+    // 象限の名前（チェック、または ① で答えた象限）
+    for (let q = 1; q <= 4; q++) {
+      const show = $('optQuad').checked || (st.part === 1 && P.revealed && P.revealed[q]);
+      if (!show) continue;
+      const sx = (q === 1 || q === 4) ? 1 : -1, sy = q <= 2 ? 1 : -1;
+      h += T(sx * 3.2, sy * 5.95 - 0.12, QNAME[q], { size: 18, color: '#455a64' });
+      h += T(sx * 3.2, sy * 5.95 - 0.12, QSIGN[q], { size: 14, color: '#78909c', dy: 18 });
+    }
+    if (st.part === 1) h += map1(P, u);
+    if (st.part === 2) h += map2(P, u);
+    if (st.part === 3) h += map3(P, u);
+    if (st.part === 4) h += map4(P, u);
+    // タップで入れた点（📍）
+    if (st.preview && modeOf() === 'coord') h += EMO(st.preview.x, st.preview.y, '📍', 0.6, -u * 0.25) + DOT(st.preview.x, st.preview.y, '#d81b60', 4);
+    gOver.innerHTML = h;
+    drawShip();
+  }
+  function drawShip() {
+    if (st.part === 4) { gShip.innerHTML = ''; return; }
+    // 船の絵：いる点（青い点）の少し上にうかべて、下の宝箱や印が見えるようにする
+    const u = UNIT(), [px, py] = PX(st.ship.x, st.ship.y), s = Math.max(26, u * 0.95);
+    const bx = px, by = py - s * 0.32;            // 船体のまん中
+    gShip.innerHTML =
+      `<path d="M${f1(px)},${f1(py)}L${f1(bx)},${f1(by)}" stroke="#0d47a1" stroke-width="2" stroke-dasharray="3 3"/>` +
+      `<path d="M${f1(bx - s * 0.5)},${f1(by - s * 0.08)}h${f1(s)}l${f1(-s * 0.16)},${f1(s * 0.26)}h${f1(-s * 0.68)}z" fill="#6d4c41" stroke="#3e2723" stroke-width="2" stroke-linejoin="round"/>` +
+      `<path d="M${f1(bx + s * 0.02)},${f1(by - s * 0.12)}V${f1(by - s * 0.78)}" stroke="#3e2723" stroke-width="3"/>` +
+      `<path d="M${f1(bx + s * 0.07)},${f1(by - s * 0.74)}L${f1(bx + s * 0.42)},${f1(by - s * 0.16)}H${f1(bx + s * 0.07)}z" fill="#fff" stroke="#546e7a" stroke-width="1.5" stroke-linejoin="round"/>` +
+      `<path d="M${f1(bx - s * 0.04)},${f1(by - s * 0.66)}L${f1(bx - s * 0.36)},${f1(by - s * 0.16)}H${f1(bx - s * 0.04)}z" fill="#ffe082" stroke="#546e7a" stroke-width="1.5" stroke-linejoin="round"/>` +
+      `<path d="M${f1(bx + s * 0.02)},${f1(by - s * 0.78)}l${f1(s * 0.2)},${f1(s * 0.06)}l${f1(-s * 0.2)},${f1(s * 0.06)}z" fill="#d81b60"/>` +
+      `<circle cx="${f1(px)}" cy="${f1(py)}" r="5" fill="#0d47a1" stroke="#fff" stroke-width="2"/>`;
+  }
+  // O から「よこ → たて」の矢印（座標の読み方の見える化）
+  function readArrows(x, y) {
+    let h = '';
+    if (x !== 0) h += ARROW(0, 0, x, 0, dirX(x));
+    if (y !== 0) h += ARROW(x, 0, x, y, dirY(y));
+    return h;
+  }
+  // ヒント：点から両方の軸へおろした点線
+  function projLines(x, y, showNum) {
+    let h = LINE(x, y, x, 0, '#6a1b9a', 3, '6 6') + LINE(x, y, 0, y, '#6a1b9a', 3, '6 6') + DOT(x, 0, '#6a1b9a', 5) + DOT(0, y, '#6a1b9a', 5);
+    if (showNum) h += T(x, 0, 'x＝' + nm(x), { dy: y >= 0 ? 26 : -12, size: 17, color: '#6a1b9a' });
+    return h;
+  }
+
+  /* =====================================================================
+     4. 入力（キーパッド・x と y の欄・地図のタップ）
+     ===================================================================== */
+  // いまの入力のしかた：coord＝座標 / dist＝道のり / quad＝象限を選ぶ / tap＝地図をタップ / none＝つぎへ
+  function modeOf() {
+    const P = st.P;
+    if (!P) return 'none';
+    if (st.part === 1) return P.phase === 'sail' ? 'coord' : P.phase === 'quad' ? 'quad' : 'none';
+    if (st.part === 2) return P.phase === 'sail' ? 'coord' : 'none';
+    if (st.part === 3) return P.phase === 'sail' ? 'coord' : P.phase === 'dist' ? 'dist' : 'none';
+    if (P.phase === 'ask') return P.prob.kind === 'read' ? 'coord' : 'tap';
+    return 'none';
+  }
+  function buildKeypad() {
+    const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '−', '0', '⌫'];
+    $('keypad').innerHTML = keys.map(k => `<button class="key${k === '−' ? ' sign' : ''}" data-k="${k}" aria-label="${k === '−' ? '符号をかえる（マイナス）' : k === '⌫' ? '1文字消す' : k}">${k === '−' ? '−<small style="font-size:.8rem">符号</small>' : k}</button>`).join('');
+    $('keypad').querySelectorAll('.key').forEach(b => b.addEventListener('click', () => press(b.dataset.k)));
+    document.querySelectorAll('.box').forEach(b => b.addEventListener('click', () => { st.act = b.dataset.f; renderInputs(); }));
+  }
+  function press(k) {
+    if (st.busy) return;
+    const f = st.act;
+    let v = st.inp[f];
+    if (k === '⌫') v = v.slice(0, -1);
+    else if (k === '−') { if (f === 'd') return; v = v.startsWith('-') ? v.slice(1) : '-' + v; }
+    else {
+      const digits = v.replace('-', '');
+      const max = f === 'd' ? 2 : 1;                 // 座標は1けた（−6〜6）、道のりは2けたまで
+      if (digits === '0') v = v.replace('0', k);
+      else if (digits.length >= max) v = (v.startsWith('-') ? '-' : '') + k;
+      else v += k;
+    }
+    st.inp[f] = v;
+    st.preview = null;
+    renderInputs();
+    if (modeOf() === 'coord') renderMap();
+  }
+  function renderInputs() {
+    const m = modeOf(), P = st.P;
+    $('coordLine').hidden = m !== 'coord';
+    $('distLine').hidden = m !== 'dist';
+    $('tapNote').hidden = m !== 'tap';
+    $('quadBtns').hidden = m !== 'quad';
+    $('keypad').hidden = !(m === 'coord' || m === 'dist');
+    document.querySelectorAll('.box').forEach(b => {
+      const f = b.dataset.f, v = st.inp[f];
+      b.querySelector('.bv').textContent = v === '' ? '　' : nm(v);
+      b.classList.toggle('active', st.act === f);
+      b.classList.toggle('neg', f !== 'd' && v.startsWith('-'));
+      b.classList.toggle('pos', f !== 'd' && v !== '' && !v.startsWith('-') && v !== '0');
+    });
+    $('keypad').querySelector('[data-k="−"]').disabled = m === 'dist';
+    const go = $('btnGo');
+    go.classList.remove('next');
+    go.hidden = m === 'quad' || m === 'tap';
+    if (m === 'coord') go.textContent = PARTS[st.part].go;
+    else if (m === 'dist') go.textContent = '✔ こたえる';
+    else {
+      go.classList.add('next');
+      if (st.part === 4) go.textContent = P.phase === 'end' ? '🔁 もう一度チャレンジ' : 'つぎの問題 ▶';
+      else go.textContent = st.part === 1 ? '🎲 新しい島へ' : '🎲 つぎの問題へ';
+    }
+    $('btnUndo').disabled = st.part === 4 || !st.hist.length;
+    renderTeacher();
+  }
+  // 入力欄の数を読む（入っていなければ null）
+  function readInt(s) { if (s === '' || s === '-') return null; return parseInt(s, 10); }
+
+  // 地図のタップ（ちょっと動いただけならタップとみなす）
+  let downAt = null;
+  g.svg.addEventListener('pointerdown', e => { downAt = { x: e.clientX, y: e.clientY }; });
+  g.svg.addEventListener('pointerup', e => {
+    if (!downAt) return;
+    const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 14;
+    downAt = null;
+    if (moved) return;
+    const p = g.toData(e.clientX, e.clientY);
+    const x = Math.max(-LIM, Math.min(LIM, Math.round(p.x))), y = Math.max(-LIM, Math.min(LIM, Math.round(p.y)));
+    onTap(x, y);
+  });
+  function onTap(x, y) {
+    if (st.busy) return;
+    const m = modeOf();
+    if (m === 'tap') { bury(x, y); return; }
+    if (m !== 'coord') return;
+    if (!$('optTap').checked) {
+      setMsg('このパートでは、座標を<b>キーパッド</b>で入れよう。<br><span class="small">地図をタップして入れたいときは「📍 地図をタップして入力」にチェック。</span>');
+      return;
+    }
+    st.inp.x = String(x); st.inp.y = String(y); st.act = 'x'; st.preview = { x, y };
+    renderInputs(); renderMap();
+  }
+  // キーボードでも入力できる（数字・−・Backspace・Tab・Enter）
+  document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('.ws-panel, input, textarea')) return;
+    if (e.target.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;   // ボタンの上では、ボタンの動きを優先
+    const m = modeOf();
+    if (m !== 'coord' && m !== 'dist') { if (e.key === 'Enter' && m === 'none') { e.preventDefault(); go(); } return; }
+    if (/^[0-9]$/.test(e.key)) { press(e.key); e.preventDefault(); }
+    else if (e.key === '-' || e.key === '−') { press('−'); e.preventDefault(); }
+    else if (e.key === 'Backspace') { press('⌫'); e.preventDefault(); }
+    else if (e.key === 'Tab' || e.key === ',' || e.key === ' ') { if (m === 'coord') { st.act = st.act === 'x' ? 'y' : 'x'; renderInputs(); } e.preventDefault(); }
+    else if (e.key === 'Enter') { go(); e.preventDefault(); }
+  });
+
+  /* =====================================================================
+     5. つまずきの判定
+     ===================================================================== */
+  // 正しい点 t と、入れた点 (x, y) をくらべて、まちがい方の型を返す
+  function detectCoord(t, x, y) {
+    const a = t.x, b = t.y;
+    if (x === a && y === b) return [];
+    if (Math.abs(a) !== Math.abs(b)) {
+      if (x === b && y === a) return ['swap'];
+      if (Math.abs(x) === Math.abs(b) && Math.abs(y) === Math.abs(a)) return ['swap', 'swapSign'];
+    }
+    if (Math.abs(x) === Math.abs(a) && Math.abs(y) === Math.abs(b)) {
+      const r = [];
+      if (x !== a) r.push('signX');
+      if (y !== b) r.push('signY');
+      return r;
+    }
+    if (Math.abs(x - a) + Math.abs(y - b) === 1) return ['count'];
+    return ['other'];
+  }
+  // 型からメッセージを作る（正しい座標そのものは言わない）
+  function explainCoord(t, x, y, types) {
+    const lines = [`あなたの ${cs(x, y)} は「O から ${dirX(x)}、${dirY(y)}」の点。`];
+    if (types.includes('swap')) lines.push('<b>x と y が入れかわっている</b>みたい。x（よこ）が先、y（たて）が後だよ。' + (types.includes('swapSign') ? '符号もたしかめよう。' : ''));
+    if (types.includes('signX')) lines.push(`<b>x の符号</b>をたしかめよう。めざす点は原点より<b>${t.x < 0 ? '左' : '右'}</b>にあるよ。`);
+    if (types.includes('signY')) lines.push(`<b>y の符号</b>をたしかめよう。めざす点は原点より<b>${t.y < 0 ? '下' : '上'}</b>にあるよ。`);
+    if (types.includes('count')) lines.push('<b>となりの点</b>だよ。目もりを O から数えなおそう。');
+    if (types.includes('other')) lines.push('O から「よこ（x）→ たて（y）」の順に、目もりを数えなおそう。');
+    return lines.join('<br>');
+  }
+  // 記録してよい型だけを数える
+  function tripsOf(types) { return types.filter(k => TRIPS[k]); }
+
+  /* =====================================================================
+     6. パート① 象限めぐり
+     P = { chests:[{x,y,open,q}], cur, sharks, cards, ghosts, arrows, revealed, phase:'sail'|'quad'|'done', qWrong }
+     ===================================================================== */
+  function gen1() {
+    st.round1++;
+    const used = new Set(['0,0']);
+    const free = (x, y) => !used.has(x + ',' + y);
+    const take = (x, y) => used.add(x + ',' + y);
+    const chests = shuffle([1, 2, 3, 4]).map(q => {
+      let x, y, n = 0;
+      do {
+        x = rnd(1, 5) * ((q === 1 || q === 4) ? 1 : -1);
+        y = rnd(1, 5) * (q <= 2 ? 1 : -1);
+        n++;
+      } while ((!free(x, y) || !free(y, x) || (Math.abs(x) === Math.abs(y) && n < 30)) && n < 60);
+      take(x, y);
+      return { x, y, open: false, q: 0 };
+    });
+    // 2回目の島からは、軸の上の宝も出す（軸の上の点は、どの象限でもない）
+    const nAxis = st.focus === 'axisQuad' ? 2 : (st.round1 >= 2 && Math.random() < 0.75 ? 1 : 0);
+    for (let i = 0; i < nAxis; i++) {
+      const c = chests[i];
+      used.delete(c.x + ',' + c.y);
+      let x, y;
+      do { const k = rnd(2, 5) * pick([1, -1]); if (Math.random() < 0.5) { x = k; y = 0; } else { x = 0; y = k; } } while (!free(x, y));
+      take(x, y);
+      c.x = x; c.y = y;
+    }
+    // ヒント札を2まい（あいている点に）
+    const cards = [];
+    const texts = shuffle(CARDS);
+    while (cards.length < 2) {
+      const x = rnd(-5, 5), y = rnd(-5, 5);
+      if (x === 0 || y === 0 || !free(x, y) || chests.some(c => Math.abs(c.x) === Math.abs(x) && Math.abs(c.y) === Math.abs(y))) continue;
+      take(x, y);
+      cards.push({ x, y, text: texts[cards.length] });
+    }
+    const P = { chests, cur: 0, sharks: [], cards, ghosts: [], arrows: null, revealed: {}, phase: 'sail', qWrong: [] };
+    setSharks(P);
+    return P;
+  }
+  // サメは「x と y の入れかえ」「符号のまちがい」をしたときに着く場所にいる（危険な場所）
+  function setSharks(P) {
+    const t = P.chests[P.cur], a = t.x, b = t.y;
+    const busy = (x, y) => (x === 0 && y === 0) || P.chests.some(c => same(c, x, y)) || P.cards.some(c => same(c, x, y));
+    const cand = [];
+    if (Math.abs(a) !== Math.abs(b)) cand.push({ x: b, y: a });
+    const signs = [];
+    if (a !== 0) signs.push({ x: -a, y: b });
+    if (b !== 0) signs.push({ x: a, y: -b });
+    if (signs.length) cand.push(pick(signs));
+    P.sharks = cand.filter(p => !busy(p.x, p.y) && Math.abs(p.x) <= LIM && Math.abs(p.y) <= LIM);
+  }
+  function map1(P, u) {
+    let h = '';
+    if (P.arrows) h += readArrows(P.arrows.x, P.arrows.y);
+    const t = P.chests[P.cur];
+    if (P.phase !== 'done' && st.hintLv >= 2 && P.phase === 'sail') h += projLines(t.x, t.y, st.hintLv >= 3);
+    for (const c of P.cards) h += EMO(c.x, c.y, '📜', 0.66) + DOT(c.x, c.y);
+    if (P.phase === 'sail') for (const s of P.sharks) h += EMO(s.x, s.y, '🦈', 0.72) + DOT(s.x, s.y);
+    P.chests.forEach((c, i) => {
+      const isT = i === P.cur && P.phase !== 'done';
+      h += CHEST(c.x, c.y, c.open, { target: isT && !c.open, star: isT, label: c.q ? (c.q > 0 ? '第' + c.q : '軸の上') : '' });
+    });
+    for (const gh of P.ghosts) h += GHOST(gh.x, gh.y);
+    return h;
+  }
+  async function sail1(x, y) {
+    const P = st.P, t = P.chests[P.cur];
+    pushHist();
+    P.ghosts = []; P.arrows = { x, y };
+    st.ship = { x: 0, y: 0 };
+    renderMap();
+    await sailPath([{ x: 0, y: 0 }, { x, y: 0 }, { x, y }]);
+    if (same(t, x, y)) {
+      t.open = true;
+      st.sessChests++; bumpRec(r => r.chests = (r.chests || 0) + 1);
+      P.phase = 'quad'; P.qWrong = [];
+      sndDone();
+      setMsg(`<span class="mark-ok">○</span> 宝を手に入れた！ ${cs(x, y)} は「O から ${dirX(x)}、${dirY(y)}」。<br>この宝は <b>どこ</b>にある？ 下のボタンで答えよう。`, 'ok');
+    } else {
+      const card = P.cards.find(c => same(c, x, y));
+      const shark = P.sharks.find(s => same(s, x, y));
+      const types = detectCoord(t, x, y);
+      if (card) {
+        P.cards = P.cards.filter(c => c !== card);
+        sndOK();
+        setMsg(`📜 <b>ヒント札</b>を見つけた！<br>${card.text}<br><span class="small">⭐ の宝の座標を入れて、もう一度出航しよう。</span>`, 'ok');
+      } else {
+        if (shark) { sndNG(); st.ship = { x: 0, y: 0 }; }
+        else { sndNG(); P.ghosts = [{ x, y }]; }
+        tripsOf(types).forEach(addTrip);
+        setMsg((shark ? '🦈 <b>サメがいた！</b> 船は港へにげかえった。<br>' : '<span class="mark-ng">×</span> ここには宝がない。<br>') + explainCoord(t, x, y, types), 'ng');
+      }
+    }
+    render();
+  }
+  function answerQuad(q) {
+    const P = st.P, t = P.chests[P.cur], ans = quadOf(t.x, t.y);
+    if (st.busy || P.phase !== 'quad') return;
+    if (q === ans) {
+      t.q = ans === 0 ? -1 : ans;
+      if (ans) P.revealed[ans] = true;
+      sndOK();
+      const why = ans === 0 ? `${csp(t)} は ${t.x === 0 ? 'x が 0 なので <b>y軸</b>' : 'y が 0 なので <b>x軸</b>'} の上。軸の上の点は<b>どの象限にも入らない</b>。`
+        : `x が${t.x > 0 ? '正' : '負'}、y が${t.y > 0 ? '正' : '負'}だから <b>${QNAME[ans]}</b> ${QSIGN[ans]}。`;
+      const next = P.chests.findIndex(c => !c.open);
+      if (next < 0) {
+        P.phase = 'done';
+        sndDone();
+        setMsg(`<span class="mark-ok">○</span> ${why}<br>🎉 <b>この島の宝をぜんぶ見つけた！</b>「🎲 新しい島へ」で、つぎの島へ行こう。`, 'ok');
+      } else {
+        P.cur = next; P.phase = 'sail'; P.arrows = null; P.ghosts = []; st.ship = { x: 0, y: 0 };
+        setSharks(P);
+        st.hintLv = 0;
+        setMsg(`<span class="mark-ok">○</span> ${why}<br>つぎの ⭐ の宝の座標を入れよう。<span class="small">（🦈 サメのいる場所に気をつけて）</span>`, 'ok');
+      }
+      clearInputs();
+    } else {
+      sndNG();
+      P.qWrong.push(q);
+      const type = (ans === 0 || q === 0) ? 'axisQuad' : 'quadOrder';
+      addTrip(type);
+      setMsg(`<span class="mark-ng">×</span> ${QNAME[q]} ではないよ。<br>${TRIPS[type].exp}`, 'ng');
+    }
+    render();
+  }
+  function buildQuadBtns() {
+    const P = st.P;
+    const order = [1, 2, 3, 4, 0];
+    $('quadBtns').innerHTML = order.map(q => `<button class="op-btn${q === 0 ? ' wide' : ''}${P && P.qWrong && P.qWrong.includes(q) ? ' ng' : ''}" data-q="${q}">${QNAME[q]}</button>`).join('');
+    $('quadBtns').querySelectorAll('button').forEach(b => b.addEventListener('click', () => answerQuad(+b.dataset.q)));
+  }
+
+  /* =====================================================================
+     7. パート② 対称な点
+     P = { p:{x,y}, kinds:['x','y','o'], k, found:{x,y,o}, ghosts, phase:'sail'|'done' }
+     ===================================================================== */
+  const KNAME = { x: 'x軸', y: 'y軸', o: '原点' };
+  const symOf = (p, k) => k === 'x' ? { x: p.x, y: -p.y } : k === 'y' ? { x: -p.x, y: p.y } : { x: -p.x, y: -p.y };
+  const KRULE = { x: 'x はそのまま、<b>y の符号</b>がかわる', y: '<b>x の符号</b>がかわり、y はそのまま', o: '<b>x も y も</b>符号がかわる' };
+  function gen2(first) {
+    let p;
+    if (first || !st.lastP2) p = { x: 3, y: 2 };   // はじめての ② とワークシートの問題は (3, 2)
+    else {
+      do { p = { x: rnd(1, 5) * pick([1, -1]), y: rnd(1, 5) * pick([1, -1]) }; }
+      while (Math.abs(p.x) === Math.abs(p.y) || (st.lastP2 && same(st.lastP2, p.x, p.y)));
+    }
+    st.lastP2 = p;
+    const kinds = st.focus === 'symHalf' ? ['o', 'x', 'y'] : ['x', 'y', 'o'];
+    return { p, kinds, k: 0, found: {}, ghosts: [], phase: 'sail', fold: null };
+  }
+  function map2(P, u) {
+    let h = '';
+    const kind = P.kinds[P.k], p = P.p;
+    // 折り目（いま考えている軸）を黄色で
+    if (P.phase === 'sail') {
+      if (kind === 'x') h += LINE(-VIEW, 0, VIEW, 0, '#fdd835', 12) + T(-5.6, 0.4, '折り目', { size: 15, color: '#f57f17' });
+      if (kind === 'y') h += LINE(0, -VIEW, 0, VIEW, '#fdd835', 12) + T(0.3, -5.9, '折り目', { anchor: 'start', size: 15, color: '#f57f17' });
+      if (kind === 'o') { const [ox, oy] = PX(0, 0); h += `<circle cx="${f1(ox)}" cy="${f1(oy)}" r="${f1(u * 0.32)}" fill="#fdd835" fill-opacity=".8"/>` + T(0, 0, '中心', { dx: -u * 0.55, dy: -u * 0.35, size: 15, color: '#f57f17' }); }
+      // ヒント：P を通って折り目に垂直な線（原点のときは P と O を通る線）
+      if (st.hintLv >= 2) {
+        if (kind === 'x') h += LINE(p.x, -VIEW, p.x, VIEW, '#6a1b9a', 3, '6 6');
+        if (kind === 'y') h += LINE(-VIEW, p.y, VIEW, p.y, '#6a1b9a', 3, '6 6');
+        if (kind === 'o') { const k = VIEW / Math.max(Math.abs(p.x), Math.abs(p.y)); h += LINE(p.x * k, p.y * k, -p.x * k, -p.y * k, '#6a1b9a', 3, '6 6'); }
+      }
+    }
+    // 3つとも見つけたら、4つの点を結ぶ長方形
+    if (P.phase === 'done') {
+      const q = [p, symOf(p, 'x'), symOf(p, 'o'), symOf(p, 'y')].map(a => PX(a.x, a.y).map(f1).join(',')).join(' ');
+      h += `<polygon points="${q}" fill="#c8e6c9" fill-opacity=".35" stroke="#2e7d32" stroke-width="2.5" stroke-dasharray="8 6"/>`;
+    }
+    // 見つけた点：P との間の点線・直角の印・同じ長さの印
+    for (const k of Object.keys(P.found)) h += foldMark(p, k, u);
+    for (const k of Object.keys(P.found)) { const q = P.found[k]; h += CHEST(q.x, q.y, true, { label: KNAME[k] + 'で ' + csp(q), labelColor: '#2e7d32' }); }
+    h += EMO(p.x, p.y, '🗿', 0.72) + DOT(p.x, p.y, '#263238', 4.5) + T(p.x, p.y, 'P' + csp(p), { anchor: 'start', dx: u * 0.45, dy: -u * 0.3, size: 20, color: '#263238' });
+    for (const gh of P.ghosts) h += GHOST(gh.x, gh.y);
+    return h;
+  }
+  function foldMark(p, k, u) {
+    const q = symOf(p, k);
+    let h = LINE(p.x, p.y, q.x, q.y, '#2e7d32', 3, '8 6');
+    const c = k === 'o' ? { x: 0, y: 0 } : k === 'x' ? { x: p.x, y: 0 } : { x: 0, y: p.y };
+    const [cx, cy] = PX(c.x, c.y), s = 10;
+    if (k === 'x') h += `<path d="M${f1(cx + s * Math.sign(-p.x || 1))},${f1(cy)}v${-s}h${f1(-s * Math.sign(-p.x || 1))}" stroke="#2e7d32" stroke-width="2" fill="none"/>`;
+    if (k === 'y') h += `<path d="M${f1(cx)},${f1(cy - s)}h${f1(s * Math.sign(-p.x || 1) * -1)}v${s}" stroke="#2e7d32" stroke-width="2" fill="none"/>`;
+    // 同じ長さの印「＝」
+    const tick = (a, b) => { const [x1, y1] = PX(a.x, a.y), [x2, y2] = PX(b.x, b.y); const mx = (x1 + x2) / 2, my = (y1 + y2) / 2; const ang = Math.atan2(y2 - y1, x2 - x1) + Math.PI / 2; const dx = Math.cos(ang) * 7, dy = Math.sin(ang) * 7, ex = Math.cos(ang - Math.PI / 2) * 3, ey = Math.sin(ang - Math.PI / 2) * 3; return `<path d="M${f1(mx - dx - ex)},${f1(my - dy - ey)}l${f1(2 * dx)},${f1(2 * dy)}M${f1(mx - dx + ex)},${f1(my - dy + ey)}l${f1(2 * dx)},${f1(2 * dy)}" stroke="#2e7d32" stroke-width="2.5"/>`; };
+    h += tick(p, c) + tick(c, q);
+    if (k === 'o') h += DOT(0, 0, '#2e7d32', 5);
+    return h;
+  }
+  async function sail2(x, y) {
+    const P = st.P, kind = P.kinds[P.k], p = P.p, t = symOf(p, kind);
+    pushHist();
+    P.ghosts = [];
+    st.ship = { x: p.x, y: p.y };
+    renderMap();
+    await sailPath([{ x: p.x, y: p.y }, { x, y }]);
+    if (same(t, x, y)) {
+      P.found[kind] = t;
+      st.sessChests++; bumpRec(r => r.chests = (r.chests || 0) + 1);
+      st.lastSym = { P: `(${p.x}, ${p.y})`, jiku: KNAME[kind] + 'について対称', Q: `(${t.x}, ${t.y})`, kawaru: kind === 'x' ? 'y の符号' : kind === 'y' ? 'x の符号' : 'x と y の符号' };
+      P.k++;
+      st.hintLv = 0;
+      const rule = `<span class="rule">${KNAME[kind]}について対称：${KRULE[kind]}　${csp(p)} → ${csp(t)}</span>`;
+      if (P.k >= P.kinds.length) {
+        P.phase = 'done';
+        sndDone();
+        const a = p, tbl = `<table class="sum-table"><tr><td>もとの点 P</td><td>${csp(a)}</td></tr><tr><td>x軸について対称</td><td>${csp(symOf(a, 'x'))}</td></tr><tr><td>y軸について対称</td><td>${csp(symOf(a, 'y'))}</td></tr><tr><td>原点について対称</td><td>${csp(symOf(a, 'o'))}</td></tr></table>`;
+        setMsg(`<span class="mark-ok">○</span> 宝を発見！<br>${rule}<br>🎉 3つとも見つけた！ 4つの点は<b>長方形</b>の頂点になっているね。${tbl}`, 'ok');
+      } else {
+        sndOK();
+        setMsg(`<span class="mark-ok">○</span> 宝を発見！<br>${rule}<br>つぎは <b>${KNAME[P.kinds[P.k]]}</b>について対称な点をさがそう。`, 'ok');
+      }
+      clearInputs();
+    } else {
+      sndNG();
+      P.ghosts = [{ x, y }];
+      let types = [], text = '';
+      const other = ['x', 'y', 'o'].filter(k => k !== kind).find(k => same(symOf(p, k), x, y));
+      if (same(p, x, y)) text = 'P と同じ点だよ。対称な点は、折り目（中心）の<b>反対がわ</b>にある。';
+      else if (other) {
+        types = [kind === 'o' ? 'symHalf' : 'symMix'];
+        text = `${cs(x, y)} は、P と <b>${KNAME[other]}</b>について対称な点。<br>${KNAME[kind]}について対称なら、${KRULE[kind]}。`;
+      } else {
+        types = tripsOf(detectCoord(t, x, y));
+        text = `${cs(x, y)} は P と対称な点ではないよ。<br>P から折り目（${KNAME[kind]}）までの長さと、折り目から宝までの長さは同じ。`;
+      }
+      types.forEach(addTrip);
+      setMsg('<span class="mark-ng">×</span> ここには宝がない。<br>' + text, 'ng');
+    }
+    render();
+  }
+
+  /* =====================================================================
+     8. パート③ 2点を通る道（道のり）
+     P = { stops:[A,B,(C)], next, rock, trail:[{x,y}...], phase:'sail'|'dist'|'done', showLen }
+     ===================================================================== */
+  function gen3() {
+    st.n3++;
+    const three = st.n3 % 2 === 0;           // 2回に1回は、A → B → C の3地点
+    const cross = st.focus === 'negDist' || st.focus === 'distCount' || Math.random() < 0.8;
+    const mk = (prev, sx) => {
+      let p, n = 0;
+      do {
+        p = { x: sx ? rnd(1, 5) * sx : rnd(-5, 5), y: rnd(-5, 5) };
+        n++;
+      } while (n < 200 && (!prev || Math.abs(p.x - prev.x) < 3 || Math.abs(p.y - prev.y) < 2 || (p.x === 0 && p.y === 0)));
+      return p;
+    };
+    const A = mk(null, pick([1, -1]));
+    const B = mk(A, cross ? -Math.sign(A.x) : 0);
+    const stops = [A, B];
+    let rock = null;
+    if (three) {
+      let C, n = 0;
+      do { C = mk(B, cross ? Math.sign(A.x) : 0); n++; } while (n < 50 && (same(C, A.x, A.y) || (Math.abs(C.y) === 0 && Math.abs(B.y) === 0)));
+      stops.push(C);
+    } else {
+      // 岩：L 字の道の1つの角におく（もう1つの角を通れば行ける）
+      rock = pick([{ x: B.x, y: A.y }, { x: A.x, y: B.y }]);
+    }
+    return { stops, next: 1, rock, trail: [{ x: A.x, y: A.y }], phase: 'sail', showLen: false };
+  }
+  const SN = ['A', 'B', 'C'];
+  // 線分 s→t の上に岩があるか
+  function blocked(P, s, t) {
+    const r = P.rock;
+    if (!r) return false;
+    if (s.y === t.y && r.y === s.y) return r.x >= Math.min(s.x, t.x) && r.x <= Math.max(s.x, t.x);
+    if (s.x === t.x && r.x === s.x) return r.y >= Math.min(s.y, t.y) && r.y <= Math.max(s.y, t.y);
+    return false;
+  }
+  const segLen = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  function totalLen(P) { let s = 0; for (let i = 1; i < P.trail.length; i++) s += segLen(P.trail[i - 1], P.trail[i]); return s; }
+  // 「負の数をまたぐ長さ」を ひき算でまちがえたときの道のり（|−3| と 4 で 4−3＝1 とする）
+  function negDistLen(P) {
+    let s = 0;
+    for (let i = 1; i < P.trail.length; i++) {
+      const a = P.trail[i - 1], b = P.trail[i];
+      const [u, v] = a.x !== b.x ? [a.x, b.x] : [a.y, b.y];
+      s += (u * v < 0) ? Math.abs(Math.abs(u) - Math.abs(v)) : Math.abs(u - v);
+    }
+    return s;
+  }
+  function shortest(P) { let s = 0; for (let i = 1; i < P.stops.length; i++) s += segLen(P.stops[i - 1], P.stops[i]); return s; }
+  function map3(P, u) {
+    let h = '';
+    // 船が通ったあとの線（茶色の太線）
+    if (P.trail.length > 1) {
+      const d = P.trail.map((p, i) => (i ? 'L' : 'M') + PX(p.x, p.y).map(f1).join(',')).join('');
+      h += `<path d="${d}" stroke="#fff" stroke-width="10" fill="none" stroke-linejoin="round" stroke-linecap="round"/>` +
+        `<path d="${d}" stroke="#6d4c41" stroke-width="6" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="14 6"/>`;
+      if (P.showLen) {
+        for (let i = 1; i < P.trail.length; i++) {
+          const a = P.trail[i - 1], b = P.trail[i], horiz = a.y === b.y;
+          h += T((a.x + b.x) / 2, (a.y + b.y) / 2, segLen(a, b), { dx: horiz ? 0 : 16, dy: horiz ? -10 : 6, anchor: horiz ? 'middle' : 'start', size: 20, color: '#4e342e' });
+        }
+      }
+    }
+    if (P.rock) h += EMO(P.rock.x, P.rock.y, '🪨', 0.78) + DOT(P.rock.x, P.rock.y);
+    // ヒント：通れる角
+    if (P.phase === 'sail' && st.hintLv >= 2) {
+      const w = nextWay(P);
+      if (w) { const [cx, cy] = PX(w.x, w.y); h += `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(u * 0.4)}" fill="none" stroke="#6a1b9a" stroke-width="4" stroke-dasharray="6 5"/>`; }
+    }
+    const A = P.stops[0];
+    h += EMO(A.x, A.y, '🏁', 0.62, -u * 0.32) + DOT(A.x, A.y) + T(A.x, A.y, 'A' + csp(A), { anchor: 'start', dx: u * 0.3, dy: -u * 0.45, size: 18 });
+    P.stops.slice(1).forEach((s, i) => {
+      const idx = i + 1;
+      h += CHEST(s.x, s.y, idx < P.next, { target: idx === P.next && P.phase === 'sail', label: SN[idx] + csp(s) });
+    });
+    return h;
+  }
+  // つぎに進むとよい点（先生モード・ヒント用）
+  function nextWay(P) {
+    const s = st.ship, t = P.stops[P.next];
+    if (!t) return null;
+    if ((s.x === t.x || s.y === t.y) && !blocked(P, s, t)) return t;
+    const c1 = { x: t.x, y: s.y }, c2 = { x: s.x, y: t.y };
+    for (const c of [c1, c2]) if (!same(c, s.x, s.y) && !blocked(P, s, c) && !blocked(P, c, t)) return c;
+    return { x: s.x, y: s.y + (s.y < 5 ? 1 : -1) };
+  }
+  async function sail3(x, y) {
+    const P = st.P, s = st.ship;
+    if (same(s, x, y)) { setMsg('いまいる点だよ。ほかの点を入れよう。'); return; }
+    if (s.x !== x && s.y !== y) {
+      sndNG();
+      setMsg(`<span class="mark-ng">×</span> <b>ななめには進めない</b>よ（方眼にそって たて・よこ だけ）。<br>いまの船は ${csp(s)}。<b>x か y のどちらかを同じ</b>にした点を入れよう。`, 'ng');
+      return;
+    }
+    if (blocked(P, s, { x, y })) {
+      sndNG();
+      setMsg(`🪨 <b>岩にぶつかる！</b> その道は通れないよ。ほかの道をさがそう。`, 'ng');
+      return;
+    }
+    pushHist();
+    await sailPath([{ x: s.x, y: s.y }, { x, y }]);
+    P.trail.push({ x, y });
+    const t = P.stops[P.next];
+    if (same(t, x, y)) {
+      P.next++;
+      st.sessChests++; bumpRec(r => r.chests = (r.chests || 0) + 1);
+      if (P.next >= P.stops.length) {
+        P.phase = 'dist';
+        sndDone();
+        st.inp.d = ''; st.act = 'd';
+        setMsg(`<span class="mark-ok">○</span> ゴール！ 宝を ${P.stops.length - 1}こ 手に入れた。<br>船が通ったあとの線の長さ（<b>道のり</b>）は 何目もり？ 方眼の1目もりを 1 として数えよう。`, 'ok');
+      } else {
+        sndOK();
+        setMsg(`<span class="mark-ok">○</span> 宝 ${SN[P.next - 1]} を手に入れた！ つぎは ${SN[P.next]}${csp(P.stops[P.next])} へ。`, 'ok');
+      }
+    } else {
+      sndSail();
+      setMsg(`${cs(x, y)} まで進んだ（${segLen(s, { x, y })}目もり）。つぎは どこへ？ めざすのは ${SN[P.next]}${csp(t)}。`);
+    }
+    clearInputs();
+    render();
+  }
+  function answerDist(d) {
+    const P = st.P, tot = totalLen(P), alt = negDistLen(P), best = shortest(P);
+    if (d === tot) {
+      P.phase = 'done'; P.showLen = true;
+      sndDone();
+      const parts = [];
+      for (let i = 1; i < P.trail.length; i++) parts.push(segLen(P.trail[i - 1], P.trail[i]));
+      setMsg(`<span class="mark-ok">○</span> 正解！ 道のりは <b>${parts.join(' ＋ ')} ＝ ${tot}</b> 目もり。<br>` +
+        (tot === best ? '🏅 いちばん短い道だよ！' : `いちばん短い道のりは <b>${best}</b> 目もり。もっと短い道もあるよ。`), 'ok');
+      clearInputs();
+    } else {
+      sndNG();
+      let type = null;
+      if (alt !== tot && d === alt) type = 'negDist';
+      else if (Math.abs(d - tot) <= 2) type = 'distCount';
+      if (type) addTrip(type);
+      // まちがえやすいところ（負の数をまたぐ部分）を、ことばで見せる
+      let cross = '';
+      for (let i = 1; i < P.trail.length; i++) {
+        const a = P.trail[i - 1], b = P.trail[i], hz = a.y !== b.y ? 0 : 1;
+        const [u, v] = hz ? [a.x, b.x] : [a.y, b.y];
+        if (u * v < 0) { cross = `たとえば ${hz ? 'x' : 'y'} が ${nm(u)} から ${nm(v)} までは、${nm(u)}→0 で ${Math.abs(u)}、0→${nm(v)} で ${Math.abs(v)}、あわせて ${Math.abs(u) + Math.abs(v)}。`; break; }
+      }
+      setMsg(`<span class="mark-ng">×</span> ${d} 目もりではないよ。<br>` + (type === 'negDist' ? '<b>0 をまたぐ部分</b>の長さを、ひき算で出していないかな？' : '線を1本ずつ数えて、たしてみよう。') + (cross ? '<br>' + cross : ''), 'ng');
+    }
+    render();
+  }
+
+  /* =====================================================================
+     9. パート④ 宝の地図クイズ（10問チャレンジ）
+     P = { n, score, res:[], prob:{kind:'read'|'bury', x, y}, tries, ghosts, phase:'ask'|'show'|'end', recent }
+     ===================================================================== */
+  function gen4() { const P = { n: 0, score: 0, res: [], prob: null, tries: 0, ghosts: [], phase: 'ask', recent: [] }; newQ4(P); return P; }
+  function newQ4(P) {
+    let x, y, n = 0;
+    const f = st.focus;
+    do {
+      n++;
+      if (Math.random() < 0.15 && !['swap', 'signX', 'signY'].includes(f)) {     // 軸の上の点
+        const k = rnd(1, 5) * pick([1, -1]);
+        if (Math.random() < 0.5) { x = k; y = 0; } else { x = 0; y = k; }
+      } else {
+        x = rnd(1, 5) * pick([1, -1]); y = rnd(1, 5) * pick([1, -1]);
+        if (f === 'signX') x = -Math.abs(x);
+        if (f === 'signY') y = -Math.abs(y);
+      }
+      if ((f === 'swap' || f === 'count') && Math.abs(x) === Math.abs(y)) continue;
+      if (n > 300) break;
+    } while (P.recent.includes(x + ',' + y) || (Math.abs(x) === Math.abs(y) && Math.random() < 0.7));
+    P.recent = P.recent.concat([x + ',' + y]).slice(-4);
+    P.prob = { kind: Math.random() < 0.55 ? 'read' : 'bury', x, y };
+    P.tries = 0; P.ghosts = []; P.phase = 'ask';
+    st.hintLv = 0;
+  }
+  function map4(P, u) {
+    let h = '';
+    const p = P.prob;
+    if (P.phase === 'show') h += readArrows(p.x, p.y);
+    if (P.phase === 'ask' && st.hintLv >= 2) {
+      if (p.kind === 'read') h += projLines(p.x, p.y, st.hintLv >= 3);
+      else {
+        h += LINE(p.x, -VIEW, p.x, VIEW, '#6a1b9a', 3, '6 6') + T(p.x, VIEW - 0.6, 'x＝' + nm(p.x), { dx: 8, anchor: 'start', size: 16, color: '#6a1b9a' });
+        if (st.hintLv >= 3) h += LINE(-VIEW, p.y, VIEW, p.y, '#6a1b9a', 3, '6 6') + T(-VIEW + 0.3, p.y, 'y＝' + nm(p.y), { dy: -8, anchor: 'start', size: 16, color: '#6a1b9a' });
+      }
+    }
+    if (p.kind === 'read' && P.phase === 'ask') h += XMARK(p.x, p.y);
+    if (P.phase === 'show' || P.phase === 'end') h += CHEST(p.x, p.y, true, { label: csp(p), labelColor: '#2e7d32' });
+    for (const gh of P.ghosts) h += GHOST(gh.x, gh.y);
+    return h;
+  }
+  function check4(x, y) {
+    const P = st.P, p = P.prob;
+    if (P.phase !== 'ask') return;
+    let msg = '', cls = 'ng';
+    if (same(p, x, y)) {
+      const first = P.tries === 0;
+      if (first) P.score++;
+      P.res.push(first ? 'o' : 't');
+      P.phase = 'show';
+      st.sessChests++; bumpRec(r => r.chests = (r.chests || 0) + 1);
+      sndDone();
+      msg = `<span class="mark-ok">○</span> 宝箱が開いた！ ${csp(p)} は「O から ${dirX(p.x)}、${dirY(p.y)}」。` + (first ? '' : '<br><span class="small">（2回目で正解）</span>'); cls = 'ok';
+    } else {
+      sndNG();
+      P.tries++;
+      P.ghosts.push({ x, y });
+      const types = detectCoord(p, x, y);
+      tripsOf(types).forEach(addTrip);
+      if (P.tries >= 2) {
+        P.res.push('x');
+        P.phase = 'show';
+        msg = `<span class="mark-ng">×</span> ${explainCoord(p, x, y, types)}<br>答えは <b>${csp(p)}</b>（O から ${dirX(p.x)}、${dirY(p.y)}）。`;
+      } else {
+        msg = `<span class="mark-ng">×</span> ${explainCoord(p, x, y, types)}<br><b>もう1回</b>やってみよう。`;
+      }
+    }
+    if (P.phase === 'show' && P.res.length >= 10) finish4();   // 10問目がおわったら、結果をメッセージのあとに足す
+    setMsg(msg, cls);
+    clearInputs();
+    render();
+  }
+  function bury(x, y) { if (st.P.prob.kind === 'bury') check4(x, y); }
+  function finish4() {
+    const P = st.P;
+    P.phase = 'end';
+    let best = 0;
+    bumpRec(r => { r.best4 = Math.max(r.best4 || 0, P.score); best = r.best4; });
+    const word = P.score === 10 ? '🏆 パーフェクト！ 宝の地図名人！' : P.score >= 7 ? '🎉 すばらしい！' : 'まちがえた型を「あなたのつまずき」でふくしゅうしよう。';
+    st.msgTail = `<br><b>10問中 ${P.score}問</b>、1回目で正解！（ベスト ${best}問）<br>${word}`;
+  }
+
+  /* =====================================================================
+     10. 船を動かす（アニメーション）
+     ===================================================================== */
+  function sailPath(pts) {
+    const segs = [];
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); segs.push(l); total += l; }
+    if (total === 0) return Promise.resolve();
+    st.busy = true;
+    sndSail();
+    const dur = Math.min(2600, 350 + total * 210);
+    return new Promise(res => {
+      const t0 = performance.now();
+      let done = false;
+      const at = (t) => {
+        let d = t * total;
+        for (let i = 0; i < segs.length; i++) {
+          if (d <= segs[i] || i === segs.length - 1) { const r = segs[i] ? Math.min(1, d / segs[i]) : 1; return { x: pts[i].x + (pts[i + 1].x - pts[i].x) * r, y: pts[i].y + (pts[i + 1].y - pts[i].y) * r }; }
+          d -= segs[i];
+        }
+        return pts[pts.length - 1];
+      };
+      const finish = () => { if (done) return; done = true; st.ship = { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y }; drawShip(); st.busy = false; res(); };
+      const frame = (now) => { if (done) return; const t = Math.min(1, (now - t0) / dur); st.ship = at(t); drawShip(); if (t < 1) requestAnimationFrame(frame); else finish(); };
+      requestAnimationFrame(frame);
+      setTimeout(finish, dur + 150);           // 画面がかくれていて動かないときでも、かならず終わる
+    });
+  }
+
+  /* =====================================================================
+     11. ボタンの動き
+     ===================================================================== */
+  function go() {
+    if (st.busy) return;
+    const m = modeOf();
+    if (m === 'none') {
+      if (st.part === 4) {
+        if (st.P.phase === 'end') { newProblem(); return; }
+        newQ4(st.P); setMsg('つぎの問題！'); render(); return;
+      }
+      newProblem(); return;
+    }
+    if (m === 'dist') {
+      const d = readInt(st.inp.d);
+      if (d === null) { setMsg('道のりを 数で入れよう。'); return; }
+      answerDist(d); return;
+    }
+    if (m !== 'coord') return;
+    const x = readInt(st.inp.x), y = readInt(st.inp.y);
+    if (x === null || y === null) { setMsg(`<b>${x === null ? 'x' : 'y'}</b> 座標を入れよう。<span class="small">（欄をタップすると入れる欄がかわる）</span>`); st.act = x === null ? 'x' : 'y'; renderInputs(); return; }
+    if (Math.abs(x) > LIM || Math.abs(y) > LIM) { setMsg(`島の地図は −${LIM}〜${LIM} だよ。`); return; }
+    st.preview = null;
+    if (st.part === 1) sail1(x, y);
+    else if (st.part === 2) sail2(x, y);
+    else if (st.part === 3) sail3(x, y);
+    else check4(x, y);
+  }
+  function clearInputs() { st.inp = { x: '', y: '', d: st.inp.d }; if (modeOf() !== 'dist') st.inp.d = ''; st.act = modeOf() === 'dist' ? 'd' : 'x'; st.preview = null; }
+  function pushHist() { st.hist.push(clone({ P: st.P, ship: st.ship, hintLv: st.hintLv })); if (st.hist.length > 40) st.hist.shift(); }
+  function undo() {
+    if (st.busy || !st.hist.length || st.part === 4) return;
+    const h = st.hist.pop();
+    st.P = h.P; st.ship = h.ship; st.hintLv = h.hintLv;
+    clearInputs();
+    setMsg('↶ ひとつもどした。');
+    render();
+  }
+  function resetProblem() {
+    if (st.busy) return;
+    st.P = clone(st.P0); st.hist = []; st.hintLv = 0;
+    st.ship = startShip();
+    clearInputs();
+    setMsg(st.part === 4 ? '10問チャレンジを、はじめからやりなおそう。' : 'はじめからやりなおそう。');
+    render();
+  }
+  function startShip() {
+    if (st.part === 2) return { x: st.P.p.x, y: st.P.p.y };
+    if (st.part === 3) return { x: st.P.stops[0].x, y: st.P.stops[0].y };
+    return { x: 0, y: 0 };
+  }
+  function newProblem(opt = {}) {
+    if (st.busy) return;
+    st.hist = []; st.hintLv = 0;
+    if (st.part === 1) st.P = gen1();
+    if (st.part === 2) st.P = gen2(!!opt.first);
+    if (st.part === 3) st.P = gen3();
+    if (st.part === 4) st.P = gen4();
+    st.P0 = clone(st.P);
+    st.ship = startShip();
+    clearInputs();
+    const intro = {
+      1: '港（原点 O）から出発！ ⭐ の宝の座標を (x, y) で入れて「⛵ 出航」。<br><span class="small">船は O から よこ（x）→ たて（y）の順に進むよ。</span>',
+      2: `点 P${csp(st.P.p || { x: 0, y: 0 })} の 🗿 から出発。宝は P と<b>${KNAME[(st.P.kinds || ['x'])[0]]}</b>について対称な点にあるよ。`,
+      3: '🏁 A から出発。<b>たて・よこ</b>だけに進もう（曲がる点も入れる）。岩 🪨 は通れないよ。',
+      4: '10問チャレンジ スタート！',
+    }[st.part];
+    setMsg(intro);
+    render();
+  }
+  function setPart(n, opt = {}) {
+    if (st.busy) return;
+    st.part = n;
+    if (!opt.keepFocus) st.focus = null;
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === n));
+    $('partNote').textContent = PARTS[n].note;
+    $('optTap').checked = n === 3;            // ③ は道を考えるので、はじめからタップで入れられる
+    newProblem(opt);
+  }
+  function hint() {
+    if (st.busy) return;
+    const m = modeOf(), P = st.P;
+    if (m === 'none') { setMsg('「' + $('btnGo').textContent + '」で つぎへ進もう。'); return; }
+    st.hintLv = Math.min(3, st.hintLv + 1);
+    const lv = st.hintLv;
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    let t = '';
+    if (m === 'quad') t = '第1象限は<b>右上</b>（x も y も正）。そこから<b>左回り</b>に 第2・第3・第4。軸の上の点は、どの象限にも入らないよ。';
+    else if (m === 'dist') {
+      t = '線を1本ずつ、目もりを数えて、たそう。';
+      if (lv >= 2) {
+        const parts = [];
+        for (let i = 1; i < P.trail.length; i++) parts.push(`${csp(P.trail[i - 1])}→${csp(P.trail[i])}`);
+        t += '<br>通った線：' + parts.join('、');
+      }
+      if (lv >= 3) t += '<br>−2 から 3 までは、−2→0 で 2、0→3 で 3。あわせて 5 のように、0 をまたぐときは<b>たし算</b>。';
+    } else if (st.part === 2) {
+      const k = P.kinds[P.k];
+      t = ['', `${KNAME[k]}で折り返すと、P とぴったり重なる点が宝。`, `紫の点線の上に宝があるよ。折り目までの長さが同じになる点をさがそう。`, `${KNAME[k]}について対称な点は、${KRULE[k]}。`][lv];
+    } else if (st.part === 3) {
+      t = ['', `ななめには進めない。いまの船 ${csp(st.ship)} と <b>x か y のどちらかが同じ</b>点へ進もう。`, '紫の点線の丸の点へ進むと、岩をよけて行けるよ。', `つぎは ${csp(nextWay(P))} へ進もう。`][lv];
+    } else {
+      const tgt = st.part === 1 ? P.chests[P.cur] : P.prob;
+      t = ['', '<b>x が負なら左</b>、正なら右。<b>y が負なら下</b>、正なら上。O から「よこ → たて」の順に数えよう。',
+        st.part === 4 && P.prob.kind === 'bury' ? '紫の点線は、x 座標がいくつの線？ この線の上に宝をうめるよ。' : '紫の点線で、点から x軸・y軸 へおろしたところの目もりを読もう。',
+        st.part === 4 && P.prob.kind === 'bury' ? '2本の点線が交わる点が答えだよ。' : `x 座標は <b>${nm(tgt.x)}</b>。y 座標は、点から y軸 へおろしたところを読もう。`][lv];
+    }
+    setMsg('💡 ' + t);
+    renderMap();
+  }
+
+  /* =====================================================================
+     12. 画面をかく
+     ===================================================================== */
+  function setMsg(html, cls) {
+    const el = $('msg');
+    el.innerHTML = html + (st.msgTail || '');
+    st.msgTail = '';
+    el.className = 'msg' + (cls ? ' ' + cls : '');
+  }
+  function renderMission() {
+    const P = st.P, m = modeOf();
+    let h = '';
+    if (st.part === 1) {
+      const got = P.chests.filter(c => c.open).length;
+      h = P.phase === 'done' ? '🎉 この島の宝を ぜんぶ見つけた！'
+        : P.phase === 'quad' ? 'この宝は どこにある？（第何象限？）'
+        : `⭐ の宝の座標は？ <span class="small">（宝 ${got}/${P.chests.length}）</span>`;
+    } else if (st.part === 2) {
+      const k = P.kinds[Math.min(P.k, 2)];
+      h = P.phase === 'done' ? '🎉 対称な点を 3つとも見つけた！'
+        : `宝は 点 P<span class="big">${csp(P.p)}</span> と <b>${KNAME[k]}</b>について対称な点`;
+    } else if (st.part === 3) {
+      h = P.phase === 'sail' ? `${P.stops.map((s, i) => SN[i]).join(' → ')} の順にめぐろう。いま ${csp(st.ship)}`
+        : P.phase === 'dist' ? '通ったあとの線の長さ（道のり）は 何目もり？' : `🎉 道のり ${totalLen(P)} 目もりで ゴール！`;
+    } else {
+      const p = P.prob;
+      h = P.phase === 'end' ? '🏁 10問チャレンジ おしまい'
+        : m === 'tap' ? `<span class="big">${csp(p)}</span> に宝をうめよう！ 地図をタップ`
+        : m === 'coord' ? '✖ の場所の座標は？' : `${p.kind === 'read' ? '✖ の場所' : 'うめる場所'}は ${csp(p)}`;
+      h = `<span class="small">${Math.min(P.res.length + (P.phase === 'ask' ? 1 : 0), 10)}問目　</span>` + h;
+    }
+    $('mission').innerHTML = h;
+  }
+  function renderScore() {
+    const P = st.P;
+    let h = `💰 この時間に見つけた宝：<b>${st.sessChests}</b>こ`;
+    if (st.part === 4) {
+      const cells = [];
+      for (let i = 0; i < 10; i++) {
+        const r = P.res[i];
+        cells.push(`<span class="q ${r || (i === P.res.length && P.phase === 'ask' ? 'cur' : '')}">${r === 'o' ? '○' : r === 't' ? '△' : r === 'x' ? '×' : i + 1}</span>`);
+      }
+      h += `<div class="chips">${cells.join('')}</div><div class="small">○＝1回目で正解　△＝2回目で正解　×＝答えを見た</div>`;
+    }
+    $('score').innerHTML = h;
+  }
+  function render() {
+    renderMission();
+    if (st.part === 1) buildQuadBtns();
+    renderInputs();
+    renderMap();
+    renderScore();
+    renderTrips();
+  }
+
+  /* =====================================================================
+     13. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() {
+    const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {};
+    r.trips = r.trips || {};
+    return r;
+  }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function addTrip(type) {
+    st.sessTrips[type] = (st.sessTrips[type] || 0) + 1;
+    bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1);
+  }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><button class="op-btn" data-prac="${k}">🔁 この型を練習（${PARTS[TRIPS[k].part].name}）</button></div>`).join('')
+      : '<div class="small">まだ ありません。まちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    const r = getRec();
+    $('recLine').textContent = `この端末のきろく：見つけた宝 ${r.chests || 0}こ ／ 宝の地図クイズのベスト ${r.best4 || 0}/10 ／ ヒント ${r.hint || 0}回`;
+  }
+  // その型の類題：型に合った問題が出やすくなる
+  function practice(type) {
+    if (st.busy) return;
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    setPart(TRIPS[type].part, { keepFocus: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     14. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const P = st.P, m = modeOf();
+    if (m === 'quad') { const t = P.chests[P.cur]; return '答え：' + QNAME[quadOf(t.x, t.y)]; }
+    if (m === 'dist') return `答え：${totalLen(P)} 目もり（いちばん短い道のりは ${shortest(P)}）`;
+    if (m === 'none') return '（つぎへ進んでください）';
+    if (st.part === 1) return '答え：' + csp(P.chests[P.cur]);
+    if (st.part === 2) return '答え：' + csp(symOf(P.p, P.kinds[P.k]));
+    if (st.part === 3) return `つぎの1手の例：${csp(nextWay(P))}（いちばん短い道のりは ${shortest(P)} 目もり）`;
+    return '答え：' + csp(P.prob);
+  }
+  function renderTeacher() {
+    if (!TEACHER || !st.P) return;
+    $('tAns').textContent = answerText();
+    const r = getRec(), t = Object.keys(r.trips);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.filter(k => TRIPS[k]).map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  // 1手だけ自動で進める（答えを入れて実行する）
+  async function teacherStep() {
+    if (st.busy) return;
+    const P = st.P, m = modeOf();
+    const put = async (x, y) => { st.inp.x = String(x); st.inp.y = String(y); st.act = 'y'; renderInputs(); await sleep(450); go(); };
+    if (m === 'quad') { const t = P.chests[P.cur]; answerQuad(quadOf(t.x, t.y)); }
+    else if (m === 'dist') { st.inp.d = String(totalLen(P)); renderInputs(); await sleep(450); go(); }
+    else if (m === 'tap') bury(P.prob.x, P.prob.y);
+    else if (m === 'none') go();
+    else if (st.part === 1) await put(P.chests[P.cur].x, P.chests[P.cur].y);
+    else if (st.part === 2) { const t = symOf(P.p, P.kinds[P.k]); await put(t.x, t.y); }
+    else if (st.part === 3) { const w = nextWay(P); await put(w.x, w.y); }
+    else await put(P.prob.x, P.prob.y);
+  }
+  async function teacherAuto() {
+    if (st.auto) return;
+    st.auto = true;
+    // いまの問題が終わるまで（④ は 10問まで）
+    for (let i = 0; i < 60 && st.auto; i++) {
+      while (st.busy) await sleep(100);
+      const m = modeOf();
+      if (m === 'none' && !(st.part === 4 && st.P.phase === 'show')) break;
+      await teacherStep();
+      await sleep(900);
+      while (st.busy) await sleep(100);
+    }
+    st.auto = false;
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tAuto').addEventListener('click', teacherAuto);
+    $('tStop').addEventListener('click', () => { st.auto = false; });
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・見つけた宝・ベスト）を消しますか？')) return;
+      setRec({ trips: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     15. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3, 4].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnNew').addEventListener('click', () => newProblem());
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetProblem);
+  $('btnHint').addEventListener('click', hint);
+  $('btnGo').addEventListener('click', go);
+  $('btnWs').addEventListener('click', () => {
+    setPart(2, { first: true });
+    setMsg('📄 ワークシートの問題：点 P(3, 2) を <b>x軸</b>で折り返すと、どこに移るかな？ 予想してから出航しよう。');
+  });
+  $('optQuad').addEventListener('change', renderMap);
+  // 画面の大きさがかわったら、地図の絵をかき直す
+  if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(renderMap)).observe($('map'));
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '座標でお宝さがし',
+    question: '点 (3, 2) を x軸で折り返すと、どこに移るだろうか？ y軸や原点についてはどうだろう？',
+    predictions: ['(3, −2)', '(−3, 2)', '(−3, −2)', '(2, 3)', 'わからない'],
+    operationNote: '「📄 ワークシートの問題」を押して、② 対称な点 で P(3, 2) の宝をさがそう。宝が見つかるたびに「＋ 記録する」。ほかの P でも記録して、きまりを見つけよう。',
+    fields: [
+      { key: 'P', label: 'もとの点 P' },
+      { key: 'jiku', label: '何について対称？', math: false },
+      { key: 'Q', label: '対称な点' },
+      { key: 'kawaru', label: '符号がかわったもの', math: false }
+    ],
+    capture: () => {
+      if (!st.lastSym) { setMsg('② 対称な点 で宝を見つけてから記録しよう。'); return null; }
+      return { ...st.lastSym };
+    },
+    summaryHint: '「点 (a, b) と x軸について対称な点は (　,　)、y軸については (　,　)、原点については (　,　)」の形で書こう。',
+    teacher: {
+      hint: 'まず予想を挙手で集める（(−3, 2) と (2, 3) を選ぶ生徒が多い）。「x軸で折る」＝ x軸を折り目にして紙を折ると考えさせる。3つ見つけたら4点が長方形になることにふれ、文字 (a, b) で一般化させる。',
+      answer: '(3, −2)。<br>x軸について対称：x はそのまま、y の符号がかわる → (3, −2)<br>y軸について対称：x の符号がかわる → (−3, 2)<br>原点について対称：x も y も符号がかわる → (−3, −2)<br>まとめ：点 (a, b) と x軸について対称な点は (a, −b)、y軸については (−a, b)、原点については (−a, −b)。'
+    }
+  });
+
+  buildKeypad();
+  setupTeacher();
+  setPart(1);
+})();
+</script>
+
+</body>
+</html>
