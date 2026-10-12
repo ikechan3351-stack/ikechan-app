@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>素数のふるいと素因数分解</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり：素数（○でかこむ）＝緑、まちがい＝赤紫（記号もつける）。
+     ふるいで消した数は、何の倍数かを「色」と「模様」の両方で見せる。
+     色は色覚のちがいがあっても見分けやすい組み合わせ（Okabe-Ito）にしている。 */
+  :root {
+    --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb;
+    --ok: #2e7d32; --ng: #ad1457;
+    --p2: #0072b2; --p3: #e69f00; --p5: #009e73; --p7: #cc79a7; --p11: #d55e00; --p13: #56b4e9;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3faf8 0%, #d9efea 100%);
+    min-height: 100vh; padding: 10px 16px 28px; font-size: 18px;
+  }
+  button { font-family: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  .topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; }
+  h1 { margin: 0; flex: 1; text-align: center; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--accent-dark); }
+  .subtitle { margin: -6px 0 0; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .card { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.05rem; color: var(--accent-dark); }
+  .note { font-size: 0.9rem; color: #546e7a; margin: 6px 0 0; line-height: 1.6; }
+  .lbl { font-weight: 900; color: var(--accent-dark); }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; }
+  .hatten { display: inline-block; background: #ede7f6; color: #4527a0; border: 2px solid #9575cd; border-radius: 8px; padding: 0 8px; font-size: .85rem; font-weight: 900; margin-left: 6px; vertical-align: middle; }
+
+  /* ===== タブ ===== */
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tab {
+    min-height: 56px; border: 3px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: 1.1rem; font-weight: bold; cursor: pointer; touch-action: manipulation; padding: 2px 4px;
+  }
+  .tab small { display: block; font-size: 0.75rem; font-weight: normal; color: #78909c; }
+  .tab.on { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .tab.on small { color: #e0f2f1; }
+
+  /* ===== 2列（左：表や木、右：ボタンと説明）。ワークシートが開いても入れ物の幅で決める ===== */
+  .main { container-type: inline-size; }
+  .grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+  @container (min-width: 760px) {
+    .grid { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+  }
+
+  /* ===== ボタン ===== */
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .act {
+    min-height: 52px; padding: 4px 14px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: 1.02rem; font-weight: 900; cursor: pointer; touch-action: manipulation;
+  }
+  .act:disabled { opacity: .45; cursor: default; }
+  .act.primary { background: linear-gradient(150deg, #009688 0%, #00695c 100%); color: #fff; border: none; box-shadow: 0 4px 0 rgba(0,70,60,0.35); }
+  .act.primary:disabled { background: #b0bec5; box-shadow: none; }
+  .act.wide { flex: 1 1 100%; }
+  .row { display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .chip-s {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip-s.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip-s.on::before { content: "✔ "; }
+  .numin {
+    width: 5em; min-height: 52px; font-size: 1.5rem; font-weight: 900; text-align: center; font-family: inherit;
+    border: 3px solid #4db6ac; border-radius: 12px;
+  }
+  .msg { margin-top: 10px; border-radius: 12px; padding: 8px 12px; line-height: 1.7; background: #f7fbfa; border: 2px solid #b2dfdb; min-height: 3.6em; }
+  .msg.good { background: #e8f5e9; border-color: #66bb6a; }
+  .msg.good::before { content: "○ "; color: var(--ok); font-weight: 900; }
+  .msg.info { background: #fffde7; border-color: #ffe082; }
+  .msg.info::before { content: "💡 "; }
+  .trip { margin-top: 10px; background: #fce4ec; border-radius: 12px; padding: 8px 12px; border-left: 8px solid var(--ng); line-height: 1.7; }
+  .trip h3 { margin: 0; font-size: 1.1rem; color: var(--ng); }
+  .trip h3::before { content: "✖ "; }
+  .trip .acts { margin-top: 6px; }
+  .count { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .count div { flex: 1 1 80px; background: #f5f5f5; border-radius: 12px; padding: 4px 8px; text-align: center; font-size: .9rem; }
+  .count b { display: block; font-size: 1.6rem; }
+  .count .cp b { color: var(--ok); }
+
+  /* ===== ① ふるい：数の表 ===== */
+  .sieve { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; max-width: 600px; margin: 0 auto; touch-action: manipulation; }
+  .cell {
+    position: relative; aspect-ratio: 1; border-radius: 8px; border: 2px solid #cfd8dc; background: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 900; font-variant-numeric: tabular-nums;
+    font-size: clamp(14px, 3.4cqi, 24px); cursor: pointer; user-select: none; -webkit-user-select: none; padding: 0;
+    transition: background-color .2s, transform .2s;
+  }
+  .sieve.big .cell { font-size: clamp(12px, 2.8cqi, 20px); }
+  .cell .tg { position: absolute; right: 2px; bottom: 0; font-size: 0.48em; font-weight: bold; color: #37474f; line-height: 1.2; background: rgba(255,255,255,.85); border-radius: 4px; padding: 0 2px; }
+  .cell.x { color: #78909c; border-color: transparent; }
+  .cell.x .n { text-decoration: line-through; text-decoration-thickness: 2px; background: rgba(255,255,255,.82); border-radius: 4px; padding: 0 2px; line-height: 1.1; }
+  /* 何の倍数で消したかの模様（色＋模様） */
+  .cell.x2  { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--p2) 45%, transparent) 0 3px, #eef5fb 3px 9px); border-color: var(--p2); }
+  .cell.x3  { background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--p3) 55%, transparent) 0 3px, #fdf6e6 3px 9px); border-color: var(--p3); }
+  .cell.x5  { background: radial-gradient(circle, color-mix(in srgb, var(--p5) 70%, transparent) 2px, transparent 2.6px) 0 0 / 9px 9px, #eaf7f2; border-color: var(--p5); }
+  .cell.x7  { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--p7) 60%, transparent) 0 3px, #fbf0f6 3px 9px); border-color: var(--p7); }
+  .cell.x11 { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--p11) 45%, transparent) 0 2px, transparent 2px 8px), repeating-linear-gradient(-45deg, color-mix(in srgb, var(--p11) 45%, transparent) 0 2px, #fdf0e8 2px 8px); border-color: var(--p11); }
+  .cell.x13 { background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--p13) 55%, transparent) 0 2px, transparent 2px 8px), repeating-linear-gradient(90deg, color-mix(in srgb, var(--p13) 55%, transparent) 0 2px, #eef8fd 2px 8px); border-color: var(--p13); }
+  .cell.one { color: #78909c; border-style: dashed; background: #f5f5f5; }
+  .cell.one .tg { right: auto; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: .4em; color: var(--ng); }
+  .cell.pr { color: var(--ok); border-color: var(--ok); background: #f1f8e9; }
+  .cell.pr::after { content: ""; position: absolute; inset: 3px; border: 3px solid var(--ok); border-radius: 50%; }
+  .cell.cur { box-shadow: 0 0 0 4px #ffd54f; }
+  .cell.hit { transform: scale(1.12); z-index: 2; }
+  .cell.bad { animation: shake .35s; }
+  .cell.look { box-shadow: 0 0 0 4px #4db6ac; }
+  @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; font-size: .9rem; justify-content: center; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { display: inline-block; width: 26px; height: 26px; border-radius: 6px; border: 2px solid; }
+  .legend i.pr { border-radius: 50%; border: 3px solid var(--ok); background: #f1f8e9; }
+
+  /* ===== ② 素因数分解の木 ===== */
+  .treebox { overflow-x: auto; text-align: center; min-height: 160px; }
+  .treebox svg { max-width: 100%; height: auto; }
+  .tnode rect { fill: #fff; stroke: #90a4ae; stroke-width: 2.5; }
+  .tnode text { font-size: 26px; font-weight: 900; fill: #263238; text-anchor: middle; dominant-baseline: central; font-family: inherit; }
+  .tnode.prime rect { fill: #f1f8e9; stroke: var(--ok); }
+  .tnode.prime text { fill: #1b5e20; }
+  .tnode.cur rect { stroke: #f9a825; stroke-width: 4; stroke-dasharray: 8 5; fill: #fffde7; }
+  .tedge { stroke: #78909c; stroke-width: 3; }
+  .tdiv { font-size: 18px; fill: #00695c; font-weight: bold; text-anchor: middle; }
+  .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 6px; margin-top: 6px; }
+  .key {
+    min-height: 52px; border: 3px solid var(--soft); background: #fff; border-radius: 12px; font-size: 1.3rem; font-weight: 900;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .key:disabled { opacity: .4; cursor: default; }
+  .key.primebtn { grid-column: span 3; background: #f1f8e9; border-color: #66bb6a; color: #1b5e20; font-size: 1.1rem; }
+  .result { margin-top: 10px; text-align: center; border: 3px solid #66bb6a; background: #e8f5e9; border-radius: 14px; padding: 8px 10px; }
+  .result .mr { font-size: clamp(26px, 5cqi, 40px); }
+  .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-top: 8px; }
+  .choice { min-height: 60px; border: 3px solid var(--soft); background: #fff; border-radius: 14px; cursor: pointer; touch-action: manipulation; }
+  .choice .mr { font-size: clamp(20px, 3.2cqi, 28px); }
+  .choice { padding: 4px 6px; overflow-x: auto; }
+  .choice.right { border-color: var(--ok); background: #e8f5e9; }
+  .choice.right::before { content: "○ "; color: var(--ok); font-weight: 900; font-size: 1.3rem; }
+  .choice.wrong { border-color: var(--ng); background: #fce4ec; }
+  .choice.wrong::before { content: "× "; color: var(--ng); font-weight: 900; font-size: 1.3rem; }
+  .orders { margin-top: 10px; font-size: 1rem; line-height: 1.8; }
+  .orders .same { color: var(--ok); font-weight: 900; }
+  .orders .same::before { content: "○ "; }
+
+  /* ===== ③ 使い道 ===== */
+  .ftable { border-collapse: separate; border-spacing: 4px; margin: 6px auto; font-size: clamp(18px, 3.6cqi, 28px); font-weight: 900; }
+  .ftable th { text-align: right; padding-right: 6px; white-space: nowrap; }
+  .ftable td { min-width: 1.8em; height: 1.8em; text-align: center; border-radius: 8px; }
+  .ftable td.f { background: #f5f5f5; border: 2px solid #cfd8dc; }
+  .ftable td.c { background: #e8f5e9; border: 3px solid var(--ok); }
+  .ftable td.sep { min-width: .6em; color: #90a4ae; font-weight: normal; }
+  .ftable tr.gcd td.f, .ftable tr.lcm td.f { background: #fffde7; border-color: #ffb300; }
+  .ftable tr.gcd th, .ftable tr.lcm th { font-size: .75em; color: #5d4037; }
+  .ftable td.ans { text-align: left; padding-left: 8px; white-space: nowrap; }
+  .usebox { overflow-x: auto; }
+  .sqrtcard { margin-top: 12px; border: 3px dashed #9575cd; border-radius: 14px; padding: 8px 12px; background: #f3e5f5; }
+  .sqrtcard { overflow-x: auto; }
+  .sqrtcard .mr { font-size: clamp(20px, 4.4cqi, 30px); }
+
+  /* ===== つまずきの記録 ===== */
+  .stats { font-size: .95rem; line-height: 1.8; }
+  .stats button { min-height: 44px; border: 2px solid #cfd8dc; background: #fff; border-radius: 10px; padding: 2px 12px; cursor: pointer; }
+  .words { font-size: 0.95rem; line-height: 1.7; margin: 0; }
+  .words dt { font-weight: 900; display: inline; }
+  .words dd { display: inline; margin: 0 0 0 .3em; }
+  .words dd::after { content: ""; display: block; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+  .links a { color: var(--accent-dark); font-weight: bold; }
+
+  @media (max-width: 520px) {
+    .tab { font-size: .95rem; }
+    .sieve { gap: 2px; }
+    .cell { border-width: 1.5px; border-radius: 5px; }
+    .cell .tg { display: none; }       /* せまい画面では、倍数の小さい字は模様だけにする */
+    .cell.one .tg { display: block; font-size: .32em; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← もどる</a>
+    <h1>🔍 素数のふるいと素因数分解</h1>
+  </div>
+  <p class="subtitle">倍数をふるい落として素数を見つけ、素因数分解の木をのばそう</p>
+  <div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" data-tab="sieve" role="tab">① ふるい<small>素数を見つける</small></button>
+    <button class="tab" data-tab="tree" role="tab">② 素因数分解の木<small>素数の積に分ける</small></button>
+    <button class="tab" data-tab="use" role="tab">③ 使い道<small>公約数・公倍数（発展）</small></button>
+  </div>
+
+  <div class="main">
+    <!-- ===================== ① ふるい ===================== -->
+    <section class="grid" id="pSieve">
+      <div class="card">
+        <div class="sieve" id="sieve" aria-label="数の表"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="card">
+        <div class="row" style="margin-top:0">
+          <span class="lbl">表</span>
+          <button class="chip-s" data-n="100">1〜100</button>
+          <button class="chip-s" data-n="200">1〜200</button>
+        </div>
+        <div class="row">
+          <span class="lbl">消し方</span>
+          <button class="chip-s" data-how="btn">ボタンで</button>
+          <button class="chip-s" data-how="tap">自分でタップ</button>
+        </div>
+        <div class="acts">
+          <button class="act primary wide" id="sNext">▶ つぎの素数でふるう</button>
+          <button class="act" id="sAuto">⏩ 自動でぜんぶ</button>
+          <button class="act" id="sUndo">↶ ひとつもどす</button>
+          <button class="act" id="sReset">⟲ もういちど</button>
+        </div>
+        <div class="row">
+          <span class="lbl">はやさ</span>
+          <button class="chip-s" data-sp="0">ゆっくり</button>
+          <button class="chip-s" data-sp="1">ふつう</button>
+          <button class="chip-s" data-sp="2">はやい</button>
+        </div>
+        <div class="count">
+          <div class="cp"><b id="cPrime">0</b>素数（○）</div>
+          <div><b id="cCross">0</b>消した数</div>
+          <div><b id="cLeft">0</b>まだ</div>
+        </div>
+        <div class="msg" id="sMsg" aria-live="polite"></div>
+        <div id="sTrip"></div>
+      </div>
+    </section>
+
+    <!-- ===================== ② 素因数分解の木 ===================== -->
+    <section class="grid" id="pTree" hidden>
+      <div class="card">
+        <div class="treebox" id="treeBox"></div>
+        <div id="tResult"></div>
+      </div>
+      <div class="card">
+        <div class="row" style="margin-top:0">
+          <span class="lbl">分ける数</span>
+          <input class="numin" id="tNum" type="number" min="2" max="1000" inputmode="numeric" aria-label="素因数分解する数（2〜1000）">
+          <button class="act primary" id="tGo">つくる</button>
+          <button class="act" id="tOdai">🎲 おだい</button>
+        </div>
+        <div style="margin-top:10px"><span class="lbl" id="tAsk">どの素数でわる？</span></div>
+        <div class="keys" id="tKeys"></div>
+        <div class="row">
+          <span class="lbl">ほかの数で</span>
+          <input class="numin" id="tOther" type="number" min="1" max="1000" inputmode="numeric" aria-label="わる数" style="width:4.2em;font-size:1.3rem">
+          <button class="act" id="tOtherGo">わる</button>
+        </div>
+        <div class="acts">
+          <button class="act" id="tUndo">↶ ひとつもどす</button>
+          <button class="act" id="tReset">⟲ もういちど</button>
+          <button class="act" id="tAgain" hidden>🔀 べつの順で分けてみる</button>
+          <button class="act" id="tAuto" hidden>▶ 自動で分ける（先生）</button>
+        </div>
+        <div class="msg" id="tMsg" aria-live="polite"></div>
+        <div id="tTrip"></div>
+        <div class="orders" id="tOrders"></div>
+      </div>
+    </section>
+
+    <!-- ===================== ③ 使い道（発展） ===================== -->
+    <section class="grid" id="pUse" hidden>
+      <div class="card">
+        <h2>最大公約数・最小公倍数を素因数分解から求める <span class="hatten">発展</span></h2>
+        <div class="usebox" id="useBox"></div>
+        <div id="sqrtBox"></div>
+      </div>
+      <div class="card">
+        <div class="row" style="margin-top:0">
+          <span class="lbl">2つの数</span>
+          <input class="numin" id="uA" type="number" min="2" max="1000" inputmode="numeric" aria-label="1つめの数">
+          <input class="numin" id="uB" type="number" min="2" max="1000" inputmode="numeric" aria-label="2つめの数">
+        </div>
+        <div class="acts">
+          <button class="act primary" id="uGo">くらべる</button>
+          <button class="act" id="uOdai">🎲 おだい</button>
+          <button class="act" id="uReset">⟲ もういちど</button>
+        </div>
+        <div class="msg" id="uMsg"></div>
+        <p class="note">※この画面は「発展」です。教科書によっては、中1では最大公約数・最小公倍数をあつかわないことがあります。</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="card">
+    <h2>📒 つまずきの記録</h2>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="card">
+    <h2>ことば</h2>
+    <dl class="words">
+      <dt>素数</dt><dd>1 とその数のほかに約数がない、1 より大きい自然数（2, 3, 5, 7, 11 …）。<b>1 は素数ではない。</b></dd>
+      <dt>素因数分解</dt><dd>自然数を素数だけの積に分けること（例 72 ＝ 2³×3²）。積に使った素数を「素因数」という。</dd>
+      <dt>エラトステネスのふるい</dt><dd>小さい素数から順に、その倍数を消していき、のこった数を素数とする方法。</dd>
+    </dl>
+    <div class="links">
+      <span>小学校の倍数をふりかえる → <a href="九九マスター.html">九九マスター</a></span>
+      <span>つぎに学ぶ → <a href="正負の数ドリル.html">正負の数ドリル</a></span>
+    </div>
+    <p class="note">※じっさいとのちがい：ふるいの表は 200 まで、素因数分解は 1000 までにしています。素数は無限にあり、もっと大きな数でも同じ方法で調べられます。</p>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   素数のふるいと素因数分解
+   ---------------------------------------------------------------------
+   1. 共通の道具（素数の判定・素因数分解）
+   2. つまずきの記録
+   3. ① ふるい
+   4. ② 素因数分解の木
+   5. ③ 使い道（最大公約数・最小公倍数・√の予告）
+   6. ワークシート
+   ===================================================================== */
+const PARAMS = new URLSearchParams(location.search);
+const TEACHER = PARAMS.get('teacher') === '1';
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const mr = (src, size) => MathRender.html(src, { size: size || 'inherit' });
+
+/* =====================================================================
+   1. 共通の道具
+   ===================================================================== */
+function isPrime(n) {
+  if (n < 2) return false;
+  for (let d = 2; d * d <= n; d++) if (n % d === 0) return false;
+  return true;
+}
+/** 素因数分解：[[素数, 個数], …]（小さい順） */
+function factorize(n) {
+  const out = [];
+  for (let d = 2; d * d <= n; d++) {
+    let e = 0;
+    while (n % d === 0) { n /= d; e++; }
+    if (e) out.push([d, e]);
+  }
+  if (n > 1) out.push([n, 1]);
+  return out;
+}
+/** [[2,3],[3,2]] → "2^3×3^2"（累乗の形） */
+const powText = f => f.map(([p, e]) => (e > 1 ? p + '^' + e : '' + p)).join('×');
+/** [[2,3],[3,2]] → "2×2×2×3×3" */
+const mulText = f => f.flatMap(([p, e]) => Array(e).fill(p)).join('×');
+/** 上つき数字の文字（ワークシートの記録用） */
+const SUP = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const supText = f => f.map(([p, e]) => (e > 1 ? p + String(e).replace(/\d/g, c => SUP[c]) : '' + p)).join('×');
+const PRIME_COLOR = { 2: 'var(--p2)', 3: 'var(--p3)', 5: 'var(--p5)', 7: 'var(--p7)', 11: 'var(--p11)', 13: 'var(--p13)' };
+const PATTERN_NAME = { 2: 'ななめ線', 3: '横線', 5: '点', 7: 'たて線', 11: 'あみ目', 13: 'ごばん目' };
+
+/* =====================================================================
+   2. つまずきの記録（Worksheet.appData('trips') に回数を入れる）
+   ===================================================================== */
+const TRIPS = {
+  notmult: '倍数でない数を消そうとした',
+  primex: '素数を消そうとした',
+  notdiv: 'わり切れない数でわろうとした',
+  notprime: '素数でない数でわろうとした',
+  one: '1 でわろうとした',
+  fakeprime: '素数でない数を素数とした',
+  primediv: '素数をさらに分けようとした',
+  powmul: '累乗をかけ算で表した',
+  powswap: '指数の取りちがえ',
+};
+function addTrip(type) {
+  const s = Worksheet.appData('trips') || {};
+  s[type] = (s[type] || 0) + 1;
+  Worksheet.appData('trips', s);
+  renderStats();
+}
+function renderStats() {
+  const s = Worksheet.appData('trips') || {};
+  const keys = Object.keys(TRIPS).filter(k => s[k]);
+  $('#stats').innerHTML = keys.length
+    ? keys.map(k => `✖ ${TRIPS[k]}：<b>${s[k]}</b>回`).join('<br>') + ' <button type="button" id="clearStats">記録を消す</button>'
+    : 'まだありません。まちがえると、型の名前と回数がここに出ます。';
+}
+document.addEventListener('click', ev => {
+  if (ev.target.id === 'clearStats' && confirm('つまずきの記録を消しますか？')) { Worksheet.appData('trips', {}); renderStats(); }
+});
+/** つまずきを画面に出す（box：出す場所、type：型、body：説明、btns：[[文字, 関数]]） */
+function showTrip(box, type, body, btns) {
+  addTrip(type);
+  box.innerHTML = `<div class="trip"><h3>${TRIPS[type]}</h3><div>${body}</div>` +
+    (btns && btns.length ? `<div class="acts">${btns.map((b, i) => `<button class="act" data-tb="${i}">${b[0]}</button>`).join('')}</div>` : '') + '</div>';
+  (btns || []).forEach((b, i) => { box.querySelector(`[data-tb="${i}"]`).onclick = b[1]; });
+}
+
+/* =====================================================================
+   3. ① ふるい
+   ---------------------------------------------------------------------
+   S.x[n]   … n を消した素数（まだなら 0）
+   S.by[n]  … n をふるった素数の一覧（6 なら [2, 3]）。表の小さい字に出す
+   S.pr     … ○をつけた素数の一覧
+   S.cur    … いまふるっている素数（自分でタップするときに使う）
+   ===================================================================== */
+const SP_MS = [420, 150, 45];          // はやさ：ゆっくり・ふつう・はやい（1マスの間）
+const S = { N: 100, how: 'btn', sp: 1, x: [], by: [], pr: [], cur: 0, done: false, busy: false, hist: [], stop: false };
+
+function sieveInit() {
+  S.x = Array(S.N + 1).fill(0);
+  S.by = Array.from({ length: S.N + 1 }, () => []);
+  S.pr = []; S.cur = 0; S.done = false; S.hist = []; S.stop = true;
+  S.gen = (S.gen || 0) + 1;     // 「もういちど」のあと、動いていたアニメが前の表をさわらないように
+  drawSieve();
+  sMsg('2 から順に、まだ消えていない一番小さい数を ○ でかこみ、その倍数を消していこう。<b>1 は素数ではない</b>ので、はじめから外してあるよ。');
+  $('#sTrip').innerHTML = '';
+}
+function snap() { S.hist.push(JSON.stringify({ x: S.x, by: S.by, pr: S.pr, cur: S.cur, done: S.done })); }
+function sMsg(html, cls) { const m = $('#sMsg'); m.className = 'msg' + (cls ? ' ' + cls : ''); m.innerHTML = html; }
+
+function drawSieve() {
+  const box = $('#sieve');
+  box.classList.toggle('big', S.N > 100);
+  let h = '';
+  for (let n = 1; n <= S.N; n++) h += `<button type="button" class="cell" data-n="${n}" aria-label="${n}"><span class="n">${n}</span></button>`;
+  box.innerHTML = h;
+  for (let n = 1; n <= S.N; n++) paint(n);
+  drawLegend();
+  drawCount();
+}
+function cellEl(n) { return $('#sieve').children[n - 1]; }
+/** 1マスの見た目を、状態に合わせて書きかえる */
+function paint(n) {
+  const c = cellEl(n);
+  c.className = 'cell';
+  let tg = '';
+  if (n === 1) { c.classList.add('one'); tg = '素数ではない'; }
+  else if (S.x[n]) { c.classList.add('x', 'x' + S.x[n]); tg = S.by[n].join('・'); }
+  else if (S.pr.includes(n)) c.classList.add('pr');
+  if (n === S.cur) c.classList.add('cur');
+  const old = c.querySelector('.tg'); if (old) old.remove();
+  if (tg) c.insertAdjacentHTML('beforeend', `<span class="tg">${tg}</span>`);
+  c.setAttribute('aria-label', n + (n === 1 ? '（素数ではない）' : S.x[n] ? `（${S.by[n].join('と')}の倍数で消した）` : S.pr.includes(n) ? '（素数）' : ''));
+}
+function drawLegend() {
+  const ps = [2, 3, 5, 7].concat(S.N > 120 ? [11, 13] : []);
+  $('#legend').innerHTML = `<span><i class="pr"></i>素数</span>` +
+    ps.map(p => `<span><i class="cell x${p}" style="display:inline-block;padding:0"></i>${p} の倍数（${PATTERN_NAME[p]}）</span>`).join('');
+}
+function drawCount() {
+  let x = 0, left = 0;
+  for (let n = 2; n <= S.N; n++) { if (S.x[n]) x++; else if (!S.pr.includes(n)) left++; }
+  $('#cPrime').textContent = S.pr.length;
+  $('#cCross').textContent = x;
+  $('#cLeft').textContent = left;
+  $('#sUndo').disabled = !S.hist.length || S.busy;
+  $('#sNext').disabled = S.done || S.busy || (S.how === 'tap' && S.cur && multiplesLeft(S.cur).length > 0);
+  $('#sAuto').disabled = S.done;
+  $('#sAuto').textContent = S.busy ? '⏸ とめる' : '⏩ 自動でぜんぶ';
+}
+/** まだ消えていない、一番小さい数（○もついていない） */
+function nextP() {
+  for (let n = 2; n <= S.N; n++) if (!S.x[n] && !S.pr.includes(n)) return n;
+  return 0;
+}
+/** p の倍数で、まだ消えていないもの */
+function multiplesLeft(p) {
+  const out = [];
+  for (let m = 2 * p; m <= S.N; m += p) if (!S.x[m]) out.push(m);
+  return out;
+}
+function cross(m, p) {
+  if (!S.by[m].includes(p)) S.by[m].push(p);
+  if (!S.x[m]) S.x[m] = p;
+  paint(m);
+}
+/** つぎの素数を ○ でかこむ。p×p が表をこえたら、のこりはぜんぶ素数 */
+function circleNext() {
+  const p = nextP();
+  if (!p) return 0;
+  if (p * p > S.N) {
+    const rest = [];
+    for (let n = p; n <= S.N; n++) if (!S.x[n] && !S.pr.includes(n)) rest.push(n);
+    S.pr.push(...rest);
+    const old = S.cur; S.cur = 0; if (old) paint(old);
+    rest.forEach(paint);
+    S.done = true;
+    sMsg(`${p}×${p}＝${p * p} は ${S.N} より大きい。${p} 以上の素数の倍数で ${S.N} 以下のもの（${p}×2, ${p}×3 …）は、小さい素数の倍数として<b>もう消えている</b>。<br>
+      だから、<b>のこった数はすべて素数</b>。1〜${S.N} の素数は <b>${S.pr.length}こ</b>！`, 'good');
+    return -1;
+  }
+  const old = S.cur;
+  S.cur = p; S.pr.push(p);
+  if (old) paint(old);
+  paint(p);
+  return p;
+}
+/** ボタンで：つぎの素数をえらんで、その倍数を順に消す */
+async function sieveStep() {
+  if (S.busy && !S.autoAll) return;
+  snap();
+  const p = circleNext();
+  drawCount();
+  if (p <= 0) return;
+  // 倍数のうち、もう消えているものも数える（p×p より小さい倍数は、もう消えている）
+  const all = []; for (let m = 2 * p; m <= S.N; m += p) all.push(m);
+  const already = all.filter(m => S.x[m]);
+  if (S.how === 'tap') {
+    sMsg(`<b>${p}</b> は素数（○）。${p} の倍数をタップして消そう。のこり <b id="tapLeft">${multiplesLeft(p).length}</b>こ。`);
+    drawCount();
+    return;
+  }
+  const own = !S.autoAll, gen = S.gen;
+  if (own) S.busy = true;
+  drawCount();
+  sMsg(`<b>${p}</b> は素数（○）。${p} の倍数（${p * 2}, ${p * 3}, ${p * 4} …）を消していくよ。`);
+  for (const m of all) {
+    if ((S.stop && !S.autoAll) || gen !== S.gen) return;
+    const c = cellEl(m);
+    c.classList.add('hit');
+    cross(m, p);
+    await sleep(SP_MS[S.sp]);
+    c.classList.remove('hit');
+  }
+  if (own) S.busy = false;
+  const firstNew = all.find(m => !already.includes(m));
+  sMsg(`<b>${p}</b> の倍数を消したよ。` + (already.length && firstNew
+    ? `${already.slice(0, 3).join(', ')}${already.length > 3 ? ' …' : ''} は小さい素数の倍数として<b>もう消えていた</b>。${p} ではじめて消えたのは <b>${firstNew}（${p}×${p}）</b>から。`
+    : '') + (nextP() ? `<br>つぎに ○ をつけるのは、まだ消えていない一番小さい数 <b>${nextP()}</b>。` : ''));
+  drawCount();
+}
+/** 自動でぜんぶ（とちゅうで「とめる」もできる） */
+async function sieveAuto() {
+  if (S.busy) { S.stop = true; return; }
+  S.busy = true; S.autoAll = true; S.stop = false;
+  const how = S.how; S.how = 'btn';
+  drawCount();
+  const gen = S.gen;
+  while (!S.done && !S.stop && gen === S.gen) {
+    await sieveStep();
+    await sleep(SP_MS[S.sp] * 3);
+  }
+  S.how = how; S.busy = false; S.autoAll = false;
+  drawCount();
+}
+/** 表のマスをタップしたとき */
+function sieveTap(n) {
+  if (S.busy) return;
+  const c = cellEl(n);
+  if (S.how === 'tap' && S.cur && !S.done && multiplesLeft(S.cur).length) {
+    const p = S.cur;
+    if (n === 1) return sMsg('1 は素数ではないので、はじめから外してあるよ。');
+    if (S.x[n]) return sMsg(`${n} はもう消えているよ（${S.by[n].join('と')}の倍数）。`);
+    if (n === p) {
+      c.classList.add('bad'); setTimeout(() => c.classList.remove('bad'), 400);
+      return showTrip($('#sTrip'), 'primex', `${p} は素数なので消さずに ○ のまま。消すのは ${p} の<b>倍数</b>（${p}×2, ${p}×3 …）だけだよ。`);
+    }
+    if (n % p !== 0) {
+      c.classList.add('bad'); setTimeout(() => c.classList.remove('bad'), 400);
+      return showTrip($('#sTrip'), 'notmult', `${n} ÷ ${p} ＝ ${Math.floor(n / p)} あまり ${n % p}。${n} は ${p} でわり切れないので、${p} の倍数ではないよ。`,
+        [['▶ ' + p + ' の倍数を光らせる', () => flashMultiples(p)]]);
+    }
+    snap();
+    cross(n, p);
+    $('#sTrip').innerHTML = '';
+    const left = multiplesLeft(p).length;
+    if (left) sMsg(`${n} ＝ ${p}×${n / p}。${p} の倍数だね。のこり <b>${left}</b>こ。`, 'good');
+    else sMsg(`${p} の倍数をぜんぶ消せた！ つぎの素数は <b>${nextP()}</b>。「▶ つぎの素数でふるう」を押そう。`, 'good');
+    drawCount();
+    return;
+  }
+  // ボタンで消すときは、タップした数のことを教える
+  if (n === 1) return sMsg('1 は素数ではない（約数が 1 の1つだけ）。素数は「1 とその数のほかに約数がない、1 より大きい自然数」。', 'info');
+  if (S.pr.includes(n)) return sMsg(`${n} は素数。約数は 1 と ${n} だけ。`, 'info');
+  if (S.x[n]) return sMsg(`${n} ＝ ${mulText(factorize(n))}。${S.by[n].join('・')} の倍数なので消えた。`, 'info');
+  sMsg(`${n} はまだ消えていない。素数かどうかは、ふるいを進めるとわかるよ。`, 'info');
+}
+async function flashMultiples(p) {
+  for (let m = p; m <= S.N; m += p) cellEl(m).classList.add('look');
+  await sleep(1600);
+  for (let m = p; m <= S.N; m += p) cellEl(m).classList.remove('look');
+}
+function sieveUndo() {
+  if (!S.hist.length || S.busy) return;
+  const o = JSON.parse(S.hist.pop());
+  Object.assign(S, o);
+  for (let n = 1; n <= S.N; n++) paint(n);
+  drawCount();
+  $('#sTrip').innerHTML = '';
+  sMsg('ひとつもどしたよ。');
+}
+$('#sieve').addEventListener('click', e => { const c = e.target.closest('.cell'); if (c) sieveTap(+c.dataset.n); });
+$('#sNext').onclick = () => { S.stop = false; sieveStep(); };
+$('#sAuto').onclick = sieveAuto;
+$('#sUndo').onclick = sieveUndo;
+$('#sReset').onclick = () => { S.stop = true; S.busy = false; S.autoAll = false; sieveInit(); };
+document.querySelectorAll('[data-n]').forEach(b => {
+  if (!b.classList.contains('chip-s')) return;
+  b.onclick = () => { S.N = +b.dataset.n; S.stop = true; S.busy = false; S.autoAll = false; syncChips(); sieveInit(); };
+});
+document.querySelectorAll('[data-how]').forEach(b => { b.onclick = () => { S.how = b.dataset.how; syncChips(); drawCount(); }; });
+document.querySelectorAll('[data-sp]').forEach(b => { b.onclick = () => { S.sp = +b.dataset.sp; syncChips(); }; });
+function syncChips() {
+  document.querySelectorAll('.chip-s[data-n]').forEach(b => b.classList.toggle('on', +b.dataset.n === S.N));
+  document.querySelectorAll('[data-how]').forEach(b => b.classList.toggle('on', b.dataset.how === S.how));
+  document.querySelectorAll('[data-sp]').forEach(b => b.classList.toggle('on', +b.dataset.sp === S.sp));
+}
+
+/* =====================================================================
+   4. ② 素因数分解の木
+   ---------------------------------------------------------------------
+   木は「わり算の木」：葉 v を素数 p でわると、左に p（○）、右に v÷p がのびる。
+   T.steps … わった素数の順番（[2, 2, 3] など）。のこりの葉は T.leaf
+   T.done  … のこりの葉を「素数」と決めて完成したか
+   ===================================================================== */
+const KEYS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 17, 19, 23, 29, 31];
+const ODAI = [72, 84, 90, 96, 120, 126, 150, 180, 198, 210, 225, 252, 260, 300, 315, 336, 360, 378, 420, 441, 462, 504, 540, 588, 600, 660, 693, 720, 756, 784, 840, 882, 900, 924, 990, 1000];
+// 「素数でない数を素数とした」の類題：91＝7×13 のような、素数に見えやすい数をふくむ数
+const LOOKALIKE = [182, 273, 364, 102, 153, 204, 114, 171, 174, 261, 238, 357, 266, 399, 286, 429, 322, 374, 442, 418];
+const T = { n: 72, steps: [], done: false, hist: [], orders: [], powDone: false, busy: false };
+
+function leafOf() { return T.steps.reduce((v, p) => v / p, T.n); }
+function tMsg(html, cls) { const m = $('#tMsg'); m.className = 'msg' + (cls ? ' ' + cls : ''); m.innerHTML = html; }
+
+function treeStart(n, keepOrders) {
+  n = Math.round(n);
+  if (!(n >= 1 && n <= 1000)) { tMsg('2 から 1000 までの数を入れてね。', 'info'); return; }
+  if (n === 1) { tMsg('<b>1 は素数ではない</b>し、素数の積にも分けられない。素因数分解は 2 以上の数で考えるよ。', 'info'); return; }
+  if (!keepOrders || n !== T.n) T.orders = [];
+  T.n = n; T.steps = []; T.done = false; T.hist = []; T.powDone = false;
+  $('#tNum').value = n;
+  $('#tTrip').innerHTML = '';
+  drawTree();
+  tMsg(`<b>${n}</b> を素数でわっていこう。下の数をえらんでね。わり切れる素数なら、どれからでもいいよ。`);
+}
+function drawTree() {
+  // 位置：わった回数 i の葉は (x0 + i*dx, y0 + i*dy)。左下に素数の○
+  const k = T.steps.length, dx = 74, dy = 86, x0 = 100, y0 = 40;
+  const W = x0 + (k + 1) * dx + 70, H = y0 + k * dy + 50;
+  const box = (x, y, v, cls) => {
+    const w = Math.max(54, String(v).length * 17 + 24);
+    return `<g class="tnode ${cls}"><rect x="${x - w / 2}" y="${y - 24}" width="${w}" height="48" rx="${cls.includes('prime') ? 24 : 10}"/><text x="${x}" y="${y + 1}">${v}</text></g>`;
+  };
+  let edges = '', nodes = '', v = T.n;
+  T.steps.forEach((p, i) => {
+    const x = x0 + i * dx, y = y0 + i * dy;
+    edges += `<line class="tedge" x1="${x}" y1="${y + 24}" x2="${x - dx * 0.75}" y2="${y + dy - 24}"/>
+      <line class="tedge" x1="${x}" y1="${y + 24}" x2="${x + dx}" y2="${y + dy - 24}"/>
+      <text class="tdiv" x="${x + dx * 0.72}" y="${y + dy / 2 + 2}">÷${p}</text>`;
+    nodes += box(x, y, v, '') + box(x - dx * 0.75, y + dy, p, 'prime');
+    v /= p;
+  });
+  const lx = x0 + k * dx, ly = y0 + k * dy;
+  nodes += box(lx, ly, v, T.done ? 'prime' : 'cur');
+  $('#treeBox').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="${T.n} の素因数分解の木">${edges}${nodes}</svg>`;
+  // キー
+  $('#tKeys').innerHTML = KEYS.map(d => `<button type="button" class="key" data-d="${d}">${d}</button>`).join('') +
+    `<button type="button" class="key primebtn" id="tPrime">○ ${v} は素数</button>`;
+  $('#tKeys').querySelectorAll('[data-d]').forEach(b => { b.onclick = () => treeDivide(+b.dataset.d); b.disabled = T.done; });
+  $('#tPrime').onclick = treeMarkPrime;
+  $('#tPrime').disabled = T.done;
+  $('#tAsk').textContent = T.done ? '完成！' : `${v} をどの素数でわる？（もう分けられないなら「○ 素数」）`;
+  $('#tUndo').disabled = !T.hist.length;
+  $('#tAgain').hidden = !T.done;
+  $('#tAuto').hidden = !TEACHER || T.done;
+  drawResult();
+  drawOrders();
+}
+function treeDivide(d) {
+  if (T.done || T.busy) return;
+  const v = leafOf();
+  d = Math.round(d);
+  if (!(d >= 1)) return;
+  if (d === 1) return showTrip($('#tTrip'), 'one', `${v} ÷ 1 ＝ ${v}。1 でわっても数は変わらないし、<b>1 は素数ではない</b>。2 以上の素数でわろう。`);
+  if (isPrime(v) && d === v) {
+    return showTrip($('#tTrip'), 'primediv', `${v} ÷ ${v} ＝ 1。${v} は素数なので、これ以上は分けない（1 は素数ではないので、木に 1 は出てこない）。「○ ${v} は素数」を押そう。`);
+  }
+  if (v % d !== 0) {
+    return showTrip($('#tTrip'), 'notdiv', `${v} ÷ ${d} ＝ ${Math.floor(v / d)} あまり ${v % d}。${v} は ${d} でわり切れないよ。` +
+      (v % 2 === 0 ? '一の位が偶数なので 2 でわれる。' : v % 5 === 0 ? '一の位が 0 か 5 なので 5 でわれる。' : String(v).split('').reduce((a, c) => a + +c, 0) % 3 === 0 ? '各位の数の和が 3 の倍数なので 3 でわれる。' : 'べつの素数をためしてみよう。'));
+  }
+  if (!isPrime(d)) {
+    return showTrip($('#tTrip'), 'notprime', `${d} は素数ではない（${d} ＝ ${mulText(factorize(d))}）。素因数分解では<b>素数</b>でわるよ。${factorize(d)[0][0]} でわってみよう。`);
+  }
+  T.hist.push(T.steps.slice());
+  T.steps.push(d);
+  $('#tTrip').innerHTML = '';
+  const nv = v / d;
+  tMsg(`${v} ÷ ${d} ＝ <b>${nv}</b>。${d} は素数なので ○。つぎは ${nv} を見よう。`, 'good');
+  drawTree();
+}
+function treeMarkPrime() {
+  if (T.done || T.busy) return;
+  const v = leafOf();
+  if (!isPrime(v)) {
+    const p = factorize(v)[0][0];
+    return showTrip($('#tTrip'), 'fakeprime', `${v} はまだ分けられるよ。2, 3, 5, 7 … と小さい素数から順に、わり切れるかためしてみよう。` +
+      (TEACHER ? `（先生：${v} ＝ ${p}×${v / p}）` : ''),
+      [['🔁 類題（素数に見えやすい数）', () => treeStart(LOOKALIKE[Math.floor(Math.random() * LOOKALIKE.length)])]]);
+  }
+  T.hist.push(T.steps.slice());
+  T.done = true;
+  $('#tTrip').innerHTML = '';
+  const order = T.steps.concat(v);
+  T.orders.push(order);
+  tMsg(T.steps.length ? `葉がぜんぶ素数になった。完成！` : `${v} は素数。素因数分解しても ${v} そのものだね。`, 'good');
+  drawTree();
+}
+/** 完成したら：積の形 → 累乗の形をえらぶ問題 */
+function drawResult() {
+  const box = $('#tResult');
+  if (!T.done) { box.innerHTML = ''; return; }
+  const f = factorize(T.n);
+  const mul = mulText(f), pow = powText(f);
+  const repeated = f.some(([, e]) => e > 1);
+  let h = `<div class="result"><div>${mr(T.n + '=' + mul)}</div>`;
+  if (!repeated) { box.innerHTML = h + `<div class="note">同じ素数が2回以上出てこないので、累乗にまとめる必要はないよ。</div></div>`; return; }
+  if (T.powDone) {
+    box.innerHTML = h + `<div>${mr('=' + pow)}</div><div class="note">同じ素数の積は、累乗（指数）でまとめて書く。</div></div>`;
+    return;
+  }
+  // 選択肢：正しい形・「個数をかけた」形・指数を取りちがえた形
+  const ch = [{ t: pow, ok: true }];
+  ch.push({ t: f.map(([p, e]) => (e > 1 ? '(' + p + '×' + e + ')' : '' + p)).join('×'), trip: 'powmul' });
+  const es = f.map(([, e]) => e);
+  if (f.length >= 2 && new Set(es).size > 1) {
+    const rev = es.slice().reverse();
+    ch.push({ t: f.map(([p], i) => (rev[i] > 1 ? p + '^' + rev[i] : '' + p)).join('×'), trip: 'powswap' });
+  } else {
+    ch.push({ t: f.map(([p, e]) => (e > 1 ? e + '^' + p : '' + p)).join('×'), trip: 'powswap' });
+  }
+  ch.sort(() => Math.random() - 0.5);
+  T.choices = ch;
+  box.innerHTML = h + `<div style="margin-top:6px;font-weight:900">累乗を使ってまとめると？</div>
+    <div class="choices">${ch.map((c, i) => `<button type="button" class="choice" data-c="${i}">${mr(c.t)}</button>`).join('')}</div></div>`;
+  box.querySelectorAll('.choice').forEach(b => {
+    b.onclick = () => {
+      const c = T.choices[+b.dataset.c];
+      if (c.ok) {
+        T.powDone = true;
+        tMsg(`正解！ ${T.n} ＝ ${supText(f)}。`, 'good');
+        drawResult(); drawOrders();
+        return;
+      }
+      b.classList.add('wrong');
+      const [p, e] = f.find(([, e]) => e > 1);
+      if (c.trip === 'powmul') showTrip($('#tTrip'), 'powmul', `${p} が ${e} こ → ${Array(e).fill(p).join('×')} ＝ ${p}<sup>${e}</sup>（${Math.pow(p, e)}）。${p}×${e}（＝${p * e}）ではないよ。指数は「同じ数をかける個数」。`);
+      else showTrip($('#tTrip'), 'powswap', `指数は「その素数を何こかけたか」。${f.map(([q, k]) => `${q} は ${k}こ`).join('、')} だよ。小さく右上に書くのが個数。`);
+    };
+  });
+}
+function drawOrders() {
+  const box = $('#tOrders');
+  if (!T.orders.length) { box.innerHTML = ''; return; }
+  const f = factorize(T.n);
+  box.innerHTML = `<b>${T.n} を分けた順</b><br>` + T.orders.map((o, i) => `${i + 1}回目：${o.join(' → ')}`).join('<br>') +
+    (T.orders.length >= 2 ? `<div class="same">どの順で分けても、使った素数は同じ（${supText(f)}）。素因数分解は<b>1通り</b>に決まる。</div>`
+      : T.done ? '<div class="note">「🔀 べつの順で分けてみる」で、ちがう素数から分けてくらべよう。</div>' : '');
+}
+function treeUndo() {
+  if (!T.hist.length || T.busy) return;
+  const prev = T.hist.pop();
+  if (T.done) { T.done = false; T.powDone = false; T.orders.pop(); }
+  T.steps = prev;
+  $('#tTrip').innerHTML = '';
+  tMsg('ひとつもどしたよ。');
+  drawTree();
+}
+async function treeAuto() {      // 先生モード：小さい素数から順に自動で分ける
+  if (T.busy) return;
+  treeStart(T.n, true);
+  T.busy = true;
+  for (;;) {
+    await sleep(900);
+    const v = leafOf();
+    if (isPrime(v)) break;
+    T.busy = false; treeDivide(factorize(v)[0][0]); T.busy = true;
+  }
+  T.busy = false;
+  treeMarkPrime();
+}
+$('#tGo').onclick = () => treeStart(+$('#tNum').value);
+$('#tNum').addEventListener('keydown', e => { if (e.key === 'Enter') treeStart(+$('#tNum').value); });
+$('#tOdai').onclick = () => {
+  let n; do { n = ODAI[Math.floor(Math.random() * ODAI.length)]; } while (n === T.n);
+  treeStart(n);
+};
+$('#tOtherGo').onclick = () => { const d = +$('#tOther').value; if (d) treeDivide(d); };
+$('#tOther').addEventListener('keydown', e => { if (e.key === 'Enter') $('#tOtherGo').click(); });
+$('#tUndo').onclick = treeUndo;
+$('#tReset').onclick = () => treeStart(T.n);
+$('#tAgain').onclick = () => { treeStart(T.n, true); tMsg(`こんどは、さっきとちがう素数から分けてみよう（1回目は ${T.orders[0][0]} から）。`); };
+$('#tAuto').onclick = treeAuto;
+
+/* =====================================================================
+   5. ③ 使い道：最大公約数・最小公倍数（発展）と √ の予告
+   ===================================================================== */
+const UODAI = [[72, 60], [84, 126], [90, 168], [48, 180], [36, 54], [120, 252], [98, 140], [150, 225], [66, 110], [270, 360]];
+function useDraw(a, b) {
+  a = Math.round(a); b = Math.round(b);
+  if (!(a >= 2 && a <= 1000 && b >= 2 && b <= 1000)) { $('#uMsg').innerHTML = '2 から 1000 までの数を2つ入れてね。'; return; }
+  $('#uA').value = a; $('#uB').value = b;
+  const fa = new Map(factorize(a)), fb = new Map(factorize(b));
+  const ps = [...new Set([...fa.keys(), ...fb.keys()])].sort((x, y) => x - y);
+  // 列：素数ごとに、多いほうの個数だけ列を作る。共通な列（少ないほうの個数まで）に印
+  const cols = [];
+  ps.forEach(p => {
+    const ea = fa.get(p) || 0, eb = fb.get(p) || 0;
+    for (let i = 0; i < Math.max(ea, eb); i++) cols.push({ p, a: i < ea, b: i < eb });
+  });
+  const g = cols.filter(c => c.a && c.b).reduce((s, c) => s * c.p, 1);
+  const l = cols.reduce((s, c) => s * c.p, 1);
+  const row = (name, pick, cls) => `<tr class="${cls || ''}"><th>${name}</th>` +
+    cols.map((c, i) => (i ? '<td class="sep"></td>' : '') + (pick(c) ? `<td class="${pick(c) === 'c' ? 'c' : 'f'}">${c.p}</td>` : '<td></td>')).join('') + '</tr>';
+  const gcdCols = cols.filter(c => c.a && c.b), lcmCols = cols;
+  $('#useBox').innerHTML = `<table class="ftable" aria-label="素因数をそろえた表">
+    ${row(a + ' ＝', c => (c.a ? (c.b ? 'c' : 'f') : ''))}
+    ${row(b + ' ＝', c => (c.b ? (c.a ? 'c' : 'f') : ''))}
+    <tr><td colspan="${cols.length * 2}" style="height:6px"></td></tr>
+    ${row('最大公約数', c => (c.a && c.b ? 'f' : ''), 'gcd')}
+    ${row('最小公倍数', () => 'f', 'lcm')}
+  </table>
+  <div class="note" style="text-align:center">縦にそろえた素数のうち、<b style="color:var(--ok)">緑のわく（太線）</b>が2つの数に共通な素因数。</div>
+  <div class="result">
+    <div>最大公約数 ＝ 共通な素因数の積 ＝ ${gcdCols.length ? mr(gcdCols.map(c => c.p).join('×') + '=' + g) : '1（共通な素因数がない）'}</div>
+    <div>最小公倍数 ＝ 列をぜんぶ1つずつかける ＝ ${mr(lcmCols.map(c => c.p).join('×') + '=' + l)}</div>
+  </div>`;
+  $('#uMsg').innerHTML = g === 1 ? `${a} と ${b} には共通な素因数がないので、最大公約数は 1。` :
+    `たしかめ：${a}÷${g}＝${a / g}、${b}÷${g}＝${b / g}（わり切れる）。${l}÷${a}＝${l / a}、${l}÷${b}＝${l / b}（わり切れる）。`;
+  // √ の予告（1つめの数）
+  const f = factorize(a);
+  const out = f.reduce((s, [p, e]) => s * Math.pow(p, Math.floor(e / 2)), 1);
+  const ins = f.reduce((s, [p, e]) => s * Math.pow(p, e % 2), 1);
+  const pairs = f.filter(([, e]) => e >= 2).map(([p, e]) => Array(Math.floor(e / 2)).fill(p + '×' + p).join('・')).join('・');
+  $('#sqrtBox').innerHTML = `<div class="sqrtcard"><b>🔭 中3で学ぶこと（予告）</b>：素因数分解は √（平方根）を簡単にするときにも使うよ。<br>
+    ${mr('√' + a + '=√(' + mulText(f) + ')')}　` +
+    (out > 1 ? `→ 同じ素数のペア（${pairs}）を √ の外に出すと ${mr((out > 1 ? out : '') + (ins > 1 ? '√' + ins : ''))}` : '→ ペアがないので、これ以上簡単にならない') + '</div>';
+}
+$('#uGo').onclick = () => useDraw(+$('#uA').value, +$('#uB').value);
+$('#uOdai').onclick = () => { const [a, b] = UODAI[Math.floor(Math.random() * UODAI.length)]; useDraw(a, b); };
+$('#uReset').onclick = () => useDraw(72, 60);
+['#uA', '#uB'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') $('#uGo').click(); }));
+
+/* =====================================================================
+   タブ
+   ===================================================================== */
+let tab = PARAMS.get('tab') || 'sieve';
+function setTab(t) {
+  tab = t;
+  document.querySelectorAll('.tab').forEach(b => { b.classList.toggle('on', b.dataset.tab === t); b.setAttribute('aria-selected', b.dataset.tab === t); });
+  $('#pSieve').hidden = t !== 'sieve';
+  $('#pTree').hidden = t !== 'tree';
+  $('#pUse').hidden = t !== 'use';
+}
+document.querySelectorAll('.tab').forEach(b => { b.onclick = () => setTab(b.dataset.tab); });
+
+/* =====================================================================
+   6. ワークシート
+   ===================================================================== */
+Worksheet.init({
+  title: '素数のふるいと素因数分解',
+  question: '1〜100 に、素数はいくつあるだろうか？　また、自然数を素数の積に分けるとき、分ける順番で答えは変わるだろうか？',
+  predictions: ['10こくらい', '25こくらい', '50こくらい', 'わからない'],
+  operationNote: '① ふるいで 1〜100 をさいごまでふるったら「＋ 記録する」。② 木で 72 などを分けて完成させたら、べつの順でも分けて「＋ 記録する」。',
+  fields: [
+    { key: 'what', label: 'やったこと', math: false },
+    { key: 'res', label: 'けっか', math: false }
+  ],
+  capture: () => {
+    if (tab === 'sieve') {
+      if (!S.done) { sMsg('さいごまでふるってから記録しよう。', 'info'); return null; }
+      return { what: `1〜${S.N} をふるった（${S.pr.filter(p => p * p <= S.N).join(', ')} の倍数を消した）`, res: `素数 ${S.pr.length}こ` };
+    }
+    if (tab === 'tree') {
+      if (!T.done) { tMsg('木を完成させてから記録しよう。', 'info'); return null; }
+      return { what: `${T.n} を ${T.orders[T.orders.length - 1].join('→')} の順に分けた`, res: `${T.n}＝${supText(factorize(T.n))}` };
+    }
+    const a = +$('#uA').value, b = +$('#uB').value;
+    const g = (x, y) => (y ? g(y, x % y) : x);
+    return { what: `${a} と ${b}（発展）`, res: `最大公約数 ${g(a, b)}・最小公倍数 ${a * b / g(a, b)}` };
+  },
+  summaryHint: '「素数は〜」「素因数分解は、分ける順番を変えても〜」の形で書いてみよう。72 の素因数分解も式で。',
+  teacher: {
+    hint: 'ふるいは「自動」で 2→3→5→7 と進め、7 で終わる理由（11×11＝121 が100をこえる）を問う。木は 2 から分ける生徒と 3 から分ける生徒の結果をくらべさせる。',
+    answer: '1〜100 の素数は 25こ（2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97）。<br>式：72＝2³×3²<br>ことば：素因数分解は、どの順でわっても同じ素数の積になる（ただ1通り）。1 は素数ではない。'
+  }
+});
+
+// ===== はじめ =====
+if (TEACHER) $('#teacherBadge').hidden = false;
+syncChips();
+sieveInit();
+treeStart(72);
+useDraw(72, 60);
+setTab(['sieve', 'tree', 'use'].includes(tab) ? tab : 'sieve');
+renderStats();
+</script>
+</body>
+</html>
