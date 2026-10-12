@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一次方程式のステップ</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：正（＋）＝オレンジ・実線、負（−）＝青・点線
+     正解＝緑（○）、まちがい・注意＝赤紫（×）。色だけでなく、記号・線の種類でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip-s { min-height: 44px; font-size: 0.92rem; padding: 4px 12px; }
+  .level-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+
+  /* ===== いまの式（大きく） ===== */
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  svg#bal { width: 260px; max-width: 70%; height: auto; display: block; }
+  #bal .beam, #bal .pan { transition: transform .55s cubic-bezier(.3,1.5,.5,1); transform-box: view-box; }
+  .bal-cap { font-size: 0.9rem; color: #546e7a; text-align: center; min-height: 1.3rem; font-weight: bold; }
+  .eq-scroll { width: 100%; overflow-x: auto; overflow-y: hidden; }
+  .eq-wrap { position: relative; padding: 62px 8px 10px; width: max-content; min-width: 100%; text-align: center; }
+  .eq-big { font-size: clamp(30px, 6.4vw, 56px); font-weight: bold; white-space: nowrap; display: inline-flex; align-items: center; }
+  .eq-big .eqs, .eq-mid .eqs { margin: 0 .35em; }
+  .side { display: inline-flex; align-items: center; }
+  .pt { display: inline-flex; align-items: center; border-radius: 8px; padding: 0 .04em; transition: background .3s; }
+  .pt + .pt { margin-left: .1em; }
+  .opm { margin: 0 .22em 0 0; font-weight: normal; }
+  /* 色ぬり：正＝オレンジ＋実線の下線、負＝青＋点線の下線 */
+  .pt.hl-pos { color: var(--pos); background: #fff3e0; box-shadow: inset 0 -.09em 0 var(--pos); }
+  .pt.hl-neg { color: var(--neg); background: #e3f2fd; border-bottom: .08em dashed var(--neg); }
+  .pt.hl-ng  { color: var(--ng); background: #fce4ec; }
+  .eq-arrows { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .eq-arrows path { fill: none; stroke-width: 3.5; }
+  .eq-arrows text { font-size: 19px; font-weight: bold; paint-order: stroke; stroke: #fff; stroke-width: 5px; }
+  .flash { animation: flash .7s ease-out; }
+  @keyframes flash { 0% { background: #fffde7; } 100% { background: transparent; } }
+  .msg { text-align: center; font-size: 1.05rem; line-height: 1.7; min-height: 1.8rem; padding: 4px 6px; }
+  .msg .eq-mid { font-size: 26px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; border-radius: 12px; }
+  .msg.ok { color: #1b5e20; }
+  .mark-ok { color: var(--ok); font-weight: 900; }
+  .mark-ng { color: var(--ng); font-weight: 900; }
+
+  /* ===== 次の一手のカード ===== */
+  .moves-head { text-align: center; font-weight: bold; color: #37474f; margin-bottom: 8px; }
+  .moves { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+  .move {
+    min-height: 64px; border: 3px solid #b0bec5; background: #fafafa; border-radius: 14px;
+    font-size: 1.08rem; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation;
+    padding: 8px 10px; line-height: 1.4; box-shadow: 0 3px 0 rgba(0,0,0,0.12);
+  }
+  .move .k { display: block; font-size: 0.78rem; color: #78909c; font-weight: bold; }
+  .move:active { transform: translateY(2px); box-shadow: none; }
+  .move.ng { border-color: var(--ng); background: #fce4ec; }
+  .move.ng::before { content: "× "; color: var(--ng); font-weight: 900; }
+  .move.ok { border-color: var(--ok); background: #e8f5e9; }
+  .move.ok::before { content: "○ "; color: var(--ok); font-weight: 900; }
+  .move.pulse { animation: pulse 0.9s ease-in-out infinite; border-color: #fbc02d; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(251,192,45,.8); } 50% { box-shadow: 0 0 0 8px rgba(251,192,45,0); } }
+  .moves.busy { pointer-events: none; opacity: 0.6; }
+  .opt-check { font-size: 0.92rem; font-weight: bold; color: #37474f; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+  .opt-check input { width: 22px; height: 22px; }
+
+  /* ===== 変形したあとの式はどれ？（3択） ===== */
+  .quiz-card { border: 3px solid #fbc02d; }
+  .quiz-what { text-align: center; font-weight: bold; margin-bottom: 8px; }
+  .quiz-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
+  .quiz-btn { min-height: 64px; border: 3px solid var(--soft); background: #fff; border-radius: 14px; cursor: pointer; touch-action: manipulation; padding: 6px; color: var(--ink); font-size: 26px; }
+  .quiz-btn.ok { border-color: var(--ok); background: #e8f5e9; }
+  .quiz-btn.ok::before { content: "○ "; color: var(--ok); font-weight: 900; }
+  .quiz-btn.ng { border-color: var(--ng); background: #fce4ec; }
+  .quiz-btn.ng::before { content: "× "; color: var(--ng); font-weight: 900; }
+  .quiz-msg { text-align: center; margin-top: 8px; line-height: 1.7; }
+
+  /* ===== 検算 ===== */
+  .check-card { border: 3px solid var(--ok); }
+  .check-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; font-size: 26px; }
+  .check-row .lbl { font-size: 1rem; font-weight: bold; color: #37474f; min-width: 3em; }
+  .check-row input { width: 120px; font-size: 1.4rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .check-row input.ng { border-color: var(--ng); background: #fce4ec; }
+  .check-row input.ok { border-color: var(--ok); background: #e8f5e9; }
+
+  /* ===== 式のきろく：「=」の位置を縦にそろえ、右はしに「なにをしたか」 ===== */
+  .steps { display: grid; grid-template-columns: 1fr auto 1fr minmax(9em, auto); align-items: center; column-gap: 6px; row-gap: 3px; font-size: 24px; }
+  .steps .s-l { text-align: right; }
+  .steps .s-r { text-align: left; }
+  .steps .s-eq { text-align: center; font-weight: bold; }
+  .steps .s-why { font-size: 0.9rem; color: #546e7a; padding-left: 8px; border-left: 3px solid #cfd8dc; }
+  .steps .sub { color: #78909c; }
+  .steps .last { color: var(--ok); font-weight: bold; }
+  @media (max-width: 560px) {
+    .steps { grid-template-columns: 1fr auto 1fr; font-size: 20px; }
+    .steps .s-why { grid-column: 1 / -1; border-left: none; padding-left: 0; text-align: center; margin-bottom: 4px; }
+  }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🪜 一次方程式のステップ</h1>
+<p class="subtitle">次の一手を自分でえらんで、1ステップずつ方程式を解こう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- レベル：① ax+b=c → ② x が両辺 → ③ かっこ → ④ 小数・分数 -->
+  <div class="chip-row" id="levelRow"></div>
+  <div class="level-note" id="levelNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">🎲 新しい問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+
+  <!-- いまの式：天秤アイコン＋大きな式＋移項の矢印 -->
+  <div class="card stage">
+    <svg id="bal" viewBox="0 0 320 128" xmlns="http://www.w3.org/2000/svg" aria-label="天秤のアイコン"></svg>
+    <div class="bal-cap" id="balCap"></div>
+    <div class="eq-scroll"><div class="eq-wrap" id="eqWrap">
+      <div class="eq-big" id="eqBig"></div>
+      <svg class="eq-arrows" id="eqArrows"></svg>
+    </div></div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <!-- 変形したあとの式はどれ？（移項・かっこ・分母をはらう のとき） -->
+  <div class="card quiz-card" id="quizCard" hidden></div>
+
+  <!-- 次の一手のカード -->
+  <div class="card" id="movesCard">
+    <div class="moves-head">👇 次の一手はどれ？</div>
+    <div class="moves" id="moves"></div>
+    <div style="text-align:center; margin-top:6px">
+      <label class="opt-check"><input type="checkbox" id="optQuiz" checked> 移項・かっこ・分母をはらうときは、変形したあとの式もえらぶ</label>
+    </div>
+  </div>
+
+  <!-- 検算 -->
+  <div class="card check-card" id="checkCard" hidden>
+    <h2>🔍 検算：解を、もとの式に代入してたしかめよう</h2>
+    <div id="checkBody"></div>
+  </div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="tools">
+      <button class="op-btn action" id="tAuto">▶ 最後まで自動で見せる</button>
+      <button class="op-btn" id="tStep">⏭ つぎの1手</button>
+      <button class="op-btn" id="tStop">■ とめる</button>
+    </div>
+    <div class="t-ans" id="tAns"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- 式のきろく -->
+  <div class="card">
+    <h2>📝 式のきろく</h2>
+    <div class="steps" id="steps"></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li>「👇 次の一手」のカードから、いまの式にすることを1つえらぼう。正しければ式が変形するよ。まちがえると、その理由が出るよ。</li>
+      <li>両辺に同じ操作をするときは、天秤のアイコンの両方の皿に同じ札がのる。<b>片方の辺だけ</b>に計算すると、天秤がかたむく（等式が成り立たない）。</li>
+      <li><b>移項</b>：項を反対の辺へうつすと、矢印のように<b>符号がかわる</b>（＋5 → −5）。これは「両辺から5をひく」を短く書いたもの。</li>
+      <li>移項・かっこをはずす・分母をはらう を選んだら、<b>変形したあとの式</b>を3つから選ぼう（チェックを外すと選ばずに進む）。</li>
+      <li>x ＝ 数 の形になったら、さいごに<b>検算</b>。解をもとの式の左辺と右辺に代入して、等しくなるかたしかめよう。</li>
+      <li>レベル：① ax＋b＝c　② x が両辺　③ かっこ　④ 小数・分数。まちがえたら <b>↶ ひとつもどす</b>、はじめからは <b>⟲ もういちど</b>。</li>
+      <li><b>分母をはらう</b>：両辺に分母の最小公倍数をかけて、分数のない式にすること。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：教科書では、移項した数の計算（14−5）を同じ行でしてしまうことも多いけれど、ここでは「移項」と「計算する（まとめる）」を別の一手にしています。また、x の項を左辺、数の項を右辺に集める解き方を正解にしています（右辺に x を集めても解けます）。<br>
+    つながる教材：<a href="おもさくらべと はかり.html">小3 おもさくらべとはかり（てんびん）</a>／<a href="天秤方程式.html">中1 天秤で方程式</a>／<a href="同類項タイル.html">中1 同類項タイル</a></p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（最後まで自動で見せる・答え・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const F = (v) => Fraction.from(v);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndMove = () => beep([[520, 0, 0.08, 'triangle'], [700, 0.08, 0.1, 'triangle']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  /* =====================================================================
+     1. 式のしくみ
+     式 = { L: 左辺の項の並び, R: 右辺の項の並び, dec: 小数で見せるか }
+     項は3種類：
+       { t:'x', c }          … x の項（c は係数。Fraction）
+       { t:'n', c }          … 数の項
+       { t:'g', m, inner }   … かっこのまとまり m(inner)。m が 1/3 なら (inner)/3 と分数で見せる
+     ===================================================================== */
+  const X = (c) => ({ t: 'x', c: F(c) });
+  const N = (c) => ({ t: 'n', c: F(c) });
+  const G = (m, inner) => ({ t: 'g', m: F(m), inner });
+  const cloneP = (p) => p.t === 'g' ? { t: 'g', m: p.m, inner: p.inner.map(cloneP) } : { t: p.t, c: p.c };
+  const cloneE = (e) => ({ L: e.L.map(cloneP), R: e.R.map(cloneP), dec: e.dec });
+  const other = (s) => s === 'L' ? 'R' : 'L';
+
+  // 項の値（x に数を入れたとき）
+  function partVal(p, x) {
+    if (p.t === 'x') return p.c.mul(x);
+    if (p.t === 'n') return p.c;
+    return p.m.mul(sideVal(p.inner, x));
+  }
+  function sideVal(ps, x) { return ps.reduce((s, p) => s.add(partVal(p, x)), F(0)); }
+  // 辺を「a x + b」にしたときの a と b
+  function lin(ps) { const b = sideVal(ps, 0); return { a: sideVal(ps, 1).sub(b), b }; }
+  // 符号を反対にした項
+  function negP(p) { return p.t === 'g' ? { t: 'g', m: p.m.neg(), inner: p.inner.map(cloneP) } : { t: p.t, c: p.c.neg() }; }
+  // 項に k をかける（かっこの前の数が 1 になったら、かっこをはずして中身を返す）
+  function mulP(p, k) {
+    if (p.t !== 'g') return [{ t: p.t, c: p.c.mul(k) }];
+    const m = p.m.mul(k);
+    if (m.equals(1)) return p.inner.map(cloneP);
+    return [{ t: 'g', m, inner: p.inner.map(cloneP) }];
+  }
+  const mulSide = (ps, k) => ps.flatMap(p => mulP(p, k));
+  function mulAll(e, k) { return { L: mulSide(e.L, k), R: mulSide(e.R, k), dec: e.dec }; }
+  // かっこをはずす（分配法則）
+  const expandP = (p) => p.t === 'g' ? p.inner.map(q => ({ t: q.t, c: q.c.mul(p.m) })) : [cloneP(p)];
+  function expandAll(e) { return { L: e.L.flatMap(expandP), R: e.R.flatMap(expandP), dec: e.dec }; }
+  // 同類項をまとめる（かっこはそのまま。x の項 → 数の項 の順にならべる）
+  function collectSide(ps) {
+    const gs = ps.filter(p => p.t === 'g').map(cloneP);
+    let a = F(0), b = F(0);
+    ps.forEach(p => { if (p.t === 'x') a = a.add(p.c); if (p.t === 'n') b = b.add(p.c); });
+    const out = gs;
+    if (!a.isZero()) out.push(X(a));
+    if (!b.isZero()) out.push(N(b));
+    return out;
+  }
+  function collectAll(e) { return { L: collectSide(e.L), R: collectSide(e.R), dec: e.dec }; }
+  // 移項：items = [{s:'L', i:1}, ...]。sign:false にすると符号をかえない（つまずき用）、drop:true でうつし先に書かない
+  function moveTerms(e, items, opt) {
+    opt = opt || {};
+    const n = cloneE(e), add = { L: [], R: [] };
+    items.forEach((it, k) => {
+      const p = e[it.s][it.i];
+      const keep = opt.keepSignIdx != null ? opt.keepSignIdx === k : opt.sign === false;
+      if (!opt.drop) add[other(it.s)].push(keep ? cloneP(p) : negP(p));
+    });
+    ['L', 'R'].forEach(s => {
+      const rm = new Set(items.filter(it => it.s === s).map(it => it.i));
+      n[s] = n[s].filter((_, i) => !rm.has(i)).concat(add[s]);
+    });
+    return n;
+  }
+
+  /* ---------- 式の見た目 ---------- */
+  // 小数で見せる（0.3 など）。分母が 2・5 だけでできているときだけ
+  function decStr(f) {
+    let k = 0, p = 1;
+    while (p % f.d !== 0) { p *= 10; k++; if (k > 6) return f.toString(); }
+    const v = Math.abs(f.n) * (p / f.d);
+    let s = String(v).padStart(k + 1, '0');
+    s = k ? s.slice(0, -k) + '.' + s.slice(-k) : s;
+    return (f.n < 0 ? '-' : '') + s;
+  }
+  const numStr = (f, dec) => (dec && !f.isInteger()) ? decStr(f) : f.toString();
+  // 項の「符号をのぞいた本体」の書き方（MathRender の書き方）
+  function body(p, dec) {
+    if (p.t === 'x') {
+      const c = p.c.abs();
+      if (c.equals(1)) return 'x';
+      if (c.isInteger() || dec) return numStr(c, dec) + 'x';
+      return '{' + (c.n === 1 ? '' : c.n) + 'x}/' + c.d;                // 2/3 x は 2x/3 の形で
+    }
+    if (p.t === 'n') return numStr(p.c.abs(), dec);
+    const m = p.m.abs(), in_ = sideText(p.inner, dec);
+    if (m.equals(1)) return '(' + in_ + ')';
+    if (m.isInteger() || dec) return numStr(m, dec) + '(' + in_ + ')';
+    if (m.n === 1) return '{' + in_ + '}/' + m.d;                       // (x+1)/3
+    return m.toString() + ' (' + in_ + ')';
+  }
+  const isNeg = (p) => (p.t === 'g' ? p.m : p.c).sign() < 0;
+  const termSrc = (p, first, dec) => (isNeg(p) ? '-' : (first ? '' : '+')) + body(p, dec);
+  function sideText(ps, dec) { return ps.length ? ps.map((p, i) => termSrc(p, i === 0, dec)).join('') : '0'; }
+  const eqText = (e) => sideText(e.L, e.dec) + '=' + sideText(e.R, e.dec);
+  const mr = (src) => MathRender.html(src, { size: 'inherit' });
+  // 辺を、項ごとの <span> にして出す（矢印や色ぬりの場所をとるため）
+  function sideHTML(ps, dec, s, hl) {
+    if (!ps.length) return `<span class="side" data-s="${s}"><span class="pt">${mr('0')}</span></span>`;
+    return `<span class="side" data-s="${s}">` + ps.map((p, i) => {
+      const h = hl && hl[s] && hl[s][i] ? ' ' + hl[s][i] : '';
+      // 2つめからの項は「＋」「−」を記号として離して書く（−6 が「マイナス6」に見えないように）
+      const inner = i === 0 ? mr(termSrc(p, true, dec)) : `<span class="opm">${isNeg(p) ? '−' : '+'}</span>${mr(body(p, dec))}`;
+      return `<span class="pt${h}" data-i="${i}">${inner}</span>`;
+    }).join('') + '</span>';
+  }
+  function eqHTML(e, hl) { return sideHTML(e.L, e.dec, 'L', hl) + '<span class="eqs">=</span>' + sideHTML(e.R, e.dec, 'R', hl); }
+  const eqInline = (e) => `<span class="eq-mid">${mr(eqText(e))}</span>`;
+  // ボタンの文字に使う「+5」「−2x」の書き方
+  const signedTerm = (p, dec) => mr(termSrc(p, false, dec));
+
+  /* =====================================================================
+     2. 問題を作る（答え x を先に決めてから式を作る）
+     問題を手で足したいときは FIXED に { L:[...], R:[...] } を1行足す
+     ===================================================================== */
+  const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const nz = (a, b) => { let v; do v = ri(a, b); while (v === 0); return v; };
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const shuffle = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+  // L・R の中に「あとで決める数の項」slot を1つ入れておき、答え x で等式がなりたつように決める
+  function finish(L, R, slot, x, opt) {
+    opt = opt || {};
+    const e = { L, R, dec: !!opt.dec };
+    const list = e[slot.s];
+    const tmp = list.slice(); tmp.splice(slot.at, 0, N(0));
+    e[slot.s] = tmp;
+    const k = slot.s === 'R' ? sideVal(e.L, x).sub(sideVal(e.R, x)) : sideVal(e.R, x).sub(sideVal(e.L, x));
+    if (k.isZero()) return null;
+    if (!opt.dec && (!k.isInteger() || Math.abs(k.n) > (opt.max || 40))) return null;
+    tmp[slot.at] = N(k);
+    return check(e, x) ? e : null;
+  }
+  // x の係数が両辺で同じ（解がない）問題や、答えがずれた問題をはじく
+  function check(e, x) {
+    const l = lin(e.L), r = lin(e.R);
+    if (l.a.equals(r.a)) return false;
+    return r.b.sub(l.b).div(l.a.sub(r.a)).equals(x);
+  }
+  const LEVELS = {
+    1: { name: '① ax＋b＝c', note: 'x の項と数の項を分けて、さいごに x の係数でわろう' },
+    2: { name: '② x が両辺', note: 'x の項は左辺に、数の項は右辺に集めよう' },
+    3: { name: '③ かっこ', note: 'まずかっこをはずそう。かっこの前が − のときは符号に注意' },
+    4: { name: '④ 小数・分数', note: '両辺を10倍したり、分母をはらったりして、整数の式にしよう' }
+  };
+  function gen1() {
+    for (;;) {
+      const x = nz(-4, 9);
+      let a = Math.random() < 0.15 ? 1 : ri(2, 9);
+      if (Math.random() < 0.2) a = -ri(2, 5);
+      const b = nz(-9, 9), c = a * x + b;
+      if (c === 0 || Math.abs(c) > 60) continue;
+      return { L: [X(a), N(b)], R: [N(c)], dec: false };
+    }
+  }
+  function gen2() {
+    for (;;) {
+      const x = nz(-5, 9), a = ri(1, 9);
+      const c = Math.random() < 0.2 ? -ri(1, 3) : ri(1, 9);
+      if (a === c) continue;
+      const b = ri(-9, 9), d = (a - c) * x + b;
+      if ((b === 0 && d === 0) || Math.abs(d) > 40) continue;
+      const L = [X(a)]; if (b) L.push(N(b));
+      const R = (d && Math.random() < 0.25) ? [N(d), X(c)] : [X(c)].concat(d ? [N(d)] : []);
+      return { L, R, dec: false };
+    }
+  }
+  // かっこ：P1 m(x+p)=d ／ P2 m(x+p)=cx+d ／ P3 ax−n(x+p)=d ／ P4 m(x+p)=k(x+q) ／ P5 d−n(x+p)=cx
+  function gen3(tpl) {
+    for (let t = 0; t < 500; t++) {
+      const x = nz(-4, 8), p = nz(-6, 6);
+      const inner = () => [X(Math.random() < 0.15 ? 2 : 1), N(p)];
+      const T = tpl || pick(['P1', 'P2', 'P3', 'P3', 'P4', 'P5']);
+      let e = null;
+      if (T === 'P1') e = finish([G(pick([2, 3, 4, 5, -2, -3, -1]), inner())], [], { s: 'R', at: 0 }, x);
+      if (T === 'P2') { const m = ri(2, 5); e = finish([G(Math.random() < 0.3 ? -m : m, inner())], [X(ri(1, 5))], { s: 'R', at: 1 }, x); }
+      if (T === 'P3') e = finish([X(ri(2, 7)), G(-ri(1, 4), inner())], [], { s: 'R', at: 0 }, x);
+      if (T === 'P4') {
+        const m1 = ri(2, 5), m2 = pick([1, 2, 3, 4].filter(v => v !== m1)), v = m1 * (x + p);
+        if (v % m2 !== 0) continue;
+        const q = v / m2 - x;
+        if (q === 0 || Math.abs(q) > 9) continue;
+        const R = m2 === 1 ? [X(1), N(q)] : [G(m2, [X(1), N(q)])];
+        e = { L: [G(m1, [X(1), N(p)])], R, dec: false };
+        if (!check(e, x)) e = null;
+      }
+      if (T === 'P5') e = finish([G(-ri(1, 3), [X(1), N(p)])], [X(ri(1, 4))], { s: 'L', at: 0 }, x);
+      if (e && e.L.length) return e;
+    }
+    return { L: [G(2, [X(1), N(3)])], R: [N(10)], dec: false };
+  }
+  // 小数・分数：D1 0.3x+1.2=0.5x−0.4 ／ D2 小数第2位まで ／ F1 x/2+1=x/3+2 ／ F2 (x+1)/2=(x−2)/3 ／ F3 (x+p)/a−(x+q)/b=k ／ F4 (x+p)/a=x+k
+  function gen4(tpl) {
+    for (let t = 0; t < 800; t++) {
+      const T = tpl || pick(['D1', 'D1', 'D2', 'F1', 'F1', 'F2', 'F3', 'F4']);
+      let e = null;
+      if (T === 'D1' || T === 'D2') {
+        const k = T === 'D1' ? 10 : 100, x = nz(-5, 8);
+        const A = T === 'D1' ? ri(1, 9) : pick([5, 15, 25, 35, 45, 75, 12]);
+        const C = T === 'D1' ? ri(1, 9) : pick([10, 20, 30, 50]);
+        if (A === C) continue;
+        const B = T === 'D1' ? nz(-30, 30) : pick([-1, 1]) * pick([10, 20, 30, 50, 70]);
+        const D = (A - C) * x + B;
+        if (D === 0 || Math.abs(D) > (T === 'D1' ? 60 : 300)) continue;
+        // 「1.2」「−0.4」のように、整数にならない数が多くなるように
+        if (T === 'D1' && (B % 10 === 0 && D % 10 === 0)) continue;
+        e = { L: [X(new Fraction(A, k)), N(new Fraction(B, k))], R: [X(new Fraction(C, k)), N(new Fraction(D, k))], dec: true };
+      }
+      if (T === 'F1') {
+        // 分母の組は、最小公倍数が12以下になるものだけ（答えが大きくなりすぎないように）
+        const [d1, d2] = shuffle(pick([[2, 3], [2, 4], [3, 4], [2, 6], [3, 6], [4, 6], [2, 5]]));
+        const l = Fraction.lcm(d1, d2), x = l * (l >= 10 ? pick([-1, 1]) : nz(-2, 2));
+        const n1 = Math.random() < 0.3 ? 2 : 1, n2 = 1;
+        if (new Fraction(n1, d1).isInteger()) continue;
+        if (Math.random() < 0.35) e = finish([X(new Fraction(n1, d1)), X(new Fraction(-n2, d2))], [], { s: 'R', at: 0 }, x, { max: 20 });
+        else e = finish([X(new Fraction(n1, d1)), N(nz(-5, 5))], [X(new Fraction(n2, d2))], { s: 'R', at: 1 }, x, { max: 20 });
+      }
+      if (T === 'F2') {
+        const [d1, d2] = shuffle([2, 3, 4, 5]).slice(0, 2), x = nz(-6, 9), v = nz(-3, 3);
+        const p = v * d1 - x, q = v * d2 - x;
+        if (!p || !q || Math.abs(p) > 9 || Math.abs(q) > 9) continue;
+        e = { L: [G(new Fraction(1, d1), [X(1), N(p)])], R: [G(new Fraction(1, d2), [X(1), N(q)])], dec: false };
+        if (!check(e, x)) e = null;
+      }
+      if (T === 'F3') {
+        const [d1, d2] = shuffle([2, 3, 4, 6]).slice(0, 2), x = nz(-6, 9);
+        const p = nz(-5, 5), q = nz(-5, 5);
+        if ((x + p) % d1 || (x + q) % d2) continue;
+        e = finish([G(new Fraction(1, d1), [X(1), N(p)]), G(new Fraction(-1, d2), [X(1), N(q)])], [], { s: 'R', at: 0 }, x, { max: 9 });
+      }
+      if (T === 'F4') {
+        const d = pick([2, 3, 4]), x = nz(-6, 9), p = nz(-5, 5);
+        if ((x + p) % d) continue;
+        e = finish([G(new Fraction(1, d), [X(1), N(p)])], [X(1)], { s: 'R', at: 1 }, x, { max: 12 });
+      }
+      if (e) return e;
+    }
+    return { L: [G(new Fraction(1, 2), [X(1), N(1)])], R: [G(new Fraction(1, 3), [X(1), N(-2)])], dec: false };
+  }
+  const GEN = { 1: gen1, 2: gen2, 3: gen3, 4: gen4 };
+  // ワークシートの問題 3x−5=x+7
+  const WS_PROB = () => ({ L: [X(3), N(-5)], R: [X(1), N(7)], dec: false });
+
+  /* =====================================================================
+     3. いまの式の「状態」と、次の一手のカード
+     正しい解き方の順：小数→10倍 ／ 分数→分母をはらう ／ かっこ→はずす
+                      → x の項は左辺・数の項は右辺へ（移項・等式の性質）・同類項をまとめる
+                      → 両辺を x の係数でわる → x ＝ 数
+     ===================================================================== */
+  function allCoefs(e) {
+    const out = [];
+    const walk = (ps) => ps.forEach(p => { if (p.t === 'g') { out.push(p.m); walk(p.inner); } else out.push(p.c); });
+    walk(e.L); walk(e.R);
+    return out;
+  }
+  function placesOf(d) { let k = 0, p = 1; while (p % d !== 0) { p *= 10; k++; } return k; }
+  const hasGroup = (e) => e.L.concat(e.R).some(p => p.t === 'g');
+  function isSolved(e) {
+    return e.L.length === 1 && e.L[0].t === 'x' && e.L[0].c.equals(1) && e.R.length <= 1 && e.R.every(p => p.t === 'n');
+  }
+  // x の項が右辺にある・数の項が左辺にある（＝移項したい項）
+  function wrongSide(e) {
+    const out = [];
+    e.L.forEach((p, i) => { if (p.t === 'n') out.push({ s: 'L', i }); });
+    e.R.forEach((p, i) => { if (p.t === 'x') out.push({ s: 'R', i }); });
+    return out;
+  }
+  const needCollect = (e) => ['L', 'R'].some(s => ['x', 'n'].some(t => e[s].filter(p => p.t === t).length >= 2));
+  function stateOf(e) {
+    const nonInt = allCoefs(e).some(c => !c.isInteger());
+    if (nonInt && e.dec) return 'dec';
+    if (nonInt) return 'frac';
+    if (hasGroup(e)) return 'group';
+    if (isSolved(e)) return 'done';
+    if (wrongSide(e).length || needCollect(e)) return 'linear';
+    return 'divide';
+  }
+  const answerOf = (e) => { const l = lin(e.L), r = lin(e.R); return r.b.sub(l.b).div(l.a.sub(r.a)); };
+
+  // つまずきの型（名前・説明・練習するレベル）
+  const TRIPS = {
+    ikouSign:   { name: '移項で符号を変え忘れた', lv: 2, exp: '項を反対の辺へうつす（移項する）と、符号がかわる。＋5 → −5、＋2x → −2x。移項は「両辺から同じ数をひく（たす）」を短く書いたものだから。' },
+    ikouDrop:   { name: '移項した項を書き忘れた', lv: 2, exp: '移項は「消す」のではなく「反対の辺へうつす」こと。うつした先に、符号をかえて書こう。' },
+    denPartial: { name: '分母をはらう（10倍する）とき、かけ忘れた項がある', lv: 4, exp: '両辺に6をかけるときは、分数の項だけでなく、整数の項にも、右辺にも、<b>ぜんぶの項</b>にかける。分子が x＋1 のような式のときは、かっこをつけて 3(x＋1) のようにかける。' },
+    minusParen: { name: 'かっこの前の − の処理ミス', lv: 3, tpl: 'P3', exp: '−2(x−3) は、かっこの中のぜんぶの項に −2 をかけて −2x＋6。うしろの項の符号もかわる。' },
+    partialMul: { name: 'かっこの中の一部の項にしかかけていない', lv: 3, tpl: 'P1', exp: '2(x＋3) は 2×x＋2×3＝2x＋6。かっこの前の数は、中のぜんぶの項にかける（分配法則）。' },
+    oneSide:    { name: '片方の辺だけに計算した', lv: 1, exp: '等式は天秤と同じ。両辺に同じ操作をしないと、つり合いがくずれる（等式が成り立たなくなる）。' },
+    coefSub:    { name: 'x の係数をひいた', lv: 1, exp: '3x は 3×x のこと。x を1こにするには、係数の3で<b>わる</b>。3をひいても 3x−3 になるだけ。' },
+    likeTerms:  { name: 'x の項と数の項をまとめた', lv: 2, exp: '3x＋5 は 8x にはならない。まとめられるのは、x の項どうし・数の項どうし（同類項）だけ。<a href="同類項タイル.html">同類項タイル</a>で見てみよう。' },
+    calc:       { name: '計算のまちがい', lv: 2, exp: '符号と計算を、もう一度たしかめよう。' }
+  };
+
+  // ----- 正しい一手（ok）を作る -----
+  // kind: add（両辺に同じ数・式をたす/ひく）move（移項）collect expand mul
+  function opAdd(e, it) {
+    const p = e[it.s][it.i], q = negP(p);
+    const label = (q.c.sign() > 0 ? '両辺に ' : '両辺から ') + mr(body(q, e.dec)) + (q.c.sign() > 0 ? ' をたす' : ' をひく');
+    const tag = termSrc(q, false, e.dec);
+    return { ok: true, kind: 'add', key: 'add' + it.s + it.i, label, why: plainOf(label),
+      bal: { tag, cap: '両辺に同じ操作 → つり合ったまま' },
+      run: () => { const m = cloneE(e); m.L.push(cloneP(q)); m.R.push(cloneP(q)); return [m, collectAll(m)]; } };
+  }
+  function opMove(e, items) {
+    const all = items.length >= 2;
+    const ps = items.map(it => e[it.s][it.i]);
+    const where = (it) => it.s === 'L' ? '右辺へ' : '左辺へ';
+    const label = all ? 'まとめて移項する<br><small>（x の項は左辺へ、数の項は右辺へ）</small>'
+      : signedTerm(ps[0], e.dec) + ' を' + where(items[0]) + '移項する';
+    const why = all ? '移項（' + ps.map(p => termSrc(p, false, e.dec) + ' → ' + termSrc(negP(p), false, e.dec)).join('、') + '）'
+      : termSrc(ps[0], false, e.dec) + ' を' + where(items[0]) + '移項（符号がかわって ' + termSrc(negP(ps[0]), false, e.dec) + '）';
+    return { ok: true, kind: 'move', key: all ? 'moveAll' : 'move' + items[0].s + items[0].i, label, why: plainOf(why), items,
+      bal: { tag: all ? '' : termSrc(negP(ps[0]), false, e.dec), cap: '移項は「両辺に同じ数をたす・ひく」を短く書いたもの' },
+      quiz: () => moveQuiz(e, items),
+      run: () => [moveTerms(e, items)] };
+  }
+  function opCollect(e) {
+    return { ok: true, kind: 'collect', key: 'collect', label: '同類項をまとめる<br><small>（計算する）</small>', why: '計算する（同類項をまとめる）',
+      bal: { tag: '', cap: '辺の中で計算しただけ。大きさはかわらない' }, run: () => [collectAll(e)] };
+  }
+  function opExpand(e) {
+    return { ok: true, kind: 'expand', key: 'expand', label: 'かっこをはずす', why: 'かっこをはずす（分配法則）',
+      bal: { tag: '', cap: '形をかえただけ。辺の大きさはかわらない' }, quiz: () => expandQuiz(e), run: () => [expandAll(e)] };
+  }
+  // 両辺に k をかける。how: dec（10倍）den（分母をはらう）div（わる）gdiv（かっこの前の数でわる）
+  function opMul(e, k, how) {
+    let label, tag, why;
+    if (how === 'dec') { label = '両辺を ' + k + ' 倍する'; tag = '×' + k; why = '両辺を' + k + '倍する'; }
+    else if (how === 'den') { label = '分母をはらう<br><small>（両辺に ' + k + ' をかける）</small>'; tag = '×' + k; why = '両辺に' + k + 'をかける（分母をはらう）'; }
+    else {
+      const d = k.inv();
+      if (d.isInteger()) { label = '両辺を ' + mr(d.toString()) + ' でわる'; tag = '÷' + (d.sign() < 0 ? '(' + d + ')' : d); why = '両辺を' + d + 'でわる'; }
+      else { label = '両辺に ' + mr(k.toString()) + ' をかける'; tag = '×' + k; why = '両辺に' + k + 'をかける'; }
+    }
+    return { ok: true, kind: 'mul', key: 'mul' + how, label, why: plainOf(why),
+      bal: { tag: tag.replace(/-/g, '−'), cap: '両辺に同じ操作 → つり合ったまま' },
+      quiz: (how === 'dec' || how === 'den') ? () => mulQuiz(e, k) : null,
+      run: () => [mulAll(e, k)] };
+  }
+  function plainOf(html) { const d = document.createElement('div'); d.innerHTML = html; return d.textContent.replace(/-/g, '−'); }
+
+  // ----- まちがいの一手（ng）を作る：理由とプレビューの式をつける -----
+  const ng = (label, reason, o) => Object.assign({ ok: false, label, reason }, o || {});
+
+  function cardsFor(e, level) {
+    const st = stateOf(e), good = [], bad = [];
+    const firstX = (s) => e[s].findIndex(p => p.t === 'x');
+    if (st === 'dec') {
+      const k = Math.pow(10, Math.max(...allCoefs(e).map(c => placesOf(c.d))));
+      good.push(opMul(e, k, 'dec'));
+      if (k === 100) bad.push(ng('両辺を 10 倍する', '10倍しても、まだ小数が残る：' + eqInline(mulAll(e, 10)) + '<br>小数第2位まであるときは <b>100倍</b> しよう。', { pv: true }));
+      else bad.push(ng('両辺を 10 でわる', 'わると、もっと小さい小数になってしまう：' + eqInline(mulAll(e, F(1).div(10))) + '<br>小数を整数にするには、両辺を <b>10倍</b>。'));
+      bad.push(ng('左辺だけを ' + k + ' 倍する', '左辺だけ大きくすると、天秤がかたむく（等式が成り立たない）。両辺に同じ数をかけよう。', { tilt: 'L', trip: 'oneSide' }));
+      bad.push(ng('x の項を移項する', '小数のままでも解けるけど、先に両辺を ' + k + ' 倍すると、整数だけで計算できてまちがいが少ないよ。'));
+    } else if (st === 'frac') {
+      const dens = [...new Set(allCoefs(e).filter(c => !c.isInteger()).map(c => c.d))];
+      const L = dens.reduce((a, b) => Fraction.lcm(a, b), 1);
+      good.push(opMul(e, L, 'den'));
+      const d1 = dens.find(d => d !== L);
+      if (d1) bad.push(ng('両辺に ' + d1 + ' をかける', d1 + ' をかけても、分数が残る：' + eqInline(mulAll(e, d1)) + '<br>分母 ' + dens.join('・') + ' の<b>最小公倍数 ' + L + '</b> をかけよう。'));
+      bad.push(ng('両辺を ' + L + ' でわる', 'わると分母が大きくなる：' + eqInline(mulAll(e, F(1).div(L))) + '<br>分母をはらうときは、分母の最小公倍数を<b>かける</b>。'));
+      bad.push(ng('左辺だけに ' + L + ' をかける', '左辺だけにかけると、天秤がかたむく（等式が成り立たない）。<b>両辺のぜんぶの項</b>にかけよう。', { tilt: 'L', trip: 'oneSide' }));
+      if (hasGroup(e)) bad.push(ng('かっこをはずす', '分数のままかっこをはずすと、分数の計算がふえる。先に<b>分母をはらう</b>と、整数だけで計算できるよ。'));
+    } else if (st === 'group') {
+      good.push(opExpand(e));
+      // m(x+p)=d で d が m でわりきれるときは「両辺を m でわる」も正解
+      if (e.L.length === 1 && e.L[0].t === 'g' && e.R.length === 1 && e.R[0].t === 'n') {
+        const m = e.L[0].m;
+        if (e.R[0].c.div(m).isInteger() && !m.equals(-1)) good.push(opMul(e, m.inv(), 'gdiv'));
+        else if (!m.equals(-1)) bad.push(ng('両辺を ' + mr(m.toString()) + ' でわる', 'わりきれなくて分数が出てくる：' + eqInline(mulAll(e, m.inv())) + '<br>先にかっこをはずそう。'));
+      }
+      const g = e.L.concat(e.R).find(p => p.t === 'g');
+      const inN = g.inner.find(p => p.t === 'n');
+      if (inN) bad.push(ng('かっこの中の ' + signedTerm(inN, e.dec) + ' を移項する', 'かっこの中の項は、かっこの前の数 ' + mr(g.m.toString()) + ' とかけ算でつながっている。そのままでは移項できないので、先に<b>かっこをはずそう</b>。'));
+      bad.push(ng('分母をはらう', 'この式には分数がないよ。'));
+      bad.push(ng('同類項をまとめる', 'かっこの中と外の項は、そのままではまとめられない。先に<b>かっこをはずそう</b>。'));
+    } else if (st === 'linear') {
+      const W = wrongSide(e);
+      const moves = W.map(it => opMove(e, [it]));
+      const adds = W.map(it => opAdd(e, it));
+      // カードは多すぎないように：移項（2つまで）→ まとめて移項 → 同類項 → 等式の性質（1つ）
+      moves.slice(0, 2).forEach(o => good.push(o));
+      if (W.length >= 2 && level >= 2) good.push(opMove(e, W));
+      if (needCollect(e)) good.push(opCollect(e));
+      if (adds.length && (level === 1 || good.length < 3)) good.push(adds[0]);
+      // まちがいの一手
+      const nL = e.L.findIndex(p => p.t === 'n');
+      if (nL >= 0) {
+        const p = e.L[nL];
+        const same = cloneE(e); same.L.push(cloneP(p)); same.R.push(cloneP(p));
+        const word = p.c.sign() > 0 ? 'たす' : 'ひく';
+        bad.push(ng((p.c.sign() > 0 ? '両辺に ' : '両辺から ') + mr(body(p, e.dec)) + ' を' + word,
+          '左辺の ' + signedTerm(p, e.dec) + ' を消すには、反対に ' + (p.c.sign() > 0 ? 'ひく' : 'たす') + '（' + mr(termSrc(p, true, e.dec) + termSrc(negP(p), false, e.dec)) + '＝0）。<br>' + word + 'と ' + eqInline(collectAll(same)) + ' になって、x から遠ざかる。', { pv: true }));
+        const one = cloneE(e); one.R.push(cloneP(p));
+        bad.push(ng('右辺だけに ' + mr(body(p, e.dec)) + ' を' + word,
+          '右辺だけに' + word + 'と、天秤がかたむく（等式が成り立たない）。それに、左辺の ' + signedTerm(p, e.dec) + ' も消えないよ。',
+          { tilt: p.c.sign() > 0 ? 'R' : 'L', trip: 'oneSide' }));
+        const xi = firstX('L');
+        if (xi >= 0) {
+          const xp = e.L[xi], sum = cloneE(e);
+          bad.push(ng(mr(termSrc(xp, true, e.dec) + termSrc(p, false, e.dec)) + ' をまとめる',
+            'x の項と数の項は<b>同類項ではない</b>から、まとめられない（' + mr(termSrc(xp, true, e.dec) + termSrc(p, false, e.dec)) + ' は ' + mr(sideText([X(xp.c.add(p.c))], e.dec)) + ' にはならない）。', { trip: 'likeTerms' }));
+          if (!xp.c.abs().equals(1)) {
+            const dv = mulAll(e, xp.c.inv());
+            const clean = allCoefs(dv).every(c => c.isInteger());
+            if (!clean) bad.push(ng('両辺を ' + mr(xp.c.toString()) + ' でわる', '両辺を ' + mr(xp.c.toString()) + ' でわってもつり合うけど、' + eqInline(dv) + ' のように分数が出てきて、かえってむずかしくなる。先に数の項を右辺へうつそう。'));
+          }
+          bad.push(ng(signedTerm(xp, e.dec) + ' を右辺へ移項する', 'x の項は<b>左辺</b>に集めよう。' + signedTerm(xp, e.dec) + ' を右辺へうつすと、x が右辺へ行ってしまう。'));
+        }
+      }
+      const nR = e.R.findIndex(p => p.t === 'n');
+      if (nR >= 0 && nL < 0) bad.push(ng(signedTerm(e.R[nR], e.dec) + ' を左辺へ移項する', '数の項は<b>右辺</b>に集めよう。右辺の数を左辺へうつすと、x の項と数の項がまた同じ辺にまざってしまう。'));
+      const xR = e.R.findIndex(p => p.t === 'x');
+      if (xR >= 0) {
+        const p = e.R[xR], same = cloneE(e); same.L.push(cloneP(p)); same.R.push(cloneP(p));
+        bad.push(ng((p.c.sign() > 0 ? '両辺に ' : '両辺から ') + mr(body(p, e.dec)) + (p.c.sign() > 0 ? ' をたす' : ' をひく'),
+          '右辺の ' + signedTerm(p, e.dec) + ' を消すには、反対に' + (p.c.sign() > 0 ? 'ひく' : 'たす') + '。このままだと ' + eqInline(collectAll(same)) + ' になって、右辺の x が消えない。'));
+      }
+      if (!needCollect(e)) bad.push(ng('同類項をまとめる', 'それぞれの辺に、まとめられる項（同類項）がないよ。先に移項して、同じ種類の項を集めよう。'));
+    } else if (st === 'divide') {
+      const a = e.L[0].c, rhs = e.R.length ? e.R[0].c : F(0);
+      good.push(opMul(e, a.inv(), 'div'));
+      if (a.sign() > 0) {
+        const s = cloneE(e); s.L.push(N(a.neg())); s.R.push(N(a.neg()));
+        bad.push(ng('両辺から ' + mr(a.toString()) + ' をひく', mr(a.toString() + 'x') + ' は ' + mr(a + '×x') + ' のこと。' + mr(a.toString()) + ' をひいても ' + eqInline(collectAll(s)) + ' になるだけで、x は1こにならない。<b>わり算</b>を使おう。', { trip: 'coefSub' }));
+      } else {
+        bad.push(ng('両辺を ' + mr(a.abs().toString()) + ' でわる', 'わると ' + eqInline(mulAll(e, a.abs().inv())) + '。まだ −x が残る。x の係数は ' + mr(a.toString()) + ' だから、<b>' + mr(a.toString()) + ' でわろう</b>。'));
+      }
+      if (!a.abs().equals(1)) bad.push(ng('両辺に ' + mr(a.toString()) + ' をかける', 'かけると ' + eqInline(mulAll(e, a)) + ' になって、x の係数がもっと大きくなる。かけ算の反対の<b>わり算</b>を使おう。'));
+      if (!rhs.isZero() && !rhs.abs().equals(a.abs())) bad.push(ng('両辺を ' + mr(rhs.toString()) + ' でわる', 'x を1こにするには、<b>x の係数</b>（' + mr(a.toString()) + '）でわる。' + mr(rhs.toString()) + ' でわっても、x は1こにならない。'));
+      bad.push(ng('右辺だけを ' + mr(a.toString()) + ' でわる', '右辺だけわると、天秤がかたむく（等式が成り立たない）。両辺を同じ数でわろう。', { tilt: 'L', trip: 'oneSide' }));
+    }
+    // 予備のカード（足りないとき）
+    if (st !== 'group' && st !== 'frac') bad.push(ng('かっこをはずす', 'この式には、かっこがないよ。'));
+    if (st !== 'frac' && st !== 'group') bad.push(ng('分母をはらう', 'この式には分数がないよ。'));
+    // 正しいカード＋まちがいのカードで、4〜6まい
+    const n = Math.min(6, Math.max(4, good.length + 2));
+    const cards = shuffle(good.concat(shuffle(bad).slice(0, n - good.length)));
+    return { st, good, cards };
+  }
+
+  /* ---------- 変形したあとの式の3択（まちがいは つまずきの型 から作る） ---------- */
+  function makeQuiz(correct, wrongs) {
+    const seen = new Set([eqText(correct)]), out = [];
+    wrongs.forEach(w => {
+      if (!w || !w.e) return;
+      const t = eqText(w.e);
+      if (seen.has(t) || out.length >= 2) return;
+      seen.add(t); out.push(w);
+    });
+    // 足りないときは「計算のまちがい」（最後の数を ±1）
+    for (let d = 1; out.length < 2 && d < 6; d++) {
+      for (const sgn of [1, -1]) {
+        const c = cloneE(correct);
+        const side = c.R.length ? c.R : c.L;
+        const last = side[side.length - 1];
+        if (last && last.t !== 'g') { last.c = last.c.add(sgn * d); if (last.c.isZero()) continue; }
+        const t = eqText(c);
+        if (!seen.has(t) && out.length < 2) { seen.add(t); out.push({ e: c, trip: 'calc' }); }
+      }
+    }
+    return { correct, choices: shuffle([{ e: correct, ok: true }].concat(out)) };
+  }
+  function moveQuiz(e, items) {
+    const w = [{ e: moveTerms(e, items, { sign: false }), trip: 'ikouSign' }];
+    if (items.length >= 2) w.push({ e: moveTerms(e, items, { keepSignIdx: 0 }), trip: 'ikouSign' });
+    w.push({ e: moveTerms(e, items, { drop: true }), trip: 'ikouDrop' });
+    return makeQuiz(moveTerms(e, items), w);
+  }
+  function expandQuiz(e) {
+    const groups = e.L.concat(e.R).filter(p => p.t === 'g');
+    const target = groups.find(g => g.m.sign() < 0) || groups[0];
+    // target のかっこだけまちがえてはずし、ほかは正しくはずす
+    const wrongExp = (f) => {
+      const side = (ps) => ps.flatMap(p => p === target ? f(p) : expandP(p));
+      return { L: side(e.L), R: side(e.R), dec: e.dec };
+    };
+    const m = target.m, w = [];
+    const sc = (q, k) => ({ t: q.t, c: q.c.mul(k) });
+    if (m.sign() < 0) {
+      w.push({ e: wrongExp(g => g.inner.map((q, i) => sc(q, i === 0 ? m : m.abs()))), trip: 'minusParen' });       // −2(x−3) → −2x−6
+      w.push({ e: wrongExp(g => g.inner.map((q, i) => sc(q, i === 0 ? m : 1))), trip: 'partialMul' });            // −2(x−3) → −2x−3
+      w.push({ e: wrongExp(g => g.inner.map(q => sc(q, m.abs()))), trip: 'minusParen' });                          // −(x−3) → x−3
+    } else {
+      w.push({ e: wrongExp(g => g.inner.map((q, i) => sc(q, i === 0 ? m : 1))), trip: 'partialMul' });            // 2(x+3) → 2x+3
+      w.push({ e: wrongExp(g => g.inner.map((q, i) => sc(q, i === 0 ? 1 : m))), trip: 'partialMul' });            // 2(x+3) → x+6
+    }
+    return makeQuiz(expandAll(e), w);
+  }
+  function mulQuiz(e, k) {
+    const isFracPart = (p) => p.t === 'g' ? !p.m.isInteger() : !p.c.isInteger();
+    const w = [];
+    // a) 整数の項にかけ忘れ
+    const a = (ps) => ps.flatMap(p => isFracPart(p) ? mulP(p, k) : [cloneP(p)]);
+    w.push({ e: { L: a(e.L), R: a(e.R), dec: e.dec }, trip: 'denPartial' });
+    // b) 分子が式のとき、かっこをつけずに x にだけかけた（(x+1)/2 ×6 → 3x+1）
+    const b = (ps) => ps.flatMap(p => {
+      if (p.t !== 'g') return mulP(p, k);
+      const M = p.m.mul(k);
+      return p.inner.map((q, i) => ({ t: q.t, c: i === 0 ? q.c.mul(M) : (M.sign() < 0 ? q.c.neg() : q.c) }));
+    });
+    if (hasGroup(e)) w.push({ e: { L: b(e.L), R: b(e.R), dec: e.dec }, trip: 'denPartial' });
+    // c) 右辺にかけ忘れ ／ d) 左辺の最後の項にかけ忘れ
+    w.push({ e: { L: mulSide(e.L, k), R: e.R.map(cloneP), dec: e.dec }, trip: 'denPartial' });
+    w.push({ e: { L: mulSide(e.L.slice(0, -1), k).concat([cloneP(e.L[e.L.length - 1])]), R: mulSide(e.R, k), dec: e.dec }, trip: 'denPartial' });
+    return makeQuiz(mulAll(e, k), w);
+  }
+
+  /* =====================================================================
+     4. 画面のようす
+     ===================================================================== */
+  const st = {
+    level: 1, orig: null, eq: null, rows: [], hist: [],
+    phase: 'solve',          // solve（解いている）／ quiz（3択）／ check（検算）／ clear（おわり）
+    cards: null, busy: false, hint: 0, lastKey: '', isWs: false, lastSolved: null, steps: 0, checkFail: 0,
+    sessTrips: {}, auto: false
+  };
+
+  // ----- 天秤のアイコン -----
+  function drawBal() {
+    $('bal').innerHTML = `
+      <polygon points="160,44 146,104 174,104" fill="#90a4ae"/>
+      <rect x="110" y="104" width="100" height="10" rx="5" fill="#78909c"/>
+      <g class="beam" id="balBeam" style="transform-origin:160px 44px">
+        <rect x="56" y="40" width="208" height="8" rx="4" fill="#546e7a"/>
+      </g>
+      <circle cx="160" cy="44" r="7" fill="#37474f"/>
+      ${['L', 'R'].map(s => {
+        const x = s === 'L' ? 70 : 250;
+        return `<g class="pan" id="pan${s}">
+          <line x1="${x}" y1="44" x2="${x - 34}" y2="84" stroke="#78909c" stroke-width="2"/>
+          <line x1="${x}" y1="44" x2="${x + 34}" y2="84" stroke="#78909c" stroke-width="2"/>
+          <path d="M${x - 44},84 L${x + 44},84 Q${x + 40},100 ${x},100 Q${x - 40},100 ${x - 44},84 Z" fill="#eceff1" stroke="#78909c" stroke-width="2"/>
+          <text x="${x}" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#546e7a">${s === 'L' ? '左辺' : '右辺'}</text>
+          <g id="tag${s}" opacity="0"><rect x="${x - 34}" y="54" width="68" height="28" rx="14" fill="#fffde7" stroke="#fbc02d" stroke-width="2"/>
+          <text id="tagT${s}" x="${x}" y="74" text-anchor="middle" font-size="18" font-weight="bold" fill="#263238"></text></g>
+        </g>`;
+      }).join('')}`;
+  }
+  // tag：両方の皿にのせる札（'' ならなし）、tilt：'L' なら左がさがる／'R' なら右がさがる
+  let balTimer = null;
+  function showBal(tag, tilt, cap) {
+    clearTimeout(balTimer);
+    const txt = (tag || '').replace(/-/g, '−');
+    ['L', 'R'].forEach(s => {
+      // 両辺に同じ操作 → 両方の皿に札。片方だけ → さがった皿に「？」
+      const on = tilt ? tilt === s : !!txt;
+      $('tag' + s).setAttribute('opacity', on ? 1 : 0);
+      $('tagT' + s).textContent = tilt ? (txt || '？') : txt;
+    });
+    const ang = tilt === 'L' ? -9 : tilt === 'R' ? 9 : 0;
+    $('balBeam').style.transform = `rotate(${ang}deg)`;
+    const dy = 90 * Math.sin(ang * Math.PI / 180);
+    $('panL').style.transform = `translateY(${-dy}px)`;
+    $('panR').style.transform = `translateY(${dy}px)`;
+    $('balCap').textContent = cap || '';
+    if (tilt) balTimer = setTimeout(() => showBal('', null, ''), 2200);
+  }
+
+  // ----- いまの式 -----
+  function renderEq(hl) {
+    $('eqBig').innerHTML = eqHTML(st.eq, hl);
+    $('eqArrows').innerHTML = '';
+    fitEq();
+  }
+  // 式が画面の横はばに入らないときは、文字を小さくする（スマホの縦向き）
+  function fitEq() {
+    const big = $('eqBig'), box = $('eqWrap').parentElement;
+    big.style.fontSize = '';
+    let fs = parseFloat(getComputedStyle(big).fontSize);
+    while (big.scrollWidth + 24 > box.clientWidth && fs > 18) { fs -= 2; big.style.fontSize = fs + 'px'; }
+  }
+  function flashEq() { const w = $('eqWrap'); w.classList.remove('flash'); void w.offsetWidth; w.classList.add('flash'); }
+  function setMsg(html, kind) { const m = $('msg'); m.innerHTML = html || ''; m.className = 'msg' + (kind ? ' ' + kind : ''); }
+  // 移項の矢印：うつす項から、反対の辺のおわりへ。上に「＋5 → −5」
+  function drawArrows(items) {
+    const wrap = $('eqWrap'), svg = $('eqArrows'), wr = wrap.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${wr.width} ${wr.height}`);
+    let h = '<defs>' + ['pos', 'neg'].map(k => `<marker id="ah-${k}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--${k})"/></marker>`).join('') + '</defs>';
+    items.forEach((it, k) => {
+      const ptEl = wrap.querySelector(`.side[data-s="${it.s}"] .pt[data-i="${it.i}"]`);
+      const dest = wrap.querySelector(`.side[data-s="${other(it.s)}"]`);
+      if (!ptEl || !dest) return;
+      const a = ptEl.getBoundingClientRect(), d = dest.getBoundingClientRect();
+      const x1 = a.left + a.width / 2 - wr.left, y1 = a.top - wr.top + 4;
+      const x2 = (it.s === 'L' ? d.right + 10 : d.right - 6) - wr.left, y2 = d.top - wr.top + 4;
+      const top = Math.max(14, Math.min(y1, y2) - 34 - k * 22);
+      const p = st.eq[it.s][it.i], q = negP(p);
+      const kind = isNeg(q) ? 'neg' : 'pos';
+      const mx = (x1 + x2) / 2;
+      h += `<path d="M${x1},${y1} C${x1},${top} ${x2},${top} ${x2},${y2}" stroke="var(--${kind})" ${kind === 'neg' ? 'stroke-dasharray="8 5"' : ''} marker-end="url(#ah-${kind})"/>`;
+      h += `<text x="${mx}" y="${top + 2 + k * 0}" text-anchor="middle"><tspan fill="var(--${isNeg(p) ? 'neg' : 'pos'})">${termSrc(p, false, st.eq.dec).replace(/-/g, '−')}</tspan><tspan fill="#546e7a"> → </tspan><tspan fill="var(--${kind})">${termSrc(q, false, st.eq.dec).replace(/-/g, '−')}</tspan></text>`;
+    });
+    svg.innerHTML = h;
+  }
+
+  // ----- 式のきろく -----
+  function renderSteps() {
+    $('steps').innerHTML = st.rows.map((r, i) => {
+      const cls = i === st.rows.length - 1 ? (isSolved(r.e) ? ' last' : '') : '';
+      return `<div class="s-l${cls}">${mr(sideText(r.e.L, r.e.dec))}</div><div class="s-eq${cls}">=</div><div class="s-r${cls}">${mr(sideText(r.e.R, r.e.dec))}</div><div class="s-why">${r.why}</div>`;
+    }).join('');
+  }
+
+  // ----- 次の一手のカード -----
+  function renderCards() {
+    st.hint = 0;
+    const box = $('moves');
+    if (st.phase !== 'solve') { $('movesCard').hidden = true; return; }
+    $('movesCard').hidden = false;
+    st.cards = cardsFor(st.eq, st.level);
+    box.innerHTML = '';
+    st.cards.cards.forEach(c => {
+      const b = document.createElement('button');
+      b.className = 'move';
+      b.innerHTML = c.label;   // 正しいカードかどうかが見た目でわからないよう、ラベルだけ
+      b.addEventListener('click', () => choose(c, b));
+      c.btn = b;
+      box.appendChild(b);
+    });
+    box.classList.toggle('busy', st.busy);
+  }
+
+  /* ---------- カードをえらんだとき ---------- */
+  async function choose(c, btn) {
+    if (st.busy || st.phase !== 'solve') return;
+    if (!c.ok) {
+      btn.classList.add('ng');
+      sndNG();
+      setMsg('<span class="mark-ng">×</span> ' + c.reason, 'ng');
+      if (c.tilt) showBal('', c.tilt, '片方の辺だけ → 天秤がかたむく！');
+      if (c.trip) addTrip(c.trip);
+      bumpRec('ng');
+      return;
+    }
+    btn.classList.add('ok');
+    st.busy = true; $('moves').classList.add('busy');
+    showBal(c.bal.tag, null, c.bal.cap);
+    if (c.kind === 'move') {
+      // うつす項に色をつけて、矢印で反対の辺へ
+      const hl = { L: {}, R: {} };
+      c.items.forEach(it => { hl[it.s][it.i] = isNeg(st.eq[it.s][it.i]) ? 'hl-neg' : 'hl-pos'; });
+      renderEq(hl);
+      drawArrows(c.items);
+      sndMove();
+    } else sndOK();
+    setMsg('<span class="mark-ok">○</span> ' + c.why, 'ok');
+    await sleep(st.auto ? 900 : 700);
+    st.pending = c;
+    if (c.quiz && $('optQuiz').checked) { st.busy = false; showQuiz(c); return; }
+    commit(c);
+  }
+
+  // 3択：変形したあとの式はどれ？
+  function showQuiz(c) {
+    st.phase = 'quiz';
+    const q = c.quiz();
+    const card = $('quizCard');
+    card.hidden = false;
+    card.innerHTML = `<div class="quiz-what">「${c.why}」をすると、式はどうなる？ 正しいものをえらぼう</div><div class="quiz-choices"></div><div class="quiz-msg"></div>`;
+    const box = card.querySelector('.quiz-choices'), msg = card.querySelector('.quiz-msg');
+    q.choices.forEach(ch => {
+      const b = document.createElement('button');
+      b.className = 'quiz-btn';
+      b.innerHTML = mr(eqText(ch.e));
+      b.addEventListener('click', () => {
+        if (st.phase !== 'quiz' || b.classList.contains('ng')) return;
+        if (ch.ok) {
+          b.classList.add('ok'); sndOK();
+          card.hidden = true;
+          commit(c);
+        } else {
+          b.classList.add('ng'); sndNG();
+          const t = TRIPS[ch.trip];
+          msg.innerHTML = `<span class="bad">× あなたのつまずき：${t.name}</span><br>${t.exp}`;
+          addTrip(ch.trip);
+        }
+      });
+      ch.btn = b;
+      box.appendChild(b);
+    });
+    st.quiz = q;
+    renderCards();
+    card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  // 一手を式に反映して、きろくに残す
+  async function commit(c) {
+    st.hist.push({ eq: cloneE(st.eq), rows: st.rows.slice(), steps: st.steps });
+    const out = c.run();
+    st.steps++;
+    if (out.length === 2) {
+      // 等式の性質：とちゅうの式（3x+5−5＝14−5）を見せてから、計算した式へ
+      st.rows.push({ e: out[0], why: c.why });
+      st.eq = out[0]; renderEq(); flashEq(); renderSteps();
+      await sleep(900);
+      st.rows.push({ e: out[1], why: '<span class="sub">計算する</span>' });
+      st.eq = out[1];
+    } else {
+      st.rows.push({ e: out[0], why: c.why });
+      st.eq = out[0];
+    }
+    // 移項した項は、うつった先で色をつける（符号がかわったことを見せる）
+    let hl = null;
+    if (c.kind === 'move') {
+      hl = { L: {}, R: {} };
+      const cnt = { L: 0, R: 0 };
+      c.items.forEach(it => cnt[other(it.s)]++);
+      ['L', 'R'].forEach(s => {
+        let k = 0;
+        c.items.forEach(it => {
+          if (other(it.s) !== s) return;
+          const idx = st.eq[s].length - cnt[s] + k++;
+          hl[s][idx] = isNeg(st.eq[s][idx]) ? 'hl-neg' : 'hl-pos';
+        });
+      });
+    }
+    renderEq(hl); flashEq(); renderSteps();
+    st.busy = false;
+    if (isSolved(st.eq)) { startCheck(); return; }
+    st.phase = 'solve';
+    $('quizCard').hidden = true;
+    renderCards();
+    updateTeacher();
+  }
+
+  /* ---------- 検算：解をもとの式に代入する ---------- */
+  // x に値を入れた式の書き方（3x → 3×6、(x+1)/2 → (6+1)/2）
+  function substSide(ps, v, dec) {
+    if (!ps.length) return '0';
+    const P = v.sign() < 0 ? '(' + v + ')' : v.toString();
+    const one = (p) => {
+      if (p.t === 'n') return numStr(p.c.abs(), dec);
+      if (p.t === 'x') {
+        const c = p.c.abs();
+        if (c.equals(1)) return P;
+        if (c.isInteger() || dec) return numStr(c, dec) + '*' + P;
+        return '{' + (c.n === 1 ? v.toString() : c.n + '*' + P) + '}/' + c.d;   // 分子だけのときは −12/6 とかっこなし
+      }
+      const m = p.m.abs(), in_ = substSide(p.inner, v, dec);
+      if (m.equals(1)) return '(' + in_ + ')';
+      if (m.isInteger() || dec) return numStr(m, dec) + '*(' + in_ + ')';
+      return '{' + in_ + '}/' + m.d;
+    };
+    return ps.map((p, i) => (isNeg(p) ? '-' : (i ? '+' : '')) + one(p)).join('');
+  }
+  function startCheck() {
+    st.phase = 'check';
+    st.checkFail = 0;
+    $('movesCard').hidden = true; $('quizCard').hidden = true;
+    const v = answerOf(st.orig), o = st.orig;
+    sndDone();
+    setMsg(`🎉 ${mr('x=' + v)} になった！ さいごに<b>検算</b>しよう`, 'ok');
+    $('checkCard').hidden = false;
+    $('checkBody').innerHTML = `
+      <div style="text-align:center">もとの式 ${eqInline(o)} に ${mr('x=' + v)} を代入して、左辺と右辺を計算しよう</div>
+      <div class="check-row"><span class="lbl">左辺</span>${mr(substSide(o.L, v, o.dec))}<span>＝</span><input id="ckL" inputmode="decimal" aria-label="左辺の値"></div>
+      <div class="check-row"><span class="lbl">右辺</span>${mr(substSide(o.R, v, o.dec))}<span>＝</span><input id="ckR" inputmode="decimal" aria-label="右辺の値"></div>
+      <div class="tools"><button class="op-btn action" id="ckGo">✔ たしかめる</button><button class="op-btn" id="ckShow" hidden>答えを見る</button></div>
+      <div class="quiz-msg" id="ckMsg"></div>`;
+    $('ckGo').addEventListener('click', doCheck);
+    $('ckShow').addEventListener('click', () => { fillCheck(); doCheck(); });
+    ['ckL', 'ckR'].forEach(id => $(id).addEventListener('keydown', ev => { if (ev.key === 'Enter') doCheck(); }));
+    renderSteps(); updateTeacher();
+    $('checkCard').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  function parseNum(s) {
+    s = String(s).trim().replace(/[０-９．／]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).replace(/[−ー－]/g, '-').replace(/\s/g, '');
+    try { return s ? F(s) : null; } catch (e) { return null; }
+  }
+  function fillCheck() {
+    const v = answerOf(st.orig);
+    $('ckL').value = numStr(sideVal(st.orig.L, v), st.orig.dec).replace(/-/g, '−');
+    $('ckR').value = numStr(sideVal(st.orig.R, v), st.orig.dec).replace(/-/g, '−');
+  }
+  function doCheck() {
+    if (st.phase !== 'check') return;
+    const v = answerOf(st.orig), o = st.orig;
+    const want = { L: sideVal(o.L, v), R: sideVal(o.R, v) };
+    let allOk = true;
+    const msgs = [];
+    ['L', 'R'].forEach(s => {
+      const inp = $('ck' + s), got = parseNum(inp.value);
+      const ok = got && got.equals(want[s]);
+      inp.classList.toggle('ok', !!ok); inp.classList.toggle('ng', !ok);
+      if (!ok) { allOk = false; msgs.push((s === 'L' ? '左辺' : '右辺') + (got ? 'の計算をもう一度' : 'に数を入れよう')); }
+    });
+    if (!allOk) {
+      sndNG(); st.checkFail++;
+      $('ckMsg').innerHTML = '<span class="bad">× ' + msgs.join('、') + '</span><br><span class="small">かけ算・わり算を先に、それから たし算・ひき算。負の数はかっこに注意。</span>';
+      if (st.checkFail >= 2) $('ckShow').hidden = false;
+      return;
+    }
+    // 検算できた！
+    st.phase = 'clear';
+    sndDone();
+    $('ckMsg').innerHTML = `<span class="mark-ok">○</span> 左辺＝${mr(numStr(want.L, o.dec))}、右辺＝${mr(numStr(want.R, o.dec))} で<b>等しい</b>！<br>だから ${mr('x=' + v)} は、この方程式の<b>解</b>です。（${st.steps}手）<div class="tools" style="margin-top:8px"><button class="op-btn action" id="ckNext">▶ つぎの問題</button></div>`;
+    $('ckNext').addEventListener('click', () => newProblem());
+    st.lastSolved = { shiki: eqText(o), kai: 'x=' + v, kenzan: '左辺=' + numStr(want.L, o.dec) + ', 右辺=' + numStr(want.R, o.dec), tesuu: String(st.steps) };
+    bumpRec('clear', st.isWs ? 'ws' : st.level);
+    setMsg(`✅ ${mr('x=' + v)}　検算もできたね！`, 'ok');
+  }
+
+  /* ---------- 問題を出す・もどす ---------- */
+  function load(e, isWs) {
+    stopAuto();
+    st.orig = cloneE(e); st.eq = cloneE(e); st.isWs = !!isWs;
+    st.rows = [{ e: cloneE(e), why: 'もとの式' }];
+    st.hist = []; st.steps = 0; st.phase = 'solve'; st.busy = false;
+    $('quizCard').hidden = true; $('checkCard').hidden = true; $('checkBody').innerHTML = '';
+    showBal('', null, '');
+    renderEq(); renderSteps(); renderCards();
+    setMsg(isWs ? '📄 ワークシートの問題。解の偶数・奇数を予想してから解こう' : 'この方程式を解こう。次の一手をえらんでね');
+    updateTeacher();
+  }
+  function newProblem(tpl) {
+    let e, t = 0;
+    do { e = GEN[st.level](tpl); t++; } while (eqText(e) === st.lastKey && t < 30);
+    st.lastKey = eqText(e);
+    load(e);
+  }
+  function undo() {
+    if (st.busy) return;
+    if (st.phase === 'quiz') {           // 3択の途中なら、えらぶ前にもどる
+      st.phase = 'solve'; $('quizCard').hidden = true; renderEq(); renderCards(); setMsg('3択をやめて、えらびなおそう'); return;
+    }
+    const h = st.hist.pop();
+    if (!h) { setMsg('これ以上もどせないよ'); return; }
+    st.eq = h.eq; st.rows = h.rows; st.steps = h.steps; st.phase = 'solve';
+    $('checkCard').hidden = true; $('quizCard').hidden = true;
+    showBal('', null, '');
+    renderEq(); renderSteps(); renderCards();
+    setMsg('ひとつもどしたよ');
+    updateTeacher();
+  }
+
+  /* ---------- ヒント（1回目：ことばで／2回目：カードが光る） ---------- */
+  function hintText(e) {
+    const s = stateOf(e);
+    if (s === 'dec') return '小数があるね。両辺を10倍（小数第2位まであれば100倍）すると、整数だけの式になるよ。';
+    if (s === 'frac') return '分数があるね。両辺に<b>分母の最小公倍数</b>をかける（分母をはらう）と、整数だけの式になるよ。';
+    if (s === 'group') return 'かっこがあるね。まず<b>かっこをはずそう</b>（分配法則）。かっこの前が − なら、中の項の符号がぜんぶかわるよ。';
+    if (s === 'linear') {
+      const W = wrongSide(e);
+      if (W.length) return 'x の項は<b>左辺</b>、数の項は<b>右辺</b>に集めよう。じゃまなのは ' + W.map(it => signedTerm(e[it.s][it.i], e.dec) + '（' + (it.s === 'L' ? '左辺' : '右辺') + '）').join('、') + '。';
+      return '同じ辺に、まとめられる項（同類項）があるよ。計算しよう。';
+    }
+    if (s === 'divide') return mr(sideText(e.L, e.dec)) + ' は ' + mr(e.L[0].c.toString()) + '×x のこと。両辺を <b>x の係数</b>でわると、x ＝ 数 の形になるよ。';
+    return '';
+  }
+  function showHint() {
+    if (st.phase === 'quiz') { setMsg('💡 移項したら符号がかわる／かっこの前の数は中のぜんぶの項に／分母をはらうときはぜんぶの項にかける。この3つをたしかめよう'); return; }
+    if (st.phase === 'check') { setMsg('💡 x のところに解の数を入れて、左辺と右辺をそれぞれ計算しよう'); return; }
+    if (st.phase !== 'solve') return;
+    st.hint++;
+    if (st.hint === 1) setMsg('💡 ' + hintText(st.eq));
+    else {
+      st.cards.good.forEach(g => g.btn && g.btn.classList.add('pulse'));
+      setMsg('💡 光っているカードが、つかえる一手だよ');
+    }
+    bumpRec('hint');
+  }
+
+  /* ---------- つまずき・きろく（この端末の localStorage。保存キーはワークシートと同じ） ---------- */
+  let memRec = {};
+  function getRec() {
+    const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {};
+    r.clear = r.clear || {}; r.trips = r.trips || {}; r.ng = r.ng || 0; r.hint = r.hint || 0;
+    return r;
+  }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(what, lv) {
+    const r = getRec();
+    if (what === 'clear') r.clear[lv] = (r.clear[lv] || 0) + 1;
+    else r[what] = (r[what] || 0) + 1;
+    setRec(r); renderTrips();
+  }
+  function addTrip(type) {
+    st.sessTrips[type] = (st.sessTrips[type] || 0) + 1;
+    const r = getRec(); r.trips[type] = (r.trips[type] || 0) + 1; setRec(r);
+    renderTrips();
+  }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><button class="op-btn" data-prac="${k}">この型を練習（レベル${'①②③④'[TRIPS[k].lv - 1]}）</button></div>`).join('')
+      : '<div class="small">まだ見つかっていないよ。まちがえると、ここにつまずきの型が出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => {
+      const t = TRIPS[b.dataset.prac];
+      setLevel(t.lv, t.tpl);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }));
+    const r = getRec();
+    $('recLine').textContent = 'この端末のきろく：クリア ' + [1, 2, 3, 4].map(l => '①②③④'[l - 1] + ' ' + (r.clear[l] || 0)).join('　') + '　／ まちがえたカード ' + r.ng + '　／ ヒント ' + r.hint;
+    if (TEACHER) {
+      const t = Object.keys(r.trips);
+      $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+    }
+  }
+
+  /* ---------- レベル ---------- */
+  function setLevel(lv, tpl) {
+    st.level = lv;
+    document.querySelectorAll('#levelRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.lv === lv));
+    $('levelNote').textContent = LEVELS[lv].note;
+    newProblem(tpl);
+  }
+  function buildLevels() {
+    $('levelRow').innerHTML = Object.keys(LEVELS).map(k => `<button class="chip" data-lv="${k}">${LEVELS[k].name}</button>`).join('');
+    $('levelRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setLevel(+b.dataset.lv)));
+  }
+
+  /* ---------- 先生モード：最後まで自動で見せる ---------- */
+  // つぎの一手のえらび方（教科書の順）：まとめて移項 → 移項 → 同類項 → そのほかの正しい手
+  function bestCard() {
+    const g = st.cards.good;
+    return g.find(c => c.key === 'moveAll') || g.find(c => c.kind === 'move') || g.find(c => c.kind === 'collect') || g.find(c => c.kind !== 'add') || g[0];
+  }
+  async function autoStep() {
+    if (st.busy) return false;
+    if (st.phase === 'quiz') {
+      const ch = st.quiz.choices.find(c => c.ok);
+      await sleep(900); ch.btn.click(); await sleep(1300); return true;
+    }
+    if (st.phase === 'solve') {
+      const c = bestCard();
+      choose(c, c.btn);
+      while (st.busy && st.phase === 'solve') await sleep(100);
+      await sleep(st.phase === 'quiz' ? 200 : 1400);
+      return true;
+    }
+    if (st.phase === 'check') {
+      await sleep(600); fillCheck(); await sleep(900); doCheck(); return false;
+    }
+    return false;
+  }
+  async function runAuto() {
+    if (st.auto) return;
+    st.auto = true;
+    while (st.auto && st.phase !== 'clear') {
+      const more = await autoStep();
+      if (!more && st.phase === 'clear') break;
+      while (st.busy) await sleep(100);
+    }
+    st.auto = false;
+  }
+  function stopAuto() { st.auto = false; }
+  function updateTeacher() {
+    if (!TEACHER || !st.orig) return;
+    $('tAns').innerHTML = '答え：' + mr('x=' + answerOf(st.orig)) + '　（いまの状態：' + ({ dec: '小数', frac: '分数', group: 'かっこ', linear: '移項・まとめる', divide: '係数でわる', done: '解けた' }[stateOf(st.eq)]) + '）';
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tAuto').addEventListener('click', runAuto);
+    $('tStep').addEventListener('click', async () => { if (!st.auto) { st.auto = true; await autoStep(); st.auto = false; } });
+    $('tStop').addEventListener('click', stopAuto);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（クリア数・つまずきの回数）を消しますか？')) return;
+      setRec({}); st.sessTrips = {}; renderTrips();
+    });
+  }
+
+  /* ---------- ボタン ---------- */
+  $('btnNew').addEventListener('click', () => newProblem());
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', () => load(st.orig, st.isWs));
+  $('btnHint').addEventListener('click', showHint);
+  $('btnWs').addEventListener('click', () => {
+    st.level = 2;
+    document.querySelectorAll('#levelRow .chip').forEach(b => b.classList.toggle('active', b.dataset.lv === '2'));
+    $('levelNote').textContent = LEVELS[2].note;
+    load(WS_PROB(), true);
+  });
+  // 画面の大きさがかわったら、移項の矢印の位置をかき直す
+  window.addEventListener('resize', () => { fitEq(); if (st.phase === 'quiz' && st.pending && st.pending.kind === 'move') drawArrows(st.pending.items); });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '一次方程式のステップ',
+    question: '方程式 3x − 5 = x + 7 の解は、偶数だろうか？ 奇数だろうか？ ステップで解いてたしかめよう。',
+    predictions: ['偶数', '奇数', '整数にならない', 'わからない'],
+    operationNote: '「📄 ワークシートの問題」を押して 3x−5＝x＋7 を解こう。検算までできたら「＋ 記録する」。はじめの式・解・検算・手数が表に入るよ。ほかのレベルの問題も記録できるよ。',
+    fields: [
+      { key: 'shiki', label: 'はじめの式' },
+      { key: 'kai', label: '解' },
+      { key: 'kenzan', label: '検算', math: false },
+      { key: 'tesuu', label: '手数', math: false }
+    ],
+    capture: () => {
+      if (!st.lastSolved) { setMsg('問題を解いて、検算までしてから記録しよう'); return null; }
+      return { ...st.lastSolved };
+    },
+    summaryHint: '「一次方程式は、①かっこ・分母をなくす → ②移項して x の項と数の項を分ける → ③まとめる → ④係数でわる の順に解ける。移項すると符号が〜」の形で書こう。',
+    teacher: {
+      hint: 'まず予想を挙手で集めてから解かせる。3x を左辺に、−5 を右辺に移項 → 2x＝12 → x＝6。「解がわかったら検算で確かめる」習慣をつける。速い生徒には ③④ のレベルで、どの一手を先にするか（かっこ→移項／分母をはらう→かっこ）を説明させる。',
+      answer: '偶数（x＝6）。<br>3x−5＝x＋7 → 3x−x＝7＋5（移項。符号がかわる）→ 2x＝12（まとめる）→ x＝6（両辺を2でわる）。<br>検算：左辺 3×6−5＝13、右辺 6＋7＝13 で等しい。<br>まとめ：一次方程式は、かっこや分母をなくし、移項して x の項を左辺・数の項を右辺に集め、まとめてから x の係数でわると解ける。'
+    }
+  });
+
+  drawBal();
+  buildLevels();
+  setupTeacher();
+  setLevel(1);
+  renderTrips();
+})();
+</script>
+
+</body>
+</html>
