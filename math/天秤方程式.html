@@ -119,6 +119,22 @@
   .op-check input { width: 22px; height: 22px; }
   .div-btn { min-width: 52px; padding: 8px 6px; }
   .ops.busy { pointer-events: none; opacity: 0.55; }
+  [hidden] { display: none !important; }
+  .quiz-card { border: 3px solid #fbc02d; }
+  .quiz-what { text-align: center; font-weight: bold; margin-bottom: 8px; }
+  .quiz-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+  .quiz-btn { min-height: 60px; border: 3px solid var(--soft); background: #fff; border-radius: 14px; cursor: pointer; touch-action: manipulation; padding: 6px; color: var(--ink); }
+  .quiz-btn.ok { border-color: var(--ok); background: #e8f5e9; }
+  .quiz-btn.ok::before { content: "○ "; color: var(--ok); font-weight: 900; font-size: 1.3rem; }
+  .quiz-btn.ng { border-color: var(--ng); background: #fce4ec; }
+  .quiz-btn.ng::before { content: "× "; color: var(--ng); font-weight: 900; font-size: 1.3rem; }
+  .quiz-msg { text-align: center; margin-top: 8px; line-height: 1.7; }
+  .quiz-msg .op-btn { margin-top: 6px; }
+  .good { color: var(--ok); font-weight: bold; }
+  .good::before { content: "○ "; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .trip-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
 </style>
 </head>
 <body>
@@ -157,6 +173,9 @@
     <div class="phase-note" id="phaseNote"></div>
   </div>
 
+  <!-- 予想の3択(動かす前に出る) -->
+  <div class="card quiz-card" id="quizCard" hidden></div>
+
   <div class="card overlay-card">
     <svg id="scale" viewBox="0 0 800 430" xmlns="http://www.w3.org/2000/svg"></svg>
     <div class="overlay hidden" id="overlay"></div>
@@ -177,6 +196,13 @@
       </div>
     </div>
     <div class="steps" id="steps"></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
   </div>
 
   <div class="help">
@@ -304,7 +330,9 @@
     steps: [],     // 式のきろく:{kind, type, n, before, after, side}
     final: null,   // クリアしたときの最後の行(x = ○)
     busy: false,   // 移項のアニメ中は、ほかの操作を止める
-    slow: true     // 移項の「しくみ」をゆっくり見せる
+    slow: true,    // 移項の「しくみ」をゆっくり見せる
+    quiz: false,   // 動かす前に「つぎの式はどれ?」の3択を出す
+    trips: {}      // この時間のつまずき {型: 回数}
   };
   const solve = (eq) => (eq.d - eq.b) / (eq.a - eq.c);
   function targetPan(coef, cons) {
@@ -375,6 +403,20 @@
   // 符号つきの項(箱 2 こ → "＋2"、風船 x 3 こ → "−3x")
   const termOf = (type, n) => (isNeg(type) ? '−' : '＋') + amountOf(type, n);
   const sideName = (s) => s === 'L' ? '左辺' : '右辺';
+  // 移項した直後の式 {l, r}:うつした項を、反対の辺のうしろに符号をかえて書く(例:2x − 3 = 7 → 2x = 7 + 3)
+  function moveLine(before, side, type, n) {
+    const other = side === 'L' ? 'R' : 'L';
+    const after = { L: { ...before.L }, R: { ...before.R } };
+    after[side][type] -= n; after[other][FLIP[type]] += n;
+    const amt = amountOf(type, n), neg = isNeg(FLIP[type]);
+    const ob = fmtRaw(before[other]);
+    const dest = ob === '0' ? (neg ? '−' : '') + amt : `${ob} ${neg ? '−' : '+'} ${amt}`;
+    const src = fmtRaw(after[side]);
+    const line = side === 'L' ? { l: src, r: dest } : { l: dest, r: src };
+    // 反対の辺で同じ種類とまとまってしまったとき(7 + 3 → 10)は、つぎに「計算する」の行が要る
+    line.merged = before[other][FLIP[type]] > 0;
+    return line;
+  }
   // きろくを、画面に出す行 {l, r, why, cls} にする。st.view が 'move' のときは、うすい字の行(とちゅうの式)を省く
   function stepLines() {
     const lines = [];
@@ -410,9 +452,13 @@
           const l = bl + op + amt, r = br === '0' ? (isNeg(s.type) ? amt : '−' + amt) : br + op + amt;
           lines.push({ l, r, why: isNeg(s.type) ? `両辺に ${amt} をたす` : `両辺から ${amt} をひく`, cls: 'sub' });
         }
-        const [l, r] = side(s.after);
+        const ml = moveLine(s.before, s.side, s.type, s.n);
         const to = sideName(s.side === 'L' ? 'R' : 'L');
-        lines.push({ l, r, why: `${termOf(s.type, s.n)} を${to}へ移項(符号がかわって ${termOf(FLIP[s.type], s.n)})` });
+        lines.push({ l: ml.l, r: ml.r, why: `${termOf(s.type, s.n)} を${to}へ移項(符号がかわって ${termOf(FLIP[s.type], s.n)})` });
+        if (ml.merged) {
+          const [l, r] = side(s.after);
+          lines.push({ l, r, why: '計算する' });
+        }
       } else if (s.kind === 'cancel') {
         const [l, r] = side(s.after);
         lines.push({ l, r, why: '計算する(＋と−の 0 のペアを消す)' });
@@ -580,10 +626,10 @@
       if (!drag) return;
       const d = drag; drag = null;
       $('ghost').style.display = 'none';
-      if (!d.moved) { moveTerm(d.side, d.type); return; }   // タップでも移項
+      if (!d.moved) { requestMove(d.side, d.type); return; }   // タップでも移項
       const p = svgPt(ev);
       const dropSide = p.x < SVG.px ? 'L' : 'R';
-      if (dropSide !== d.side) moveTerm(d.side, d.type);
+      if (dropSide !== d.side) requestMove(d.side, d.type);
       else log('反対がわの皿までドラッグすると移項できるよ');
     });
     window.addEventListener('pointercancel', () => { drag = null; $('ghost').style.display = 'none'; });
@@ -621,7 +667,7 @@
     const before = clonePans();
     st.busy = true; $('opsCard').classList.add('busy');
     if (st.slow) {
-      st[side][flip] += n; st[other][flip] += n;
+      st[side][flip] += n; st[other][flip] += n;   // ① 両辺に反対の符号のパーツをたす
       sndPut();
       renderScale();
       $('phaseNote').textContent = isNeg(type)
@@ -636,7 +682,7 @@
       $('eqNow').textContent = `いまの式: ${fmtPans()}`;
       await wait(1700);
     } else {
-      st[side][type] -= n; st[other][flip] += n;
+      applyMove(st, side, type, n);
       sndPop();
     }
     st.busy = false; $('opsCard').classList.remove('busy');
@@ -771,6 +817,9 @@
         <div class="op-group"><span class="op-label">➗ 両辺を同じ数でわる</span>${divs}</div>
         <div class="op-group" id="negRow">
           <button class="op-btn" id="btnNeg">✖ 両辺に −1 をかける</button>
+        </div>
+        <div class="op-group">
+          <label class="op-check"><input type="checkbox" id="chkQuiz" ${st.quiz ? 'checked' : ''}> 🤔 動かす前に「つぎの式」を予想する</label>
         </div>` + UNDO_ROW;
       const tx = $('btnTrashX');
       if (tx) {
@@ -794,41 +843,60 @@
       const bc = $('btnCancel');
       if (bc) bc.addEventListener('click', () => {
         if (st.busy) return;
-        const save = saveState();
-        const before = clonePans();
-        let n = 0;
-        for (const p of [st.L, st.R]) {
-          const px = Math.min(p.x, p.negx); p.x -= px; p.negx -= px;
-          const po = Math.min(p.one, p.negone); p.one -= po; p.negone -= po;
-          n += px + po;
-        }
-        if (n === 0) { sndNG(); log('けせる0のペアがないよ'); return; }
-        st.hist.push(save);
-        st.ops++;
-        recordStep('cancel', null, n, before);
-        sndPop();
-        log(`+と−の0のペアを ${n}組 けした(たして0!)`);
-        afterOp();
+        if (!hasPair(st.L) && !hasPair(st.R)) { sndNG(); log('けせる0のペアがないよ'); return; }
+        ask('cancel', {}, doCancel);
       });
-      document.querySelectorAll('[data-div]').forEach(b => b.addEventListener('click', () => divide(+b.dataset.div)));
+      document.querySelectorAll('[data-div]').forEach(b => b.addEventListener('click', () => {
+        const k = +b.dataset.div;
+        if (st.busy) return;
+        if (!canDiv(k)) { sndNG(); return; }
+        ask('div', { k }, () => divide(k));
+      }));
       $('btnNeg').addEventListener('click', () => {
         if (st.busy || !canNeg()) return;
-        snapshot();
-        const before = clonePans();
-        for (const p of [st.L, st.R]) {
-          [p.x, p.negx] = [p.negx, p.x];
-          [p.one, p.negone] = [p.negone, p.one];
-        }
-        st.ops++;
-        recordStep('neg', null, 1, before);
-        sndOK();
-        log('両辺に −1 をかけた(箱と風船が入れかわっても、つり合ったまま)');
-        afterOp();
+        ask('neg', {}, doNeg);
       });
+      const cq = $('chkQuiz');
+      if (cq) cq.addEventListener('change', () => { st.quiz = cq.checked; });
     }
     $('btnUndo').addEventListener('click', undo);
     $('btnRestart').addEventListener('click', () => { if (!st.busy) loadProb(st.probIdx); });
     updateOpBtns();
+  }
+  // ===== 操作の中身(皿の状態 pans を変える。予想の3択でも同じ関数で「正しい式」を作る) =====
+  function applyCancel(P) {
+    let n = 0;
+    for (const p of [P.L, P.R]) {
+      const px = Math.min(p.x, p.negx); p.x -= px; p.negx -= px;
+      const po = Math.min(p.one, p.negone); p.one -= po; p.negone -= po;
+      n += px + po;
+    }
+    return n;
+  }
+  const applyDiv = (P, k) => { for (const p of [P.L, P.R]) for (const t of TYPES) p[t] /= k; };
+  const applyNeg = (P) => {
+    for (const p of [P.L, P.R]) { [p.x, p.negx] = [p.negx, p.x]; [p.one, p.negone] = [p.negone, p.one]; }
+  };
+  const applyMove = (P, side, type, n) => { P[side][type] -= n; P[side === 'L' ? 'R' : 'L'][FLIP[type]] += n; };
+  function doCancel() {
+    snapshot();
+    const before = clonePans();
+    const n = applyCancel(st);
+    st.ops++;
+    recordStep('cancel', null, n, before);
+    sndPop();
+    log(`+と−の0のペアを ${n}組 けした(たして0!)`);
+    afterOp();
+  }
+  function doNeg() {
+    snapshot();
+    const before = clonePans();
+    applyNeg(st);
+    st.ops++;
+    recordStep('neg', null, 1, before);
+    sndOK();
+    log('両辺に −1 をかけた(箱と風船が入れかわっても、つり合ったまま)');
+    afterOp();
   }
   // 両辺を k でわれるか(どのパーツの数も k でわり切れる)
   const canDiv = (k) => TYPES.every(t => st.L[t] % k === 0 && st.R[t] % k === 0)
@@ -840,7 +908,7 @@
     if (!canDiv(k)) { sndNG(); return; }
     snapshot();
     const before = clonePans();
-    for (const p of [st.L, st.R]) for (const t of TYPES) p[t] /= k;
+    applyDiv(st, k);
     st.ops++;
     recordStep('div', null, k, before);
     sndOK();
@@ -861,6 +929,187 @@
     if (t1) t1.disabled = !(st.L.one > 0 && st.R.one > 0);
   }
   function log(msg) { $('logLine').textContent = '📝 ' + msg; }
+
+
+  // ===== 予想の3択「つぎの式はどれ?」とつまずき検知 =====
+  // まちがいの選択肢は、よくあるまちがい方(型)から作る。えらんだ型を「あなたのつまずき」にきろくする
+  const TRIP = {
+    sign:      { name: '符号をかえずに移項した',       tip: '移項すると ＋ は −、− は ＋ にかわる。天秤では、箱が反対の皿へ行くと風船になる。', mode: 'move' },
+    oneSide:   { name: '片方の辺だけ計算した',         tip: '等式の性質は「両辺に」同じことをする。片方だけだと天秤がかたむく。', mode: 'move' },
+    divPart:   { name: 'わるとき、一部の項だけわった', tip: '両辺を k でわるときは、どの項も k でわる(箱を k 等分する)。', mode: 'prop' },
+    subCoef:   { name: '係数をひいてしまった',         tip: '3x は 3×x。x を1こにするには、3 をひくのではなく、両辺を 3 でわる。', mode: 'prop' },
+    invDiv:    { name: 'わる数とわられる数が逆',       tip: '3x = 6 なら x = 6÷3。「右辺 ÷ x の係数」の順。', mode: 'prop' },
+    negOneSide:{ name: '−1 を片方の辺にだけかけた',   tip: '−1 をかけるのも両辺に。両方の辺の符号がぜんぶかわる。', mode: 'both' },
+    calcSign:  { name: '正負の計算で符号をまちがえた', tip: '8 − 2 は (＋8)＋(−2)。0 のペアを消すと 6 になる(10 ではない)。', mode: 'move' },
+    mixXC:     { name: 'x の項と数の項をまとめた',     tip: 'x の箱と 1 の箱は別のもの。2x + 3 は 5x にはならない。', mode: 'both' },
+    calcSlip:  { name: '計算ミス',                     tip: '天秤のパーツを数えなおしてみよう。', mode: null }
+  };
+  const pansText = (P) => `${fmtRaw(P.L)} = ${fmtRaw(P.R)}`;
+  const sideText = fmtSide;
+  const clone2 = (P) => ({ L: { ...P.L }, R: { ...P.R } });
+  // 選択肢を作る。[{text, trip}] trip が null のものが正解
+  function buildChoices(kind, a) {
+    const P = clone2(st);
+    const good = clone2(st);
+    const wrong = [];
+    let moveRight = null;   // 移項の正解は、皿の状態ではなく教科書の形の式
+    const xSide = netX(P.L) !== 0 ? 'L' : 'R', cSide = xSide === 'L' ? 'R' : 'L';
+    if (kind === 'move') {
+      const n = P[a.side][a.type], other = a.side === 'L' ? 'R' : 'L';
+      const ml = moveLine(P, a.side, a.type, n);
+      moveRight = `${ml.l} = ${ml.r}`;
+      // 符号をかえずに移した(反対の辺に、もとの符号のまま書く)
+      const ob = fmtRaw(P[other]), amt = amountOf(a.type, n), neg = isNeg(a.type);
+      const dest = ob === '0' ? (neg ? '−' : '') + amt : `${ob} ${neg ? '−' : '+'} ${amt}`;
+      wrong.push({ text: a.side === 'L' ? `${ml.l} = ${dest}` : `${dest} = ${ml.r}`, trip: 'sign' });
+      // 消しただけ(反対の辺に書かない)
+      wrong.push({ text: a.side === 'L' ? `${ml.l} = ${ob}` : `${ob} = ${ml.r}`, trip: 'oneSide' });
+    } else if (kind === 'cancel') {
+      applyCancel(good);
+      // 0 のペアを「消す」のではなく、たしてしまった(8 − 2 → 10)
+      const w1 = clone2(P);
+      for (const p of [w1.L, w1.R]) {
+        if (p.one && p.negone) { p.one += p.negone; p.negone = 0; }
+        if (p.x && p.negx) { p.x += p.negx; p.negx = 0; }
+      }
+      wrong.push({ text: pansText(w1), trip: 'calcSign' });
+      // x の項と数の項をまとめた(2x + 3 → 5x)
+      for (const sd of ['L', 'R']) {
+        const g = good[sd];
+        if (netX(g) !== 0 && netC(g) !== 0) {
+          const mixed = sideText(netX(g) + netC(g), 0);
+          const t = sd === 'L' ? `${mixed} = ${fmtRaw(good.R)}` : `${fmtRaw(good.L)} = ${mixed}`;
+          wrong.push({ text: t, trip: 'mixXC' });
+          break;
+        }
+      }
+    } else if (kind === 'div') {
+      const k = a.k;
+      applyDiv(good, k);
+      const kx = netX(P[xSide]), m = netC(P[cSide]);
+      const pure = netC(P[xSide]) === 0 && netX(P[cSide]) === 0 && !hasPair(P.L) && !hasPair(P.R);
+      if (pure && kx === k) {
+        // kx = m の形:x = m − k(係数をひいた)/ x = k/m(逆にわった)
+        const lx = xSide === 'L';
+        const sub = sideText(0, m - k);
+        wrong.push({ text: lx ? `x = ${sub}` : `${sub} = x`, trip: 'subCoef' });
+        if (m !== 0 && Math.abs(m) !== k) {
+          const inv = m < 0 ? `−${k}/${-m}` : `${k}/${m}`;
+          wrong.push({ text: lx ? `x = ${inv}` : `${inv} = x`, trip: 'invDiv' });
+        }
+      }
+      // x の辺だけわった
+      const w1 = clone2(P); for (const t of TYPES) w1[xSide][t] /= k;
+      wrong.push({ text: pansText(w1), trip: 'oneSide' });
+      // 一部の項だけわった(x の項だけ)
+      const w2 = clone2(P); for (const sd of ['L', 'R']) { w2[sd].x /= k; w2[sd].negx /= k; }
+      wrong.push({ text: pansText(w2), trip: 'divPart' });
+    } else if (kind === 'neg') {
+      applyNeg(good);
+      const w1 = clone2(P); [w1[xSide].x, w1[xSide].negx] = [w1[xSide].negx, w1[xSide].x];
+      [w1[xSide].one, w1[xSide].negone] = [w1[xSide].negone, w1[xSide].one];
+      wrong.push({ text: pansText(w1), trip: 'negOneSide' });
+    }
+    const right = moveRight || pansText(good);
+    // 正解と同じ・重なった選択肢をのぞき、2つに足りなければ「計算ミス」で数をずらす
+    const list = [];
+    for (const w of wrong) if (w.text !== right && !list.some(v => v.text === w.text)) list.push(w);
+    for (const dlt of [1, -1, 2]) {
+      if (list.length >= 2) break;
+      const g = clone2(good), c = g[cSide];
+      const v = netC(c) + dlt;
+      c.one = Math.max(0, v); c.negone = Math.max(0, -v);
+      const t = pansText(g);
+      if (t !== right && !list.some(w => w.text === t)) list.push({ text: t, trip: 'calcSlip' });
+    }
+    const choices = [{ text: right, trip: null }, ...list.slice(0, 2)];
+    for (let i = choices.length - 1; i > 0; i--) { const j = rnd(0, i); [choices[i], choices[j]] = [choices[j], choices[i]]; }
+    return choices;
+  }
+  const QUIZ_KINDS = { move: true, cancel: true, div: true, neg: true };
+  // 予想がオンなら3択を出し、答えたあとで本当の操作(go)をする
+  function ask(kind, a, go) {
+    if (!st.quiz || !QUIZ_KINDS[kind]) { go(); return; }
+    const choices = buildChoices(kind, a);
+    const what = kind === 'move' ? `${termOf(a.type, st[a.side][a.type])} を${sideName(a.side === 'L' ? 'R' : 'L')}へ移項すると…`
+      : kind === 'cancel' ? '計算する(0 のペアを消す)と…'
+      : kind === 'div' ? `両辺を ${a.k} でわると…` : '両辺に −1 をかけると…';
+    st.busy = true; $('opsCard').classList.add('busy');
+    const card = $('quizCard');
+    card.hidden = false;
+    card.innerHTML = `<h2>🤔 つぎの式はどれ?</h2>
+      <div class="quiz-what">${what}</div>
+      <div class="quiz-choices">${choices.map((c, i) => `<button class="quiz-btn" data-ci="${i}">${mr(c.text)}</button>`).join('')}</div>
+      <div class="quiz-msg" id="quizMsg"></div>`;
+    card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const finish = () => {
+      card.hidden = true; card.innerHTML = '';
+      st.busy = false; $('opsCard').classList.remove('busy');
+      go();
+    };
+    card.querySelectorAll('[data-ci]').forEach(b => b.addEventListener('click', () => {
+      if (b.disabled) return;
+      card.querySelectorAll('[data-ci]').forEach(x => { x.disabled = true; });
+      const c = choices[+b.dataset.ci];
+      const ri = choices.findIndex(v => v.trip === null);
+      card.querySelector(`[data-ci="${ri}"]`).classList.add('ok');
+      if (c.trip === null) {
+        sndOK();
+        saveRec((r) => { r.quizOk = (r.quizOk || 0) + 1; });
+        $('quizMsg').innerHTML = '<span class="good">せいかい!天秤でたしかめよう</span>';
+        setTimeout(finish, 900);
+      } else {
+        sndNG();
+        b.classList.add('ng');
+        addTrip(c.trip);
+        $('quizMsg').innerHTML = `<span class="bad">あなたのつまずき:<b>${TRIP[c.trip].name}</b></span><br>${TRIP[c.trip].tip}
+          <div><button class="op-btn action" id="btnQuizGo">⚖️ 天秤で正しい式をたしかめる</button></div>`;
+        $('btnQuizGo').addEventListener('click', finish);
+      }
+    }));
+  }
+  function requestMove(side, type) {
+    if (st.busy || st.phase !== 'solve' || !st[side][type]) return;
+    ask('move', { side, type }, () => moveTerm(side, type));
+  }
+
+  // ===== きろく(この端末の localStorage。使えないときは何もしない) =====
+  const REC_KEY = 'ikechan-math-天秤方程式';
+  function loadRec() {
+    try { return JSON.parse(localStorage.getItem(REC_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function saveRec(fn) {
+    const r = loadRec();
+    fn(r);
+    try { localStorage.setItem(REC_KEY, JSON.stringify(r)); } catch (e) { /* 保存できなくても続ける */ }
+    renderTrips();
+  }
+  function addTrip(type) {
+    st.trips[type] = (st.trips[type] || 0) + 1;
+    saveRec((r) => { r.trips = r.trips || {}; r.trips[type] = (r.trips[type] || 0) + 1; r.quizNg = (r.quizNg || 0) + 1; });
+  }
+  // 「あなたのつまずき」と、きろくの表示
+  function renderTrips() {
+    const r = loadRec();
+    const solved = r.solved || {};
+    const names = Object.entries(st.trips).sort((a, b) => b[1] - a[1]);
+    $('recLine').textContent = `クリア:${Object.keys(MODES).map(k => `${MODES[k].name} ${solved[k] || 0}問`).join('/')}` +
+      `  予想の正解:${r.quizOk || 0}/${(r.quizOk || 0) + (r.quizNg || 0)}`;
+    const box = $('tripList');
+    if (!names.length) { box.innerHTML = '<span class="small">予想でまちがえると、ここにまちがい方の型が出るよ</span>'; return; }
+    box.innerHTML = names.map(([t, n]) => `<div class="trip-row">
+        <span class="bad">◆ ${TRIP[t].name}(${n}回)</span>
+        <span class="small">${TRIP[t].tip}</span>
+        ${TRIP[t].mode ? `<button class="op-btn" data-practice="${t}">この型の練習(${MODES[TRIP[t].mode].name})</button>` : ''}
+      </div>`).join('');
+    box.querySelectorAll('[data-practice]').forEach(b => b.addEventListener('click', () => {
+      if (st.busy) return;
+      setMode(TRIP[b.dataset.practice].mode);
+      st.quiz = true;
+      loadProb('rand');
+      $('scale').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }));
+  }
 
   // ===== ならべるチェック =====
   function checkBuild() {
@@ -907,6 +1156,7 @@
     for (let d = 2; d <= 9; d++) if (k % d === 0 && m % d === 0) return;
     st.phase = 'won';
     sndDone();
+    saveRec((r) => { r.solved = r.solved || {}; r.solved[st.mode] = (r.solved[st.mode] || 0) + 1; });
     const e = st.eq;
     const ans = fmtFrac(m, k);
     st.final = { l: 'x', r: ans.text, why: ans.isInt ? 'こたえ' : `両辺を ${k} でわる(わり切れないので分数)` };
@@ -957,6 +1207,7 @@
   function setMode(mode) {
     st.mode = mode;
     st.view = MODES[mode].view;
+    st.quiz = mode !== 'prop';   // ②③は予想の3択から(①はオフ。チェックでオンにできる)
     document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
     $('modeNote').textContent = MODES[mode].note;
     buildProbRow();
@@ -1012,6 +1263,7 @@
 
   buildScaffold();
   setMode('prop');
+  renderTrips();
 })();
 </script>
 
