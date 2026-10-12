@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>天秤で方程式</title>
+<link rel="stylesheet" href="worksheet.css">
 <style>
   /* 色のきまり（中1の教材とそろえる）：正（重り・箱）＝オレンジ・実線のふち、負（うかせる・風船）＝青・点線のふち＋「−」
      正解＝緑、まちがい・注意＝赤紫。色だけでなく、形（箱／風船）・線の種類・文字でも区別する。 */
@@ -135,13 +136,21 @@
   .bad { color: var(--ng); font-weight: bold; }
   .trip-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
   .trip-row .op-btn { align-self: flex-start; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-hint { min-height: 1.6rem; text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  .t-hint:empty { display: none; }
+  .t-next { margin-top: 4px; }
+  .pitem.hint-pulse { animation: pulse 0.9s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 </style>
 </head>
 <body>
 
 <a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
 <h1>⚖️ 天秤で方程式</h1>
-<p class="subtitle">箱(おもり・＋)と風船(うかせる・−)で、等式の性質を体で感じよう!</p>
+<p class="subtitle">箱(おもり・＋)と風船(うかせる・−)で、等式の性質から移項まで</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
 
 <div class="panel">
 
@@ -183,6 +192,28 @@
 
   <div class="card ops" id="opsCard"></div>
 
+  <!-- 先生モード(?teacher=1 のときだけ出る) -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="op-group">
+      <button class="op-btn action" id="tAuto">▶ 解き方を自動再生</button>
+      <button class="op-btn" id="tStep">⏭ つぎの1手</button>
+      <button class="op-btn" id="tStop">■ とめる</button>
+    </div>
+    <div class="op-group"><span class="op-label">ヒントをえらんで出す(つぎの1手について)</span>
+      <button class="op-btn" data-hint="1">ヒント① 天秤の図で</button>
+      <button class="op-btn" data-hint="2">ヒント② 等式の性質で</button>
+      <button class="op-btn" data-hint="3">ヒント③ 移項で(つぎの式)</button>
+    </div>
+    <div class="t-hint" id="tHint"></div>
+    <div class="op-group"><span class="op-label">📜 途中の式を1行ずつ出す(はじめの式から。書き方は「式のきろく」の切りかえと同じ)</span>
+      <button class="op-btn" id="tLine">つぎの行 ▶</button>
+      <button class="op-btn" id="tAll">ぜんぶ出す</button>
+      <button class="op-btn" id="tHide">かくす</button>
+    </div>
+    <div class="steps" id="tSteps"></div>
+  </div>
+
   <div class="card log" id="logLine">ここに操作のきろくが出るよ</div>
 
   <!-- 式のきろく：解いた手順が、式の書き方で1行ずつ残る -->
@@ -203,6 +234,7 @@
     <h2>🔎 あなたのつまずき</h2>
     <div id="tripList"></div>
     <div class="small" id="recLine" style="margin-top:6px"></div>
+    <div class="small" id="tripAll" style="margin-top:6px"></div>
   </div>
 
   <div class="help">
@@ -220,15 +252,18 @@
       <li><b>✏️つくる</b>で、じぶんだけの問題も作れるよ。<b>答えが分数になる問題もOK</b>——「2x = 5」みたいにもうわれなくなったら、<b>x = 5/2</b> と分数で答えが出るよ!</li>
     </ul>
     <p class="note">※じっさいとのちがい:答えがマイナスになる問題でも、x の箱は箱の形のままかいています(本当なら x の箱も浮きます)。<br>
-    つながる教材:<a href="正負の数チップ.html">正負の数チップ(0 のペア)</a></p>
+    つながる教材:<a href="おもさくらべと はかり.html">小3 おもさくらべとはかり(てんびん)</a>/<a href="正負の数チップ.html">中1 正負の数チップ(0 のペア)</a>/<a href="同類項タイル.html">中1 同類項タイル</a></p>
   </div>
 
 </div>
 
 <script src="math-render.js"></script>
+<script src="worksheet.js"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード(自動再生・ヒント・途中の式を1行ずつ・この端末のつまずきの合計)
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
 
   // ===== 効果音 =====
   let audioCtx = null;
@@ -388,13 +423,15 @@
     return t.map(([sg, v], i) => i === 0 ? (sg === '−' ? '−' : '') + v : ` ${sg} ${v}`).join('');
   }
   // 操作を1つきろくする。同じ「すてる」「たす」が続いたら1行にまとめる(1こずつ → 「両辺から 3 をひく」)
-  function recordStep(kind, type, n, before, side) {
-    const after = clonePans();
-    const last = st.steps[st.steps.length - 1];
+  // steps と after を書かなければ、今の画面のきろく(st.steps)に今の皿(st.L, st.R)を足す
+  function recordStep(kind, type, n, before, side, steps, after) {
+    steps = steps || st.steps;
+    after = after || clonePans();
+    const last = steps[steps.length - 1];
     if (last && (kind === 'sub' || kind === 'add') && last.kind === kind && last.type === type) {
       last.n += n; last.after = after;
     } else {
-      st.steps.push({ kind, type, n, before, after, side: side || null });
+      steps.push({ kind, type, n, before, after, side: side || null });
     }
   }
   const isNeg = (type) => type === 'negx' || type === 'negone';
@@ -418,11 +455,13 @@
     return line;
   }
   // きろくを、画面に出す行 {l, r, why, cls} にする。st.view が 'move' のときは、うすい字の行(とちゅうの式)を省く
-  function stepLines() {
+  function stepLines(steps, final) {
+    steps = steps || st.steps;
+    final = final === undefined ? st.final : final;
     const lines = [];
     const full = st.view === 'prop';
     const side = (pans) => [fmtRaw(pans.L), fmtRaw(pans.R)];
-    for (const s of st.steps) {
+    for (const s of steps) {
       if (s.kind === 'start') {
         const [l, r] = side(s.after);
         lines.push({ l, r, why: 'はじめの式' });
@@ -470,10 +509,10 @@
         lines.push({ l, r, why: '両辺に −1 をかける(＋と−が入れかわる)' });
       }
     }
-    if (st.final) {
+    if (final) {
       const prev = lines[lines.length - 1];
-      if (prev && prev.l === st.final.l && prev.r === st.final.r) prev.cls = 'last';
-      else lines.push({ l: st.final.l, r: st.final.r, why: st.final.why, cls: 'last' });
+      if (prev && prev.l === final.l && prev.r === final.r) prev.cls = 'last';
+      else lines.push({ l: final.l, r: final.r, why: final.why, cls: 'last' });
     }
     return lines;
   }
@@ -488,7 +527,11 @@
       box.innerHTML = '<div class="empty">②とく に進むと、ここに式がかかれるよ</div>';
       return;
     }
-    box.innerHTML = lines.map(ln => {
+    box.innerHTML = linesHTML(lines);
+    if (TEACHER) renderTeacherSteps();
+  }
+  function linesHTML(lines) {
+    return lines.map(ln => {
       const c = ln.cls ? ' ' + ln.cls : '';
       return `<div class="s-l${c}">${mr(ln.l)}</div><div class="s-eq${c}">=</div>` +
         `<div class="s-r${c}">${mr(ln.r)}</div><div class="s-why${c}">${ln.why}</div>`;
@@ -830,15 +873,7 @@
       if (cs) cs.addEventListener('change', () => { st.slow = cs.checked; });
       document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => {
         if (st.busy) return;
-        const t = b.dataset.add;
-        snapshot();
-        const before = clonePans();
-        st.L[t]++; st.R[t]++;
-        st.ops++;
-        recordStep('add', t, 1, before);
-        sndPut();
-        log(`両辺に ${labelOf(t)} を1こずつたした`);
-        afterOp();
+        doAdd(b.dataset.add);
       }));
       const bc = $('btnCancel');
       if (bc) bc.addEventListener('click', () => {
@@ -886,6 +921,16 @@
     recordStep('cancel', null, n, before);
     sndPop();
     log(`+と−の0のペアを ${n}組 けした(たして0!)`);
+    afterOp();
+  }
+  function doAdd(t) {
+    snapshot();
+    const before = clonePans();
+    st.L[t]++; st.R[t]++;
+    st.ops++;
+    recordStep('add', t, 1, before);
+    sndPut();
+    log(`両辺に ${labelOf(t)} を1こずつたした`);
     afterOp();
   }
   function doNeg() {
@@ -1074,14 +1119,16 @@
   }
 
   // ===== きろく(この端末の localStorage。使えないときは何もしない) =====
-  const REC_KEY = 'ikechan-math-天秤方程式';
+  // 保存キー「ikechan-math-天秤方程式」はワークシート部品と同じなので、その中の appData('rec') に入れる
+  let memRec = {};   // worksheet.js が読めないときは、この時間だけおぼえておく
   function loadRec() {
-    try { return JSON.parse(localStorage.getItem(REC_KEY)) || {}; } catch (e) { return {}; }
+    const r = window.Worksheet ? Worksheet.appData('rec') : memRec;
+    return r ? JSON.parse(JSON.stringify(r)) : {};
   }
   function saveRec(fn) {
     const r = loadRec();
     fn(r);
-    try { localStorage.setItem(REC_KEY, JSON.stringify(r)); } catch (e) { /* 保存できなくても続ける */ }
+    if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r;
     renderTrips();
   }
   function addTrip(type) {
@@ -1095,6 +1142,17 @@
     const names = Object.entries(st.trips).sort((a, b) => b[1] - a[1]);
     $('recLine').textContent = `クリア:${Object.keys(MODES).map(k => `${MODES[k].name} ${solved[k] || 0}問`).join('/')}` +
       `  予想の正解:${r.quizOk || 0}/${(r.quizOk || 0) + (r.quizNg || 0)}`;
+    if (TEACHER) {
+      const all = Object.entries(r.trips || {}).sort((a, b) => b[1] - a[1]);
+      $('tripAll').innerHTML = '<b>👩‍🏫 この端末のつまずきの合計</b>(クラスで使ったぶん):' +
+        (all.length ? all.map(([t, n]) => `${TRIP[t].name} ${n}回`).join('/') : 'まだありません') +
+        ' <button class="op-btn" id="btnClearRec">記録を消す</button>';
+      $('btnClearRec').addEventListener('click', () => {
+        if (!confirm('この端末のきろく(クリア数・予想・つまずき)を消しますか?')) return;
+        st.trips = {};
+        saveRec((x) => { for (const k of Object.keys(x)) delete x[k]; });
+      });
+    }
     const box = $('tripList');
     if (!names.length) { box.innerHTML = '<span class="small">予想でまちがえると、ここにまちがい方の型が出るよ</span>'; return; }
     box.innerHTML = names.map(([t, n]) => `<div class="trip-row">
@@ -1109,6 +1167,168 @@
       loadProb('rand');
       $('scale').scrollIntoView({ block: 'center', behavior: 'smooth' });
     }));
+  }
+
+
+  // ===== 解き方を考える(先生モードの自動再生・ヒント・途中の式で使う) =====
+  // 今の皿 P から「つぎの1手」を決める。モードごとに教科書どおりの順:
+  // 0 のペアを計算 → (①③)両辺から同じものをひく → x の項を片方へ → 数の項を反対へ → −1 をかける → わる
+  function nextAction(P, mode) {
+    if (hasPair(P.L) || hasPair(P.R)) return { kind: 'cancel' };
+    // x を集める辺:x の係数が大きいほう(集めたあとの係数が正になる)
+    const xs = netX(P.L) >= netX(P.R) ? 'L' : 'R', cs = xs === 'L' ? 'R' : 'L';
+    if (mode !== 'move') {
+      for (const t of ['x', 'negx']) if (P.L[t] > 0 && P.R[t] > 0) return { kind: 'sub', type: t };
+    }
+    if (P[cs].x || P[cs].negx) {
+      const t = P[cs].x ? 'x' : 'negx';
+      return mode === 'prop' ? { kind: 'add', type: FLIP[t] } : { kind: 'move', side: cs, type: t };
+    }
+    if (P[xs].one || P[xs].negone) {
+      const t = P[xs].one ? 'one' : 'negone';
+      if (mode !== 'prop') return { kind: 'move', side: xs, type: t };
+      return P[cs][t] > 0 ? { kind: 'sub', type: t } : { kind: 'add', type: FLIP[t] };
+    }
+    const k = netX(P[xs]);
+    if (k < 0) return { kind: 'neg' };
+    for (let d = Math.min(k, 9); d >= 2; d--) {
+      if (TYPES.every(t => P.L[t] % d === 0 && P.R[t] % d === 0)) return { kind: 'div', k: d };
+    }
+    return null;
+  }
+  function applyAction(P, a) {
+    if (a.kind === 'cancel') return applyCancel(P);
+    if (a.kind === 'sub') { P.L[a.type]--; P.R[a.type]--; return 1; }
+    if (a.kind === 'add') { P.L[a.type]++; P.R[a.type]++; return 1; }
+    if (a.kind === 'move') { const n = P[a.side][a.type]; applyMove(P, a.side, a.type, n); return n; }
+    if (a.kind === 'div') { applyDiv(P, a.k); return a.k; }
+    if (a.kind === 'neg') { applyNeg(P); return 1; }
+  }
+  // 答えの行(x = ○)。まだ答えの形でなければ null
+  function finalOf(P) {
+    const pureX = (p) => p.x >= 1 && p.negx === 0 && p.one === 0 && p.negone === 0;
+    const isConst = (p) => p.x === 0 && p.negx === 0 && (p.one === 0 || p.negone === 0);
+    let k = 0, m = null;
+    if (pureX(P.L) && isConst(P.R)) { k = P.L.x; m = netC(P.R); }
+    else if (pureX(P.R) && isConst(P.L)) { k = P.R.x; m = netC(P.L); }
+    if (m === null) return null;
+    const ans = fmtFrac(m, k);
+    return { l: 'x', r: ans.text, why: ans.isInt ? 'こたえ' : `両辺を ${k} でわる(わり切れないので分数)` };
+  }
+  // はじめの式から最後まで、解き方を式のきろくの形で作る
+  function simulate(eq, mode) {
+    const P = { L: targetPan(eq.a, eq.b), R: targetPan(eq.c, eq.d) };
+    const steps = [{ kind: 'start', type: null, n: 0, before: null, after: clone2(P) }];
+    for (let i = 0; i < 80; i++) {
+      const a = nextAction(P, mode);
+      if (!a) break;
+      const before = clone2(P);
+      const n = applyAction(P, a);
+      recordStep(a.kind, a.type || null, n, before, a.side, steps, clone2(P));
+    }
+    return stepLines(steps, finalOf(P));
+  }
+
+  // ===== 先生モード =====
+  let autoOn = false;
+  // つぎの1手を、天秤で本当に行う(予想の3択は出さない)
+  async function performAction(a) {
+    if (a.kind === 'cancel') doCancel();
+    else if (a.kind === 'sub') discardBoth(a.type);
+    else if (a.kind === 'add') doAdd(a.type);
+    else if (a.kind === 'move') await moveTerm(a.side, a.type);
+    else if (a.kind === 'div') divide(a.k);
+    else if (a.kind === 'neg') doNeg();
+  }
+  async function teacherStep() {
+    if (st.busy) return false;
+    if (st.phase === 'build') {
+      snapshot();
+      st.L = targetPan(st.eq.a, st.eq.b); st.R = targetPan(st.eq.c, st.eq.d);
+      renderScale(); renderEq();
+      await wait(400);
+      checkBuild();
+      return st.phase === 'solve';
+    }
+    if (st.phase !== 'solve') return false;
+    const a = nextAction(st, st.mode);
+    if (!a) return false;
+    await performAction(a);
+    $('tHint').innerHTML = '';
+    return st.phase === 'solve';
+  }
+  async function autoPlay() {
+    if (autoOn) return;
+    autoOn = true;
+    const keepSlow = st.slow;
+    st.slow = true;
+    while (autoOn && await teacherStep()) await wait(1400);
+    st.slow = keepSlow;
+    autoOn = false;
+  }
+  // ヒント:① 天秤の図で ② 等式の性質で ③ 移項で(つぎの式まで)
+  function showHint(level) {
+    const box = $('tHint');
+    document.querySelectorAll('.pitem.hint-pulse').forEach(g => g.classList.remove('hint-pulse'));
+    if (st.phase !== 'solve') { box.textContent = st.phase === 'build' ? 'まず、式のとおりに皿にならべよう。' : 'クリアしているよ。'; return; }
+    const a = nextAction(st, st.mode);
+    if (!a) { box.textContent = 'もう x = ○ の形になっているよ。'; return; }
+    const P = clone2(st);
+    const n = a.kind === 'move' ? P[a.side][a.type] : 0;
+    const amt = a.type ? amountOf(a.type, a.kind === 'move' ? n : 1) : '';
+    let t = '';
+    if (level === 1) {
+      t = {
+        cancel: '同じ皿に、箱と風船の「0 のペア」があるね。消してみよう。',
+        sub: `両方の皿に ${labelOf(a.type)} がある。両方から1こずつすてても、つり合ったままだよ。`,
+        add: `${labelOf(FLIP[a.type])} を消したい。両方の皿に ${labelOf(a.type)} をたすと、0 のペアができるよ。`,
+        move: `${sideName(a.side)}の皿の ${labelOf(a.type)} を、反対の皿へ動かそう(光っているパーツ)。動かすと${isNeg(a.type) ? '箱' : '風船'}にかわるよ。`,
+        div: `x の箱が同じ数ずつに分けられるね。両方の皿を ${a.k} 等分しよう。`,
+        neg: 'x が風船(−x)になっている。箱と風船をぜんぶ入れかえると、x の箱になるよ。'
+      }[a.kind];
+      if (a.kind === 'move') document.querySelectorAll(`.pitem[data-side="${a.side}"][data-type="${a.type}"]`).forEach(g => g.classList.add('hint-pulse'));
+      if (a.kind === 'sub') document.querySelectorAll(`.pitem[data-type="${a.type}"]`).forEach(g => g.classList.add('hint-pulse'));
+    } else if (level === 2) {
+      t = {
+        cancel: '左辺・右辺を、それぞれ計算しよう((＋1)＋(−1)＝0)。',
+        sub: `等式の性質:両辺から同じ数(${amountOf(a.type, 1)})をひいても、等式はなりたつ。`,
+        add: `等式の性質:両辺に同じ数(${isNeg(a.type) ? '−' : ''}${amountOf(a.type, 1)})をたしても、等式はなりたつ。`,
+        move: isNeg(a.type) ? `等式の性質:両辺に ${amt} をたす。` : `等式の性質:両辺から ${amt} をひく。`,
+        div: `等式の性質:両辺を同じ数(${a.k})でわっても、等式はなりたつ。`,
+        neg: '等式の性質:両辺に同じ数(−1)をかけても、等式はなりたつ。'
+      }[a.kind];
+    } else {
+      let next;
+      if (a.kind === 'move') { const ml = moveLine(P, a.side, a.type, n); next = `${ml.l} = ${ml.r}`; }
+      else { applyAction(P, a); next = pansText(P); }
+      const lead = a.kind === 'move'
+        ? `${termOf(a.type, n)} を${sideName(a.side === 'L' ? 'R' : 'L')}へ移項する(符号がかわって ${termOf(FLIP[a.type], n)})。`
+        : 'つぎの式は:';
+      box.innerHTML = `${lead}<div class="t-next">${mr(next)}</div>`;
+      return;
+    }
+    box.textContent = t;
+  }
+  // 途中の式を1行ずつ出す(はじめの式から、教科書どおりの解き方)
+  let tShown = 0;
+  function renderTeacherSteps() {
+    const lines = simulate(st.eq, st.mode);
+    const box = $('tSteps');
+    $('tLine').disabled = tShown >= lines.length;
+    if (!tShown) { box.innerHTML = '<div class="empty">「つぎの行」で、解き方の式を1行ずつ出せます</div>'; return; }
+    box.innerHTML = linesHTML(lines.slice(0, tShown));
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false;
+    $('teacherCard').hidden = false;
+    $('tAuto').addEventListener('click', autoPlay);
+    $('tStep').addEventListener('click', () => { if (!autoOn) teacherStep(); });
+    $('tStop').addEventListener('click', () => { autoOn = false; });
+    document.querySelectorAll('[data-hint]').forEach(b => b.addEventListener('click', () => showHint(+b.dataset.hint)));
+    $('tLine').addEventListener('click', () => { tShown++; renderTeacherSteps(); });
+    $('tAll').addEventListener('click', () => { tShown = 999; renderTeacherSteps(); });
+    $('tHide').addEventListener('click', () => { tShown = 0; renderTeacherSteps(); });
   }
 
   // ===== ならべるチェック =====
@@ -1160,6 +1380,10 @@
     const e = st.eq;
     const ans = fmtFrac(m, k);
     st.final = { l: 'x', r: ans.text, why: ans.isInt ? 'こたえ' : `両辺を ${k} でわる(わり切れないので分数)` };
+    // ワークシートに記録する値(はじめの式・最初に移項した式・答え)
+    const mv = st.steps.find(x => x.kind === 'move');
+    const ml = mv ? moveLine(mv.before, mv.side, mv.type, mv.n) : null;
+    st.lastSolved = { shiki: fmtEq(e), ikou: ml ? `${ml.l} = ${ml.r}` : '(移項なし)', kotae: `x = ${ans.text}` };
     renderSteps();
     // 検算も分数で正確に:左辺 = (a·m + b·k)/k
     const lv = fmtFrac(e.a * m + e.b * k, k), rv = fmtFrac(e.c * m + e.d * k, k);
@@ -1191,6 +1415,8 @@
     st.L = emptyPan(); st.R = emptyPan();
     st.ops = 0;
     st.hist = []; st.steps = []; st.final = null;
+    tShown = 0; autoOn = false;
+    if (TEACHER) $('tHint').innerHTML = '';
     $('overlay').classList.add('hidden');
     if (idx !== 'custom') $('customCard').style.display = 'none';
     document.querySelectorAll('[data-prob]').forEach(x => x.classList.toggle('active', x.dataset.prob === String(idx)));
@@ -1201,6 +1427,7 @@
   function renderAll() {
     $('trash').style.display = (st.phase === 'build' || st.mode === 'move') ? 'none' : '';
     renderScale(); renderEq(); renderOps(); renderSteps();
+    if (TEACHER) renderTeacherSteps();
   }
 
   // ===== モードえらび・問題えらび =====
@@ -1261,7 +1488,29 @@
     renderSteps();
   }));
 
+  // ===== ワークシート(①予想 → ②操作 → ③気づき → ④まとめ) =====
+  if (window.Worksheet) Worksheet.init({
+    title: '天秤で方程式',
+    question: '方程式の項を、反対の辺へうつす(移項する)と、その項の符号はどうなるだろうか? 天秤でたしかめよう。',
+    predictions: ['符号はそのまま', '符号が反対になる', '項によってちがう', 'わからない'],
+    operationNote: '「② 移項」で問題を解こう。クリアしたら「＋ 記録する」。はじめの式・最初に移項した式・答えが表に入るよ。「しくみをゆっくり見る」で、なぜ符号がかわるのかも見てみよう。',
+    fields: [
+      { key: 'shiki', label: 'はじめの式' },
+      { key: 'ikou', label: '移項した式' },
+      { key: 'kotae', label: '答え' }
+    ],
+    capture: () => {
+      if (!st.lastSolved) { log('問題をクリアしてから記録しよう'); return null; }
+      return { ...st.lastSolved };
+    },
+    summaryHint: '「移項すると、項の符号が〜。なぜなら、両辺から同じ数を〜」の形で、等式の性質とつなげて書こう。',
+    teacher: {
+      hint: '① で「両辺から同じ数をひく」を天秤で確かめてから、② の「しくみをゆっくり見る」で、両辺から 2 をひく → 左辺の 0 のペアが消える → ＋2 が右辺に −2 として現れる、の2段階を見せる。③ では「両辺から x をひく」と「x の項の移項」が同じことだと比べる。',
+      answer: '移項すると、項の符号がかわる(＋2 → −2、−3 → ＋3、＋x → −x)。<br>ことば:移項は「両辺から同じ数をひく(たす)」という等式の性質を使って、0 になる項を書かずに省いたもの。だから、反対の辺へうつした項は符号が反対になる。'
+    }
+  });
   buildScaffold();
+  setupTeacher();
   setMode('prop');
   renderTrips();
 })();
