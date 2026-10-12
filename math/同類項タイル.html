@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>同類項タイル</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり：正の項＝オレンジ（実線のふち）、負の項＝青（点線のふち＋「−」）、正解＝緑、まちがい＝赤紫（記号もつける）
+     x のタイル＝長い棒、2つめの文字（b など）のタイル＝中くらいの棒＋しま模様、1 のタイル＝小さい正方形。
+     色だけでなく、形・線の種類・文字でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457;
+    --u: 34px;             /* 1 のタイルの1辺（x のタイルはこの 2.6 倍の長さ） */
+    --anim: 600ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3faf8 0%, #d9efea 100%);
+    min-height: 100vh; padding: 10px 16px 28px; font-size: 18px;
+  }
+  button, input { font-family: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  .topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; }
+  h1 { margin: 0; flex: 1; text-align: center; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--accent-dark); }
+  .subtitle { margin: -6px 0 0; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .card { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.05rem; color: var(--accent-dark); }
+  .note { font-size: 0.9rem; color: #546e7a; margin: 6px 0 0; line-height: 1.6; }
+  .lbl { font-weight: 900; color: var(--accent-dark); }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; }
+  i.v { font-family: "Times New Roman", "Hiragino Mincho ProN", serif; font-style: italic; font-weight: bold; padding-right: .04em; }
+
+  /* ===== モードのタブ ===== */
+  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .tab {
+    min-height: 56px; border: 3px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: 1.05rem; font-weight: bold; cursor: pointer; touch-action: manipulation; padding: 2px 4px;
+  }
+  .tab small { display: block; font-size: 0.75rem; font-weight: normal; color: #78909c; }
+  .tab.on { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .tab.on small { color: #e0f2f1; }
+
+  /* ===== 問題をえらぶところ ===== */
+  .row { display: flex; gap: 8px 10px; flex-wrap: wrap; align-items: center; }
+  .chip-s {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1.05rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip-s.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip-s.on::before { content: "✔ "; }
+  .freein { flex: 1 1 260px; min-height: 52px; font-size: 1.4rem; font-weight: bold; padding: 4px 12px; border: 3px solid #4db6ac; border-radius: 12px; }
+  .warn { color: var(--ng); font-weight: bold; margin-top: 6px; }
+  .warn::before { content: "⚠ "; }
+
+  /* ===== 3つの場所：タイル（左）・式（右上）・答え（右下） ===== */
+  .main { container-type: inline-size; }
+  .grid { display: grid; gap: 12px; grid-template-columns: 1fr; grid-template-areas: "expr" "board" "result"; }
+  @container (min-width: 760px) {
+    .grid { grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: "board expr" "board result"; align-items: start; }
+  }
+  .a-board { grid-area: board; }
+  .a-expr { grid-area: expr; }
+  .a-result { grid-area: result; }
+
+  /* ===== タイル ===== */
+  .board { position: relative; min-height: 150px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: flex-end; font-size: .9rem; margin-bottom: 8px; color: #455a64; }
+  .legend span { display: inline-flex; align-items: flex-end; gap: 4px; }
+  .tile {
+    width: var(--u); height: var(--u); flex: none; display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: calc(var(--u) * .5); line-height: 1; border-radius: 6px; position: relative;
+    cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2); transition: opacity var(--anim) ease, transform var(--anim) ease;
+  }
+  .tile.k0 { height: calc(var(--u) * 2.6); }          /* 1つめの文字（x）＝長い棒 */
+  .tile.k1 { height: calc(var(--u) * 1.8); }          /* 2つめの文字（b）＝中くらいの棒＋しま模様 */
+  .tile.p { background-color: #ffcc80; border: 3px solid var(--pos); color: #6d2c00; }
+  .tile.m { background-color: #dcecfb; border: 3px dashed var(--neg); color: #0d47a1; }
+  .tile.k1.p { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 4px, transparent 4px 9px); }
+  .tile.k1.m { background-image: repeating-linear-gradient(45deg, rgba(21,101,192,.14) 0 4px, transparent 4px 9px); }
+  .tile .badge { position: absolute; top: -10px; right: -7px; width: 17px; height: 17px; border-radius: 50%; background: #fff;
+    border: 2px solid #8e24aa; color: #8e24aa; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+  .tile.sel { outline: 5px solid #43a047; outline-offset: 2px; }
+  .tile.gone { opacity: 0; transform: scale(.2) rotate(90deg); pointer-events: none; }
+  .tile.drag { transition: none; z-index: 20; box-shadow: 0 10px 18px rgba(0,0,0,0.3); pointer-events: none; }
+  .tile.drop { outline: 5px dashed #43a047; outline-offset: 2px; }
+  .tile.mini { --u: 26px; font-size: 12px; cursor: default; box-shadow: none; border-width: 2px; }
+  .tile.flash { animation: flash .9s ease 2; }
+  @keyframes flash { 50% { box-shadow: 0 0 0 6px #f48fb1; } }
+
+  /* かっこのまとまり（かっこをはずす前） */
+  .gwrap { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px 8px; align-items: center; }
+  .grp { display: flex; align-items: center; gap: 2px; border-radius: 14px; padding: 6px 6px; background: #fafafa; border: 2px solid #cfd8dc; position: relative; }
+  .grp.loose { background: transparent; border-color: transparent; }
+  .grp.neg { background: #f3e5f5; border-color: #ce93d8; }
+  .grp .par { font-size: calc(var(--u) * 1.8); font-weight: 300; line-height: 1; color: #546e7a; }
+  .grp .pre { font-size: calc(var(--u) * 1.1); font-weight: 900; color: #6a1b9a; padding-right: 2px; }
+  .grp .pre.pos { color: #37474f; }
+  .grp .rows { display: flex; flex-direction: column; gap: 8px; }
+  .grp .tag { position: absolute; left: 8px; top: -12px; background: #fff; border: 2px solid #9ccc65; color: #33691e; border-radius: 999px; padding: 0 8px; font-size: .8rem; font-weight: bold; }
+  .trow { display: flex; flex-wrap: wrap; gap: 5px; align-items: flex-end; }
+  .op { font-size: calc(var(--u) * 1.1); font-weight: 900; color: #546e7a; }
+
+  /* かっこをはずしたあと：1列にならぶ */
+  .flat { display: flex; flex-wrap: wrap; gap: 8px 5px; align-items: flex-end; min-height: calc(var(--u) * 2.8); }
+  .flat .tile.rs { margin-left: 12px; }
+  .flat .tile.rs:first-child { margin-left: 0; }
+
+  /* 同類項を寄せたあと：文字ごとの場所（＋の列と−の列をそろえて、ゼロ対がたてに並ぶ） */
+  .zones { display: flex; flex-direction: column; gap: 10px; }
+  .zone { border-radius: 14px; padding: 6px 8px 8px; border: 2px solid #cfd8dc; background: #fafafa; }
+  .zone.z0 { background: #fff8e1; border-color: #ffe082; }
+  .zone.z1 { background: #f1f8e9; border-color: #c5e1a5; }
+  .zone.zu { background: #eceff1; border-color: #b0bec5; }
+  .zone-h { font-weight: 900; font-size: 1rem; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .zrow { display: grid; grid-template-columns: repeat(auto-fill, var(--u)); gap: 6px; align-items: end; min-height: calc(var(--u) * .9); margin-top: 4px; }
+  .zrow .empty { grid-column: 1 / -1; color: #90a4ae; font-size: .9rem; }
+  .pop {
+    position: absolute; z-index: 15; pointer-events: none; font-weight: 900; font-size: 28px; color: var(--ok);
+    background: #fff; border: 4px solid var(--ok); border-radius: 50%; width: 46px; height: 46px;
+    display: flex; align-items: center; justify-content: center; transform: translate(-50%, -50%) scale(.4); opacity: 0;
+    transition: transform calc(var(--anim) * .5) ease, opacity calc(var(--anim) * .5) ease;
+  }
+  .pop.on { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+
+  /* ===== ボタン ===== */
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .act {
+    min-height: 52px; padding: 4px 14px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: 1.02rem; font-weight: 900; cursor: pointer; touch-action: manipulation;
+  }
+  .act:disabled { opacity: .45; cursor: default; }
+  .act.primary { background: linear-gradient(150deg, #009688 0%, #00695c 100%); color: #fff; border: none; box-shadow: 0 4px 0 rgba(0,70,60,0.35); }
+  .act.primary:disabled { background: #b0bec5; box-shadow: none; }
+  .act.zero { border-color: #9ccc65; background: #f1f8e9; color: #33691e; }
+  .act.flip { border-color: #ce93d8; background: #f3e5f5; color: #6a1b9a; }
+  .act.blink { animation: blink 1s ease 3; }
+  @keyframes blink { 50% { box-shadow: 0 0 0 6px #ffeb3b; } }
+
+  /* ===== 式 ===== */
+  .a-expr { container-type: inline-size; }
+  .lines { font-weight: 900; font-size: clamp(24px, 9cqi, 32px); line-height: 1.5; }
+  .ln .t { overflow-wrap: anywhere; }
+  .ln { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .3em; padding: 2px 0; border-bottom: 1px dashed #e0e0e0; }
+  .ln .eq { color: #78909c; }
+  .ln.first { color: var(--accent-dark); }
+  .ln.live { color: #78909c; }
+  .ln .nt { font-size: .82rem; font-weight: normal; color: #607d8b; flex-basis: 100%; line-height: 1.4; }
+  .ln.ans { color: var(--ok); }
+  .ln.ans .t { border-bottom: .08em solid var(--ok); }
+  .ln .q { color: #b0bec5; }
+
+  /* ===== 答え ===== */
+  .ansrow { display: flex; gap: 8px; align-items: center; }
+  .ansin { flex: 1; min-width: 0; min-height: 56px; font-size: 1.7rem; font-weight: 900; padding: 4px 10px; border: 3px solid #4db6ac; border-radius: 12px; }
+  .ansin.blink { animation: blink 1s ease 3; }
+  .keys { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
+  .key { min-height: 48px; border-radius: 10px; border: 2px solid #b0bec5; background: #fafafa; font-size: 1.3rem; font-weight: 900; cursor: pointer; touch-action: manipulation; }
+  .key.v { font-family: "Times New Roman", serif; font-style: italic; background: #fff8e1; border-color: #ffcc80; }
+  .msg { margin-top: 8px; border-radius: 12px; padding: 8px 12px; line-height: 1.7; }
+  .msg.info { background: #f1f8e9; border: 2px solid #9ccc65; }
+  .msg.info::before { content: "💡 "; }
+  .msg.good { background: #e8f5e9; border: 3px solid #66bb6a; }
+  .msg.good::before { content: "○ "; color: var(--ok); font-weight: 900; font-size: 1.3em; }
+  .msg.bad { background: #fff8e1; border: 2px solid #ffb300; }
+  .msg.bad::before { content: "△ "; font-weight: 900; }
+  .trip { margin-top: 8px; background: #fce4ec; border-radius: 12px; padding: 8px 12px; border-left: 8px solid var(--ng); line-height: 1.7; }
+  .trip h3 { margin: 0; font-size: 1.05rem; color: var(--ng); }
+  .trip h3::before { content: "✖ "; }
+  .stats { margin-top: 10px; font-size: 0.95rem; color: #455a64; line-height: 1.7; }
+
+  /* ===== ④ わって見る（発展） ===== */
+  .fterm { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 0; border-bottom: 1px dashed #e0e0e0; }
+  .fctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .fctl .stp { display: inline-flex; align-items: center; gap: 4px; }
+  .fctl .stp button { min-width: 44px; min-height: 44px; border-radius: 10px; border: 2px solid var(--soft); background: #fff; font-weight: 900; font-size: 1rem; cursor: pointer; touch-action: manipulation; }
+  .fctl .stp input { width: 2.6em; min-height: 44px; font-size: 1.3rem; font-weight: 900; text-align: center; border: 3px solid #4db6ac; border-radius: 10px; }
+  .fctl .sbtn { min-width: 48px; min-height: 44px; border-radius: 10px; border: 2px solid var(--soft); background: #fff; font-weight: 900; font-size: 1.2rem; cursor: pointer; }
+  .fctl .sbtn.on[data-s="1"] { background: var(--pos); border-color: var(--pos); color: #fff; }
+  .fctl .sbtn.on[data-s="-1"] { background: var(--neg); border-color: var(--neg); color: #fff; }
+  .fexpr { font-size: 30px; font-weight: 900; min-width: 6em; }
+  .fbars { overflow-x: auto; }
+  .fres { font-size: 30px; font-weight: 900; color: var(--ok); }
+  .both { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; font-size: 1rem; margin-top: 4px; }
+  .both .mr { font-size: 26px; }
+
+  /* ===== ことば・リンク ===== */
+  .words { font-size: 0.95rem; line-height: 1.7; margin: 8px 0 0; }
+  .words dt { font-weight: 900; display: inline; }
+  .words dd { display: inline; margin: 0 0 0 .3em; }
+  .words dd::after { content: ""; display: block; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+  .links a { color: var(--accent-dark); font-weight: bold; }
+
+  @media (max-width: 640px) {
+    .tabs { grid-template-columns: repeat(3, 1fr); }
+    .tab { font-size: .95rem; }
+  }
+  @media (max-width: 520px) {
+    :root { --u: 28px; }
+    .keys .key { min-height: 46px; }
+    .fexpr, .fres { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← もどる</a>
+    <h1>🧩 同類項タイル</h1>
+  </div>
+  <p class="subtitle">文字式の項をタイルにして、同じ形のタイル（同類項）を寄せてまとめよう</p>
+  <div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" data-mode="sum" role="tab">① まとめる<small>同類項を寄せる</small></button>
+    <button class="tab" data-mode="neg" role="tab">② −( ) をはずす<small>ひっくり返す</small></button>
+    <button class="tab" data-mode="dist" role="tab">③ 分配法則<small>2(…) を写す</small></button>
+    <button class="tab" data-mode="frac" role="tab">④ わって見る<small>発展・分数の係数</small></button>
+    <button class="tab" data-mode="free" role="tab">⑤ じゆう<small>式を入れる</small></button>
+  </div>
+
+  <!-- 問題をえらぶ -->
+  <div class="card" id="probBox">
+    <div class="row" id="freeRow" hidden style="margin-bottom:8px">
+      <input class="freein" id="freeIn" type="text" autocomplete="off" spellcheck="false" placeholder="例：(3x+2)−(2x−5)、2(x+1)+3(x−2)" aria-label="式を入れる">
+      <button class="act primary" id="freeGo" data-lock>🧩 タイルにする</button>
+    </div>
+    <div class="row" id="presets"></div>
+    <div class="warn" id="parseWarn" hidden></div>
+  </div>
+
+  <!-- タイルのモード（①②③⑤） -->
+  <div class="main" id="tileArea">
+    <div class="grid">
+      <div class="card a-board">
+        <h2>🧩 タイルの置き場</h2>
+        <div class="legend" id="legend"></div>
+        <div class="board" id="board"></div>
+        <p class="small" id="howto"></p>
+        <div class="acts">
+          <button class="act" id="copyBtn" data-lock>📑 <span id="copyLabel">写す</span></button>
+          <button class="act flip" id="flipBtn" data-lock>🔄 −( ) の中をぜんぶひっくり返す</button>
+          <button class="act primary" id="unparenBtn" data-lock>✂ かっこをはずす</button>
+          <button class="act primary" id="gatherBtn" data-lock>🧲 同類項を寄せる</button>
+          <button class="act zero" id="cancelAllBtn" data-lock>✨ ゼロ対をぜんぶ消す</button>
+          <button class="act" id="autoBtn" data-lock hidden>▶ 手順を自動再生</button>
+        </div>
+        <div class="acts">
+          <button class="act" id="undoBtn" data-lock>↶ ひとつもどす</button>
+          <button class="act" id="resetBtn" data-lock>⟲ もういちど</button>
+          <button class="act" id="newBtn" data-lock>🎲 べつの問題</button>
+        </div>
+        <div id="msg"></div>
+      </div>
+
+      <div class="card a-expr">
+        <h2>🧮 式の変化</h2>
+        <div class="lines" id="lines" aria-live="polite"></div>
+      </div>
+
+      <div class="card a-result">
+        <h2>✏️ 答えの式を書こう</h2>
+        <div class="ansrow">
+          <input class="ansin" id="ansIn" type="text" autocomplete="off" spellcheck="false" aria-label="答えの式" placeholder="例：5x−3">
+          <button class="act primary" id="checkBtn" data-lock>たしかめる</button>
+        </div>
+        <div class="keys" id="keys"></div>
+        <div id="ansMsg"></div>
+        <div class="acts" id="teacherAns" hidden><button class="act" id="showAnsBtn">★ 答えを見る</button></div>
+        <div class="stats" id="stats"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ わって見る（発展） -->
+  <div class="card" id="fracArea" hidden>
+    <h2>✂ わって見る（発展）：分数の係数</h2>
+    <p class="note" style="margin-top:0">x のタイル1本を等分して、かけらの数で分数の係数を見よう。<b>x/2</b>（x を 2 つにわった 1 つ分）と <b>(1/2)x</b> は同じ。数×文字は <b>3×x＝3x</b>（× をはぶいて数を前）。</p>
+    <div id="fTerms"></div>
+    <div id="fRes"></div>
+    <div class="acts">
+      <button class="act primary" id="fCutBtn">✂ 同じ大きさに切りそろえる</button>
+      <button class="act primary" id="fJoinBtn">🧩 まとめる</button>
+      <button class="act" id="fUndoBtn">↶ ひとつもどす</button>
+      <button class="act" id="fResetBtn">⟲ もういちど</button>
+    </div>
+    <div id="fMsg"></div>
+  </div>
+
+  <!-- はやさ・ことば・リンク -->
+  <div class="card">
+    <div class="row">
+      <span class="lbl">動くはやさ：</span>
+      <button class="chip-s" data-speed="1">ゆっくり</button>
+      <button class="chip-s" data-speed="2.5">はやい</button>
+      <button class="chip-s" data-speed="0">アニメなし</button>
+    </div>
+    <dl class="words">
+      <dt>項</dt><dd>＋ で結んだ1つ1つの部分。3<i class="v">x</i>−5 ＝ 3<i class="v">x</i>＋(−5) の項は 3<i class="v">x</i> と −5。</dd>
+      <dt>係数</dt><dd>文字にかけてある数。3<i class="v">x</i> の係数は 3、−<i class="v">x</i> の係数は −1。</dd>
+      <dt>同類項</dt><dd>文字の部分が同じ項。3<i class="v">x</i> と 5<i class="v">x</i> は同類項（タイルの形が同じ）。3<i class="v">x</i> と 5 は同類項ではない。</dd>
+      <dt>ゼロ対</dt><dd><i class="v">x</i> と −<i class="v">x</i>、1 と −1 の1組。たすと 0 なので、いっしょに消しても式の値は変わらない。</dd>
+      <dt>分配法則</dt><dd>2(3<i class="v">x</i>−1) ＝ 2×3<i class="v">x</i> ＋ 2×(−1)。かっこの中の項の<b>ぜんぶ</b>に、前の数をかける。</dd>
+    </dl>
+    <p class="note">※じっさいとのちがい：タイルの係数は整数だけ（④ をのぞく）、1つの列に24枚まで、文字は2種類までです。<i class="v">x</i> のタイルの長さは決まっていません（<i class="v">x</i> はいろいろな数を表すので、1 のタイル何個分とは決められない）。</p>
+    <div class="links">
+      <span>小学校の「十のまとまり」と「ばら」を分けて数える → <a href="くり上がり・くり下がりをブロックで.html">くり上がり・くり下がりをブロックで</a></span>
+      <a href="正負の数チップ.html">➕ 正負の数チップ（ゼロ対）</a>
+      <a href="文字式の立式.html">🍎 文字式の立式（書き方のきまり）</a>
+    </div>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   同類項タイル（中1 文字式の計算）
+   ・x のタイル（長い棒）＝ x、1 のタイル（小さい正方形）＝ 1。負の項は点線のふち＋「−」。
+   ・形が同じタイル（同類項）だけが、まとめられる。x と 1 は形がちがうのでまとめられない。
+   ・x と −x、1 と −1 は「ゼロ対」＝ 0。消しても式は変わらない。
+   ・流れ：（分配法則で写す）→（−( ) の中をひっくり返す）→ かっこをはずす → 同類項を寄せる → ゼロ対を消す → 答えを書く。
+   ・式は「まとまり（group）」の並び。group = { k:かっこの前の数, paren:かっこがあるか, terms:[{v:文字か'1', c:係数}] }
+   ・タイル：{ id, v, s:+1/−1, g:まとまりの番号, row:写した何番目か, ti:何番目の項か, j:その項の何枚目か, fl:ひっくり返したか }
+   ・係数はすべて整数なので、ふつうの数の計算で厳密に行える。④ だけは Fraction（math-render.js）を使う。
+   ===================================================================== */
+
+const MAXT = 24;                      // 1つの列（ある文字の＋または−）に置けるタイルの数
+const MAXN = 12;                      // 1つの項の係数の大きさの上限
+const $ = s => document.querySelector(s);
+const ri = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const pick = a => a[ri(0, a.length - 1)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const MINUS = '−';
+
+const params = new URLSearchParams(location.search);
+const TEACHER = params.get('teacher') === '1';
+
+/* =====================================================================
+   1. 式の文字列 → まとまり（group）に読む
+   ===================================================================== */
+// 全角や「−」などを、ふつうの半角にそろえる
+function norm(s) {
+  return String(s)
+    .replace(/[０-９ａ-ｚＡ-Ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/\s+/g, '').replace(/[−－ー‐–]/g, '-').replace(/＋/g, '+')
+    .replace(/（/g, '(').replace(/）/g, ')').replace(/[＊*]/g, '×').replace(/²/g, '^2').toLowerCase();
+}
+// 例：'(3x+2)-(2x-5)' → { groups, letters }
+function parseExpr(src) {
+  const s = norm(src);
+  if (!s) throw '式を入れてね。';
+  if (/[\/÷]/.test(s)) throw '分数やわり算の式は「④ わって見る」でためそう。';
+  if (/[\^]/.test(s)) throw 'x² などの累乗は、このアプリではあつかいません。';
+  if (/=/.test(s)) throw '等式（＝）ではなく、式だけを入れてね。';
+  let i = 0;
+  const letters = [], groups = [];
+  let loose = null;
+  const readInt = () => { const m = s.slice(i).match(/^\d+/); if (!m) return null; i += m[0].length; return +m[0]; };
+  const readLetter = () => {
+    const ch = s[i];
+    if (ch && /[a-z]/.test(ch)) { i++; if (!letters.includes(ch)) letters.push(ch); return ch; }
+    return null;
+  };
+  // 1つの項を読む（first：最初の項は符号がなくてもよい）
+  const readTerm = (first, inParen) => {
+    let sign = 1;
+    if (s[i] === '+' || s[i] === '-') { sign = s[i] === '-' ? -1 : 1; i++; }
+    else if (!first) throw '項と項のあいだには ＋ か − を書こう。';
+    const n = readInt();
+    if (s[i] === '×') { if (n == null) throw '「×」の前に数を書こう。'; i++; }
+    if (s[i] === '(') {
+      if (inParen) throw 'かっこの中のかっこは、このアプリではあつかいません。';
+      return { sign, n, paren: true };
+    }
+    const v = readLetter();
+    if (n == null && !v) throw i >= s.length ? '式のさいごが ＋ や − で終わっています。' : '「' + s[i] + '」のところが読めません。';
+    if (v && s[i] && /[a-z(]/.test(s[i])) throw '文字と文字のかけ算（ab など）は、このアプリではあつかいません。';
+    if (n === 0) throw '0 の項は書かなくてよいよ。';
+    if (n != null && n > MAXN) throw '係数は ' + MAXN + ' までにしてね（タイルがならびきらないため）。';
+    return { t: { v: v || '1', c: sign * (n == null ? 1 : n) } };
+  };
+  while (i < s.length) {
+    const r = readTerm(groups.length === 0, false);
+    if (r.paren) {
+      i++;                                        // '(' をとばす
+      const terms = [];
+      while (i < s.length && s[i] !== ')') {
+        const q = readTerm(terms.length === 0, true);
+        if (q.paren) throw 'かっこの中のかっこは、このアプリではあつかいません。';
+        terms.push(q.t);
+      }
+      if (s[i] !== ')') throw 'かっこがとじていません。';
+      i++;
+      if (!terms.length) throw 'かっこの中がからっぽです。';
+      const k = r.sign * (r.n == null ? 1 : r.n);
+      if (Math.abs(k) > 5) throw 'かっこの前の数は 5 までにしてね。';
+      if (i < s.length && s[i] !== '+' && s[i] !== '-') throw 'かっこのうしろには ＋ か − を書こう。';
+      groups.push({ k, paren: true, terms, copies: 1 });
+      loose = null;
+    } else {
+      if (!loose) { loose = { k: 1, paren: false, terms: [], copies: 1 }; groups.push(loose); }
+      loose.terms.push(r.t);
+    }
+  }
+  if (letters.length > 2) throw '文字は2種類までにしてね。';
+  // 列にならぶタイルの数をしらべる（かっこをはずしたあとの＋・−の枚数）
+  const kinds = letters.concat(['1']);
+  for (const v of kinds) {
+    let P = 0, N = 0;
+    groups.forEach(g => g.terms.forEach(t => { if (t.v === v) { const x = g.k * t.c; if (x > 0) P += x; else N -= x; } }));
+    if (P > MAXT || N > MAXT) throw 'タイルが ' + MAXT + ' 枚をこえるので置けません。数を小さくしよう。';
+  }
+  groups.forEach((g, gi) => g.id = gi);
+  return { groups, letters };
+}
+
+/* =====================================================================
+   2. 式を HTML にする
+   ===================================================================== */
+const vH = v => '<i class="v">' + v + '</i>';
+// 1つの項 → "3x" "−x" "+5"（first：先頭なら ＋ を書かない）
+function termH(c, v, first) {
+  if (c === 0) return '';
+  const sg = c < 0 ? MINUS : (first ? '' : '+');
+  const a = Math.abs(c);
+  return sg + (v === '1' ? a : (a === 1 ? '' : a) + vH(v));
+}
+// 項の並び → 式。からっぽなら 0
+function polyH(list) {
+  let h = '', first = true;
+  list.forEach(t => { if (t.c !== 0) { h += termH(t.c, t.v, first); first = false; } });
+  return h || '0';
+}
+// まとまりの並び → 式（写したあとは、かっこの中をその数だけくり返す）
+function groupsH(groups) {
+  let h = '';
+  groups.forEach((g, gi) => {
+    if (!g.paren) {
+      g.terms.forEach((t, ti) => h += termH(t.c, t.v, gi === 0 && ti === 0));
+      return;
+    }
+    // 写したあとは (3x−1)+(3x−1)、−(x+3)−(x+3) のように、かっこをその数だけ並べる
+    const a = Math.abs(g.k);
+    for (let r = 0; r < g.copies; r++)
+      h += (g.k < 0 ? MINUS : gi === 0 && r === 0 ? '' : '+') + (a > 1 ? a : '') + '(' + polyH(g.terms) + ')';
+  });
+  return h;
+}
+// ふつうの文字（ワークシート用）
+const plain = h => { const d = document.createElement('div'); d.innerHTML = h; return d.textContent; };
+// 文字列にする（問題の名前・重なりチェック用）：'3x-2'
+function polyS(list) {
+  let s = '';
+  list.forEach(([c, v]) => {
+    if (!c) return;
+    const a = Math.abs(c);
+    s += (c < 0 ? '-' : s ? '+' : '') + (v === '1' ? a : (a === 1 ? '' : a) + v);
+  });
+  return s || '0';
+}
+
+/* =====================================================================
+   3. アプリの状態
+   ===================================================================== */
+const MODES = ['sum', 'neg', 'dist', 'frac', 'free'];
+const st = {
+  mode: MODES.includes(params.get('mode')) ? params.get('mode') : 'sum',
+  src: { sum: '(3x+2)+(2x-5)', neg: '-(2x-3)', dist: '2(3x-1)', free: '(3x+2)-(2x-5)' },
+  orig: null,                 // 読んだ式（はじめのまま）
+  letters: [], kinds: [],     // 文字（出てきた順）と、文字＋'1'
+  groups: [], tiles: [],
+  phase: 'group',             // 'group'（かっこあり）→ 'flat'（1列）→ 'sorted'（同類項ごと）
+  lines: [],                  // 式の変化 [{h, nt}]
+  sel: null, canceled: 0, solved: false, revealed: false,
+  hist: [], busy: false, speed: 1
+};
+let nid = 1;
+const clone = o => JSON.parse(JSON.stringify(o));
+const tileById = id => st.tiles.find(t => t.id === id);
+const tilesOf = (gid, row) => st.tiles.filter(t => t.g === gid && (row == null || t.row === row));
+const cnt = (v, s) => st.tiles.filter(t => t.v === v && t.s === s).length;
+const pairsLeft = () => st.kinds.reduce((a, v) => a + Math.min(cnt(v, 1), cnt(v, -1)), 0);
+const kc = v => v === '1' ? 'u' : st.letters.indexOf(v) === 0 ? 'k0' : 'k1';
+const kindName = v => v === '1' ? '数の項（1 のタイル）' : vH(v) + ' の項（' + vH(v) + ' のタイル）';
+// 正しい答え：文字ごとの係数 { x:5, '1':-3 }
+function truth(mode) {
+  const r = {};
+  st.kinds.forEach(v => r[v] = 0);
+  st.orig.groups.forEach(g => g.terms.forEach((t, ti) => {
+    let m = g.k;
+    if (mode === 'forget' && g.k < 0 && ti > 0) m = -g.k;                  // 2つめから符号を変え忘れた
+    if (mode === 'distFirst' && Math.abs(g.k) > 1 && ti > 0) m = Math.sign(g.k);   // 1つめにしかかけていない
+    r[t.v] += m * t.c;
+  }));
+  return r;
+}
+const ansList = r => st.kinds.map(v => ({ c: r[v], v }));
+
+/* =====================================================================
+   4. 問題を出す（はじめの状態にする）
+   ===================================================================== */
+function load(src) {
+  let p;
+  try { p = parseExpr(src); }
+  catch (e) {
+    $('#parseWarn').hidden = false; $('#parseWarn').textContent = typeof e === 'string' ? e : '式が読めません。';
+    return false;
+  }
+  $('#parseWarn').hidden = true;
+  st.src[st.mode] = src;
+  st.orig = p;
+  st.letters = p.letters.slice();
+  st.kinds = p.letters.concat(p.groups.some(g => g.terms.some(t => t.v === '1')) ? ['1'] : []);
+  setup();
+  return true;
+}
+function setup() {
+  st.groups = clone(st.orig.groups);
+  st.tiles = [];
+  st.groups.forEach(g => g.terms.forEach((t, ti) => {
+    const sg = Math.sign(t.c);
+    for (let j = 0; j < Math.abs(t.c); j++) st.tiles.push({ id: nid++, v: t.v, s: sg, g: g.id, row: 0, ti, j, fl: false });
+  }));
+  st.phase = st.groups.some(g => g.paren) ? 'group' : 'flat';
+  st.lines = [{ h: groupsH(st.orig.groups), nt: '' }];
+  st.sel = null; st.canceled = 0; st.solved = false; st.revealed = false; st.hist = [];
+  $('#ansIn').value = '';
+  setMsg(''); setAns('');
+  renderKeys();
+  render(false);
+}
+// 並べる順：まとまり → 写した何番目 → 項 → 何枚目
+function sortTiles() {
+  st.tiles.sort((a, b) => a.g - b.g || a.row - b.row || a.ti - b.ti || a.j - b.j);
+}
+
+/* =====================================================================
+   5. 描く
+   ===================================================================== */
+function tileEl(t, mini) {
+  const d = document.createElement('div');
+  d.className = 'tile ' + kc(t.v) + (t.s > 0 ? ' p' : ' m') + (mini ? ' mini' : '') + (st.sel === t.id ? ' sel' : '') + (!mini && st.flash && st.flash.includes(t.id) ? ' flash' : '');
+  d.innerHTML = (t.s < 0 ? MINUS : '') + (t.v === '1' ? '1' : vH(t.v));
+  if (mini) return d;
+  d.dataset.id = t.id;
+  d.setAttribute('role', 'button');
+  d.tabIndex = 0;
+  d.setAttribute('aria-label', (t.s < 0 ? 'マイナス' : '') + (t.v === '1' ? '1' : t.v) + ' のタイル' + (t.fl ? '（ひっくり返した）' : ''));
+  if (t.fl) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = '↺'; d.appendChild(b); }
+  return d;
+}
+const div = (cls, html) => { const d = document.createElement('div'); d.className = cls; if (html != null) d.innerHTML = html; return d; };
+const rectMap = () => { const m = {}; document.querySelectorAll('#board .tile[data-id]').forEach(e => m[e.dataset.id] = e.getBoundingClientRect()); return m; };
+
+function render(anim = true) {
+  const before = anim && animMs() ? rectMap() : null;
+  renderBoard();
+  // 動いたタイルを、もとの場所からすべらせる（FLIP）
+  if (before) {
+    document.querySelectorAll('#board .tile[data-id]').forEach(e => {
+      const t = tileById(+e.dataset.id);
+      const now = e.getBoundingClientRect();
+      const o = before[e.dataset.id] || (t && t.from != null && before[t.from]);
+      if (!o) return;
+      const dx = o.left - now.left, dy = o.top - now.top;
+      if (dx || dy) e.animate([{ transform: `translate(${dx}px, ${dy}px)`, opacity: before[e.dataset.id] ? 1 : .2 }, { transform: 'none', opacity: 1 }], { duration: animMs(), easing: 'ease' });
+    });
+  }
+  st.tiles.forEach(t => delete t.from);
+  renderLegend();
+  renderLines();
+  renderButtons();
+}
+
+function renderBoard() {
+  const b = $('#board');
+  b.innerHTML = '';
+  if (st.phase === 'group') {
+    const w = div('gwrap');
+    st.groups.forEach((g, gi) => {
+      if (!g.paren) {
+        const box = div('grp loose'), row = div('trow');
+        tilesOf(g.id).forEach(t => row.appendChild(tileEl(t)));
+        box.appendChild(row); w.appendChild(box);
+        return;
+      }
+      if (gi > 0 && g.k > 0) w.appendChild(div('op', '+'));
+      const box = div('grp' + (g.k < 0 ? ' neg' : ''));
+      const a = Math.abs(g.k);
+      const pre = (g.k < 0 ? MINUS : '') + (a > 1 ? a : '');
+      if (pre) box.appendChild(div('pre' + (g.k > 0 ? ' pos' : ''), pre));
+      box.appendChild(div('par', '('));
+      const rows = div('rows');
+      for (let r = 0; r < g.copies; r++) {
+        const row = div('trow');
+        tilesOf(g.id, r).forEach(t => row.appendChild(tileEl(t)));
+        rows.appendChild(row);
+      }
+      box.appendChild(rows);
+      box.appendChild(div('par', ')'));
+      if (g.copies > 1) box.appendChild(div('tag', '📑 ' + g.copies + ' つ分'));
+      w.appendChild(box);
+    });
+    b.appendChild(w);
+  } else if (st.phase === 'flat') {
+    const f = div('flat');
+    let prev = null;
+    st.tiles.forEach(t => {
+      const e = tileEl(t);
+      if (!prev || termKey(prev) !== termKey(t)) e.classList.add('rs');   // 項の切れ目に少しすきま
+      f.appendChild(e); prev = t;
+    });
+    if (!st.tiles.length) f.innerHTML = '<span class="small">（タイルがなくなった → 0）</span>';
+    b.appendChild(f);
+  } else {
+    const zs = div('zones');
+    st.kinds.forEach(v => {
+      const z = div('zone ' + (v === '1' ? 'zu' : kc(v) === 'k0' ? 'z0' : 'z1'));
+      const P = cnt(v, 1), N = cnt(v, -1);
+      z.appendChild(div('zone-h', '<span>' + kindName(v) + '</span><span class="small">＋ ' + P + ' 枚・− ' + N + ' 枚</span>'));
+      [1, -1].forEach(s => {
+        const r = div('zrow');
+        const list = st.tiles.filter(t => t.v === v && t.s === s);
+        list.forEach(t => r.appendChild(tileEl(t)));
+        if (!list.length) r.innerHTML = '<span class="empty">（' + (s > 0 ? '＋' : '−') + ' のタイルなし）</span>';
+        z.appendChild(r);
+      });
+      zs.appendChild(z);
+    });
+    b.appendChild(zs);
+  }
+}
+
+function renderLegend() {
+  const L = $('#legend');
+  L.innerHTML = '';
+  st.kinds.forEach(v => {
+    const sp = document.createElement('span');
+    sp.appendChild(tileEl({ v, s: 1 }, true));
+    sp.appendChild(tileEl({ v, s: -1 }, true));
+    sp.insertAdjacentHTML('beforeend', v === '1' ? '1 と −1（小さい正方形）' : vH(v) + ' と −' + vH(v) + (kc(v) === 'k0' ? '（長い棒）' : '（しま模様の棒）'));
+    L.appendChild(sp);
+  });
+  L.insertAdjacentHTML('beforeend', '<span class="small">負は点線のふち＋「−」</span>');
+}
+
+// 同類項ごとの、のこりのタイルの式（ゼロ対を消している間）
+function liveH() {
+  const list = [];
+  st.kinds.forEach(v => { list.push({ c: cnt(v, 1), v }); list.push({ c: -cnt(v, -1), v }); });
+  return polyH(list);
+}
+// タイルがもとはどの項だったか（まとまり・写した何番目・何番目の項）
+const termKey = t => t.g + '-' + t.row + '-' + t.ti;
+// タイルの並び → 項の並び（もとの同じ項のタイルを1つの項にする）
+function runsOf(tiles) {
+  const out = [];
+  tiles.forEach(t => {
+    const last = out[out.length - 1];
+    if (last && last.key === termKey(t)) last.c += t.s;
+    else out.push({ v: t.v, c: t.s, key: termKey(t) });
+  });
+  return out;
+}
+function renderLines() {
+  const L = st.lines.slice();
+  if (st.solved) L.push({ h: polyH(ansList(truth())), nt: '答え', ans: true });   // 答えはいつもいちばん下
+  else if (st.phase === 'sorted') {
+    if (pairsLeft() > 0) { if (st.canceled) L.push({ h: liveH(), nt: 'ゼロ対を ' + st.canceled + ' 組 消した', live: true }); }
+    else L.push({ h: st.revealed ? polyH(ansList(truth())) : '<span class="q">？</span>', nt: st.revealed ? '★答え' : 'タイルを見て、答えの式を書こう →', live: true });
+  }
+  $('#lines').innerHTML = L.map((l, i) =>
+    '<div class="ln' + (i === 0 ? ' first' : '') + (l.live ? ' live' : '') + (l.ans ? ' ans' : '') + '">' +
+    (i ? '<span class="eq">=</span>' : '') + '<span class="t">' + l.h + '</span>' + (l.nt ? '<span class="nt">' + l.nt + '</span>' : '') + '</div>').join('');
+}
+
+function renderButtons() {
+  const g = st.phase === 'group';
+  const needCopy = st.groups.filter(x => Math.abs(x.k) > 1);
+  const negs = st.groups.filter(x => x.paren && x.k < 0);
+  $('#copyBtn').hidden = !g || !needCopy.length;
+  $('#copyLabel').textContent = needCopy.length ? needCopy.map(x => Math.abs(x.k)).join('・') + ' つ分に写す（分配法則）' : '';
+  $('#flipBtn').hidden = !g || !st.groups.some(x => x.k < 0);
+  $('#unparenBtn').hidden = !g;
+  $('#gatherBtn').hidden = st.phase !== 'flat';
+  $('#cancelAllBtn').hidden = st.phase !== 'sorted';
+  if (!st.busy) {
+    $('#flipBtn').disabled = !negs.length || negs.every(x => tilesOf(x.id).every(t => t.fl));
+    $('#cancelAllBtn').disabled = pairsLeft() === 0;
+    $('#undoBtn').disabled = st.hist.length === 0;
+  }
+  let h;
+  if (g && needCopy.length) h = 'かっこの前に数がある → 「写す」で、かっこの中を その数だけ写そう（2(…) は (…) が 2 つ分）。';
+  else if (g && negs.length) h = '−( ) のかっこをはずすときは、中のタイルを<b>ぜんぶ</b>ひっくり返す（符号を変える）。タイルを1枚ずつタップしてもよい。';
+  else if (g) h = '＋( ) のかっこは、そのままはずせる。「かっこをはずす」を押そう。';
+  else if (st.phase === 'flat') h = '同じ形のタイル（同類項）を寄せよう。<i class="v">x</i> と −<i class="v">x</i> のように、同じ形で ＋ と − のタイルをタップ（またはドラッグして重ねる）すると、ゼロ対が消える。';
+  else if (pairsLeft() > 0) h = '同じ形の ＋ と − のタイルを1枚ずつタップ（またはドラッグして重ねる）して、ゼロ対を消そう。';
+  else h = 'のこったタイルを見て、右の「答えの式」に書こう。';
+  $('#howto').innerHTML = h;
+}
+
+function setMsg(html, kind = 'info') { $('#msg').innerHTML = html ? (kind === 'none' ? html : '<div class="msg ' + kind + '">' + html + '</div>') : ''; }
+function setAns(html, kind = 'info') { $('#ansMsg').innerHTML = html ? (kind === 'none' ? html : '<div class="msg ' + kind + '">' + html + '</div>') : ''; }
+
+/* =====================================================================
+   6. アニメーション・ひとつもどす
+   ===================================================================== */
+const animMs = () => st.speed === 0 ? 0 : 600 / st.speed;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function applySpeed() { document.documentElement.style.setProperty('--anim', animMs() + 'ms'); }
+function setBusy(b) {
+  st.busy = b;
+  document.querySelectorAll('[data-lock]').forEach(x => x.disabled = b);
+  if (!b) renderButtons();
+}
+const elOf = id => document.querySelector('#board .tile[data-id="' + id + '"]');
+function snapshot() {
+  st.hist.push(JSON.stringify({ groups: st.groups, tiles: st.tiles, phase: st.phase, lines: st.lines, canceled: st.canceled, solved: st.solved, revealed: st.revealed }));
+  if (st.hist.length > 80) st.hist.shift();
+}
+function undo() {
+  const s = st.hist.pop();
+  if (!s) return;
+  Object.assign(st, JSON.parse(s), { sel: null });
+  setMsg('');
+  render();
+}
+// ユーザーの操作：前の状態をとっておき、何も起きなかったら（false）とっておいたのを捨てる
+async function act(fn) {
+  if (st.busy) return;
+  st.flash = null;
+  snapshot();
+  setBusy(true);
+  let ok;
+  try { ok = await fn(); } finally { setBusy(false); }
+  if (ok === false) st.hist.pop();
+  render(false);
+}
+function blink(sel) { const b = $(sel); b.classList.remove('blink'); void b.offsetWidth; b.classList.add('blink'); }
+
+/* =====================================================================
+   7. 操作
+   ===================================================================== */
+// 分配法則：k(…) のかっこの中を k つ分に写す
+async function copyCore() {
+  const gs = st.groups.filter(g => Math.abs(g.k) > 1);
+  if (!gs.length) return false;
+  gs.forEach(g => {
+    const n = Math.abs(g.k);
+    const base = tilesOf(g.id, 0);
+    for (let r = 1; r < n; r++) base.forEach(t => st.tiles.push(Object.assign({}, t, { id: nid++, row: r, from: t.id })));
+    g.copies = n;
+    g.k = Math.sign(g.k);
+  });
+  sortTiles();
+  st.lines.push({ h: groupsH(st.groups), nt: gs.map(g => g.copies + '(…) は (…) が ' + g.copies + ' つ分').join('、') + '（かっこの中の項<b>ぜんぶ</b>を写す）' });
+  setMsg('');
+  render();
+  await sleep(animMs());
+}
+// タイルをひっくり返す（符号を変える）アニメ
+async function flipTiles(ids) {
+  const ms = animMs();
+  if (ms) {
+    await Promise.all(ids.map(id => { const e = elOf(id); return e ? e.animate([{ transform: 'rotateY(0)' }, { transform: 'rotateY(90deg)' }], { duration: ms / 2, fill: 'forwards' }).finished : null; }));
+  }
+  ids.forEach(id => { const t = tileById(id); t.s = -t.s; t.fl = !t.fl; });
+  render(false);
+  if (ms) {
+    await Promise.all(ids.map(id => { const e = elOf(id); return e ? e.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'rotateY(0)' }], { duration: ms / 2 }).finished : null; }));
+  }
+}
+async function flipAllCore() {
+  if (st.groups.some(g => g.k < -1)) { setMsg('先に「写す」で、かっこの中を写そう。'); blink('#copyBtn'); return false; }
+  const ids = st.tiles.filter(t => !t.fl && st.groups[t.g].k < 0).map(t => t.id);
+  if (!ids.length) return false;
+  setMsg('');
+  await flipTiles(ids);
+  setMsg('−( ) の中のタイルを<b>ぜんぶ</b>ひっくり返した。−(…) は「(…) の符号をぜんぶ変えたもの」。');
+}
+// かっこをはずす
+async function unparenCore() {
+  if (st.groups.some(g => Math.abs(g.k) > 1)) {
+    setMsg('かっこの前に数があるときは、先に「写す」で、かっこの中を その数だけ写そう（分配法則）。'); blink('#copyBtn'); return false;
+  }
+  const negs = st.groups.filter(g => g.paren && g.k < 0);
+  for (const g of negs) {
+    const ts = tilesOf(g.id), nf = ts.filter(t => t.fl).length;
+    if (nf === 0) {
+      setMsg('かっこの前が <b>−</b> なので、このままでははずせません。−( ) の中のタイルを<b>ぜんぶ</b>ひっくり返して（符号を変えて）からはずそう。');
+      blink('#flipBtn'); return false;
+    }
+    if (nf < ts.length) { trip('forgetSign', ts.filter(t => !t.fl)); return false; }
+  }
+  const hadNeg = negs.length > 0, hadPos = st.groups.some(g => g.paren && g.k > 0);
+  st.groups.forEach(g => { g.paren = false; g.k = 1; });
+  st.tiles.forEach(t => t.fl = false);
+  st.phase = 'flat';
+  st.lines.push({ h: polyH(runsOf(st.tiles)), nt: 'かっこをはずした' + (hadNeg ? '（−( ) は中の項の符号を<b>ぜんぶ</b>変える）' : '') + (hadPos && !hadNeg ? '（＋( ) はそのまま）' : '') });
+  setMsg('');
+  render();
+  await sleep(animMs());
+}
+// 同類項を寄せる（文字ごとの場所へ）
+async function gatherCore() {
+  if (st.phase !== 'flat') return false;
+  const order = v => st.kinds.indexOf(v);
+  const runs = [];
+  st.tiles.forEach(t => { const r = runs[runs.length - 1]; if (r && termKey(r[0]) === termKey(t)) r.push(t); else runs.push([t]); });
+  const sorted = runs.map((r, i) => ({ r, i })).sort((a, b) => order(a.r[0].v) - order(b.r[0].v) || a.i - b.i).map(x => x.r);
+  st.tiles = sorted.flat();
+  const h = polyH(sorted.map(r => ({ v: r[0].v, c: r[0].s * r.length })));   // 3x+2x+2−5 のように、もとの項のまま並べる
+  if (h !== st.lines[st.lines.length - 1].h) st.lines.push({ h, nt: '同類項を寄せた（たし算は順番をかえてもよい）' });
+  st.phase = 'sorted';
+  setMsg(pairsLeft() > 0 ? '同じ形のタイルが集まった。＋ と − のタイルのゼロ対を消そう。' : 'ゼロ対はない。のこったタイルを見て、答えの式を書こう。');
+  render();
+  await sleep(animMs());
+  if (!pairsLeft()) blink('#ansIn');
+}
+// 2つのタイルの間に「0」を出す
+async function popZero(e1, e2) {
+  const bd = $('#board').getBoundingClientRect();
+  const r1 = e1.getBoundingClientRect(), r2 = e2.getBoundingClientRect();
+  const p = div('pop', '0');
+  p.style.left = ((r1.left + r1.right + r2.left + r2.right) / 4 - bd.left) + 'px';
+  p.style.top = ((r1.top + r1.bottom + r2.top + r2.bottom) / 4 - bd.top) + 'px';
+  $('#board').appendChild(p);
+  await sleep(20); p.classList.add('on');
+  return p;
+}
+// ゼロ対を1組消す
+async function cancelCore(id1, id2) {
+  const a = tileById(id1), b = tileById(id2);
+  if (!a || !b) return false;
+  if (st.phase === 'group') { setMsg('先にかっこをはずそう。'); return false; }
+  if (a.v !== b.v) { trip('mixKinds', [a, b]); return false; }
+  if (a.s === b.s) { setMsg('同じ符号のタイルどうしは、ゼロ対になりません。ゼロ対は <b>＋ と − の1組</b>（たすと 0）です。'); st.sel = id2; return false; }
+  const e1 = elOf(id1), e2 = elOf(id2);
+  if (e1 && e2 && animMs()) {
+    const p = await popZero(e1, e2);
+    e1.classList.add('gone'); e2.classList.add('gone');
+    await sleep(animMs());
+    p.remove();
+  }
+  st.tiles = st.tiles.filter(t => t.id !== id1 && t.id !== id2);
+  st.canceled++;
+  st.sel = null;
+  setMsg('');
+  render(false);
+  if (st.phase === 'sorted' && pairsLeft() === 0) { setMsg('ゼロ対がなくなった。のこったタイルを見て、答えの式を書こう。'); blink('#ansIn'); }
+}
+async function cancelAllCore() {
+  if (st.phase === 'group' || pairsLeft() === 0) return false;
+  while (pairsLeft() > 0) {
+    const v = st.kinds.find(k => cnt(k, 1) && cnt(k, -1));
+    const p = st.tiles.filter(t => t.v === v && t.s > 0).pop(), m = st.tiles.filter(t => t.v === v && t.s < 0).pop();
+    await cancelCore(p.id, m.id);
+  }
+}
+
+/* =====================================================================
+   8. 答えの式を読む・たしかめる
+   ===================================================================== */
+// '5x-3' → { c:{x:5,'1':-3}, n:{x:1,'1':1}, one:1x を書いたか } ／ 読めなければ null
+function parseAns(src) {
+  let s = norm(src).replace(/([a-z])\1/g, '$1^2');        // xx → x^2
+  if (!s) return null;
+  const c = {}, n = {};
+  let i = 0, one = false;
+  while (i < s.length) {
+    const m = s.slice(i).match(/^([+-]?)(\d*)([a-z](?:\^2)?)?/);
+    if (!m || (!m[2] && !m[3]) || (i > 0 && !m[1])) return null;
+    i += m[0].length;
+    const sg = m[1] === '-' ? -1 : 1;
+    const k = m[3] || '1';
+    if (m[3] && m[2] === '1') one = true;
+    c[k] = (c[k] || 0) + sg * (m[2] ? +m[2] : 1);
+    n[k] = (n[k] || 0) + 1;
+  }
+  return { c, n, one };
+}
+const sameCoef = (a, r) => { const ks = new Set(Object.keys(a).concat(Object.keys(r))); for (const k of ks) if ((a[k] || 0) !== (r[k] || 0)) return false; return true; };
+function check() {
+  if (st.busy) return;
+  const raw = $('#ansIn').value;
+  const p = parseAns(raw);
+  if (!p) { setAns('式の形で書こう（例：5<i class="v">x</i>−3、−<i class="v">x</i>＋7）。キーボードの - でも − になります。'); return; }
+  const T = truth();
+  if (Object.keys(p.c).some(k => k.includes('^2'))) return trip('squared');
+  if (sameCoef(p.c, T)) {
+    if (Object.values(p.n).some(x => x > 1)) { setAns('値は合っているけれど、<b>まだまとめられる項</b>があります。同類項は1つにまとめよう。', 'bad'); return; }
+    if (p.one) { setAns('合っています！ ただし、1<i class="v">x</i> は <b><i class="v">x</i></b> と書く（1 ははぶく）のがきまりです。', 'bad'); return; }
+    return solved();
+  }
+  // つまずきの型をしらべる（わなの答えと同じか）
+  const total = Object.values(T).reduce((a, b) => a + b, 0);
+  const kindsUsed = Object.keys(T).filter(k => T[k] !== 0);
+  const keys = Object.keys(p.c).filter(k => p.c[k] !== 0);
+  if (kindsUsed.length >= 2 && keys.length === 1 && p.c[keys[0]] === total) return trip('mixKinds');
+  if (st.orig.groups.some(g => g.k < 0 && g.terms.length > 1) && sameCoef(p.c, truth('forget'))) return trip('forgetSign');
+  if (st.orig.groups.some(g => Math.abs(g.k) > 1 && g.terms.length > 1) && sameCoef(p.c, truth('distFirst'))) return trip('distFirst');
+  const flips = st.kinds.some(v => { const r = Object.assign({}, T); r[v] = -r[v]; return r[v] !== 0 && sameCoef(p.c, r); });
+  if (flips) return trip('signSlip');
+  setAns('ちがうようです。タイルで、もう一度たしかめよう。' + (st.phase !== 'sorted' ? '（かっこをはずして、同類項を寄せてみよう）' : ''), 'bad');
+}
+function solved() {
+  st.solved = true;
+  const T = truth();
+  setAns('正解！ <b>' + polyH(ansList(T)) + '</b>' + (st.phase === 'sorted' && pairsLeft() === 0 ? '' : '<br>タイルでもたしかめよう（かっこをはずす → 寄せる → ゼロ対を消す）。'), 'good');
+  render(false);
+}
+
+/* =====================================================================
+   9. つまずき検知
+   ===================================================================== */
+const TRIPS = {
+  mixKinds: { name: '文字の項と数の項をまとめた', icon: '🧱' },
+  squared: { name: 'たし算で x² にした', icon: '²' },
+  forgetSign: { name: '−( ) のうしろの符号を変え忘れた', icon: '🔄' },
+  distFirst: { name: 'かっこの1つめの項にしかかけていない', icon: '📑' },
+  signSlip: { name: '符号のまちがい', icon: '±' }
+};
+function tripMsg(type) {
+  const T = polyH(ansList(truth()));
+  if (type === 'mixKinds') return '<i class="v">x</i> のタイルと 1 のタイルは<b>形がちがう</b>ので、まとめられません。3<i class="v">x</i>＋5 は 3<i class="v">x</i> と 5 のまま（8<i class="v">x</i> ではない）。<b>文字の部分が同じ項（同類項）</b>だけをまとめよう。';
+  if (type === 'squared') return '3<i class="v">x</i>＋5<i class="v">x</i> は、<i class="v">x</i> のタイルが 3 本と 5 本で <b>8 本 → 8<i class="v">x</i></b>。<i class="v">x</i>² は <i class="v">x</i>×<i class="v">x</i>（かけ算）のときで、たし算では文字の部分はそのまま。';
+  if (type === 'forgetSign') return '−( ) のかっこをはずすときは、中の項の符号を<b>ぜんぶ</b>変えます。−(2<i class="v">x</i>−3) ＝ −2<i class="v">x</i><b>＋3</b>（うしろの −3 も ＋3 になる）。タイルを<b>ぜんぶ</b>ひっくり返そう。';
+  if (type === 'distFirst') return '2(3<i class="v">x</i>−1) は (3<i class="v">x</i>−1) が <b>2 つ分</b>。かっこの中の項<b>ぜんぶ</b>に 2 をかけて、6<i class="v">x</i><b>−2</b>（−1 にもかける）。';
+  return '符号が反対になっているところがあります。＋ と − のタイルの枚数をくらべて、多いほうの符号がのこります。答えは ' + (TEACHER ? T : 'タイルでたしかめよう') + '。';
+}
+function trip(type, tiles) {
+  const t = TRIPS[type];
+  const html = '<div class="trip"><h3>あなたのつまずき：' + t.icon + ' ' + t.name + '</h3><div>' + tripMsg(type) + '</div>' +
+    '<div class="acts"><button class="act" data-act="similar" data-trip="' + type + '" data-lock>🔁 類題</button>' +
+    (type !== 'mixKinds' || !tiles ? '<button class="act zero" data-act="show" data-lock>▶ タイルで見る</button>' : '') + '</div></div>';
+  if (tiles) { setMsg(html, 'none'); st.flash = tiles.map(x => x.id); }   // まちがえたタイルを光らせる（次の操作まで）
+  else setAns(html, 'none');
+  const s = Worksheet.appData('trips') || {};
+  s[type] = (s[type] || 0) + 1;
+  Worksheet.appData('trips', s);
+  renderStats();
+}
+function renderStats() {
+  const s = Worksheet.appData('trips') || {};
+  const list = Object.keys(TRIPS).filter(k => s[k]);
+  $('#stats').innerHTML = list.length
+    ? '<b>📒 つまずきの記録</b><br>' + list.map(k => TRIPS[k].icon + ' ' + TRIPS[k].name + '：' + s[k] + ' 回').join('<br>') +
+      '<br><button class="act" id="clearStats" style="min-height:44px;margin-top:4px">記録を消す</button>'
+    : '';
+}
+
+/* =====================================================================
+   10. 問題を作る（答えを先に決めてから式を作る。同じ問題は続けない）
+   ===================================================================== */
+const nz = (lo, hi) => { let v; do v = ri(lo, hi); while (v === 0); return v; };
+const ok6 = n => n !== 0 && Math.abs(n) <= 6;
+const GEN = {
+  // ① (ax+b)+(cx+d)、ax+bx、ax+b+cx+d
+  sum(tpl) {
+    const v = pick(['x', 'x', 'a', 'y']), A = nz(-6, 6), B = ri(-6, 6);
+    tpl = tpl == null ? ri(0, 2) : tpl;
+    const a = ri(1, 6), c = A - a;
+    if (!ok6(c)) return null;
+    if (tpl === 1) return polyS([[a, v], [c, v]]) + (B && Math.random() < .5 ? (B > 0 ? '+' : '') + B : '');
+    const b = nz(-6, 6), d = B - b;
+    if (!ok6(d)) return null;
+    if (tpl === 0) return '(' + polyS([[a, v], [b, '1']]) + ')+(' + polyS([[c, v], [d, '1']]) + ')';
+    return polyS([[a, v], [b, '1'], [c, v], [d, '1']]);
+  },
+  // ② −(cx+d)、(ax+b)−(cx+d)
+  neg() {
+    const v = pick(['x', 'x', 'a']), c = Math.random() < .8 ? ri(1, 5) : -ri(1, 5), d = nz(-6, 6);
+    if (Math.random() < .3) return '-(' + polyS([[c, v], [d, '1']]) + ')';
+    const a = ri(1, 6), b = nz(-6, 6), A = a - c, B = b - d;
+    if (A === 0 || Math.abs(B) > 9) return null;
+    return '(' + polyS([[a, v], [b, '1']]) + ')-(' + polyS([[c, v], [d, '1']]) + ')';
+  },
+  // ③ k(cx+d)、k(cx+d)+m(ex+f)
+  dist() {
+    const v = pick(['x', 'x', 'a']), k = pick([2, 3, 4, -2, -3]), c = ri(1, 3), d = nz(-4, 4);
+    if (Math.abs(k * c) > 9 || Math.abs(k * d) > 12) return null;
+    const one = (kk, p) => (kk === -1 ? '-' : kk === 1 ? '' : kk) + '(' + polyS(p) + ')';
+    if (Math.random() < .45) return one(k, [[c, v], [d, '1']]);
+    const m = pick([2, 3, -1, -2]), e = ri(1, 3), f = nz(-4, 4);
+    if (k < 0 || k * c + m * e === 0 || Math.abs(m * e) > 9) return null;
+    return one(k, [[c, v], [d, '1']]) + (m > 0 ? '+' : '') + one(m, [[e, v], [f, '1']]);
+  }
+};
+GEN.free = () => GEN[pick(['sum', 'neg', 'dist'])]();
+function newProblem(mode = st.mode, tpl) {
+  const last = norm(st.src[st.mode] || '');
+  for (let i = 0; i < 500; i++) {
+    const s = mode === 'sum' ? GEN.sum(tpl) : GEN[mode]();
+    if (!s || norm(s) === last) continue;
+    try { parseExpr(s); } catch (e) { continue; }
+    if (tpl === 'const' && !/[a-z]\d|\d[+-]?$/.test(s)) continue;
+    load(s);
+    if (mode === 'free') $('#freeIn').value = s.replace(/-/g, MINUS);
+    return s;
+  }
+}
+// 類題：その型のつまずきが出やすい問題
+function similar(type) {
+  const to = { mixKinds: 'sum', squared: 'sum', forgetSign: 'neg', distFirst: 'dist', signSlip: st.mode }[type];
+  if (to !== st.mode) setMode(to, true);
+  if (type === 'mixKinds') { for (let i = 0; i < 50; i++) { const s = newProblem('sum', pick([0, 2])); if (s) break; } }
+  else if (type === 'squared') newProblem('sum', 1);
+  else if (type === 'forgetSign') { for (let i = 0; i < 50; i++) { newProblem('neg'); if (st.orig.groups.some(g => g.k < 0 && g.terms.length > 1)) break; } }
+  else newProblem(to);
+  setMsg('類題：' + groupsH(st.orig.groups) + '。タイルで1つずつたしかめよう。');
+}
+
+/* =====================================================================
+   11. タイルのタップ・ドラッグ
+   ===================================================================== */
+async function tapTile(id) {
+  if (st.busy) return;
+  const t = tileById(id);
+  if (!t) return;
+  if (st.phase === 'group') {
+    const g = st.groups[t.g];
+    if (Math.abs(g.k) > 1) { setMsg('先に「写す」で、かっこの中を ' + Math.abs(g.k) + ' つ分に写そう。'); blink('#copyBtn'); return; }
+    if (g.k < 0) { act(async () => { await flipTiles([id]); setMsg(''); }); return; }
+    setMsg(g.paren ? '＋( ) のかっこは、中の符号を変えずに そのままはずせる。' : 'このタイルは、かっこの外の項。');
+    return;
+  }
+  if (st.sel == null || st.sel === id) { st.sel = st.sel === id ? null : id; render(false); return; }
+  const other = st.sel;
+  act(() => cancelCore(other, id));
+}
+let drag = null;
+document.addEventListener('pointerdown', ev => {
+  const e = ev.target.closest('#board .tile[data-id]');
+  if (!e || st.busy) return;
+  drag = { id: +e.dataset.id, el: e, x: ev.clientX, y: ev.clientY, moved: false, pid: ev.pointerId };
+  try { e.setPointerCapture(ev.pointerId); } catch (err) { /* つかめないときも動くように */ }
+});
+document.addEventListener('pointermove', ev => {
+  if (!drag || ev.pointerId !== drag.pid || st.phase === 'group') return;
+  const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 8) return;
+  drag.moved = true;
+  drag.el.classList.add('drag');
+  drag.el.style.transform = `translate(${dx}px, ${dy}px) scale(1.08)`;
+  document.querySelectorAll('.tile.drop').forEach(x => x.classList.remove('drop'));
+  const t = targetAt(ev.clientX, ev.clientY);
+  if (t) t.classList.add('drop');
+});
+function targetAt(x, y) {
+  const under = document.elementFromPoint(x, y);
+  return under ? under.closest('#board .tile[data-id]') : null;
+}
+function endDrag(ev) {
+  if (!drag || ev.pointerId !== drag.pid) return;
+  const d = drag; drag = null;
+  document.querySelectorAll('.tile.drop').forEach(x => x.classList.remove('drop'));
+  if (!d.moved) { if (ev.type === 'pointerup') tapTile(d.id); return; }
+  const t = ev.type === 'pointerup' ? targetAt(ev.clientX, ev.clientY) : null;
+  d.el.classList.remove('drag');
+  d.el.style.transform = '';
+  if (!t || +t.dataset.id === d.id) return;
+  st.sel = null;
+  act(() => cancelCore(d.id, +t.dataset.id));
+}
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+$('#board').addEventListener('keydown', ev => {
+  const e = ev.target.closest('.tile[data-id]');
+  if (e && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); tapTile(+e.dataset.id); }
+});
+
+/* =====================================================================
+   12. 答えのキー
+   ===================================================================== */
+function renderKeys() {
+  const ks = ['7', '8', '9', '+', '⌫', '4', '5', '6', MINUS, 'C', '1', '2', '3', '0'].concat(st.letters.length ? st.letters : ['x']);
+  $('#keys').innerHTML = ks.map(k => '<button class="key' + (/[a-z]/.test(k) ? ' v' : '') + '" data-k="' + k + '">' + k + '</button>').join('');
+}
+$('#keys').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-k]');
+  if (!b) return;
+  const inp = $('#ansIn'), k = b.dataset.k;
+  if (k === '⌫') inp.value = inp.value.slice(0, -1);
+  else if (k === 'C') inp.value = '';
+  else inp.value += k;
+});
+$('#ansIn').addEventListener('input', () => { const i = $('#ansIn'); const v = i.value.replace(/-/g, MINUS); if (v !== i.value) i.value = v; });
+$('#ansIn').addEventListener('keydown', ev => { if (ev.key === 'Enter') check(); });
+$('#checkBtn').addEventListener('click', check);
+$('#showAnsBtn').addEventListener('click', () => { st.revealed = true; render(false); });
+
+/* =====================================================================
+   13. モード・問題えらび
+   ===================================================================== */
+const PRESETS = {
+  sum: ['(3x+2)+(2x-5)', '3x+5x', '2a-3a+1', '3x+5', '4x-7+2x+3', '2a+3b-a+b'],
+  neg: ['-(2x-3)', '(5x+1)-(2x-3)', '(3x-4)-(x+2)', '4x-(x-6)', '-(-x+5)'],
+  dist: ['2(3x-1)', '3(x+2)', '-2(x+3)', '2(x+1)+3(x-2)', '4(2x-1)-(3x+2)'],
+  free: ['(3x+2)-(2x-5)', '2(x+1)+3(x-2)', '5a-2b-3a+4b', '-3(x-2)+x']
+};
+function renderPresets() {
+  const P = PRESETS[st.mode];
+  $('#presets').innerHTML = P ? '<span class="lbl">ためしてみよう：</span>' + P.map(s =>
+    '<button class="chip-s" data-pre="' + s + '">' + groupsH(parseExpr(s).groups) + '</button>').join('') : '';
+}
+function setMode(m, quiet) {
+  if (st.busy) return;
+  st.mode = m;
+  document.querySelectorAll('.tab').forEach(t => { t.classList.toggle('on', t.dataset.mode === m); t.setAttribute('aria-selected', t.dataset.mode === m); });
+  const frac = m === 'frac';
+  $('#tileArea').hidden = frac;
+  $('#fracArea').hidden = !frac;
+  $('#freeRow').hidden = m !== 'free';
+  renderPresets();
+  if (frac) { $('#parseWarn').hidden = true; F.reset(); return; }
+  load(st.src[m]);
+  if (m === 'free') $('#freeIn').value = st.src.free.replace(/-/g, MINUS);
+  if (!quiet && m === 'sum') setMsg('3<i class="v">x</i>＋5<i class="v">x</i> は 8<i class="v">x</i>？ 8<i class="v">x</i>²？ タイルでたしかめよう。');
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { if (st.mode !== t.dataset.mode) setMode(t.dataset.mode); }));
+$('#presets').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-pre]');
+  if (!b || st.busy) return;
+  if (st.mode === 'frac') return;
+  load(b.dataset.pre);
+  if (st.mode === 'free') $('#freeIn').value = b.dataset.pre.replace(/-/g, MINUS);
+});
+$('#freeGo').addEventListener('click', () => { if (!st.busy) load($('#freeIn').value); });
+$('#freeIn').addEventListener('keydown', ev => { if (ev.key === 'Enter' && !st.busy) load($('#freeIn').value); });
+$('#freeIn').addEventListener('input', () => { const i = $('#freeIn'); const v = i.value.replace(/-/g, MINUS); if (v !== i.value) i.value = v; });
+
+$('#copyBtn').addEventListener('click', () => act(copyCore));
+$('#flipBtn').addEventListener('click', () => act(flipAllCore));
+$('#unparenBtn').addEventListener('click', () => act(unparenCore));
+$('#gatherBtn').addEventListener('click', () => act(gatherCore));
+$('#cancelAllBtn').addEventListener('click', () => act(cancelAllCore));
+$('#undoBtn').addEventListener('click', () => { if (!st.busy) undo(); });
+$('#resetBtn').addEventListener('click', () => { if (!st.busy) setup(); });
+$('#newBtn').addEventListener('click', () => { if (!st.busy) { newProblem(); setMsg(''); } });
+$('#autoBtn').addEventListener('click', autoPlay);
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('[data-act]');
+  if (b && !st.busy) {
+    if (b.dataset.act === 'similar') similar(b.dataset.trip);
+    else if (b.dataset.act === 'show') { setAns(''); autoPlay(); }
+  }
+  if (ev.target.id === 'clearStats' && confirm('つまずきの記録を消しますか？')) { Worksheet.appData('trips', {}); renderStats(); }
+});
+document.querySelectorAll('[data-speed]').forEach(btn => btn.addEventListener('click', () => { st.speed = +btn.dataset.speed; syncSpeed(); }));
+function syncSpeed() {
+  applySpeed();
+  document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed === st.speed));
+}
+
+// 手順の自動再生：写す → ひっくり返す → かっこをはずす → 寄せる → ゼロ対を消す
+async function autoPlay() {
+  if (st.busy) return;
+  setup();
+  setBusy(true);
+  try {
+    await sleep(animMs());
+    if (st.groups.some(g => Math.abs(g.k) > 1)) { await copyCore(); await sleep(animMs()); }
+    if (st.groups.some(g => g.paren && g.k < 0)) { await flipAllCore(); await sleep(animMs()); }
+    if (st.phase === 'group') { await unparenCore(); await sleep(animMs()); }
+    await gatherCore(); await sleep(animMs());
+    await cancelAllCore();
+    if (TEACHER) { st.revealed = true; }
+  } finally { setBusy(false); render(false); }
+}
+
+let rz;
+window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => render(false), 150); });
+
+/* =====================================================================
+   14. ④ わって見る（発展）：分数の係数を、x のタイルを等分したかけらで見る
+   ===================================================================== */
+const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a; };
+const lcm = (a, b) => a / gcd(a, b) * b;
+const F = {
+  a: { s: 1, p: 1, q: 2 }, b: { s: 1, p: 3, q: 2 }, step: 0, hist: [],
+  PRE: [[1, 1, 2, 1, 1, 2], [1, 1, 2, 1, 3, 2], [1, 1, 3, 1, 2, 3], [1, 1, 2, 1, 1, 3], [1, 2, 1, -1, 1, 2], [1, 3, 4, -1, 1, 2]],
+  fr: t => new Fraction(t.s * t.p, t.q),
+  L() { return lcm(this.a.q, this.b.q); },
+  reset() { this.step = 0; this.hist = []; $('#fMsg').innerHTML = ''; this.render(); },
+  // 係数の文字（MathRender 用）。form 'a'：1/2 x、'b'：x/2
+  tex(s, p, q, form, first) {
+    const sg = s < 0 ? '-' : first ? '' : '+';
+    if (q === 1) return sg + (p === 1 ? '' : p) + 'x';
+    if (form === 'b') return sg + (p === 1 ? 'x' : '{' + p + 'x}') + '/' + q;
+    return sg + p + '/' + q + ' x';
+  },
+  texF(f, form) { return f.n === 0 ? '0' : this.tex(Math.sign(f.n), Math.abs(f.n), f.d, form, true); },
+  // x のタイル（たての棒）を pieces 等分して、かけら n 個に色をぬる SVG
+  bars(n, pieces, s) {
+    const W = 40, H = 140, G = 12, nb = Math.max(1, Math.ceil(n / pieces));
+    const ph = H / pieces;
+    let g = '';
+    for (let b = 0; b < nb; b++) {
+      const x = 4 + b * (W + G);
+      g += '<rect x="' + x + '" y="4" width="' + W + '" height="' + H + '" rx="5" fill="#fafafa" stroke="#b0bec5" stroke-width="2" stroke-dasharray="4 3"/>';
+      for (let k = 0; k < pieces; k++) {
+        const idx = b * pieces + k, y = 4 + H - (k + 1) * ph;
+        if (idx < n) g += '<rect x="' + x + '" y="' + y + '" width="' + W + '" height="' + ph + '" fill="' + (s > 0 ? '#ffcc80' : '#dcecfb') + '" stroke="' + (s > 0 ? '#e65100' : '#1565c0') + '" stroke-width="2.5"' + (s < 0 ? ' stroke-dasharray="6 3"' : '') + '/>';
+        else if (k > 0 || pieces > 1) g += '<line x1="' + x + '" x2="' + (x + W) + '" y1="' + (y + ph) + '" y2="' + (y + ph) + '" stroke="#cfd8dc" stroke-width="1.5"/>';
+      }
+      g += '<text x="' + (x + W / 2) + '" y="' + (H + 24) + '" text-anchor="middle" font-size="16" font-style="italic" font-family="Times New Roman,serif" fill="#78909c">x</text>';
+    }
+    const w = 8 + nb * (W + G);
+    return '<svg width="' + w + '" height="' + (H + 30) + '" viewBox="0 0 ' + w + ' ' + (H + 30) + '" role="img" aria-label="x のタイル ' + nb + ' 本を ' + pieces + ' 等分した ' + n + ' かけら（' + (s > 0 ? '正' : '負') + '）">' + g + '</svg>';
+  },
+  termRow(key, label) {
+    const t = this[key], first = key === 'a';
+    const pieces = this.step >= 1 ? this.L() : t.q, n = t.p * pieces / t.q;
+    const stp = (k, v, lo, hi) => '<span class="stp"><button data-f="' + key + '" data-k="' + k + '" data-d="-1" aria-label="へらす">▼</button>' +
+      '<input type="number" min="' + lo + '" max="' + hi + '" value="' + v + '" data-f="' + key + '" data-k="' + k + '" aria-label="' + (k === 'p' ? '分子' : '分母') + '"><button data-f="' + key + '" data-k="' + k + '" data-d="1" aria-label="ふやす">▲</button></span>';
+    return '<div class="fterm"><div><div class="lbl">' + label + '</div>' +
+      '<div class="fctl"><button class="sbtn' + (t.s > 0 ? ' on' : '') + '" data-f="' + key + '" data-s="1">＋</button><button class="sbtn' + (t.s < 0 ? ' on' : '') + '" data-f="' + key + '" data-s="-1">−</button>' +
+      ' 分子 ' + stp('p', t.p, 1, 9) + ' 分母 ' + stp('q', t.q, 1, 6) + '</div>' +
+      '<div class="both"><span>' + MathRender.html(this.tex(t.s, t.p, t.q, 'a', true), { size: 'inherit' }) + '</span>' +
+      (t.q > 1 ? '<span>＝ ' + MathRender.html(this.tex(t.s, t.p, t.q, 'b', true), { size: 'inherit' }) + '</span>' : '') + '</div>' +
+      '<div class="small">' + (t.q > 1 ? vH('x') + ' のタイル1本を ' + pieces + ' 等分したかけらが ' + n + ' 個' : vH('x') + ' のタイルが ' + t.p + ' 本') + '</div></div>' +
+      '<div class="fbars">' + this.bars(n, pieces, t.s) + '</div></div>';
+  },
+  render() {
+    const L = this.L(), fa = this.fr(this.a), fb = this.fr(this.b);
+    $('#fTerms').innerHTML = '<div class="fexpr">' + MathRender.html(this.tex(this.a.s, this.a.p, this.a.q, 'a', true) + this.tex(this.b.s, this.b.p, this.b.q, 'a', false), { size: 'inherit' }) + '</div>' +
+      this.termRow('a', '1つめの項') + this.termRow('b', '2つめの項');
+    let h = '';
+    if (this.step >= 2) {
+      const sum = fa.add(fb), n = Math.abs(sum.n) * L / sum.d;
+      h = '<div class="fterm"><div><div class="lbl">まとめると</div><div class="fres">＝ ' + MathRender.html(this.texF(sum, 'a'), { size: 'inherit' }) + '</div>' +
+        '<div class="small">' + L + ' 等分したかけらが ' + n + ' 個' + (sum.d !== L && sum.n ? '（約分すると ' + sum.toString().replace('-', MINUS) + '）' : '') + '</div></div>' +
+        '<div class="fbars">' + (sum.n ? this.bars(n, L, Math.sign(sum.n)) : '<b>0</b>（ゼロ対で消えた）') + '</div></div>';
+    }
+    $('#fRes').innerHTML = h;
+    $('#fCutBtn').disabled = this.step >= 1;
+    $('#fCutBtn').hidden = this.a.q === this.b.q;
+    $('#fJoinBtn').disabled = this.step >= 2 || (this.a.q !== this.b.q && this.step < 1);
+    $('#fUndoBtn').disabled = !this.hist.length;
+    $('#presets').innerHTML = '<span class="lbl">ためしてみよう：</span>' + this.PRE.map((p, i) =>
+      '<button class="chip-s" data-fp="' + i + '">' + MathRender.html(this.tex(p[0], p[1], p[2], 'b', true) + this.tex(p[3], p[4], p[5], 'b', false), { size: 'inherit' }) + '</button>').join('');
+  },
+  set(key, k, v) {
+    const t = this[key];
+    if (k === 's') t.s = v; else t[k] = Math.max(1, Math.min(k === 'p' ? 9 : 6, v | 0));
+    this.reset();
+  }
+};
+$('#fracArea').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-f]');
+  if (!b) return;
+  if (b.dataset.s) F.set(b.dataset.f, 's', +b.dataset.s);
+  else F.set(b.dataset.f, b.dataset.k, F[b.dataset.f][b.dataset.k] + +b.dataset.d);
+});
+$('#fracArea').addEventListener('change', ev => {
+  const i = ev.target.closest('input[data-f]');
+  if (i) F.set(i.dataset.f, i.dataset.k, parseInt(i.value, 10) || 1);
+});
+$('#presets').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-fp]');
+  if (!b) return;
+  const p = F.PRE[+b.dataset.fp];
+  F.a = { s: p[0], p: p[1], q: p[2] }; F.b = { s: p[3], p: p[4], q: p[5] };
+  F.reset();
+});
+$('#fCutBtn').addEventListener('click', () => {
+  F.hist.push(F.step); F.step = 1; F.render();
+  $('#fMsg').innerHTML = '<div class="msg info">分母を ' + F.L() + ' にそろえた（かけらを ' + F.L() + ' 等分の大きさにそろえた）。同じ大きさのかけらなら、数えてまとめられる。</div>';
+});
+$('#fJoinBtn').addEventListener('click', () => {
+  F.hist.push(F.step); F.step = 2; F.render();
+  const sum = F.fr(F.a).add(F.fr(F.b));
+  $('#fMsg').innerHTML = '<div class="msg info">同じ大きさのかけらを数えた。' + (F.a.s !== F.b.s ? '＋ と − のかけらは、ゼロ対で消える。' : '') +
+    (sum.d === 1 && sum.n ? 'かけらがちょうど ' + Math.abs(sum.n) + ' 本分になった。' : '') + '</div>';
+});
+$('#fUndoBtn').addEventListener('click', () => { if (F.hist.length) { F.step = F.hist.pop(); $('#fMsg').innerHTML = ''; F.render(); } });
+$('#fResetBtn').addEventListener('click', () => F.reset());
+
+/* =====================================================================
+   15. ワークシート
+   ===================================================================== */
+Worksheet.init({
+  title: '同類項タイル',
+  question: '3x＋5x は 8x だろうか？ 8x² だろうか？　タイルでたしかめて、同類項のまとめ方を考えよう。',
+  predictions: ['8x', '8x²', '15x', 'わからない'],
+  operationNote: '「① まとめる」で 3x＋5x を出して、タイルを寄せてみよう。答えの式を書いて正解したら「＋ 記録する」。3x＋5 や (3x＋2)＋(2x−5)、「② −( ) をはずす」の −(2x−3) もためそう。',
+  fields: [
+    { key: 'shiki', label: '式', math: false },
+    { key: 'kotae', label: 'まとめた式', math: false },
+    { key: 'zero', label: '消したゼロ対', math: false }
+  ],
+  capture: () => {
+    if (st.mode === 'frac' || !st.solved) { setMsg('答えの式を書いて、正解してから記録しよう。'); return null; }
+    return { shiki: plain(st.lines[0].h), kotae: plain(polyH(ansList(truth()))), zero: st.canceled + ' 組' };
+  },
+  summaryHint: '「同類項は、文字の部分はそのままで、係数どうしを〜」の形で。x と数の項がまとめられない理由も書こう。',
+  teacher: {
+    hint: '3x＋5x でタイルが「8本」になることから 8x を確かめ、8x² との違い（x² は x×x）を話題にする。次に 3x＋5 で「形がちがうタイルはまとめられない」ことを見せる。',
+    answer: '3x＋5x ＝ (3＋5)x ＝ 8x（8x² ではない）。<br>ことば：同類項は、文字の部分はそのままで、係数どうしをたしたりひいたりしてまとめる。文字の項と数の項は同類項ではないので、まとめられない。−( ) のかっこをはずすときは、中の項の符号をぜんぶ変える。'
+  }
+});
+
+// ===== はじめ =====
+if (TEACHER) { $('#teacherBadge').hidden = false; $('#autoBtn').hidden = false; $('#teacherAns').hidden = false; }
+syncSpeed();
+setMode(st.mode);
+renderStats();
+</script>
+</body>
+</html>
