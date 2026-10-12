@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>線分図ビルダー</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：たす（＋）＝オレンジ・実線、ひく・たりない（−）＝青・点線
+     正解＝緑（○）、まちがい・注意＝赤紫（×）。色だけでなく、記号・線の種類でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1280px; display: flex; flex-direction: column; gap: 10px; container-type: inline-size; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 46px; padding: 6px 14px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.05rem; color: var(--accent); }
+  .card.dim { opacity: 0.45; }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.ok { border-color: var(--ok); background: #e8f5e9; }
+  .op-btn.ng { border-color: var(--ng); background: #fce4ec; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+
+  /* ===== 3つの列：左＝問題、中央＝線分図、右＝式と答え（はばがせまいときはたてにならぶ） ===== */
+  .cols { display: flex; flex-direction: column; gap: 10px; }
+  .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  /* タブレット横向き：左＝問題、右＝線分図、その下に 式と答え を横ならび */
+  @container (min-width: 860px) {
+    .cols { display: grid; grid-template-columns: 31% 1fr; grid-template-areas: "l c" "r r"; align-items: start; }
+    .col-l { grid-area: l; } .col-c { grid-area: c; }
+    .col-r { grid-area: r; flex-direction: row; align-items: stretch; }
+    .col-r > .card { flex: 1 1 0; }
+  }
+  /* 広い画面：3列（左＝問題、中央＝線分図、右＝式と答え） */
+  @container (min-width: 1200px) {
+    .cols { grid-template-columns: 25% 1fr 26%; grid-template-areas: "l c r"; }
+    .col-r { flex-direction: column; }
+    .col-r > .card { flex: none; }
+  }
+
+  /* ワークシートをとじたとき、右はしの「ワークシート」タブが線分図にかからないようにする */
+  @media (min-width: 900px) { body.ws-on.ws-collapsed .panel { padding-right: 46px; } }
+
+  /* ===== 問題 ===== */
+  .ptext { font-size: 1.12rem; line-height: 1.85; }
+  .ptext b { color: #4e342e; }
+  .pask { margin-top: 6px; padding: 6px 10px; background: #fffde7; border-left: 5px solid #fbc02d; border-radius: 6px; font-weight: bold; line-height: 1.6; }
+  .xlist { display: flex; flex-direction: column; gap: 6px; }
+  .xbtn {
+    min-height: 50px; border: 3px solid #b0bec5; background: #fafafa; border-radius: 12px; text-align: left;
+    font-size: 1rem; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation; padding: 6px 10px; line-height: 1.4;
+  }
+  .xbtn.active { border-color: var(--pos); background: #fff3e0; }
+  .xbtn.active::before { content: "✔ "; color: var(--pos); }
+  .xbtn .k { display: block; font-size: 0.8rem; color: #78909c; }
+
+  /* ===== 線分図 ===== */
+  .shelf { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .part {
+    min-height: 54px; min-width: 92px; padding: 6px 10px; border-radius: 12px; border: 2px solid var(--soft);
+    background: #fafafa; font-weight: bold; font-size: 0.95rem; cursor: grab; touch-action: none; user-select: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--ink);
+  }
+  .part .sw { width: 64px; height: 14px; border-radius: 3px; }
+  .part.p-plus .sw { background: #ffe0b2; border: 3px solid var(--pos); }
+  .part.p-minus .sw { background: #e3f2fd; border: 3px dashed var(--neg); }
+  .part.p-tick .sw { background: repeating-linear-gradient(90deg, #fff 0 14px, #37474f 14px 16px); border: 2px solid #37474f; }
+  .part.p-label .sw { background: #fffde7; border: 2px solid #fbc02d; border-radius: 10px; }
+  .part.trash { cursor: default; border-style: dashed; color: var(--ng); }
+  .part.trash.over { background: #fce4ec; }
+  .part.disabled { opacity: 0.4; }
+  .ghost {
+    position: fixed; z-index: 100; pointer-events: none; padding: 6px 12px; border-radius: 10px;
+    font-weight: bold; background: #fff; border: 3px solid var(--accent); box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+    transform: translate(-50%, -120%); white-space: nowrap; font-size: 1rem;
+  }
+
+  .rows { display: flex; flex-direction: column; gap: 6px; position: relative; }
+  .rowbox { border: 2px solid #cfd8dc; border-radius: 12px; padding: 4px 8px 6px; background: #fbfcfc; }
+  .rowbox.sel { border-color: var(--accent); background: #f5f7f8; }
+  .rowbox.over { border-color: #fbc02d; background: #fffde7; }
+  .rowhead { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: bold; color: #546e7a; min-height: 30px; }
+  .rowhead .rsum { margin-left: auto; color: var(--ink); font-size: 22px; }
+  .row { position: relative; height: 128px; margin: 0 6px; }
+  .row.hasminus { height: 150px; }
+  .row.empty::after { content: "ここに棒をドラッグ（または、たなの棒をタップ）"; position: absolute; inset: 40px 0 auto; text-align: center; color: #90a4ae; font-size: 0.95rem; }
+  .bar {
+    position: absolute; top: 40px; height: 44px; border-radius: 4px; cursor: pointer; touch-action: none; user-select: none;
+    display: flex; align-items: center; justify-content: center; overflow: visible; min-width: 6px;
+  }
+  .bar.plus { background: #ffe0b2; border: 3px solid var(--pos); color: #bf360c; }
+  .bar.minus { top: 86px; height: 34px; background: rgba(227,242,253,0.85); border: 3px dashed var(--neg); color: var(--neg); }
+  .bar.negval { background: repeating-linear-gradient(135deg, #fce4ec 0 6px, #fff 6px 12px); border-color: var(--ng); color: var(--ng); }
+  .bar.dragging { opacity: 0.3; }
+  .bar.ghostbar { cursor: default; background: #eceff1; border-color: #78909c; color: #455a64; }
+  .bar.ghostbar.minus { background: rgba(236,239,241,0.8); }
+  .bar .lbl { position: relative; z-index: 2; font-size: 22px; font-weight: bold; white-space: nowrap; background: rgba(255,255,255,0.75); border-radius: 6px; padding: 0 4px; line-height: 1.1; }
+  .bar.minus .lbl { font-size: 18px; }
+  .bar .lbl .mr { font-size: inherit; }
+  .bar .tk { position: absolute; top: 0; bottom: 0; width: 2px; background: #37474f; z-index: 1; }
+  .bar .bub {
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); white-space: nowrap;
+    background: #fffde7; border: 2px solid #fbc02d; border-radius: 10px; padding: 1px 8px; font-size: 0.82rem; font-weight: bold; color: #5d4037;
+  }
+  .bar .bub::after { content: ""; position: absolute; left: 50%; top: 100%; border: 6px solid transparent; border-top-color: #fbc02d; transform: translateX(-50%); }
+  .bar.minus .bub { bottom: auto; top: calc(100% + 4px); }
+  .bar.minus .bub::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: #fbc02d; }
+  .endmark { position: absolute; top: 28px; bottom: 0; width: 0; border-left: 3px solid #37474f; z-index: 3; pointer-events: none; }
+  .endmark::before { content: "▼"; position: absolute; top: -20px; left: -9px; font-size: 14px; color: #37474f; }
+  .zero { position: absolute; top: 34px; height: 92px; border-left: 2px solid #90a4ae; }
+  .samebox { text-align: center; font-weight: bold; min-height: 1.6rem; }
+  .samebox.ok { color: var(--ok); }
+  .samebox.ng { color: var(--ng); }
+  .guide { position: absolute; top: 0; bottom: 0; width: 0; border-left: 4px dashed var(--ok); z-index: 5; pointer-events: none; }
+  .endmark.ng { border-left-color: var(--ng); }
+  .endmark.ng::before { content: "▼×"; color: var(--ng); }
+  .guide span { position: absolute; bottom: 2px; right: 6px; color: var(--ok); background: #fff; font-size: 0.85rem; font-weight: bold; white-space: nowrap; padding: 0 4px; border-radius: 6px; }
+
+  .hintbox { border: 3px solid #fbc02d; border-radius: 12px; padding: 8px 12px; background: #fffde7; line-height: 1.7; }
+  .hintbox .hl { font-weight: bold; color: #f57f17; }
+  .hintrows .row { height: 118px; }
+
+  /* ===== 式と答え ===== */
+  .eqbig { text-align: center; font-size: 30px; overflow-x: auto; padding: 4px 0; }
+  .msg { text-align: center; font-size: 1rem; line-height: 1.7; min-height: 1.6rem; padding: 4px 6px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; border-radius: 12px; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; border-radius: 12px; }
+  .mark-ok { color: var(--ok); font-weight: 900; }
+  .mark-ng { color: var(--ng); font-weight: 900; }
+  .xin { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 28px; }
+  .xin input { width: 130px; font-size: 1.4rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .steps { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; column-gap: 6px; row-gap: 4px; font-size: 22px; margin-top: 6px; }
+  .steps .s-l { text-align: right; } .steps .s-r { text-align: left; } .steps .s-eq { text-align: center; font-weight: bold; }
+  .steps .s-why { grid-column: 1 / -1; font-size: 0.82rem; color: #607d8b; text-align: center; margin-top: -2px; }
+  .qty { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; }
+  .qty div { padding: 4px 8px; background: #f5f7f8; border-radius: 8px; }
+  .judge { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .judge .op-btn { text-align: left; }
+  .answer { font-size: 1.15rem; font-weight: bold; line-height: 1.7; text-align: center; }
+  .answer.fit { color: #1b5e20; }
+  .answer.nofit { color: #4a148c; }
+
+  /* ===== 編集のまど（棒の式・目もり・ふきだし） ===== */
+  .modal { position: fixed; inset: 0; background: rgba(38,50,56,0.45); z-index: 90; display: flex; align-items: center; justify-content: center; padding: 12px; }
+  .dlg { background: #fff; border-radius: 16px; padding: 14px 16px; width: min(560px, 100%); max-height: 96vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+  .dlg h3 { margin: 0; font-size: 1.1rem; }
+  .dlg .lab { font-size: 0.9rem; font-weight: bold; color: #546e7a; }
+  .dlg input[type=text] { font-size: 1.4rem; padding: 6px 10px; border-radius: 10px; border: 2px solid var(--soft); width: 100%; }
+  .dlg input.ng { border-color: var(--ng); background: #fce4ec; }
+  .prev { min-height: 44px; text-align: center; font-size: 28px; }
+  .err { color: var(--ng); font-weight: bold; min-height: 1.3rem; font-size: 0.92rem; }
+  .keys { display: flex; flex-wrap: wrap; gap: 5px; }
+  .key { min-width: 46px; min-height: 44px; border: 2px solid var(--soft); background: #fafafa; border-radius: 10px; font-size: 1.1rem; font-weight: bold; cursor: pointer; touch-action: manipulation; }
+  .key.x { font-style: italic; font-family: serif; font-size: 1.3rem; }
+  .seg2 { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg2 .chip { flex: 1; }
+  .seg2 .chip.active.cplus { background: var(--pos); border-color: var(--pos); }
+  .seg2 .chip.active.cminus { background: var(--neg); border-color: var(--neg); }
+  .stepper { display: flex; gap: 6px; align-items: center; }
+  .stepper .num { min-width: 3em; text-align: center; font-size: 1.3rem; font-weight: bold; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .tools { justify-content: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px 10px; line-height: 1.7; }
+  .flash { animation: flash .8s ease-out; }
+  @keyframes flash { 0% { background: #fff59d; } 100% { background: transparent; } }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>📏 線分図ビルダー</h1>
+<p class="subtitle">文章題を線分図にして、同じ長さから方程式を立てよう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- 問題の型：① 代金・個数 ② 過不足 ③ 速さ ④ 割合 ⑤ 比例配分 ⑥ 年れい算 -->
+  <div class="chip-row" id="typeRow"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">🎲 新しい問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- ===== 左：問題と x ===== -->
+    <div class="col col-l">
+      <div class="card">
+        <h2 id="pTitle">問題</h2>
+        <div class="ptext" id="pText"></div>
+        <div class="pask" id="pAsk"></div>
+      </div>
+      <div class="card" id="xCard">
+        <h2>① 何を x にする？</h2>
+        <div class="xlist" id="xList"></div>
+        <div class="small" style="margin-top:6px">たずねられているものを x にすることが多いけれど、ほかの数量を x にしても解けるよ。</div>
+      </div>
+    </div>
+
+    <!-- ===== 中央：線分図 ===== -->
+    <div class="col col-c">
+      <div class="card">
+        <h2>② 線分図をつくろう</h2>
+        <div class="shelf" id="shelf">
+          <div class="part p-plus" data-kind="plus"><div class="sw"></div>＋ たす棒</div>
+          <div class="part p-minus" data-kind="minus"><div class="sw"></div>− ひく棒</div>
+          <div class="part p-tick" data-kind="tick"><div class="sw"></div>目もり</div>
+          <div class="part p-label" data-kind="label"><div class="sw"></div>ふきだし</div>
+          <div class="part trash" id="trash">🗑<span>ここで消す</span></div>
+        </div>
+        <div class="small" style="text-align:center; margin:6px 0">部品を段にドラッグ。棒をタップすると式を直せるよ。目もり・ふきだしは棒の上にドラッグ。</div>
+        <div class="rows" id="rows"></div>
+        <div class="samebox" id="sameBox"></div>
+        <div class="tools" style="margin-top:6px">
+          <button class="op-btn action" id="btnSame">⇔ 上と下は同じ長さ → 方程式にする</button>
+        </div>
+      </div>
+      <div class="card" id="hintCard" hidden>
+        <h2>💡 ヒント</h2>
+        <div id="hintBody"></div>
+      </div>
+    </div>
+
+    <!-- ===== 右：式と答え ===== -->
+    <div class="col col-r">
+      <div class="card" id="eqCard">
+        <h2>③ 方程式</h2>
+        <div class="eqbig" id="eqBig"><span class="small">線分図ができたら「⇔ 同じ長さ」を押そう</span></div>
+        <div class="msg" id="eqMsg"></div>
+      </div>
+      <div class="card dim" id="solveCard">
+        <h2>④ 解く</h2>
+        <div class="xin"><span class="mr-i" style="font-style:italic">x</span> ＝ <input id="xInput" type="text" inputmode="decimal" placeholder="例 9、7/2" autocomplete="off"> <button class="op-btn action" id="btnSolve">たしかめる</button></div>
+        <div class="msg" id="solveMsg"></div>
+        <div class="tools"><button class="op-btn" id="btnSteps">📝 解き方を見る</button></div>
+        <div class="steps" id="steps"></div>
+        <div class="small" style="text-align:center; margin-top:4px">方程式の解き方は <a href="方程式ステップ.html">一次方程式のステップ</a> で練習できるよ。</div>
+      </div>
+      <div class="card dim" id="judgeCard">
+        <h2>⑤ 答えは問題に合う？</h2>
+        <div class="qty" id="qty"></div>
+        <div class="judge" id="judge"></div>
+        <div class="msg" id="judgeMsg"></div>
+      </div>
+      <div class="card" id="ansCard" hidden>
+        <h2>⑥ 答え</h2>
+        <div class="answer" id="ansText"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="chip-row" id="tFitRow"></div>
+    <div class="tools">
+      <button class="op-btn action" id="tBuild">▶ 図を自動で組み立てる</button>
+      <button class="op-btn" id="tAll">⏭ 最後まで自動で見せる</button>
+      <button class="op-btn" id="tStop">■ とめる</button>
+    </div>
+    <div class="t-ans" id="tAns"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li>① 問題を読んで、<b>何を x にするか</b>をえらぶ。</li>
+      <li>② たなの部品を段にドラッグして、線分図をつくる。棒には長さを表す式（<i>x</i>、3<i>x</i>、120、<i>x</i>＋5、80(15−<i>x</i>)、<i>x</i>/60 など）を書く。<b>あまり</b>のように加える量は「＋たす棒」（オレンジ・実線）、<b>たりない</b>のように引く量は「−ひく棒」（青・点線）。</li>
+      <li>上の段と下の段は、<b>同じ量を2通りに表したもの</b>にする（例：あめの全部の数、兄と弟が進んだ道のり）。右はしの ▼ がそろえば同じ長さ。</li>
+      <li>③「⇔ 同じ長さ」を押すと、上の段＝下の段 で方程式ができる。④ 解いて、⑤ <b>答えが問題に合うか</b>（人数が小数・負の数になっていないか、範囲をこえていないか）をたしかめよう。</li>
+      <li>💡 ヒントは3段階：① 図の形 → ② 関係（ことばの式）→ ③ 式。</li>
+      <li><b>線分図</b>：数量の大きさを線（棒）の長さで表した図。<b>比例配分</b>：全体を決まった比に分けること。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：棒の長さは、本当の答えを x に入れたときの長さで描いています（だから、式がまちがっていると右はしがずれます）。じっさいにノートにかく線分図は、だいたいの長さでかまいません。答えが負の数になる問題では、長さが負の棒を しま模様で表しています。人名・品物・ねだんは架空のものです。<br>
+    つながる教材：<a href="割合.html">小5 割合トレーニング</a>／<a href="まぜて のばして 比と比例.html">小6 比と比例</a>／<a href="方程式ステップ.html">中1 一次方程式のステップ</a>／<a href="文字式の立式.html">中1 文字式の立式</a></p>
+  </div>
+
+</div>
+
+<!-- 棒を直すまど -->
+<div class="modal" id="modal" hidden>
+  <div class="dlg" role="dialog" aria-modal="true">
+    <h3 id="dlgTitle">棒の長さを表す式</h3>
+    <input type="text" id="edExpr" autocomplete="off" spellcheck="false" placeholder="例 3x、120、80(15-x)">
+    <div class="prev" id="edPrev"></div>
+    <div class="err" id="edErr"></div>
+    <div class="keys" id="edKeys"></div>
+    <div class="lab">棒の種類</div>
+    <div class="seg2">
+      <button class="chip cplus" id="edPlus">＋ たす（実線）</button>
+      <button class="chip cminus" id="edMinus">− ひく・たりない（点線）</button>
+    </div>
+    <div class="lab">目もり（棒を同じ長さに分ける。0 は なし）</div>
+    <div class="stepper"><button class="key" id="edTm">−</button><span class="num" id="edTn">0</span><button class="key" id="edTp">＋</button></div>
+    <div class="lab">ふきだし（ことば。なくてもよい）</div>
+    <input type="text" id="edLabel" autocomplete="off" placeholder="例 りんごの代金、あまり" style="font-size:1.1rem">
+    <div class="tools" style="margin-top:6px">
+      <button class="op-btn action" id="edOk">決定</button>
+      <button class="op-btn ng" id="edDel">🗑 この棒を消す</button>
+      <button class="op-btn" id="edCancel">やめる</button>
+    </div>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（図の自動組み立て・答え・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const F = (v) => Fraction.from(v);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const M = (src, opt) => { try { return MathRender.html(src, Object.assign({ size: 'inherit' }, opt || {})); } catch (e) { return esc(src); } };
+  const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));   // a〜b の整数
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndPut  = () => beep([[520, 0, 0.07, 'triangle']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  /* =====================================================================
+     1. 一次式（a x ＋ b）の読みとり
+     棒に書かれた式「3x」「80(15-x)」「(x-5)/3」「0.2x」「2/3x」などを、
+     係数 a と定数 b（どちらも分数 Fraction）にする。x×x や x でわる式はエラー。
+     ===================================================================== */
+  function normExpr(s) {
+    return String(s)
+      .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .replace(/[ｘＸX]/g, 'x').replace(/[×＊*]/g, '*').replace(/[÷／]/g, '/')
+      .replace(/[−ー－–―]/g, '-').replace(/＋/g, '+').replace(/（/g, '(').replace(/）/g, ')').replace(/[．。]/g, '.')
+      .replace(/\s+/g, '');
+  }
+  const L = (a, b) => ({ a: F(a), b: F(b) });
+  const linAdd = (p, q) => ({ a: p.a.add(q.a), b: p.b.add(q.b) });
+  const linNeg = (p) => ({ a: p.a.neg(), b: p.b.neg() });
+  const linScale = (p, k) => ({ a: p.a.mul(k), b: p.b.mul(k) });
+  function parseLin(src) {
+    const s = normExpr(src);
+    if (!s) throw new Error('式を書いてね');
+    const toks = [];
+    for (let i = 0; i < s.length;) {
+      const m = s.slice(i).match(/^(\d+\.?\d*|\.\d+)/);
+      if (m) { toks.push({ t: 'n', v: m[1] }); i += m[1].length; continue; }
+      const c = s[i];
+      if ('x+-*/()'.includes(c)) { toks.push({ t: c }); i++; continue; }
+      throw new Error('「' + c + '」は使えないよ（数・x・＋−×÷・かっこ だけ）');
+    }
+    let p = 0;
+    const peek = () => toks[p], eat = (t) => { if (toks[p] && toks[p].t === t) { p++; return true; } return false; };
+    function expr() {
+      let v = term();
+      for (;;) {
+        if (eat('+')) v = linAdd(v, term());
+        else if (eat('-')) v = linAdd(v, linNeg(term()));
+        else return v;
+      }
+    }
+    function mul(u, v) {
+      if (!u.a.isZero() && !v.a.isZero()) throw new Error('x × x になるので、この教材では使えないよ');
+      if (u.a.isZero()) return linScale(v, u.b);
+      return linScale(u, v.b);
+    }
+    function term() {
+      let v = factor();
+      for (;;) {
+        const t = peek();
+        if (!t) return v;
+        if (t.t === '*') { p++; v = mul(v, factor()); }
+        else if (t.t === '/') {
+          p++; const d = factor();
+          if (!d.a.isZero()) throw new Error('x でわる式は、この教材では使えないよ');
+          if (d.b.isZero()) throw new Error('0 でわることはできないよ');
+          v = linScale(v, d.b.inv());
+        }
+        else if (t.t === 'n' || t.t === 'x' || t.t === '(') v = mul(v, factor());   // 3x、2(x+1) のような × の省略
+        else return v;
+      }
+    }
+    function factor() {
+      const t = peek();
+      if (!t) throw new Error('式がとちゅうで終わっているよ');
+      if (eat('-')) return linNeg(factor());
+      if (eat('+')) return factor();
+      if (t.t === 'n') { p++; return L(0, F(t.v)); }
+      if (t.t === 'x') { p++; return L(1, 0); }
+      if (eat('(')) { const v = expr(); if (!eat(')')) throw new Error('かっこが閉じていないよ'); return v; }
+      throw new Error('式の形がおかしいよ');
+    }
+    const v = expr();
+    if (p < toks.length) throw new Error('式の形がおかしいよ（「' + (toks[p].v || toks[p].t) + '」のあたり）');
+    return v;
+  }
+  // 表示用の式（MathRender の書き方）にする。2/3x → 2/3 x（分数×文字）、* → ×
+  function dispExpr(src) {
+    return normExpr(src).replace(/(\d+\/\d+)x/g, '$1 x').replace(/\*/g, '×').replace(/([+\-])/g, ' $1 ').replace(/\(\s*-\s*/g, '(-').replace(/^\s*-\s*/, '-').trim();
+  }
+  // a x + b を式の文字列に（MathRender の書き方）
+  function linStr(v) {
+    const parts = [];
+    if (!v.a.isZero()) {
+      const a = v.a, ab = a.abs();
+      const c = ab.equals(1) ? '' : (ab.isInteger() ? String(ab.n) : ab.n + '/' + ab.d + ' ');
+      parts.push((a.sign() < 0 ? '-' : '') + c + 'x');
+    }
+    if (!v.b.isZero() || !parts.length) {
+      const b = v.b;
+      if (parts.length) parts.push(b.sign() < 0 ? ' - ' + b.abs().toString() : ' + ' + b.toString());
+      else parts.push(b.toString());
+    }
+    return parts.join('');
+  }
+  // 数を文に入れる形：整数ならそのまま、分数なら たて分数＋（小数で）
+  function numHTML(f) {
+    f = F(f);
+    if (f.isInteger()) return String(f.n);
+    let d = f.d; while (d % 2 === 0) d /= 2; while (d % 5 === 0) d /= 5;
+    const dec = d === 1 ? String(+f.valueOf().toFixed(6)) : '約 ' + (+f.valueOf().toFixed(2));
+    return M(f.toString()) + '（' + dec + '）';
+  }
+  const numTxt = (f) => { f = F(f); if (f.isInteger()) return String(f.n); return String(+f.valueOf().toFixed(2)); };
+
+  /* =====================================================================
+     2. 問題をつくる
+     どの型も「答え（もとになる量 n）」を先に決めてから、問題の数を作る。
+     合う問題＝答えが問題の条件に合う、合わない問題＝小数・負の数・範囲外になる。
+
+     問題 = {
+       type, fit, title, text, ask,
+       nums: 式を書くときのキーに出す数,
+       cands: [ x の候補 { key, label, val（x の本当の値）, top, bot（線分図の見本の棒）,
+                         topName, botName, words（ことばの式）, traps（まちがいの式）} ],
+       qty: [ 問題の条件をたしかめる量 { name, v, unit, int（整数か）, max（上限）, maxText } ],
+       answer（合うときの答えの文）, nofitNote（合わないときの説明）
+     }
+     棒 = { e: 式, s: 1（たす）/ -1（ひく）, ticks: 目もり, label: ふきだし }
+     まちがいの式 = { l, r, type（つまずきの型） }
+     ===================================================================== */
+  const B = (e, s, label, ticks) => ({ e: String(e), s: s || 1, label: label || '', ticks: ticks || 0 });
+  const TYPES = [
+    { id: 1, name: '① 代金・個数' },
+    { id: 2, name: '② 過不足（配る）' },
+    { id: 3, name: '③ 速さ・時間・道のり' },
+    { id: 4, name: '④ 割合（〜割引）' },
+    { id: 5, name: '⑤ 比例配分' },
+    { id: 6, name: '⑥ 年れい算' }
+  ];
+
+  // ① 代金・個数：1個 p1 円の A と 1個 p2 円の B をあわせて N 個買い、代金は C 円
+  function genPrice(fit, fixed) {
+    // 品物の組（同じ単位でかぞえるもの）：[A, B, 単位]
+    const [A, Bn, U] = pick([['りんご', 'みかん', 'こ'], ['ドーナツ', 'クッキー', 'こ'], ['ジュース', 'お茶', '本']]);
+    let p1, p2, N, k, why;
+    for (;;) {
+      p1 = pick([100, 110, 120, 130, 150, 160]); p2 = pick([50, 60, 70, 80, 90]); N = ri(10, 18);
+      if (p1 - p2 < 30) continue;
+      if (fit) { k = F(ri(2, N - 2)); why = null; }
+      else if (Math.random() < 0.5) { k = F(ri(1, N - 2)).add(new Fraction(1, 2)); why = 'frac'; }   // 個数が小数（○.5個）
+      else { k = F(N + ri(2, 4)); why = 'neg'; }                                            // B が負の個数
+      if (k.mul(2).equals(N)) continue;   // ちょうど半分だと「残りを x のまま」の式でも解が同じになるのでさける
+      break;
+    }
+    const C = F(p2 * N).add(k.mul(p1 - p2));
+    return {
+      type: 1, fit, title: '代金・個数',
+      text: `1${U} <b>${p1}円</b>の${A}と、1${U} <b>${p2}円</b>の${Bn}を、あわせて <b>${N}${U}</b>買ったら、代金は <b>${C}円</b>でした。`,
+      ask: `${A}と${Bn}を、それぞれ何${U}買ったでしょう。`,
+      nums: [p1, p2, N, +C],
+      cands: [
+        { key: 'a', label: `${A}の数を x ${U} とする`, val: k,
+          topName: '代金（2つの和）', botName: '代金の合計',
+          top: [B(`${p1}x`, 1, `${A}の代金`), B(`${p2}(${N}-x)`, 1, `${Bn}の代金`)], bot: [B(C, 1, '代金の合計')],
+          words: `${A}の代金 ＋ ${Bn}の代金 ＝ 代金の合計（${Bn}の数は ${N}−x ${U}）`,
+          traps: [{ l: `${p1}x+${p2}x`, r: `${C}`, type: 'rest' }, { l: `${p1}x+${p2}(x-${N})`, r: `${C}`, type: 'rest' },
+                  { l: `x+(${N}-x)`, r: `${C}`, type: 'mix' }, { l: `${p1}x+${p2}`, r: `${C}`, type: 'rest' }] },
+        { key: 'b', label: `${Bn}の数を x ${U} とする`, val: F(N).sub(k),
+          topName: '代金（2つの和）', botName: '代金の合計',
+          top: [B(`${p1}(${N}-x)`, 1, `${A}の代金`), B(`${p2}x`, 1, `${Bn}の代金`)], bot: [B(C, 1, '代金の合計')],
+          words: `${A}の代金 ＋ ${Bn}の代金 ＝ 代金の合計（${A}の数は ${N}−x ${U}）`,
+          traps: [{ l: `${p1}x+${p2}x`, r: `${C}`, type: 'rest' }, { l: `${p1}(x-${N})+${p2}x`, r: `${C}`, type: 'rest' },
+                  { l: `(${N}-x)+x`, r: `${C}`, type: 'mix' }] }
+      ],
+      qty: [{ name: A + 'の数', v: k, unit: U, int: true, max: F(N), maxText: `あわせて ${N}${U}` },
+            { name: Bn + 'の数', v: F(N).sub(k), unit: U, int: true, max: F(N), maxText: `あわせて ${N}${U}` }],
+      answer: () => `${A} ${numTxt(k)}${U}、${Bn} ${numTxt(F(N).sub(k))}${U}`,
+      why
+    };
+  }
+
+  // ② 過不足：1人 a 個ずつだと b 個あまり、1人 c 個ずつだと d 個たりない
+  function genShare(fit, fixed) {
+    let a, c, b, d, n;
+    if (fixed) ({ a, c, b, d } = fixed);
+    else for (;;) {
+      a = ri(2, 5); const g = fit ? ri(1, 3) : ri(2, 3); c = a + g;
+      if (fit) { n = ri(5, 14); b = ri(1, n * g - 1); d = n * g - b; if (b > 20 || d > 20 || d < 1) continue; }
+      else { b = ri(2, 15); d = ri(2, 15); if ((b + d) % g === 0) continue; }
+      break;
+    }
+    n = F(b + d).div(c - a);
+    const item = fixed ? 'あめ' : pick(['あめ', 'カード', 'シール', '画用紙']);
+    const u = item === '画用紙' ? 'まい' : (item === 'あめ' ? 'こ' : 'まい');
+    const total = n.mul(a).add(b);
+    return {
+      type: 2, fit: n.isInteger(), title: '過不足（配る）',
+      text: `子どもたちに${item}を配ります。1人に <b>${a}${u}ずつ</b>配ると <b>${b}${u}あまり</b>、1人に <b>${c}${u}ずつ</b>配ると <b>${d}${u}たりません</b>。`,
+      ask: `子どもの人数と、${item}の数を求めましょう。`,
+      nums: [a, b, c, d],
+      cands: [
+        { key: 'n', label: '子どもの人数を x 人 とする', val: n,
+          topName: `${item}の全部の数（${a}${u}ずつ配ったとき）`, botName: `${item}の全部の数（${c}${u}ずつ配るとき）`,
+          top: [B(`${a}x`, 1, `${a}${u}ずつ配った数`, 0), B(b, 1, 'あまり')], bot: [B(`${c}x`, 1, `${c}${u}ずつ配るのに必要な数`), B(d, -1, 'たりない')],
+          words: `${a}${u}ずつ配った数 ＋ あまり ＝ ${c}${u}ずつ配るのに必要な数 − たりない数（どちらも${item}の全部の数）`,
+          traps: [{ l: `${a}x-${b}`, r: `${c}x+${d}`, type: 'kafusoku' }, { l: `${a}x+${b}`, r: `${c}x+${d}`, type: 'kafusoku' },
+                  { l: `${a}x-${b}`, r: `${c}x-${d}`, type: 'kafusoku' }, { l: `${a}x+${b}`, r: `${c}x`, type: 'kafusoku' }] },
+        { key: 't', label: `${item}の全部の数を x ${u} とする`, val: total,
+          topName: `人数（${a}${u}ずつ配ったとき）`, botName: `人数（${c}${u}ずつ配るとき）`,
+          top: [B(`(x-${b})/${a}`, 1, '人数')], bot: [B(`(x+${d})/${c}`, 1, '人数')],
+          words: `（全部の数 − あまり）÷ ${a} ＝（全部の数 ＋ たりない数）÷ ${c}（どちらも人数）`,
+          traps: [{ l: `(x+${b})/${a}`, r: `(x-${d})/${c}`, type: 'kafusoku' }, { l: `(x-${b})/${a}`, r: `(x-${d})/${c}`, type: 'kafusoku' }] }
+      ],
+      qty: [{ name: '子どもの人数', v: n, unit: '人', int: true }, { name: item + 'の数', v: total, unit: u, int: true }],
+      answer: () => `子ども ${numTxt(n)}人、${item} ${numTxt(total)}${u}`,
+      why: n.isInteger() ? null : 'frac'
+    };
+  }
+
+  // ③ 速さ（追いつき）：弟が分速 v1 m で出発、t 分後に兄が分速 v2 m で追いかける。家から駅まで Lm
+  function genSpeed(fit) {
+    let v1, dv, t, x, D, Lm;
+    for (;;) {
+      v1 = pick([50, 60, 70, 80]); dv = pick([10, 20, 30, 40, 50]); t = ri(4, 15);
+      if ((v1 * t) % dv) continue;
+      x = v1 * t / dv; if (x < 3 || x > 25) continue;
+      D = (v1 + dv) * x;
+      if (fit) Lm = Math.ceil((D + 100) / 100) * 100 + 100 * ri(0, 3);
+      else Lm = Math.floor((D - 100) / 100) * 100 - 100 * ri(0, 3);
+      if (Lm < 600 || Lm > 4000) continue;
+      break;
+    }
+    const v2 = v1 + dv, km = +(Lm / 1000).toFixed(1);
+    return {
+      type: 3, fit, title: '速さ・時間・道のり',
+      text: `弟が家を出て、<b>分速${v1}m</b>で駅へ向かいました。その <b>${t}分後</b>に、兄が家を出て <b>分速${v2}m</b>で弟を追いかけました。家から駅までは <b>${km}km</b> で、弟は駅に着いたら止まります。`,
+      ask: `兄は家を出てから何分後に弟に追いつくでしょう。（駅に着くまでに追いつけるかな？）`,
+      nums: [v1, v2, t, km],
+      cands: [
+        { key: 'b', label: '兄が歩いた時間を x 分 とする', val: F(x),
+          topName: '兄が進んだ道のり', botName: '弟が進んだ道のり',
+          top: [B(`${v2}x`, 1, '兄が進んだ道のり')], bot: [B(`${v1 * t}`, 1, `弟が先に進んだ道のり`), B(`${v1}x`, 1, '兄と同じ時間に弟が進んだ道のり')],
+          words: `兄が進んだ道のり ＝ 弟が進んだ道のり（弟は ${t}分 多く歩いている：${v1}×(x＋${t})）`,
+          traps: [{ l: `${v2}x`, r: `${v1}x+${t}`, type: 'unitmix' }, { l: `${v2}x`, r: `${v1}x`, type: 'head' },
+                  { l: `${v2}x`, r: `${v1}(x-${t})`, type: 'time' }, { l: `${v2}(x+${t})`, r: `${v1}x`, type: 'time' }] },
+        { key: 'y', label: '弟が歩いた時間を x 分 とする', val: F(x + t),
+          topName: '兄が進んだ道のり', botName: '弟が進んだ道のり',
+          top: [B(`${v2}(x-${t})`, 1, '兄が進んだ道のり')], bot: [B(`${v1}x`, 1, '弟が進んだ道のり')],
+          words: `兄が進んだ道のり ＝ 弟が進んだ道のり（兄が歩いた時間は x−${t} 分）`,
+          traps: [{ l: `${v2}(x+${t})`, r: `${v1}x`, type: 'time' }, { l: `${v2}x-${t}`, r: `${v1}x`, type: 'unitmix' }, { l: `${v2}x`, r: `${v1}x`, type: 'head' }] },
+        { key: 'd', label: '追いつく地点までの道のりを x m とする', val: F(D),
+          topName: '弟がかかった時間', botName: '兄がかかった時間＋待った時間',
+          top: [B(`x/${v1}`, 1, '弟がかかった時間')], bot: [B(t, 1, '兄が出るまでの時間'), B(`x/${v2}`, 1, '兄がかかった時間')],
+          words: `弟がかかった時間 ＝ ${t}分 ＋ 兄がかかった時間（時間 ＝ 道のり ÷ 速さ）`,
+          traps: [{ l: `x/${v1}`, r: `x/${v2}-${t}`, type: 'time' }, { l: `${v1}x`, r: `${v2}x+${t}`, type: 'unitmix' }, { l: `x/${v1}`, r: `x/${v2}`, type: 'head' }] }
+      ],
+      qty: [{ name: '兄が歩いた時間', v: F(x), unit: '分', int: false },
+            { name: '追いつく地点（家から）', v: F(D), unit: 'm', int: false, max: F(Lm), maxText: `駅まで ${Lm}m（${km}km）` }],
+      answer: () => `兄は家を出てから ${x}分後 に追いつく（家から ${D}m の地点）`,
+      why: fit ? null : 'range'
+    };
+  }
+
+  // ④ 割合：定価 x 円の品物を r 割引で買ったら S 円
+  function genPct(fit) {
+    let r, n, S;
+    for (;;) {
+      r = ri(1, 4);
+      if (fit) { n = F(ri(10, 60) * 50); S = n.mul(10 - r).div(10); if (!S.isInteger()) continue; }
+      else { S = F(ri(40, 250) * 10 + pick([0, 5])); n = S.mul(10).div(10 - r); if (n.isInteger()) continue; }
+      break;
+    }
+    const goods = pick(['かばん', 'くつ', 'Tシャツ', 'ぼうし']);
+    const rd = '0.' + r, off = n.mul(r).div(10);
+    return {
+      type: 4, fit, title: '割合（〜割引）',
+      text: `ある${goods}を、定価の <b>${r}割引</b>で買ったら、代金は <b>${S}円</b>でした。`,
+      ask: `この${goods}の定価は何円でしょう。（1円玉より小さいお金はないものとします）`,
+      nums: [r, rd, S, 10],
+      cands: [
+        { key: 'p', label: '定価を x 円 とする', val: n,
+          topName: '定価', botName: '代金 ＋ 引かれた金額',
+          top: [B('x', 1, '定価', 10)], bot: [B(S, 1, '代金'), B(`${rd}x`, 1, `引かれた金額（定価の${r}割）`)],
+          words: `定価 ＝ 代金 ＋ 引かれた金額（${r}割 ＝ ${rd}。引かれた金額は ${rd}x 円）`,
+          traps: [{ l: `${rd}x`, r: `${S}`, type: 'pctpart' }, { l: `x-${rd}`, r: `${S}`, type: 'pctnum' }, { l: `x-${r}`, r: `${S}`, type: 'pctnum' },
+                  { l: `x+${rd}x`, r: `${S}`, type: 'pctadd' }, { l: `x`, r: `${S}-${rd}x`, type: 'pctadd' }] },
+        { key: 'o', label: '引かれた金額を x 円 とする', val: off,
+          topName: '引かれた金額', botName: '定価の' + r + '割',
+          top: [B('x', 1, '引かれた金額')], bot: [B(`${rd}(${S}+x)`, 1, `定価（${S}＋x）の${r}割`)],
+          words: `引かれた金額 ＝ 定価の ${r}割（定価 ＝ 代金 ＋ 引かれた金額 ＝ ${S}＋x）`,
+          traps: [{ l: 'x', r: `${rd}*${S}`, type: 'pctpart' }, { l: 'x', r: `${rd}(${S}-x)`, type: 'pctadd' }] }
+      ],
+      qty: [{ name: '定価', v: n, unit: '円', int: true }, { name: '引かれた金額', v: off, unit: '円', int: true }],
+      answer: () => `定価 ${numTxt(n)}円`,
+      why: fit ? null : 'frac'
+    };
+  }
+
+  // ⑤ 比例配分：T まいを 兄:弟 = a:b に分ける
+  function genRatio(fit) {
+    let a, b, u, T;
+    for (;;) {
+      [a, b] = pick([[3, 2], [4, 3], [5, 3], [5, 2], [3, 1], [7, 5], [5, 4]]);
+      if (fit) { u = F(ri(3, 12)); T = u.mul(a + b); }
+      else { T = F(ri(20, 90)); if (T.n % (a + b) === 0) continue; u = T.div(a + b); }
+      break;
+    }
+    const item = pick(['カード', '色紙', 'シール']);
+    return {
+      type: 5, fit, title: '比例配分',
+      text: `<b>${T}まい</b>の${item}を、兄と弟で、まい数の比が <b>${a}：${b}</b> になるように分けます。`,
+      ask: `兄と弟は、それぞれ何まいになるでしょう。（${item}は切りません）`,
+      nums: [a, b, T],
+      cands: [
+        { key: 'u', label: `比の「1」にあたるまい数を x まい とする`, val: u,
+          topName: '兄と弟のまい数', botName: '全部のまい数',
+          top: [B(`${a}x`, 1, '兄', a), B(`${b}x`, 1, '弟', b)], bot: [B(T, 1, '全部')],
+          words: `兄（${a}x まい）＋ 弟（${b}x まい）＝ 全部（${a}：${b} なら、全体は ${a}＋${b}＝${a + b} つ分）`,
+          traps: [{ l: `${a}x`, r: `${T}`, type: 'ratiowhole' }, { l: `x+${b}x`, r: `${T}`, type: 'ratioraw' }] },
+        { key: 'e', label: '兄のまい数を x まい とする', val: u.mul(a),
+          topName: '兄と弟のまい数', botName: '全部のまい数',
+          top: [B('x', 1, '兄'), B(`${b}/${a}x`, 1, `弟（兄の ${b}/${a} 倍）`)], bot: [B(T, 1, '全部')],
+          words: `兄 ＋ 弟 ＝ 全部（弟は 兄の ${b}/${a} 倍、または 全部 − 兄）`,
+          traps: [{ l: `x+${b}x`, r: `${T}`, type: 'ratioraw' }, { l: `x+${b}`, r: `${T}`, type: 'ratioraw' }, { l: 'x', r: `${T}`, type: 'ratiowhole' },
+                  { l: `x+${a}/${b}x`, r: `${T}`, type: 'ratioraw' }] }
+      ],
+      qty: [{ name: '兄のまい数', v: u.mul(a), unit: 'まい', int: true }, { name: '弟のまい数', v: u.mul(b), unit: 'まい', int: true }],
+      answer: () => `兄 ${numTxt(u.mul(a))}まい、弟 ${numTxt(u.mul(b))}まい`,
+      why: fit ? null : 'frac'
+    };
+  }
+
+  // ⑥ 年れい算：いま父 A 才・子 C 才。父が子の k 倍になるのは何年後
+  function genAge(fit) {
+    let k, c, x, a;
+    for (;;) {
+      k = pick([2, 3, 4]); c = ri(4, 14);
+      x = fit ? ri(1, 12) : -ri(1, 4);
+      if (c + x < 2) continue;
+      a = k * (c + x) - x;
+      if (a < 28 || a > 52 || a - c < 22) continue;
+      break;
+    }
+    return {
+      type: 6, fit, title: '年れい算',
+      text: `いま、父は <b>${a}才</b>、子どもは <b>${c}才</b>です。`,
+      ask: `父の年れいが子どもの年れいの <b>${k}倍</b> になるのは、いまから何年後でしょう。`,
+      nums: [a, c, k],
+      cands: [
+        { key: 'y', label: 'いまから x 年後 とする', val: F(x),
+          topName: `x 年後の父の年れい`, botName: `x 年後の子の年れいの ${k}倍`,
+          top: [B(a, 1, 'いまの父'), B('x', 1, 'x 年')], bot: [B(`${k}(${c}+x)`, 1, `x 年後の子の ${k}倍`, k)],
+          words: `x 年後の父の年れい ＝ x 年後の子の年れい × ${k}（x 年たつと、2人とも x 才ずつ年をとる）`,
+          traps: [{ l: `${a}+x`, r: `${k * c}+x`, type: 'ageparen' }, { l: `${a}+x`, r: `${k * c}`, type: 'ageone' }, { l: `${a}`, r: `${k}(${c}+x)`, type: 'ageone' },
+                  { l: `${a}+x`, r: `${k}*${c}+${k}`, type: 'ageparen' }] },
+        { key: 'c', label: `そのときの子の年れいを x 才 とする`, val: F(c + x),
+          topName: 'そのときの父の年れい', botName: `子の年れいの ${k}倍`,
+          top: [B('x', 1, 'そのときの子'), B(a - c, 1, '父と子の年の差（ずっと同じ）')], bot: [B(`${k}x`, 1, `子の ${k}倍`, k)],
+          words: `そのときの父 ＝ 子 ＋ 年の差（${a}−${c}＝${a - c}）、それが 子の ${k}倍`,
+          traps: [{ l: 'x', r: `${k}x`, type: 'ageone' }, { l: `x+${a}`, r: `${k}x`, type: 'ageone' }] }
+      ],
+      qty: [{ name: '何年後', v: F(x), unit: '年後', int: true, min0: true }],
+      answer: () => `${x}年後`,
+      why: fit ? null : 'neg',
+      nofitExtra: fit ? '' : `（「${-x}年前」なら、父 ${a + x}才・子 ${c + x}才 で ${k}倍 になっていた。でも「何年後」とたずねているので、この問題の答えとしては合わない）`
+    };
+  }
+
+  const GEN = { 1: genPrice, 2: genShare, 3: genSpeed, 4: genPct, 5: genRatio, 6: genAge };
+
+  // 合う・合わないの理由
+  const REASONS = {
+    ok:    { text: '合う（答えにしてよい）' },
+    frac:  { text: '合わない：人数・個数・金額が 小数や分数 になった' },
+    neg:   { text: '合わない：負の数 になった（または、ほかの量が負になった）' },
+    range: { text: '合わない：問題の範囲をこえた（例：駅をこえる、全体より多い）' }
+  };
+  // 問題の量から、合う／合わない理由を調べる（いくつもあてはまるときは、どれをえらんでも正解）
+  function fitReasons(prob) {
+    const rs = new Set();
+    prob.qty.forEach(q => {
+      if (q.v.sign() < 0 || (q.min0 && q.v.sign() <= 0)) rs.add('neg');
+      if (q.int && !q.v.isInteger()) rs.add('frac');
+      if (q.max && q.v.cmp(q.max) > 0) rs.add('range');
+    });
+    return rs.size ? rs : new Set(['ok']);
+  }
+
+  /* =====================================================================
+     3. つまずきの型
+     ===================================================================== */
+  const TRIP = {
+    kafusoku: { name: 'あまり・たりないの符号', desc: 'あまりは「たす」、たりないは「ひく」。全部の数 ＝ 配った数 ＋ あまり、全部の数 ＝ 配るのに必要な数 − たりない数。' },
+    rest:     { name: '残りの個数の表し方', desc: '一方を x こ にしたら、もう一方は（あわせた個数 − x）こ。x のままや、x − あわせた個数 ではない。' },
+    mix:      { name: 'ちがう種類の量をまぜた', desc: '個数と代金のように、ちがう種類の量を「＝」で結んでいないかな。上の段と下の段は、同じ種類の量（代金どうし）にしよう。' },
+    head:     { name: '先に進んだ分を入れわすれ', desc: '弟は兄より先に出発しているので、その時間の分だけ多く進んでいる。弟が歩いた時間は 兄の時間 ＋ 先に出た時間。' },
+    time:     { name: '時間のたし・ひきが逆', desc: '先に出た弟のほうが長く歩いている。兄の時間を x 分 にしたら弟は（x ＋ 先に出た時間）分。' },
+    unitmix:  { name: '時間と道のりをたした', desc: '道のり ＝ 速さ × 時間。「分」（時間）と「m」（道のり）はそのままたせない。図の段の中は同じ種類の量にそろえよう。' },
+    pctpart:  { name: '引かれた金額を代金にした', desc: '〜割引の代金は 定価の（1 − 0.○）倍。0.○x は「引かれた金額」のほう。' },
+    pctnum:   { name: '割を「0.○円」や「○円」にした', desc: '2割は「定価の 0.2 倍」。0.2円 や 2円 ではなく、0.2x 円 をひく。' },
+    pctadd:   { name: '割引なのにたした', desc: '割引は定価から引くこと。代金 ＝ 定価 − 引かれた金額、定価 ＝ 代金 ＋ 引かれた金額。' },
+    ratiowhole: { name: '比の一方を全体にした', desc: 'a：b に分けると、全体は a＋b つ分。比の一方の数を全体と等しくしない。' },
+    ratioraw: { name: '比の数をそのまま使った', desc: '兄を x まいにしたら、弟は兄の b/a 倍。比の数をそのまま「○まい」や「○x」にしない。' },
+    ageone:   { name: '片方だけに年数をたした', desc: 'x 年たつと、父も子も x 才ずつ年をとる。父と子の両方に x をたそう。' },
+    ageparen: { name: 'かっこのつけわすれ', desc: '「子の年れいの3倍」は 3 ×（子の年れい）＝ 3(c ＋ x)。3c ＋ x ではない。' },
+    otherx:   { name: 'x にしたものとちがう式', desc: '別のものを x にしたときの式になっている。いま えらんだ x に合わせて、棒の式を書きなおそう。' },
+    diagram:  { name: '図の長さがそろっていない', desc: '上の段と下の段が同じ量を表しているか、棒の式（x の係数・たす／ひく）を見なおそう。' },
+    calc:     { name: '方程式の計算のまちがい', desc: '移項すると符号がかわる。x の係数でわるのをわすれない。解き方を見て、検算（代入）してみよう。' },
+    nocheck:  { name: '合わない答えを「合う」とした', desc: '人数・個数・金額は整数か、負の数になっていないか、問題の範囲（駅まで、あわせた数）に入っているかをたしかめよう。' },
+    falseno:  { name: '合う答えを「合わない」とした', desc: '答えを問題の条件にもどして、本当に合わないかを1つずつたしかめよう。' },
+    reason:   { name: '合わない理由のとりちがえ', desc: '小数・分数になったのか、負の数か、範囲をこえたのか、量を1つずつ見てみよう。' }
+  };
+
+  /* =====================================================================
+     4. 状態とひとつもどす
+     ===================================================================== */
+  const st = {
+    type: 1, prob: null, xKey: null,
+    rows: { top: [], bot: [] },   // 棒の並び（上の段・下の段）
+    selRow: 'top',
+    stage: 'pickx',               // pickx → build → solve → judge → done
+    eq: null,                     // 方程式 { l, r, lin }
+    hint: 0, solvedOK: false, judged: null, showSteps: false, sameView: null,
+    undo: [], lastDone: null, autoStop: false, nextId: 1
+  };
+  const bags = {};   // 型ごとの「合う／合わない」の袋（両方が必ず出るように）
+  let tFit = 'auto';  // 先生モード：つぎの問題を 合う／合わない／おまかせ
+  let lastText = '';
+
+  function snapshot() {
+    return JSON.stringify({ xKey: st.xKey, rows: st.rows, stage: st.stage, eq: st.eq ? { l: st.eq.l, r: st.eq.r } : null,
+      solvedOK: st.solvedOK, judged: st.judged, hint: st.hint, showSteps: st.showSteps, sameView: st.sameView });
+  }
+  function pushUndo() { st.undo.push(snapshot()); if (st.undo.length > 80) st.undo.shift(); }
+  function undo() {
+    const s = st.undo.pop(); if (!s) { setEqMsg('もどす操作がないよ'); return; }
+    const o = JSON.parse(s);
+    Object.assign(st, { xKey: o.xKey, rows: o.rows, stage: o.stage, solvedOK: o.solvedOK, judged: o.judged, hint: o.hint, showSteps: o.showSteps, sameView: o.sameView });
+    st.eq = o.eq ? makeEq(o.eq.l, o.eq.r) : null;
+    renderAll();
+  }
+
+  const cand = () => st.prob && st.prob.cands.find(c => c.key === st.xKey);
+
+  function newProblem(type, opt) {
+    opt = opt || {};
+    st.type = type;
+    let fit = opt.fit;
+    if (fit === undefined) {
+      if (TEACHER && tFit !== 'auto') fit = tFit === 'fit';
+      else {
+        if (!bags[type] || !bags[type].length) bags[type] = Math.random() < 0.5 ? [true, false] : [false, true];
+        fit = bags[type].shift();
+      }
+    }
+    let p;
+    for (let i = 0; i < 30; i++) { p = opt.prob || GEN[type](fit); if (p.text !== lastText || opt.prob) break; }
+    lastText = p.text;
+    // まちがいの式のうち、数のぐあいで正しい式と同じになってしまうものは外す
+    p.cands.forEach(c => { const good = modelEq(c); c.traps = c.traps.filter(t => { try { return !sameEq(makeEq(t.l, t.r), good); } catch (e) { return false; } }); });
+    st.prob = p;
+    resetWork();
+  }
+  function resetWork() {
+    Object.assign(st, { xKey: null, rows: { top: [], bot: [] }, selRow: 'top', stage: 'pickx', eq: null, hint: 0, solvedOK: false, judged: null, showSteps: false, sameView: null, undo: [] });
+    $('xInput').value = ''; $('xInput').className = '';
+    setEqMsg(''); $('solveMsg').textContent = ''; $('solveMsg').className = 'msg'; $('judgeMsg').textContent = ''; $('judgeMsg').className = 'msg';
+    renderAll();
+  }
+
+  /* =====================================================================
+     5. 線分図をかく
+     棒の長さは「本当の答え」を x に入れた長さ。上の段・下の段で 0 からの位置を計算し、
+     2つの段の中でいちばん長いものに合わせて % で置く。
+     ===================================================================== */
+  function barLin(b) { try { return parseLin(b.e); } catch (e) { return null; } }
+  function rowLin(row) {
+    return row.reduce((s, b) => { const v = barLin(b); return v ? linAdd(s, b.s > 0 ? v : linNeg(v)) : s; }, L(0, 0));
+  }
+  function rowExprStr(row) {
+    // 段の式の文字列（ひく棒は −(…)、たす棒で式が − で始まるときは ＋(…)）
+    return row.map((b, i) => {
+      const e = normExpr(b.e);
+      const compound = /[+\-]/.test(e.replace(/^-/, '').replace(/\([^()]*\)/g, ''));
+      if (b.s > 0) { if (i === 0) return e; return e.startsWith('-') ? '+(' + e + ')' : '+' + e; }
+      return '-' + (compound || e.startsWith('-') ? '(' + e + ')' : e);
+    }).join('');
+  }
+  function layoutRows(rows, xv) {
+    // それぞれの棒の左はし・右はし（数）と、段の右はし（合計）
+    const out = {}; let lo = 0, hi = 0;
+    for (const name of ['top', 'bot']) {
+      let cur = 0; const segs = [];
+      for (const b of rows[name]) {
+        const v = barLin(b); const val = v ? v.a.valueOf() * xv + v.b.valueOf() : 0;
+        const start = cur, end = b.s > 0 ? cur + val : cur - val;
+        segs.push({ b, from: Math.min(start, end), to: Math.max(start, end), negval: val < 0 });
+        cur = end; lo = Math.min(lo, start, end); hi = Math.max(hi, start, end);
+      }
+      out[name] = { segs, end: cur };
+    }
+    if (hi - lo < 1e-9) hi = lo + 1;
+    out.lo = lo; out.hi = hi;
+    out.pct = (p) => 2 + (p - lo) / (hi - lo) * 96;
+    return out;
+  }
+  function barHTML(sg, lay, opt) {
+    const b = sg.b, left = lay.pct(sg.from), w = Math.max(lay.pct(sg.to) - left, 0.8);
+    let ticks = '';
+    for (let i = 1; i < b.ticks; i++) ticks += `<span class="tk" style="left:${(i / b.ticks * 100).toFixed(2)}%"></span>`;
+    const cls = ['bar', b.s > 0 ? 'plus' : 'minus'];
+    if (sg.negval) cls.push('negval');
+    if (opt.ghost) cls.push('ghostbar');
+    let lbl;
+    if (opt.ghost) lbl = '？';
+    else lbl = (b.s < 0 ? '−' : '') + M(dispExpr(b.e));
+    const bub = b.label ? `<span class="bub">${esc(b.label)}</span>` : '';
+    return `<div class="${cls.join(' ')}" data-id="${b.id || ''}" style="left:${left.toFixed(2)}%;width:${w.toFixed(2)}%">${ticks}<span class="lbl">${lbl}</span>${bub}</div>`;
+  }
+  function rowsHTML(rows, xv, opt) {
+    opt = opt || {};
+    const lay = layoutRows(rows, xv);
+    const c = cand();
+    const names = { top: opt.topName || '上の段', bot: opt.botName || '下の段' };
+    let h = '';
+    for (const name of ['top', 'bot']) {
+      const r = rows[name];
+      const sum = r.length && !opt.ghost ? M(dispExpr(linStr(rowLin(r)))) : '';
+      h += `<div class="rowbox ${!opt.ghost && st.selRow === name ? 'sel' : ''}" data-row="${name}">
+        <div class="rowhead">${name === 'top' ? '⬆' : '⬇'} ${esc(names[name])}${sum ? `<span class="rsum">${sum}</span>` : ''}</div>
+        <div class="row ${r.length ? '' : 'empty'} ${r.some(b => b.s < 0) ? 'hasminus' : ''}" data-row="${name}">
+          <div class="zero" style="left:${lay.pct(0).toFixed(2)}%"></div>
+          ${lay[name].segs.map(sg => barHTML(sg, lay, opt)).join('')}
+          ${r.length ? `<div class="endmark ${opt.same === 'ng' ? 'ng' : ''}" style="left:${lay.pct(lay[name].end).toFixed(2)}%"></div>` : ''}
+          ${opt.same === 'ok' && r.length ? `<div class="guide" style="left:${lay.pct(lay[name].end).toFixed(2)}%">${name === 'top' ? '<span>○ 同じ長さ</span>' : ''}</div>` : ''}
+        </div></div>`;
+    }
+    return { h, lay };
+  }
+  function renderRows() {
+    const c = cand();
+    const xv = c ? c.val.valueOf() : 1;
+    const { h } = rowsHTML(st.rows, xv, { topName: '上の段', botName: '下の段', same: st.sameView });
+    $('rows').innerHTML = h;
+    $('rows').classList.toggle('locked', st.stage !== 'build' && st.stage !== 'pickx');
+    // 段の見出しをタップすると、たなの棒をタップしたときに入る段がかわる
+    $('rows').querySelectorAll('.rowhead').forEach(el => el.addEventListener('click', () => {
+      st.selRow = el.parentElement.dataset.row; renderRows();
+    }));
+    const box = $('sameBox');
+    if (st.sameView === 'ok') { box.className = 'samebox ok'; box.innerHTML = '<span class="mark-ok">○</span> 右はしがそろった！ 上の段と下の段は同じ長さ'; }
+    else if (st.sameView === 'ng') { box.className = 'samebox ng'; box.innerHTML = '<span class="mark-ng">×</span> 右はし（▼）がずれている … 同じ長さになっていない'; }
+    else { box.className = 'samebox'; box.textContent = ''; }
+  }
+
+  /* =====================================================================
+     6. ドラッグ（たなの部品・置いた棒）
+     pointer events でマウスとタッチの両方に対応する。
+     ===================================================================== */
+  let drag = null;
+  const KIND_NAME = { plus: '＋ たす棒', minus: '− ひく棒', tick: '目もり', label: 'ふきだし' };
+  function canBuild() {
+    if (!st.xKey) { flashX(); setEqMsg('まず ① で、何を x にするか えらぼう', 'ng'); return false; }
+    if (st.stage !== 'build') { setEqMsg('図を直すと、③ からやりなおしになるよ（↶ ひとつもどす でもとにもどせる）'); }
+    return true;
+  }
+  function findBar(id) {
+    for (const name of ['top', 'bot']) { const i = st.rows[name].findIndex(b => b.id === id); if (i >= 0) return { name, i, b: st.rows[name][i] }; }
+    return null;
+  }
+  function startDrag(ev, info) {
+    drag = Object.assign({ x0: ev.clientX, y0: ev.clientY, moved: false, ghost: null }, info);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onCancel);
+  }
+  function onMove(ev) {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(ev.clientX - drag.x0, ev.clientY - drag.y0) < 8) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      const g = document.createElement('div'); g.className = 'ghost';
+      g.innerHTML = drag.kind === 'bar' ? M(dispExpr(drag.bar.e)) : KIND_NAME[drag.kind];
+      document.body.appendChild(g); drag.ghost = g;
+      if (drag.el) drag.el.classList.add('dragging');
+    }
+    ev.preventDefault();
+    drag.ghost.style.left = ev.clientX + 'px'; drag.ghost.style.top = ev.clientY + 'px';
+    document.querySelectorAll('.rowbox.over').forEach(e => e.classList.remove('over'));
+    const t = hit(ev.clientX, ev.clientY);
+    if (t.rowbox) t.rowbox.classList.add('over');
+    $('trash').classList.toggle('over', !!t.trash);
+  }
+  function hit(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return {};
+    return { rowbox: el.closest('#rows .rowbox'), bar: el.closest('#rows .bar'), trash: el.closest('#trash') };
+  }
+  // 段の中の、落とした位置に入る番号
+  function insertIndex(rowName, clientX) {
+    const rowEl = $('rows').querySelector(`.row[data-row="${rowName}"]`);
+    const bars = [...rowEl.querySelectorAll('.bar')].filter(b => !b.classList.contains('dragging'));
+    let idx = 0;
+    const list = st.rows[rowName].filter(b => !(drag && drag.bar && b.id === drag.bar.id));
+    for (const b of list) {
+      const el = bars.find(e => +e.dataset.id === b.id);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (clientX > r.left + r.width / 2) idx = list.indexOf(b) + 1;
+    }
+    return idx;
+  }
+  function onUp(ev) {
+    const d = drag; endDrag();
+    if (!d) return;
+    if (!d.moved) { // タップ
+      if (d.kind === 'bar') { if (canBuild()) openEditor(d.bar, null); return; }
+      if (d.kind === 'plus' || d.kind === 'minus') { if (canBuild()) openEditor(null, { row: st.selRow, idx: st.rows[st.selRow].length, s: d.kind === 'plus' ? 1 : -1 }); return; }
+      setEqMsg(KIND_NAME[d.kind] + ' は、置いた棒の上にドラッグしてね');
+      return;
+    }
+    const t = hit(ev.clientX, ev.clientY);
+    if (d.kind === 'bar') {
+      const f = findBar(d.bar.id); if (!f) return;
+      if (t.trash) { pushUndo(); st.rows[f.name].splice(f.i, 1); changed(); sndPut(); return; }
+      if (!t.rowbox) { renderRows(); return; }   // 段の外で はなしたら、もとにもどる
+      const to = t.rowbox.dataset.row, idx = insertIndex(to, ev.clientX);
+      pushUndo(); st.rows[f.name].splice(f.i, 1); st.rows[to].splice(idx, 0, f.b); st.selRow = to; changed(); sndPut();
+      return;
+    }
+    if (!canBuild()) return;
+    if (d.kind === 'plus' || d.kind === 'minus') {
+      if (!t.rowbox) return;
+      const to = t.rowbox.dataset.row;
+      st.selRow = to;
+      openEditor(null, { row: to, idx: insertIndex(to, ev.clientX), s: d.kind === 'plus' ? 1 : -1 });
+      return;
+    }
+    // 目もり・ふきだし：棒の上（段の上なら近い棒）に付ける
+    let target = t.bar ? findBar(+t.bar.dataset.id) : null;
+    if (!target && t.rowbox) {
+      const name = t.rowbox.dataset.row; const els = [...t.rowbox.querySelectorAll('.bar')];
+      let best = null, bd = 1e9;
+      els.forEach(e => { const r = e.getBoundingClientRect(); const dd = Math.abs(ev.clientX - (r.left + r.width / 2)); if (dd < bd) { bd = dd; best = e; } });
+      if (best) target = findBar(+best.dataset.id);
+      else if (name) { setEqMsg('先に棒を置いてから、' + KIND_NAME[d.kind] + 'を付けよう'); return; }
+    }
+    if (!target) return;
+    openEditor(target.b, null, d.kind);
+  }
+  function onCancel() { endDrag(); renderRows(); }
+  function endDrag() {
+    if (drag && drag.ghost) drag.ghost.remove();
+    if (drag && drag.el) drag.el.classList.remove('dragging');
+    document.querySelectorAll('.rowbox.over').forEach(e => e.classList.remove('over'));
+    $('trash').classList.remove('over');
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.removeEventListener('pointercancel', onCancel);
+    drag = null;
+  }
+  $('shelf').addEventListener('pointerdown', (ev) => {
+    const p = ev.target.closest('.part'); if (!p || !p.dataset.kind) return;
+    ev.preventDefault();
+    startDrag(ev, { kind: p.dataset.kind });
+  });
+  $('rows').addEventListener('pointerdown', (ev) => {
+    const b = ev.target.closest('.bar'); if (!b) return;
+    const f = findBar(+b.dataset.id); if (!f) return;
+    ev.preventDefault();
+    startDrag(ev, { kind: 'bar', bar: f.b, el: b });
+  });
+
+  /* =====================================================================
+     7. 棒を直すまど（式・種類・目もり・ふきだし）
+     ===================================================================== */
+  let ed = null;
+  function openEditor(bar, place, focus) {
+    ed = { bar, place, s: bar ? bar.s : place.s, ticks: bar ? bar.ticks : 0 };
+    $('dlgTitle').textContent = bar ? '棒を直す' : '新しい棒の長さを表す式';
+    $('edExpr').value = bar ? bar.e : '';
+    $('edLabel').value = bar ? bar.label : '';
+    $('edDel').hidden = !bar;
+    const keys = ['x', ...new Set(st.prob.nums.map(String)), '+', '-', '(', ')', '/', '.', '⌫'];
+    $('edKeys').innerHTML = keys.map(k => `<button class="key ${k === 'x' ? 'x' : ''}" data-k="${esc(k)}">${k === '-' ? '−' : (k === '/' ? '÷（分数）' : esc(k))}</button>`).join('') +
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => `<button class="key" data-k="${k}">${k}</button>`).join('');
+    edUpdate();
+    $('modal').hidden = false;
+    setTimeout(() => {
+      if (focus === 'label') $('edLabel').focus();
+      else if (focus !== 'tick' && !bar) $('edExpr').focus();
+    }, 30);
+    if (focus === 'tick' && !ed.ticks) { ed.ticks = 2; edUpdate(); }
+  }
+  function edUpdate() {
+    let ok = true;
+    const v = $('edExpr').value;
+    try { parseLin(v); $('edErr').textContent = ''; $('edPrev').innerHTML = M(dispExpr(v)); }
+    catch (e) { ok = false; $('edErr').textContent = v.trim() ? '⚠ ' + e.message : ''; $('edPrev').innerHTML = ''; }
+    $('edExpr').classList.toggle('ng', !ok && !!v.trim());
+    $('edPlus').classList.toggle('active', ed.s > 0); $('edMinus').classList.toggle('active', ed.s < 0);
+    $('edTn').textContent = ed.ticks;
+    $('edOk').disabled = !ok;
+  }
+  function closeEditor() { $('modal').hidden = true; ed = null; }
+  $('edExpr').addEventListener('input', edUpdate);
+  $('edExpr').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('edOk').disabled) $('edOk').click(); });
+  $('edKeys').addEventListener('click', (e) => {
+    const k = e.target.closest('.key'); if (!k) return;
+    const inp = $('edExpr'), key = k.dataset.k;
+    const s = inp.selectionStart != null ? inp.selectionStart : inp.value.length, en = inp.selectionEnd != null ? inp.selectionEnd : s;
+    if (key === '⌫') { const a = s === en ? Math.max(0, s - 1) : s; inp.value = inp.value.slice(0, a) + inp.value.slice(en); inp.setSelectionRange(a, a); }
+    else { inp.value = inp.value.slice(0, s) + key + inp.value.slice(en); const c = s + key.length; inp.setSelectionRange(c, c); }
+    edUpdate();
+  });
+  $('edPlus').onclick = () => { ed.s = 1; edUpdate(); };
+  $('edMinus').onclick = () => { ed.s = -1; edUpdate(); };
+  $('edTm').onclick = () => { ed.ticks = Math.max(0, ed.ticks - 1); if (ed.ticks === 1) ed.ticks = 0; edUpdate(); };
+  $('edTp').onclick = () => { ed.ticks = Math.min(12, Math.max(2, ed.ticks + 1)); edUpdate(); };
+  $('edCancel').onclick = closeEditor;
+  $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeEditor(); });
+  $('edDel').onclick = () => {
+    const f = findBar(ed.bar.id); if (f) { pushUndo(); st.rows[f.name].splice(f.i, 1); }
+    closeEditor(); changed();
+  };
+  $('edOk').onclick = () => {
+    const e = $('edExpr').value.trim(), label = $('edLabel').value.trim().slice(0, 30);
+    pushUndo();
+    if (ed.bar) Object.assign(ed.bar, { e, s: ed.s, ticks: ed.ticks, label });
+    else st.rows[ed.place.row].splice(ed.place.idx, 0, { id: st.nextId++, e, s: ed.s, ticks: ed.ticks, label });
+    closeEditor(); changed(); sndPut();
+  };
+
+  // 図がかわったら、方程式から先はやりなおし
+  function changed() {
+    st.stage = st.xKey ? 'build' : 'pickx';
+    st.eq = null; st.solvedOK = false; st.judged = null; st.showSteps = false; st.sameView = null;
+    setEqMsg(''); $('solveMsg').textContent = ''; $('solveMsg').className = 'msg'; $('judgeMsg').textContent = ''; $('judgeMsg').className = 'msg';
+    renderAll();
+  }
+
+  /* =====================================================================
+     8. 方程式にする・正しいかしらべる
+     上の段＝下の段 を「A x ＝ B」の形にして、正しい式と くらべる（A・B の比が同じなら同じ方程式）。
+     ===================================================================== */
+  function makeEq(l, r) {
+    const ll = parseLin(l), rl = parseLin(r);
+    return { l, r, A: ll.a.sub(rl.a), Bc: rl.b.sub(ll.b) };
+  }
+  function sameEq(e1, e2) {
+    if (e1.A.isZero() || e2.A.isZero()) return false;
+    return e1.A.mul(e2.Bc).equals(e2.A.mul(e1.Bc));
+  }
+  function modelEq(c) { return makeEq(rowExprStr(c.top), rowExprStr(c.bot)); }
+  function doSame() {
+    if (!st.xKey) { flashX(); setEqMsg('まず ① で、何を x にするか えらぼう', 'ng'); return; }
+    if (!st.rows.top.length || !st.rows.bot.length) { setEqMsg('上の段と下の段の両方に棒を置こう', 'ng'); sndNG(); return; }
+    const c = cand();
+    pushUndo();
+    const eq = makeEq(rowExprStr(st.rows.top), rowExprStr(st.rows.bot));
+    st.eq = eq;
+    const good = modelEq(c);
+    // x の本当の値で、上と下の長さがそろうか
+    const xs = c.val;
+    const lenOK = parseLin(eq.l).a.mul(xs).add(parseLin(eq.l).b).equals(parseLin(eq.r).a.mul(xs).add(parseLin(eq.r).b));
+    st.sameView = lenOK ? 'ok' : 'ng';
+    if (sameEq(eq, good)) {
+      st.stage = 'solve';
+      setEqMsg('<span class="mark-ok">○</span> 方程式ができた！ ④ で解こう', 'ok'); sndOK();
+      renderAll();
+      setTimeout(() => { try { $('xInput').focus({ preventScroll: true }); } catch (e) { /* なにもしない */ } }, 50);
+      return;
+    }
+    st.stage = 'build';
+    sndNG();
+    // つまずきの型をさがす
+    let trip = null;
+    if (eq.A.isZero()) trip = 'mix';
+    for (const t of c.traps) { if (trip) break; try { if (sameEq(eq, makeEq(t.l, t.r))) trip = t.type; } catch (e) { /* なにもしない */ } }
+    if (!trip) for (const o of st.prob.cands) { if (o !== c && sameEq(eq, modelEq(o))) { trip = 'otherx'; break; } }
+    if (trip) {
+      addTrip(trip);
+      setEqMsg(`<span class="mark-ng">×</span> あなたのつまずき：<b>${TRIP[trip].name}</b><br>${TRIP[trip].desc}`, 'ng');
+    } else if (lenOK) {
+      setEqMsg('<span class="mark-ng">×</span> 長さはそろったけれど、この式では x が1つに決まらないよ。棒の式を見なおそう', 'ng');
+    } else {
+      addTrip('diagram');
+      setEqMsg(`<span class="mark-ng">×</span> 右はし（▼）がそろっていないよ。${TRIP.diagram.desc}<br>💡 ヒント を使ってもいいよ`, 'ng');
+    }
+    renderAll();
+  }
+
+  /* =====================================================================
+     9. 解く・合うかしらべる・答え
+     ===================================================================== */
+  function solveLines(eq) {
+    // 方程式 → ax+b=cx+d（整理）→ (a−c)x = d−b（移項してまとめる）→ x = ...
+    const l = parseLin(eq.l), r = parseLin(eq.r);
+    const lines = [{ l: dispExpr(eq.l), r: dispExpr(eq.r), why: 'できた方程式' }];
+    const lt = linStr(l), rt = linStr(r);
+    if (dispExpr(lt) !== dispExpr(eq.l) || dispExpr(rt) !== dispExpr(eq.r)) lines.push({ l: lt, r: rt, why: 'かっこをはずして、それぞれの辺をまとめる' });
+    const A = l.a.sub(r.a), Bc = r.b.sub(l.b);
+    lines.push({ l: linStr({ a: A, b: F(0) }), r: Bc.toString(), why: 'x の項を左辺、数の項を右辺に移項して まとめる（移項すると符号がかわる）' });
+    lines.push({ l: 'x', r: Bc.div(A).toString(), why: `両辺を ${A.toString()} でわる` , last: true });
+    return lines;
+  }
+  function renderSteps() {
+    const el = $('steps');
+    if (!st.showSteps || !st.eq) { el.innerHTML = ''; return; }
+    el.innerHTML = solveLines(st.eq).map((s, i) =>
+      `<div class="s-l">${M(s.l)}</div><div class="s-eq">${i ? '=' : '='}</div><div class="s-r">${M(s.r)}</div><div class="s-why">${esc(s.why)}</div>`).join('');
+  }
+  function doSolve() {
+    if (st.stage === 'build' || st.stage === 'pickx' || !st.eq) { $('solveMsg').innerHTML = 'まず ③ で方程式をつくろう'; $('solveMsg').className = 'msg ng'; return; }
+    let v;
+    try { v = F($('xInput').value.trim().replace(/[−ー－]/g, '-').replace(/／/g, '/')); }
+    catch (e) { $('solveMsg').innerHTML = '数を入れてね（例 9、−2、7/2、3.5）'; $('solveMsg').className = 'msg ng'; return; }
+    const c = cand();
+    if (v.equals(c.val)) {
+      pushUndo();
+      st.solvedOK = true; if (st.stage === 'solve') st.stage = 'judge';
+      $('xInput').className = 'ok';
+      $('solveMsg').innerHTML = `<span class="mark-ok">○</span> x ＝ ${numHTML(v)}。⑤ で、この答えが問題に合うか たしかめよう`;
+      $('solveMsg').className = 'msg ok'; sndOK();
+      renderAll();
+    } else {
+      $('xInput').className = 'ng';
+      addTrip('calc');
+      // 検算：入れた数を左辺・右辺に代入するとどうなるか
+      const l = parseLin(st.eq.l), r = parseLin(st.eq.r);
+      const lv = l.a.mul(v).add(l.b), rv = r.a.mul(v).add(r.b);
+      $('solveMsg').innerHTML = `<span class="mark-ng">×</span> x ＝ ${numHTML(v)} を代入すると、左辺 ＝ ${numHTML(lv)}、右辺 ＝ ${numHTML(rv)} で等しくないよ。<br>「📝 解き方を見る」でたしかめよう`;
+      $('solveMsg').className = 'msg ng'; sndNG();
+    }
+  }
+  function renderJudge() {
+    const card = $('judgeCard');
+    const on = st.solvedOK;
+    card.classList.toggle('dim', !on);
+    if (!on) { $('qty').innerHTML = '<span class="small">④ で x を求めると、ここに量が出るよ</span>'; $('judge').innerHTML = ''; return; }
+    const p = st.prob;
+    $('qty').innerHTML = p.qty.map(q => `<div>${esc(q.name)}：<b>${numHTML(q.v)}</b> ${esc(q.unit)}${q.maxText ? `<span class="small">（${esc(q.maxText)}）</span>` : ''}</div>`).join('');
+    $('judge').innerHTML = Object.entries(REASONS).map(([k, r]) => {
+      let cls = '';
+      if (st.judged && st.judged.pick === k) cls = st.judged.ok ? 'ok' : 'ng';
+      return `<button class="op-btn ${cls}" data-r="${k}" ${st.stage === 'done' ? 'disabled' : ''}>${k === 'ok' ? '○ ' : '× '}${esc(r.text)}</button>`;
+    }).join('');
+  }
+  function doJudge(k) {
+    if (st.stage !== 'judge') return;
+    const rs = fitReasons(st.prob);
+    const msg = $('judgeMsg');
+    pushUndo();
+    if (rs.has(k)) {
+      st.judged = { pick: k, ok: true }; st.stage = 'done';
+      msg.className = 'msg ok';
+      msg.innerHTML = k === 'ok' ? '<span class="mark-ok">○</span> そのとおり！ 問題に合う答えだね' : '<span class="mark-ok">○</span> そのとおり！ この答えは問題に合わない';
+      sndDone(); finishRecord();
+    } else {
+      st.judged = { pick: k, ok: false };
+      msg.className = 'msg ng';
+      let trip;
+      if (k === 'ok') trip = 'nocheck'; else if (rs.has('ok')) trip = 'falseno'; else trip = 'reason';
+      addTrip(trip);
+      msg.innerHTML = `<span class="mark-ng">×</span> あなたのつまずき：<b>${TRIP[trip].name}</b><br>${TRIP[trip].desc}`;
+      sndNG();
+    }
+    renderAll();
+  }
+  function renderAnswer() {
+    const card = $('ansCard'), p = st.prob;
+    card.hidden = st.stage !== 'done';
+    if (card.hidden) return;
+    const rs = fitReasons(p);
+    const el = $('ansText');
+    if (rs.has('ok')) { el.className = 'answer fit'; el.innerHTML = '答え：' + esc(p.answer()); }
+    else {
+      const why = [...rs].map(r => ({ frac: '小数・分数になる', neg: '負の数になる', range: '問題の範囲をこえる' })[r]).join('・');
+      el.className = 'answer nofit';
+      el.innerHTML = `方程式の解は x ＝ ${numHTML(cand().val)} だけれど、${esc(why)}ので、<br>この問題に合う答えは<b>ない</b>。` + (p.nofitExtra ? `<div class="small" style="font-weight:normal">${esc(p.nofitExtra)}</div>` : '') +
+        (p.type === 3 ? `<div class="small" style="font-weight:normal">（兄が追いつく前に、弟は駅に着いて止まってしまう。兄が弟に会えるのは、兄が駅に着いたとき）</div>` : '');
+    }
+  }
+
+  /* =====================================================================
+     10. ヒント（① 図の形 → ② 関係 → ③ 式）
+     ===================================================================== */
+  function doHint() {
+    if (!st.xKey) { flashX(); $('hintCard').hidden = false; $('hintBody').innerHTML = '<div class="hintbox">まず ① で、<b>たずねられているもの</b>を x にしてみよう。どれを x にしても方程式は立てられるよ。</div>'; return; }
+    st.hint = Math.min(3, st.hint + 1);
+    renderHint();
+  }
+  function renderHint() {
+    const card = $('hintCard'), c = cand();
+    if (!c || !st.hint) { card.hidden = true; return; }
+    card.hidden = false;
+    let h = '';
+    const { h: rh } = rowsHTML({ top: c.top, bot: c.bot }, c.val.valueOf(), { ghost: true, topName: c.topName, botName: c.botName });
+    h += `<div class="hintbox"><span class="hl">ヒント① 図の形</span>：上の段は「${esc(c.topName)}」、下の段は「${esc(c.botName)}」。棒の数と、たす（実線）・ひく（点線）はこうなるよ。
+      <div class="rows hintrows" style="margin-top:6px">${rh}</div></div>`;
+    if (st.hint >= 2) h += `<div class="hintbox" style="margin-top:6px"><span class="hl">ヒント② 関係</span>：${esc(c.words)}</div>`;
+    if (st.hint >= 3) { const e = modelEq(c); h += `<div class="hintbox" style="margin-top:6px"><span class="hl">ヒント③ 式</span>：<span style="font-size:26px">${M(dispExpr(e.l) + ' = ' + dispExpr(e.r))}</span></div>`; }
+    if (st.hint < 3) h += '<div class="small" style="margin-top:4px">もう一度 💡 を押すと、つぎのヒント</div>';
+    $('hintBody').innerHTML = h;
+  }
+
+  /* =====================================================================
+     11. 画面をかく
+     ===================================================================== */
+  function setEqMsg(h, cls) { const m = $('eqMsg'); m.innerHTML = h || ''; m.className = 'msg' + (cls ? ' ' + cls : ''); }
+  function flashX() { const c = $('xCard'); c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); }
+  function renderProblem() {
+    const p = st.prob;
+    $('pTitle').textContent = `問題（${TYPES[p.type - 1].name}）` + (TEACHER ? (p.fit ? '　〔合う問題〕' : '　〔合わない問題〕') : '');
+    $('pText').innerHTML = p.text;
+    $('pAsk').innerHTML = '❓ ' + p.ask;
+    $('xList').innerHTML = p.cands.map(c => `<button class="xbtn ${st.xKey === c.key ? 'active' : ''}" data-k="${c.key}">${c.label.replace(/x/g, '<i>x</i>')}</button>`).join('');
+    document.querySelectorAll('#typeRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.t === p.type));
+  }
+  function renderEq() {
+    const el = $('eqBig');
+    if (!st.eq) el.innerHTML = '<span class="small">線分図ができたら「⇔ 同じ長さ」を押そう。上の段 ＝ 下の段 が方程式になるよ</span>';
+    else el.innerHTML = M(dispExpr(st.eq.l) + ' = ' + dispExpr(st.eq.r));
+    $('solveCard').classList.toggle('dim', !(st.stage === 'solve' || st.stage === 'judge' || st.stage === 'done'));
+    $('btnSolve').disabled = st.stage !== 'solve';
+    $('btnSteps').disabled = !st.eq || st.stage === 'build';
+    $('btnSame').disabled = !st.xKey;
+    $('shelf').querySelectorAll('.part[data-kind]').forEach(p => p.classList.toggle('disabled', !st.xKey));
+  }
+  function renderAll() {
+    renderProblem(); renderRows(); renderEq(); renderSteps(); renderJudge(); renderAnswer(); renderHint(); renderTeacher(); renderTrips();
+    $('btnUndo').disabled = !st.undo.length;
+  }
+
+  /* =====================================================================
+     12. きろく（この端末）とつまずき
+     ===================================================================== */
+  let memRec = {};
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.done = r.done || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function addTrip(type) {
+    const r = getRec();
+    const t = r.trips[type] || { n: 0, ptype: st.type };
+    t.n++; t.ptype = st.type; r.trips[type] = t; setRec(r);
+  }
+  function finishRecord() {
+    const r = getRec(); const k = 't' + st.type;
+    r.done[k] = (r.done[k] || 0) + 1; setRec(r);
+    const c = cand();
+    st.lastDone = {
+      kata: TYPES[st.type - 1].name, xname: c.label, shiki: dispExpr(st.eq.l) + ' = ' + dispExpr(st.eq.r),
+      kai: 'x = ' + c.val.toString(), au: fitReasons(st.prob).has('ok') ? '合う' : '合わない'
+    };
+  }
+  function renderTrips() {
+    const r = getRec();
+    const ent = Object.entries(r.trips).sort((a, b) => b[1].n - a[1].n);
+    $('tripList').innerHTML = ent.length ? ent.map(([k, v]) => `<div class="trip-row">
+        <div><span class="bad">× ${esc(TRIP[k] ? TRIP[k].name : k)}</span>　${v.n}回</div>
+        <div class="small">${esc(TRIP[k] ? TRIP[k].desc : '')}</div>
+        <div class="tools"><button class="op-btn" data-sim="${v.ptype}">🔁 この型の類題（${esc(TYPES[v.ptype - 1].name)}）</button>
+        <button class="op-btn" data-back="1">↩ 図にもどる</button></div></div>`).join('')
+      : '<div class="small">まだ つまずきはないよ。まちがえると、ここに型の名前が出るよ。</div>';
+    const done = Object.entries(r.done).map(([k, n]) => TYPES[+k.slice(1) - 1].name + ' ' + n + '問').join('、');
+    $('recLine').textContent = done ? 'この端末でできた問題：' + done : '';
+  }
+  $('tripList').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.sim) { newProblem(+b.dataset.sim); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (b.dataset.back) {
+      if (st.stage !== 'pickx' && st.stage !== 'build') { pushUndo(); changed(); }
+      $('rows').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  /* =====================================================================
+     13. 先生モード（図の自動組み立て・最後まで自動・答え）
+     ===================================================================== */
+  function renderTeacher() {
+    if (!TEACHER) return;
+    const p = st.prob; const c = cand() || p.cands[0];
+    const e = modelEq(c);
+    $('tAns').innerHTML = `x の置き方：${esc(c.label)}<br>方程式：${M(dispExpr(e.l) + ' = ' + dispExpr(e.r))}　解：x ＝ ${numHTML(c.val)}<br>` +
+      (fitReasons(p).has('ok') ? '問題に合う → 答え：' + esc(p.answer()) : '問題に合わない（' + [...fitReasons(p)].map(r => REASONS[r].text.replace('合わない：', '')).join('／') + '）');
+    const r = getRec();
+    const tot = Object.entries(r.trips).map(([k, v]) => (TRIP[k] ? TRIP[k].name : k) + ' ' + v.n + '回').join('、');
+    $('tTotal').textContent = 'この端末のつまずきの合計：' + (tot || 'なし');
+  }
+  async function autoBuild() {
+    st.autoStop = false;
+    if (!st.xKey) { st.xKey = st.prob.cands[0].key; st.stage = 'build'; }
+    pushUndo();
+    st.rows = { top: [], bot: [] }; st.eq = null; st.sameView = null; st.stage = 'build'; st.solvedOK = false; st.judged = null;
+    renderAll();
+    const c = cand();
+    for (const name of ['top', 'bot']) {
+      for (const b of c[name]) {
+        if (st.autoStop) return false;
+        await sleep(650);
+        st.rows[name].push(Object.assign({ id: st.nextId++ }, b)); sndPut(); renderAll();
+      }
+    }
+    return true;
+  }
+  async function autoAll() {
+    if (!(await autoBuild())) return;
+    await sleep(800); if (st.autoStop) return; doSame();
+    await sleep(1200); if (st.autoStop) return;
+    $('xInput').value = cand().val.toString(); st.showSteps = true; renderSteps(); doSolve();
+    await sleep(1500); if (st.autoStop) return;
+    doJudge([...fitReasons(st.prob)][0]);
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    const opts = [['auto', 'おまかせ'], ['fit', 'つぎは 合う問題'], ['nofit', 'つぎは 合わない問題']];
+    $('tFitRow').innerHTML = opts.map(([k, t]) => `<button class="chip ${k === tFit ? 'active' : ''}" data-f="${k}">${t}</button>`).join('');
+    $('tFitRow').onclick = (e) => { const b = e.target.closest('.chip'); if (!b) return; tFit = b.dataset.f; setupTeacher(); };
+    $('tBuild').onclick = autoBuild;
+    $('tAll').onclick = autoAll;
+    $('tStop').onclick = () => { st.autoStop = true; };
+    $('tClear').onclick = () => { if (confirm('この端末のつまずき・できた問題のきろくを消します。よいですか？')) { setRec({}); renderAll(); } };
+  }
+
+  /* =====================================================================
+     14. ボタン
+     ===================================================================== */
+  $('typeRow').innerHTML = TYPES.map(t => `<button class="chip" data-t="${t.id}">${t.name}</button>`).join('');
+  $('typeRow').onclick = (e) => { const b = e.target.closest('.chip'); if (b) newProblem(+b.dataset.t); };
+  $('xList').onclick = (e) => {
+    const b = e.target.closest('.xbtn'); if (!b) return;
+    if (st.xKey === b.dataset.k) return;
+    pushUndo();
+    const had = st.rows.top.length + st.rows.bot.length;
+    st.xKey = b.dataset.k; st.hint = st.hint ? 1 : 0;
+    changed();
+    setEqMsg(had ? 'x をかえたので、棒の式も x に合わせて直そう' : 'つぎは ② 線分図。たなの棒を段にドラッグしよう');
+  };
+  $('btnNew').onclick = () => newProblem(st.type);
+  $('btnUndo').onclick = undo;
+  $('btnReset').onclick = () => { st.autoStop = true; resetWork(); };
+  $('btnHint').onclick = doHint;
+  $('btnSame').onclick = doSame;
+  $('btnSolve').onclick = doSolve;
+  $('xInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSolve(); });
+  $('btnSteps').onclick = () => { st.showSteps = !st.showSteps; renderSteps(); };
+  $('judge').onclick = (e) => { const b = e.target.closest('button'); if (b && !b.disabled) doJudge(b.dataset.r); };
+  // ワークシートの問題：あめを配る（1人3こずつだと5こあまり、4こずつだと4こたりない → 9人・32こ）
+  $('btnWs').onclick = () => newProblem(2, { prob: genShare(true, { a: 3, b: 5, c: 4, d: 4 }) });
+
+  if (window.Worksheet) Worksheet.init({
+    title: '線分図ビルダー',
+    question: '文章題で方程式を立てるとき、x に何をおくと立式しやすいだろうか？',
+    predictions: ['たずねられているものを x にする', 'ほかの数量（1つ分・全体など）を x にする', 'どちらでも同じくらい', 'わからない'],
+    operationNote: '「📄 ワークシートの問題」（あめを配る問題）で、x を「人数」にしたときと「あめの数」にしたときの両方で線分図をつくり、⑤ まで進んだら「＋ 記録する」。ほかの型の問題も記録できるよ。',
+    fields: [
+      { key: 'kata', label: '問題の型', math: false },
+      { key: 'xname', label: 'x にしたもの', math: false },
+      { key: 'shiki', label: '方程式' },
+      { key: 'kai', label: '解' },
+      { key: 'au', label: '問題に合う？', math: false }
+    ],
+    capture: () => {
+      if (!st.lastDone) { setEqMsg('⑤ の「答えは問題に合う？」まで進んでから記録しよう', 'ng'); return null; }
+      return Object.assign({}, st.lastDone);
+    },
+    summaryHint: '「線分図の上の段と下の段は、同じ量を2通りに表している。だから〜＝〜 の方程式になる。x には〜をおくと式が簡単になる。解が出たら〜をたしかめる」の形で書こう。',
+    teacher: {
+      hint: 'まず予想を挙手で集める。あめの問題で「人数を x」→ 3x＋5＝4x−4（x＝9）、「あめの数を x」→ (x−5)/3＝(x+4)/4（x＝32）の両方をつくらせ、式の簡単さを比べさせる。合わない問題（人数が3.5人 など）も1問はさせて、「解を問題にもどしてたしかめる」大切さを確認する。',
+      answer: '多くの場合、たずねられているもの（または、ほかの量を表しやすいもの）を x にすると立式しやすい。あめの問題では 人数を x にすると 3x＋5＝4x−4 で分数が出ない。あめの数を x にすると (x−5)/3＝(x+4)/4 と分数の式になる。<br>まとめ：線分図の上の段と下の段は同じ量を2通りに表しているので、「＝」で結ぶと方程式になる。x は、ほかの量を x の式で表しやすいものにおく。方程式の解が、問題の答えとして合う（整数か、負でないか、範囲に入るか）を必ずたしかめる。'
+    }
+  });
+
+  setupTeacher();
+  newProblem(1);
+})();
+</script>
+
+</body>
+</html>
