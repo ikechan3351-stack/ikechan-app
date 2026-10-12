@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>太陽系の惑星たんけん</title>
+<!--
+  太陽系の惑星たんけん（小学6年 理科・発展「太陽系の惑星」）
+  ・① 惑星のならび：8つの惑星を、タップで2つずつ入れかえて、太陽に近い順にならべる。「答え合わせ」で ⭕／✖。
+  ・② 公転のようす：上から見た図で、8つの惑星が太陽のまわりを回る（速さは本当の公転周期の比）。
+      地球が1周（1年）すると、そのあいだに各惑星が何周したかを自動で記録する。
+  ・③ 大きさくらべ：地球を1とした大きさを、同じ縮尺の円でくらべる（太陽は約109倍なので一部だけ）。
+      「きょりモード」では、太陽〜海王星のきょりを同じ縮尺で表し、ドラッグやスライダーで横に動かして遠さを体感する。
+  ・④ 惑星カード：惑星をタップすると、特ちょう（輪・衛星の数・温度など）が出る。岩石／ガス／氷の惑星のなかま分け。
+  ・⑤ 地球の動き：地球の自転（1日）と公転（1年）。地じくのかたむき ON/OFF で、日本の昼の長さと太陽の高さを計算する。
+  ・先生モード（?teacher=1）：先生用のメモが出る。
+  ・惑星のデータは PLANETS（教育用のおおよその数）で書きかえられる。
+-->
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e8eaf6 0%, #c5cae9 100%);
+    margin: 0; padding: 14px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    font-size: 18px; color: #333;
+  }
+  .back-link { align-self: flex-start; font-size: 16px; color: #3949ab; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.5rem; color: #1a237e; text-align: center; }
+  .subtitle { margin: 0 0 8px; color: #3949ab; text-align: center; }
+  .panel { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  ruby rt { font-size: 0.55em; }
+  .hidden { display: none !important; }
+
+  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .tabs .chip { padding: 4px 4px; font-size: 16px; }
+  @media (max-width: 760px) { .tabs { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 480px) { .tabs { grid-template-columns: repeat(2, 1fr); } }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    min-height: 48px; border: 3px solid #c5cae9; background: #fff; color: #1a237e; border-radius: 12px;
+    padding: 4px 12px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: #3949ab; border-color: #3949ab; color: #fff; }
+  .chip.ok { background: #e3f2fd; border-color: #0072B2; color: #0d47a1; }
+  .chip.ok::before { content: "⭕ "; }
+  .chip.ng { background: #fbe9e7; border-color: #D55E00; color: #8d3a00; }
+  .chip.ng::before { content: "✖ "; }
+
+  .btn-row { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .go-btn {
+    min-height: 48px; border: none; background: #3949ab; color: #fff; border-radius: 12px;
+    padding: 8px 16px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go-btn.sub { background: #eee; color: #555; box-shadow: none; }
+  .go-btn.orange { background: #e65100; }
+  .btn-row label { font-size: 17px; display: flex; align-items: center; gap: 4px; cursor: pointer; min-height: 44px; }
+  .btn-row input[type=checkbox] { width: 24px; height: 24px; }
+  .btn-row .lbl { font-weight: bold; color: #1a237e; }
+  .btn-row input[type=range] { width: 220px; height: 44px; }
+
+  .scene-card { border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); background: #000; }
+  canvas#cv { width: 100%; height: auto; display: block; touch-action: none; }
+
+  .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 150px; border-radius: 12px; padding: 6px 10px; font-weight: bold; text-align: center; line-height: 1.5; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .stat .big { font-size: 1.2rem; color: #1a237e; }
+
+  .msg { min-height: 1.6em; text-align: center; font-weight: bold; color: #3949ab; line-height: 1.6; }
+  .ask { font-weight: bold; color: #1a237e; text-align: center; margin: 8px 0 2px; line-height: 1.6; }
+  .help { line-height: 1.7; }
+  .help h2 { font-size: 1.1rem; margin: 0 0 4px; color: #1a237e; }
+  .help ul { margin: 0; padding-left: 1.3em; }
+  .diff-note { font-size: 15px; color: #666; margin: 0; line-height: 1.6; }
+  .teacher-note { background: #f3e5f5; border: 2px solid #ab47bc; border-radius: 10px; padding: 8px 10px; font-size: 15px; line-height: 1.6; margin: 0; }
+  .info { line-height: 1.7; }
+  .info .ttl { font-weight: bold; color: #1a237e; font-size: 1.15rem; }
+  .info table { border-collapse: collapse; width: 100%; margin: 4px 0; }
+  .info th, .info td { border-bottom: 1px solid #e0e0e0; padding: 3px 6px; text-align: left; vertical-align: top; }
+  .info th { white-space: nowrap; color: #3949ab; width: 8em; }
+  .explain { background: #fff8e1; border-radius: 10px; padding: 6px 10px; line-height: 1.7; margin-top: 6px; }
+  .key { display: inline-block; min-width: 1.6em; text-align: center; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1 data-j>🪐 太陽系の惑星たんけん</h1>
+<p class="subtitle" data-j>太陽のまわりを回る8つの惑星を、くらべてみよう</p>
+
+<div class="panel" data-j>
+
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button class="chip active" data-tab="order">① 惑星のならび</button>
+      <button class="chip" data-tab="orbit">② 公転のようす</button>
+      <button class="chip" data-tab="size">③ 大きさくらべ</button>
+      <button class="chip" data-tab="card">④ 惑星カード</button>
+      <button class="chip" data-tab="earth">⑤ 地球の動き</button>
+    </div>
+  </div>
+
+  <!-- ① 惑星のならび -->
+  <div class="card" id="pOrder">
+    <p class="ask" style="margin-top:0">惑星を2つずつタップして入れかえ、太陽に近い順にならべよう。</p>
+    <div class="btn-row">
+      <button class="go-btn orange" id="btnCheck">✅ 答え合わせ</button>
+      <button class="go-btn sub" id="btnShuffle">もういちど（まぜる）</button>
+    </div>
+  </div>
+
+  <!-- ② 公転のようす -->
+  <div class="card hidden" id="pOrbit">
+    <p class="ask" style="margin-top:0">惑星は、太陽のまわりを回っている（公転）。<br>地球が1周（1年）する間に、ほかの惑星は何周するかな？</p>
+    <div class="btn-row">
+      <button class="go-btn" id="btnPlay">⏸ とめる</button>
+      <button class="go-btn sub" id="btnResetOrbit">もういちど</button>
+      <button class="go-btn orange" id="btnRecOrbit">📋 記録する</button>
+    </div>
+    <div class="btn-row">
+      <span class="lbl">1秒で進む時間</span>
+      <input type="range" id="rngYear" min="0" max="100" value="50" aria-label="1秒で進む時間">
+      <span class="lbl" id="yearPerSec"></span>
+    </div>
+    <div class="btn-row">
+      <label><input type="checkbox" id="chkLaps" checked> 回った数を見る</label>
+      <label><input type="checkbox" id="chkName" checked> 名前を見る</label>
+    </div>
+  </div>
+
+  <!-- ③ 大きさくらべ -->
+  <div class="card hidden" id="pSize">
+    <div class="chips" id="cSizeMode" style="justify-content:center">
+      <button class="chip active" data-m="size">⚪ 大きさモード</button>
+      <button class="chip" data-m="dist">📏 きょりモード</button>
+    </div>
+    <p class="ask" id="sizeAsk"></p>
+    <div class="btn-row hidden" id="distRow">
+      <span class="lbl">見る場所</span>
+      <input type="range" id="rngPan" min="0" max="1000" value="0" aria-label="見る場所">
+    </div>
+  </div>
+
+  <!-- ④ 惑星カード -->
+  <div class="card hidden" id="pCard">
+    <p class="ask" style="margin-top:0">惑星をタップして、特ちょうを調べよう。<br>岩石の惑星・ガスの惑星・氷の惑星の、どのなかまかな？</p>
+    <div class="btn-row"><button class="go-btn sub" id="btnResetCard">もういちど</button></div>
+  </div>
+
+  <!-- ⑤ 地球の動き -->
+  <div class="card hidden" id="pEarth">
+    <p class="ask" style="margin-top:0">地球は、1日に1回自転し、1年で太陽のまわりを1周（公転）する。<br>地じくのかたむきで、季節はどう変わるかな？</p>
+    <div class="btn-row">
+      <span class="lbl">季節</span>
+      <span class="chips" id="cSeason">
+        <button class="chip" data-d="80">🌸 春分（3月）</button>
+        <button class="chip" data-d="172">🌻 夏至（6月）</button>
+        <button class="chip" data-d="266">🍁 秋分（9月）</button>
+        <button class="chip" data-d="356">⛄ 冬至（12月）</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="go-btn" id="btnPlayE">▶ 動かす</button>
+      <button class="go-btn sub" id="btnResetE">もういちど</button>
+      <button class="go-btn orange" id="btnRecE">📋 記録する</button>
+    </div>
+    <div class="btn-row">
+      <label><input type="checkbox" id="chkTilt" checked> 地じくのかたむき</label>
+      <label><input type="checkbox" id="chkRay" checked> 日光の矢印を見る</label>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <canvas id="cv" width="800" height="440" aria-label="太陽系の図"></canvas>
+  </div>
+
+  <!-- ④ のせつめい -->
+  <div class="card info hidden" id="cardInfo"></div>
+
+  <div class="card" id="speedCard">
+    <div class="btn-row" style="margin-top:0">
+      <span class="lbl">はやさ</span>
+      <span class="chips" id="cSpeed">
+        <button class="chip" data-speed="fast">はやおくり</button>
+        <button class="chip active" data-speed="normal">ふつう</button>
+        <button class="chip" data-speed="slow">ゆっくり</button>
+      </span>
+    </div>
+  </div>
+
+  <div class="status-row" id="statusRow">
+    <div class="stat"><span id="lA"></span><br><span class="big" id="sA"></span></div>
+    <div class="stat"><span id="lB"></span><br><span class="big" id="sB"></span></div>
+    <div class="stat"><span id="lC"></span><br><span class="big" id="sC"></span></div>
+  </div>
+  <div class="msg" id="msg"></div>
+
+  <div class="card help" id="help"></div>
+
+  <p class="teacher-note hidden" id="tNote"></p>
+
+  <div class="card">
+    <p class="diff-note">※じっさいとのちがい：数値は、教育用のおおよその数です（衛星の数は、新しく見つかってふえることがあります）。本物の太陽系は、大きさにくらべてきょりがとても遠いので、1まいの図に大きさときょりを同時に正しくかくことはできません。②の図では、惑星の大きさと軌道の間かくを、見やすいように変えています（回る速さの比は本当に近くしています）。軌道は円にし、すべて同じ平面にかいています。⑤の昼の長さと太陽の高さは、東京（北緯35度）として計算したおおよその数です。</p>
+  </div>
+
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+// =====================================================================
+// ふりがな辞書：{漢字|よみ} の形で書いておくと、画面の文字に自動でふりがなが付きます。
+// =====================================================================
+const DICT_SRC = [
+  '{太陽系|たいようけい}', '{太陽|たいよう}', '{惑星|わくせい}', '{水星|すいせい}', '{金星|きんせい}', '{地球|ちきゅう}', '{火星|かせい}', '{木星|もくせい}',
+  '{土星|どせい}', '{天王星|てんのうせい}', '{海王星|かいおうせい}', '{公転|こうてん}', '{自転|じてん}', '{軌道|きどう}', '{衛星|えいせい}', '{岩石|がんせき}',
+  '{季節|きせつ}', '{春分|しゅんぶん}', '{夏至|げし}', '{秋分|しゅうぶん}', '{冬至|とうじ}', '{日光|にっこう}', '{地|ち}じく', '{特|とく}ちょう',
+  '{予想|よそう}', '{実験|じっけん}', '{結果|けっか}', '{考察|こうさつ}', '{記録|きろく}', '{問題|もんだい}', '{先生|せんせい}', '{答|こた}え{合|あ}わせ',
+  '{答|こた}え', '{正|せい}かい', '{大|おお}きさ', '{大|おお}き', '{小|ちい}さ', '{近|ちか}', '{遠|とお}', '{順|じゅん}', '{入|い}れかえ', '{回|まわ}',
+  '{回転|かいてん}', '{1回|いっかい}', '{周|しゅう}', '{年|ねん}', '{日本|にっぽん}', '{正|ただ}し', '{入|い}れかわ', '{思|おも}', '{数値|すうち}', '{教育用|きょういくよう}', '{新|あたら}し', '{本物|ほんもの}', '{同時|どうじ}', '{変|か}え', '{比|ひ}', '{平面|へいめん}', '{計算|けいさん}', '{直径|ちょっけい}', '{丸|まる}', '{矢印|やじるし}', '{正午|しょうご}', '{1回転|いっかいてん}', '{残|のこ}', '{重|おも}', '{星|ほし}', 'オリンポス{山|さん}', '{変化|へんか}', '{日|ひ}づけ', '（{月|つき}）', '{光|ひかり}で', '{水素|すいそ}', '{昼|ひる}', '{夜|よる}', '{長|なが}さ', '{高|たか}さ', '{高|たか}', '{低|ひく}',
+  '{時間|じかん}', '{秒|びょう}', '{進|すす}', '{倍|ばい}', '{約|やく}', '{見|み}', '{調|しら}べ', '{名前|なまえ}', '{場所|ばしょ}', '{動|うご}', '{変|か}わ',
+  '{輪|わ}', '{数|かず}', '{温度|おんど}', '{表面|ひょうめん}', '{空気|くうき}', '{水|みず}', '{生|い}き{物|もの}', '{雲|くも}', '{赤|あか}い', '{青|あお}い',
+  '{青緑色|あおみどりいろ}', '{色|いろ}', '{風|かぜ}', '{強|つよ}い', '{軽|かる}', '{火山|かざん}', '{砂|すな}', '{横|よこ}', '{美|うつく}しい', '{明|あ}けの{明星|みょうじょう}',
+  '{明星|みょうじょう}', '{明|あか}るく', '{熱|あつ}い', '{寒|さむ}い', '{光|ひかり}の{速|はや}さ', '{光|ひか}', '{速|はや}', '{同|おな}じ', '{縮尺|しゅくしゃく}',
+  '{目|め}もり', '{億|おく}', '{万|まん}', '{円|えん}', '{一部|いちぶ}', '{全部|ぜんぶ}', '{横|よこ}', '{気|き}づ', '{上|うえ}', '{下|した}', '{左|ひだり}', '{右|みぎ}',
+  '{北|きた}', '{南|みなみ}', '{北極|ほっきょく}', '{東京|とうきょう}', '{北緯|ほくい}', '{度|ど}', '{月|がつ}', '{日|にち}', '{分|ふん}', '{今|いま}', '{本当|ほんとう}',
+  '{中心|ちゅうしん}', '{最|もっと}も', '{太|ふと}', '{細|ほそ}', '{体感|たいかん}', '{遠|とお}さ', '{真|ま}ん{中|なか}', '{中|なか}', '{表|ひょう}', '{図|ず}',
+  '{絵|え}', '{形|かたち}', '{文字|もじ}', '{覚|おぼ}え{方|かた}', '{方|ほう}', '{当|あ}た', '{向|む}', '{少|すこ}し', '{多|おお}', '{夏|なつ}', '{冬|ふゆ}', '{春|はる}', '{秋|あき}',
+  '{雪|ゆき}', '{金属|きんぞく}', '{氷|こおり}', '{石|いし}', '{何|なん}', '{間|あいだ}', '{数|かぞ}え', '{間|かん}かく', '{部分|ぶぶん}', '{分|わ}け', '{手|て}',
+  '{二酸化炭素|にさんかたんそ}', '{大赤斑|だいせきはん}', '{逆|ぎゃく}', '{向|む}き', '{見|み}え', '{出|で}', '{一番|いちばん}', '{地面|じめん}', '{夕方|ゆうがた}', '{明|あ}け{方|がた}'
+];
+const DICT = {};
+DICT_SRC.forEach(s => {
+  DICT[s.replace(/\{([^|}]+)\|[^}]+\}/g, '$1')] = s.replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>');
+});
+const DICT_RE = new RegExp(Object.keys(DICT).sort((a, b) => b.length - a.length)
+  .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+const J = s => String(s).replace(DICT_RE, m => DICT[m]);
+function rubyfy(root) {
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const list = [];
+  while (w.nextNode()) {
+    const n = w.currentNode;
+    if (n.parentElement.closest('ruby, script, style, canvas, .teacher-note')) continue;
+    if (J(n.nodeValue) !== n.nodeValue) list.push(n);
+  }
+  list.forEach(n => { const t = document.createElement('template'); t.innerHTML = J(n.nodeValue); n.replaceWith(t.content); });
+}
+
+// =====================================================================
+// 惑星のデータ（教育用のおおよその数。太陽に近い順）
+//   dist＝太陽からのきょり（地球を1）、period＝公転にかかる年数、size＝直径（地球を1）
+//   type：rock＝岩石の惑星、gas＝ガスの惑星、ice＝氷の惑星
+// =====================================================================
+const PLANETS = [
+  { name: '水星', yomi: 'すいせい', type: 'rock', dist: 0.39, period: 0.24, size: 0.38, moons: '0こ', ring: 'ない', temp: '昼は約430℃、夜は約−180℃', spin: '約59日',
+    note: '太陽にいちばん近く、いちばん小さい惑星。空気がほとんどなく、クレーターだらけ。', color: '#a8a29e' },
+  { name: '金星', yomi: 'きんせい', type: 'rock', dist: 0.72, period: 0.62, size: 0.95, moons: '0こ', ring: 'ない', temp: '約460℃', spin: '約243日（逆向き）',
+    note: '二酸化炭素のあつい雲におおわれ、いちばん熱い惑星。夕方や明け方に明るく光って見える（よいの明星・明けの明星）。', color: '#e8c77c' },
+  { name: '地球', yomi: 'ちきゅう', type: 'rock', dist: 1, period: 1, size: 1, moons: '1こ（月）', ring: 'ない', temp: '約15℃', spin: '約1日',
+    note: '水と空気があり、生き物がすんでいる。わたしたちの星。', color: '#3b82c4' },
+  { name: '火星', yomi: 'かせい', type: 'rock', dist: 1.52, period: 1.88, size: 0.53, moons: '2こ', ring: 'ない', temp: '約−60℃', spin: '約1日',
+    note: '赤い砂におおわれた惑星。太陽系でいちばん高い火山（オリンポス山）がある。', color: '#c8553d' },
+  { name: '木星', yomi: 'もくせい', type: 'gas', dist: 5.2, period: 11.9, size: 11.2, moons: '約95こ', ring: 'ある（うすい）', temp: '約−110℃（雲の上）', spin: '約10時間',
+    note: '太陽系でいちばん大きい惑星。しまもようと、大きなうず（大赤斑）がある。', color: '#d9a066' },
+  { name: '土星', yomi: 'どせい', type: 'gas', dist: 9.5, period: 29.5, size: 9.4, moons: '約146こ', ring: 'ある（大きくて美しい）', temp: '約−140℃（雲の上）', spin: '約11時間',
+    note: '大きくて美しい輪がある。とても軽く、水よりも軽い。', color: '#e6d08e' },
+  { name: '天王星', yomi: 'てんのうせい', type: 'ice', dist: 19.2, period: 84, size: 4.0, moons: '約28こ', ring: 'ある（細い）', temp: '約−195℃', spin: '約17時間',
+    note: '横だおしになって回っている、青緑色の惑星。', color: '#8fd3d8' },
+  { name: '海王星', yomi: 'かいおうせい', type: 'ice', dist: 30.1, period: 165, size: 3.9, moons: '約16こ', ring: 'ある（細い）', temp: '約−200℃', spin: '約16時間',
+    note: '太陽からいちばん遠い惑星。とても強い風がふく、青い惑星。', color: '#4169c9' }
+];
+const SUN_SIZE = 109;   // 太陽の直径（地球を1）
+// なかまのしるし：色だけでなく、形と文字でも区別する
+const TYPES = {
+  rock: { name: '岩石の惑星', mark: '□', col: '#D55E00', exp: '表面が岩石でできていて、小さくて重い。' },
+  gas: { name: 'ガスの惑星', mark: '○', col: '#0072B2', exp: '水素などのガスでできた、とても大きい惑星。かたい地面はない。' },
+  ice: { name: '氷の惑星', mark: '◇', col: '#009E73', exp: 'ガスの下に、水やメタンなどの氷が多い惑星。' }
+};
+
+// ===== ワークシートを用意する =====
+Worksheet.init({
+  title: J('太陽系の惑星たんけん'),
+  question: J('太陽にいちばん近い惑星は、どれだろうか？'),
+  predictionChoices: ['水星', '金星', '地球', '火星', '木星'],
+  experimentNote: J('①で惑星を太陽に近い順にならべよう。②〜⑤で、公転の速さ・大きさ・特ちょう・地球の動きを調べよう。調べたことは、表に記録されるよ。'),
+  columns: [
+    { key: 'place', label: J('どこで') },
+    { key: 'obs', label: J('調べたこと') },
+    { key: 'res', label: J('わかったこと') }
+  ],
+  chart: false,
+  hint: '予想のあと①で実際にならべさせ、答え合わせで確かめます。覚え方「すいきんちかもくどってんかい」も紹介します。②では「地球が1周する間に水星は約4周」など、太陽に近い惑星ほど速く回ることに気づかせます。③の大きさモードときょりモードをくらべ、「大きさにくらべて、きょりがとても遠い」ことを体感させます。',
+  answer: '太陽にいちばん近い惑星は水星。太陽に近い順に、水星・金星・地球・火星・木星・土星・天王星・海王星とならんでいる。太陽に近い惑星ほど、短い時間で太陽のまわりを1周する。'
+});
+
+const $ = (id) => document.getElementById(id);
+const TEACHER = Worksheet.isTeacher();
+const cv = $('cv'), ctx = cv.getContext('2d');
+const W = 800, H = 440;
+const FONT = '"Hiragino Sans", "Yu Gothic", sans-serif';
+const C_BLUE = '#0072B2', C_ORANGE = '#D55E00', C_GREEN = '#009E73';
+let tab = 'order', clock = 0, speedKey = 'normal';
+const setMsg = s => { $('msg').innerHTML = s ? J(s) : ''; };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt1 = v => (Math.round(v * 10) / 10).toString();
+
+// ワークシートに記録する（同じ内容は1回だけ）
+const recorded = new Set(Worksheet.getRecords().map(r => r.obs + '|' + r.res));
+function rec(place, obs, res) {
+  const k = obs + '|' + res;
+  if (recorded.has(k)) return false;
+  recorded.add(k); Worksheet.addRecord({ place, obs, res }); return true;
+}
+
+function fitCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+fitCanvas();
+function canvasXY(ev) {
+  const r = cv.getBoundingClientRect();
+  return { x: (ev.clientX - r.left) * W / r.width, y: (ev.clientY - r.top) * H / r.height };
+}
+
+// ===== 絵をかく道具 =====
+function text(s, x, y, size, color, align) {
+  ctx.font = 'bold ' + size + 'px ' + FONT;
+  ctx.fillStyle = color || '#fff'; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(s, x, y);
+}
+// 字のまわりをふちどって、何の上でも読めるようにする
+function labelText(s, x, y, size, color, align) {
+  ctx.font = 'bold ' + size + 'px ' + FONT; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineJoin = 'round'; ctx.strokeText(s, x, y);
+  ctx.fillStyle = color || '#fff'; ctx.fillText(s, x, y);
+}
+function arrow(x1, y1, x2, y2, color, w) {
+  const a = Math.atan2(y2 - y1, x2 - x1), hl = Math.max(10, w * 2.6);
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - Math.cos(a) * hl * 0.6, y2 - Math.sin(a) * hl * 0.6); ctx.stroke();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - Math.cos(a - 0.45) * hl, y2 - Math.sin(a - 0.45) * hl);
+  ctx.lineTo(x2 - Math.cos(a + 0.45) * hl, y2 - Math.sin(a + 0.45) * hl);
+  ctx.closePath(); ctx.fill();
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+// 星空（毎回同じ星）
+const STARS = []; { let s = 11; for (let i = 0; i < 110; i++) { s = (s * 9301 + 49297) % 233280; const a = s / 233280; s = (s * 9301 + 49297) % 233280; STARS.push([a * W, s / 233280 * H, 0.5 + (i % 3) * 0.4]); } }
+function space() {
+  ctx.fillStyle = '#05081c'; ctx.fillRect(0, 0, W, H);
+  STARS.forEach(([x, y, r]) => { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(x, y, r, r); });
+}
+function drawSunDisk(x, y, r) {
+  const g = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
+  g.addColorStop(0, '#fff59d'); g.addColorStop(0.6, '#ffb300'); g.addColorStop(1, '#f57c00');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+// 惑星の絵（i は PLANETS の番号）
+function drawPlanet(i, x, y, r, opt) {
+  const P = PLANETS[i];
+  r = Math.max(r, 1.5);
+  if (P.name === '土星' && r > 3) {   // 輪（うしろ側）
+    ctx.strokeStyle = 'rgba(230,210,150,0.9)'; ctx.lineWidth = Math.max(1.5, r * 0.28);
+    ctx.beginPath(); ctx.ellipse(x, y, r * 2.1, r * 0.6, -0.3, Math.PI, Math.PI * 2); ctx.stroke();
+  }
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+  g.addColorStop(0, '#fff'); g.addColorStop(0.25, P.color); g.addColorStop(1, shade(P.color));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  if (r > 6) {
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+    if (P.name === '木星' || P.name === '土星') {
+      ctx.fillStyle = 'rgba(120,70,30,0.3)';
+      for (let k = -3; k <= 3; k++) ctx.fillRect(x - r, y + k * r * 0.28 - r * 0.06, r * 2, r * 0.12);
+      if (P.name === '木星') { ctx.fillStyle = 'rgba(190,60,40,0.75)'; ctx.beginPath(); ctx.ellipse(x + r * 0.3, y + r * 0.35, r * 0.22, r * 0.12, 0, 0, Math.PI * 2); ctx.fill(); }
+    } else if (P.name === '地球') {
+      ctx.fillStyle = 'rgba(76,175,80,0.85)';
+      ctx.beginPath(); ctx.ellipse(x - r * 0.3, y - r * 0.2, r * 0.35, r * 0.5, 0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x + r * 0.45, y + r * 0.25, r * 0.25, r * 0.35, -0.3, 0, Math.PI * 2); ctx.fill();
+    } else if (P.name === '水星' || P.name === '火星') {
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      [[-0.3, -0.2, 0.18], [0.35, 0.1, 0.14], [-0.05, 0.45, 0.12]].forEach(([a, b, c]) => { ctx.beginPath(); ctx.arc(x + a * r, y + b * r, c * r, 0, Math.PI * 2); ctx.fill(); });
+    }
+    ctx.restore();
+  }
+  if (P.name === '土星' && r > 3) {   // 輪（手前側）
+    ctx.strokeStyle = 'rgba(240,222,165,0.95)'; ctx.lineWidth = Math.max(1.5, r * 0.28);
+    ctx.beginPath(); ctx.ellipse(x, y, r * 2.1, r * 0.6, -0.3, 0, Math.PI); ctx.stroke();
+  }
+  if (P.name === '天王星' && r > 6) {   // 細い輪（たて向き＝横だおし）
+    ctx.strokeStyle = 'rgba(200,240,245,0.6)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(x, y, r * 0.35, r * 1.6, 0.1, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (opt && opt.ring) { ctx.strokeStyle = opt.ring; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, r + 7, 0, Math.PI * 2); ctx.stroke(); }
+}
+function shade(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = v => Math.round(v * 0.45);
+  return 'rgb(' + f(n >> 16) + ',' + f((n >> 8) & 255) + ',' + f(n & 255) + ')';
+}
+// 見やすい大きさ（本当の大きさの順番は守る）
+const showR = i => 6 + 5.2 * Math.sqrt(PLANETS[i].size);
+
+// =====================================================================
+// ① 惑星のならび
+// =====================================================================
+const O = { order: [], sel: -1, checked: false, done: false };
+const SLOT = i => ({ x: 158 + i * 82, y: 220 });
+function shuffleOrder() {
+  do {
+    O.order = PLANETS.map((_, i) => i);
+    for (let j = O.order.length - 1; j > 0; j--) { const k = Math.floor(Math.random() * (j + 1)); [O.order[j], O.order[k]] = [O.order[k], O.order[j]]; }
+  } while (O.order.every((v, i) => v === i));
+  O.sel = -1; O.checked = false; O.done = false;
+}
+function orderPick(p) {
+  for (let s = 0; s < 8; s++) { const c = SLOT(s); if (Math.abs(p.x - c.x) < 40 && Math.abs(p.y - c.y) < 70) return s; }
+  return -1;
+}
+function orderTap(s) {
+  if (s < 0 || O.done) return;
+  if (O.sel < 0) { O.sel = s; setMsg(PLANETS[O.order[s]].name + 'をえらんだよ。入れかえる惑星をタップしよう。'); return; }
+  if (O.sel !== s) { [O.order[O.sel], O.order[s]] = [O.order[s], O.order[O.sel]]; }
+  O.sel = -1; O.checked = false; setMsg('');
+}
+function checkOrder() {
+  O.checked = true; O.sel = -1;
+  const ok = O.order.filter((v, i) => v === i).length;
+  if (ok === 8) {
+    O.done = true;
+    setMsg('全部正かい！ 太陽に近い順に「すい・きん・ち・か・もく・ど・てん・かい」。覚え方は「すいきんちかもくどってんかい」だよ。');
+    rec('①ならび', '惑星を太陽に近い順にならべた', '水星→金星→地球→火星→木星→土星→天王星→海王星（いちばん近いのは水星）');
+  } else setMsg(ok + 'こが正しい場所にあるよ。✖の惑星を入れかえてみよう。');
+}
+function drawOrderTab() {
+  space();
+  drawSunDisk(-150, 220, 230);
+  text('太陽', 40, 220, 24, '#5d2a00');
+  arrow(150, 60, 760, 60, '#9fa8da', 4);
+  labelText('太陽に近い', 150, 36, 16, '#c5cae9', 'left'); labelText('太陽から遠い', 760, 36, 16, '#c5cae9', 'right');
+  O.order.forEach((pi, s) => {
+    const c = SLOT(s);
+    // 台
+    roundRect(c.x - 38, c.y - 68, 76, 150, 12); ctx.fillStyle = s === O.sel ? 'rgba(255,152,0,0.35)' : 'rgba(255,255,255,0.08)'; ctx.fill();
+    ctx.strokeStyle = s === O.sel ? '#ff9800' : 'rgba(255,255,255,0.3)'; ctx.lineWidth = s === O.sel ? 4 : 1.5; ctx.stroke();
+    drawPlanet(pi, c.x, c.y - 8, Math.min(26, showR(pi)));
+    labelText(PLANETS[pi].name, c.x, c.y + 50, 17, '#fff');
+    text(String(s + 1), c.x, c.y - 52, 14, '#9fa8da');
+    if (O.checked) {
+      const ok = pi === s;
+      if (ok) { ctx.strokeStyle = '#56B4E9'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(c.x, c.y + 98, 13, 0, Math.PI * 2); ctx.stroke(); }
+      else { ctx.strokeStyle = '#ff7043'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(c.x - 11, c.y + 87); ctx.lineTo(c.x + 11, c.y + 109); ctx.moveTo(c.x + 11, c.y + 87); ctx.lineTo(c.x - 11, c.y + 109); ctx.stroke(); }
+    }
+  });
+  if (O.done) labelText('すい・きん・ち・か・もく・ど・てん・かい', 455, 400, 24, '#ffe082');
+}
+
+// =====================================================================
+// ② 公転のようす
+// =====================================================================
+const OR = { t: 0, playing: true, lastLap: 0 };   // t＝たった年数
+const OC = { x: 400, y: 220 };
+const orbR = i => 38 + i * 23;   // 軌道の半径（見やすい間かく。本当のきょりの比ではない）
+const yearPerSec = () => 0.05 * Math.pow(10, $('rngYear').value / 50);   // 0.05〜5年／秒
+function yearText(y) {
+  if (y < 1) return '約' + Math.max(1, Math.round(y * 12)) + 'か月';
+  return '約' + fmt1(y) + '年';
+}
+function stepOrbit(dt) {
+  if (!OR.playing) return;
+  OR.t += dt * yearPerSec();
+  if (Math.floor(OR.t) >= 1 && OR.lastLap < 1) {
+    OR.lastLap = 1;
+    setMsg('地球が1周（1年）したよ！ 水星は約4周も回ったね。太陽に近い惑星ほど速く回るよ。');
+    recordOrbit();
+  }
+}
+// 周の数を書く（とても少ないときは小数第2位まで）
+const lapFmt = v => v >= 0.1 ? fmt1(v) : v >= 0.01 ? v.toFixed(2) : '0.01より少ない';
+function lapsText() {
+  return PLANETS.filter((P, i) => i !== 2).map(P => P.name + '約' + lapFmt(1 / P.period) + '周').join('・');
+}
+function recordOrbit() {
+  rec('②公転', '地球が1周（1年）する間に', lapsText());
+}
+function drawOrbitTab() {
+  space();
+  drawSunDisk(OC.x, OC.y, 22);
+  text('太陽', OC.x, OC.y, 13, '#5d2a00');
+  PLANETS.forEach((P, i) => {
+    const r = orbR(i);
+    ctx.strokeStyle = i === 2 ? 'rgba(86,180,233,0.7)' : 'rgba(255,255,255,0.22)'; ctx.lineWidth = i === 2 ? 2 : 1;
+    ctx.beginPath(); ctx.arc(OC.x, OC.y, r, 0, Math.PI * 2); ctx.stroke();
+  });
+  PLANETS.forEach((P, i) => {
+    const a = -Math.PI / 2 - 2 * Math.PI * OR.t / P.period;   // 上からスタートして、反時計回り
+    const r = orbR(i), x = OC.x + Math.cos(a) * r, y = OC.y + Math.sin(a) * r;
+    drawPlanet(i, x, y, Math.min(11, 3 + showR(i) * 0.3), i === 2 ? { ring: '#56B4E9' } : null);
+    if ($('chkName').checked) labelText(P.name, x, y - 16, 13, i === 2 ? '#90caf9' : '#fff');
+  });
+  // スタートの線
+  ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(255,224,130,0.6)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(OC.x, OC.y - 26); ctx.lineTo(OC.x, OC.y - orbR(7) - 8); ctx.stroke(); ctx.setLineDash([]);
+  labelText('スタート', OC.x + 30, 14, 13, '#ffe082', 'left');
+  // 回った数の表
+  if ($('chkLaps').checked) {
+    roundRect(8, 8, 170, 230, 10); ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fill();
+    text('回った数', 93, 26, 15, '#ffe082');
+    PLANETS.forEach((P, i) => {
+      const laps = OR.t / P.period;
+      text(P.name, 20, 52 + i * 23, 14, i === 2 ? '#90caf9' : '#fff', 'left');
+      text((laps < 10 ? laps.toFixed(1) : Math.floor(laps)) + '周', 166, 52 + i * 23, 14, i === 2 ? '#90caf9' : '#fff', 'right');
+    });
+  }
+  roundRect(620, 8, 172, 54, 10); ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fill();
+  text('たった時間', 706, 24, 14, '#c5cae9'); text(yearText(OR.t), 706, 46, 18, '#fff');
+  labelText('※惑星の大きさと軌道の間かくは見やすく変えています', W - 8, H - 12, 12, '#9fa8da', 'right');
+}
+
+// =====================================================================
+// ③ 大きさくらべ／きょりモード
+// =====================================================================
+const SZ = { mode: 'size', pan: 0, drag: null };
+const ER = 6;                         // 大きさモード：地球の半径（px）
+const AU = 120, DX0 = 60;             // きょりモード：地球までのきょり＝120px
+const WORLD = DX0 + 30.1 * AU + 160;  // きょりモードの全体のはば
+function sizeLayout() {
+  // 太陽のはしの右から、惑星を横にならべる
+  let x = 150; const out = [];
+  PLANETS.forEach((P, i) => {
+    const r = P.size * ER, ring = P.name === '土星' ? r * 0.6 : 0;   // 土星は輪の分だけ広くあける
+    const half = Math.max(r + ring, 20);                              // 小さい惑星も名前が重ならないように
+    x += half; out.push({ i, x, r }); x += half + 8;
+  });
+  return out;
+}
+function drawSizeTab() {
+  space();
+  if (SZ.mode === 'size') {
+    const base = 300;
+    // 太陽（半径 109×9px なので、はしだけ）
+    const R = SUN_SIZE * ER;
+    drawSunDisk(130 - R, base - R * 0.0, R);
+    labelText('太陽（地球の約109倍）', 8, 60, 16, '#fff', 'left');
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(140, base + 1); ctx.lineTo(W, base + 1); ctx.stroke();
+    sizeLayout().forEach(o => {
+      const y = base - o.r;
+      drawPlanet(o.i, o.x, y, o.r);
+      const P = PLANETS[o.i];
+      const ly = base + 22 + (o.r < 12 ? (o.i % 2) * 34 : 0);
+      labelText(P.name, o.x, ly, 15, '#fff');
+      labelText(P.size >= 1 ? '約' + fmt1(P.size) + '倍' : P.size + '倍', o.x, ly + 18, 14, '#ffe082');
+    });
+    labelText('地球の直径を1としたときの大きさ（同じ縮尺）', 470, 24, 17, '#c5cae9');
+  } else {
+    // きょりモード：1目もり＝太陽〜地球のきょり（約1億5000万km）
+    const ox = -SZ.pan;
+    ctx.save(); ctx.translate(ox, 0);
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1;
+    for (let k = 0; k <= 31; k++) {
+      const x = DX0 + k * AU;
+      ctx.beginPath(); ctx.moveTo(x, 300); ctx.lineTo(x, k % 5 === 0 ? 318 : 310); ctx.stroke();
+      if (k % 5 === 0) text(k + '目もり', x, 330, 13, '#9fa8da');
+    }
+    ctx.beginPath(); ctx.moveTo(DX0, 300); ctx.lineTo(DX0 + 31 * AU, 300); ctx.stroke();
+    // 太陽（この縮尺では、本当は1pxより小さい）
+    drawSunDisk(DX0, 220, 5); labelText('太陽', DX0, 196, 15, '#ffe082');
+    PLANETS.forEach((P, i) => {
+      const x = DX0 + P.dist * AU;
+      drawPlanet(i, x, 220, 3.2);
+      const up = i < 4 ? (i % 2 ? 252 : 190) : 190;
+      labelText(P.name, x, up, 14, '#fff');
+      if (i >= 2) labelText(P.dist + '目もり', x, up + (up > 220 ? 18 : -18), 12, '#ffe082');
+    });
+    ctx.restore();
+    labelText('1目もり＝太陽から地球までのきょり（約1億5000万km）', 400, 30, 16, '#c5cae9');
+    labelText('この縮尺だと、太陽も惑星も小さすぎて、本当は点より小さい！', 400, 56, 15, '#ffcc80');
+    // 全体の地図
+    const mw = W - 40, sx = mw / WORLD;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(20, 392, mw, 16);
+    PLANETS.forEach((P, i) => { ctx.fillStyle = P.color; ctx.fillRect(20 + (DX0 + P.dist * AU) * sx - 1.5, 395, 3, 10); });
+    ctx.fillStyle = '#ffb300'; ctx.fillRect(20 + DX0 * sx - 2, 395, 4, 10);
+    ctx.strokeStyle = '#ffe082'; ctx.lineWidth = 2; ctx.strokeRect(20 + SZ.pan * sx, 389, W * sx, 22);
+    text('全体の中で、今見ている場所（ドラッグで動かせる）', 400, 424, 13, '#9fa8da');
+  }
+}
+function sizePick(p) {
+  if (SZ.mode !== 'size') return -1;
+  const o = sizeLayout().find(o => Math.hypot(p.x - o.x, p.y - (300 - o.r)) < Math.max(o.r, 12) + 4);
+  return o ? o.i : -1;
+}
+function setSizeMode(m) {
+  SZ.mode = m;
+  document.querySelectorAll('#cSizeMode .chip').forEach(c => c.classList.toggle('active', c.dataset.m === m));
+  $('distRow').classList.toggle('hidden', m !== 'dist');
+  $('sizeAsk').innerHTML = J(m === 'size' ? '惑星をタップすると、大きさを記録するよ。いちばん大きい惑星はどれかな？'
+    : '横に動かして、太陽から海王星までの遠さを体感しよう。地球までを1目もりとすると、海王星は約30目もり！');
+  setMsg(''); setHelp(); updateStats();
+}
+
+// =====================================================================
+// ④ 惑星カード
+// =====================================================================
+const CD = { sel: -1, done: [], wrong: false };
+const CELL = i => ({ x: 100 + (i % 4) * 200, y: 115 + Math.floor(i / 4) * 210 });
+function cardPick(p) {
+  for (let i = 0; i < 8; i++) { const c = CELL(i); if (Math.abs(p.x - c.x) < 95 && Math.abs(p.y - c.y) < 100) return i; }
+  return -1;
+}
+function drawCardTab() {
+  space();
+  PLANETS.forEach((P, i) => {
+    const c = CELL(i);
+    roundRect(c.x - 92, c.y - 98, 184, 196, 14);
+    ctx.fillStyle = i === CD.sel ? 'rgba(255,152,0,0.25)' : 'rgba(255,255,255,0.07)'; ctx.fill();
+    ctx.strokeStyle = i === CD.sel ? '#ff9800' : 'rgba(255,255,255,0.25)'; ctx.lineWidth = i === CD.sel ? 4 : 1.5; ctx.stroke();
+    drawPlanet(i, c.x, c.y - 14, Math.min(40, 10 + showR(i) * 1.3));
+    labelText(P.name, c.x, c.y + 62, 19, '#fff');
+    if (CD.done.includes(i)) {
+      const T = TYPES[P.type];
+      labelText(T.mark + ' ' + T.name, c.x, c.y + 84, 14, P.type === 'rock' ? '#ffab91' : '#fff');
+      ctx.fillStyle = T.col; roundRect(c.x - 86, c.y - 92, 34, 26, 7); ctx.fill();
+      text(T.mark, c.x - 69, c.y - 79, 18, '#fff');
+    }
+  });
+}
+function renderCardInfo() {
+  const el = $('cardInfo');
+  if (CD.sel < 0) { el.innerHTML = '<p class="ask" style="margin:0">' + J('上の惑星をタップしてね。') + '</p>'; return; }
+  const P = PLANETS[CD.sel], ok = CD.done.includes(CD.sel), T = TYPES[P.type];
+  let h = '<div class="ttl">' + J(P.name) + '</div><table>' +
+    '<tr><th>' + J('太陽からのきょり') + '</th><td>' + J('地球の約' + P.dist + '倍') + '</td></tr>' +
+    '<tr><th>' + J('大きさ（直径）') + '</th><td>' + J('地球の約' + P.size + '倍') + '</td></tr>' +
+    '<tr><th>' + J('公転') + '</th><td>' + J(P.period < 1 ? '約' + Math.round(P.period * 365) + '日で1周' : '約' + P.period + '年で1周') + '</td></tr>' +
+    '<tr><th>' + J('自転') + '</th><td>' + J(P.spin + 'で1回転') + '</td></tr>' +
+    '<tr><th>' + J('表面の温度') + '</th><td>' + J(P.temp) + '</td></tr>' +
+    '<tr><th>' + J('輪') + '</th><td>' + J(P.ring) + '</td></tr>' +
+    '<tr><th>' + J('衛星の数') + '</th><td>' + J(P.moons) + '</td></tr>' +
+    '<tr><th>' + J('特ちょう') + '</th><td>' + J(P.note) + '</td></tr></table>';
+  if (ok) h += '<div class="explain">' + J('✔ ' + T.mark + ' ' + T.name + '。' + T.exp) + '</div>';
+  else {
+    h += '<p class="ask">' + J('この惑星は、どのなかまかな？') + '</p><div class="chips" id="cType" style="justify-content:center">' +
+      Object.keys(TYPES).map(k => '<button class="chip" data-k="' + k + '">' + TYPES[k].mark + ' ' + J(TYPES[k].name) + '</button>').join('') + '</div>';
+    if (CD.wrong) h += '<div class="explain">' + J('ちがうよ。大きさや、かたい地面があるかを考えよう。地球に近い4つは小さい惑星だよ。') + '</div>';
+  }
+  el.innerHTML = h;
+}
+function answerType(k) {
+  const P = PLANETS[CD.sel];
+  if (k !== P.type) { CD.wrong = true; renderCardInfo(); return; }
+  CD.wrong = false; if (!CD.done.includes(CD.sel)) CD.done.push(CD.sel);
+  renderCardInfo();
+  if (CD.done.length === 8) {
+    setMsg('全部なかま分けできた！ 太陽に近い4つは小さな岩石の惑星、木星と土星は大きなガスの惑星、天王星と海王星は氷の惑星だよ。');
+    rec('④カード', '惑星のなかま分け', '岩石の惑星：水星・金星・地球・火星／ガスの惑星：木星・土星／氷の惑星：天王星・海王星');
+  } else setMsg('正かい！ ほかの惑星も調べよう。');
+}
+
+// =====================================================================
+// ⑤ 地球の動き（自転と公転・季節）
+// =====================================================================
+const E = { day: 80.5, playing: false };   // day＝1年の何日目（1月1日＝0）
+const TILT = 23.4, LAT = 35;             // 地じくのかたむき・東京の緯度
+const DPS = { slow: 0.5, normal: 10, fast: 60 };   // 1秒で進む日数
+const MD = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+function dateText(d) {
+  d = ((Math.floor(d) % 365) + 365) % 365;
+  let m = 0; while (d >= MD[m]) { d -= MD[m]; m++; }
+  return (m + 1) + '月' + (d + 1) + '日';
+}
+const decl = () => $('chkTilt').checked ? TILT * Math.sin(2 * Math.PI * (E.day - 80) / 365) : 0;   // 太陽の赤緯（度）
+function dayLength() {
+  const d = decl() * Math.PI / 180, f = LAT * Math.PI / 180;
+  const c = clamp(-Math.tan(f) * Math.tan(d), -1, 1);
+  return 2 * Math.acos(c) * 180 / Math.PI / 15;   // 時間
+}
+const noonAlt = () => 90 - LAT + decl();
+function seasonName() {
+  const d = ((E.day % 365) + 365) % 365;
+  if (d >= 59 && d < 151) return '春'; if (d >= 151 && d < 243) return '夏'; if (d >= 243 && d < 334) return '秋'; return '冬';
+}
+function stepEarth(dt) { if (E.playing) E.day = (E.day + dt * DPS[speedKey]) % 365; }
+function drawEarthTab() {
+  space();
+  // 左：公転のようす（ななめ上から見た図）
+  const cx = 205, cy = 225, rx = 165, ry = 72;
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+  const th = d => Math.PI - 2 * Math.PI * (d - 172) / 365;   // 夏至が左、反時計回り
+  [[80, '春分（3月）'], [172, '夏至（6月）'], [266, '秋分（9月）'], [356, '冬至（12月）']].forEach(([d, s]) => {
+    const a = th(d), x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    const ox = Math.cos(a) * 34, oy = Math.sin(a) * 34;
+    labelText(s, clamp(x + ox * (Math.abs(Math.cos(a)) > 0.5 ? 0.2 : 0), 52, 360), y + oy + (Math.abs(Math.sin(a)) > 0.5 ? 0 : -48), 14, '#c5cae9');
+  });
+  drawSunDisk(cx, cy, 26); text('太陽', cx, cy, 13, '#5d2a00');
+  const a = th(E.day), ex = cx + Math.cos(a) * rx, ey = cy + Math.sin(a) * ry;
+  // 地球（太陽側が昼）
+  const er = 15, sunDir = Math.atan2(cy - ey, cx - ex);
+  ctx.fillStyle = '#1a237e'; ctx.beginPath(); ctx.arc(ex, ey, er, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#42a5f5'; ctx.beginPath(); ctx.arc(ex, ey, er, sunDir - Math.PI / 2, sunDir + Math.PI / 2); ctx.closePath(); ctx.fill();
+  // 地じく（いつも同じ向き＝右にかたむく）
+  const tl = $('chkTilt').checked ? TILT * Math.PI / 180 : 0;
+  ctx.strokeStyle = '#ff7043'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(ex - Math.sin(tl) * 26, ey + Math.cos(tl) * 26); ctx.lineTo(ex + Math.sin(tl) * 26, ey - Math.cos(tl) * 26); ctx.stroke();
+  labelText('地球', ex, ey + 32, 14, '#90caf9');
+  labelText('公転（1年で1周）', cx, 30, 17, '#fff');
+  labelText('※ななめ上から見た図', cx, 52, 13, '#9fa8da');
+  // 右：地球の拡大（太陽の光は左から）
+  const X = 600, Y = 225, R = 118;
+  ctx.fillStyle = 'rgba(255,255,255,0.06)'; roundRect(415, 70, 380, 330, 14); ctx.fill();
+  labelText('自転（1日で1回転）と季節', X, 30, 17, '#fff');
+  labelText('← 太陽の光', 470, 92, 15, '#ffe082');
+  if ($('chkRay').checked) for (let k = -2; k <= 2; k++) arrow(424, Y + k * 46, X - Math.sqrt(Math.max(0, R * R - (k * 46) ** 2)) - 4, Y + k * 46, 'rgba(255,224,130,0.85)', 3);
+  // 昼と夜
+  ctx.fillStyle = '#0d1757'; ctx.beginPath(); ctx.arc(X, Y, R, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#3b82c4'; ctx.beginPath(); ctx.arc(X, Y, R, Math.PI / 2, Math.PI * 3 / 2); ctx.closePath(); ctx.fill();
+  text('昼', X - 70, Y + 70, 20, '#fff'); text('夜', X + 70, Y + 70, 20, '#9fa8da');
+  // 地じく（季節によって、太陽の方へかたむいて見える角度が変わる）
+  const dd = decl() * Math.PI / 180;           // 太陽の方（左）へかたむく角度
+  const axx = -Math.sin(dd), axy = -Math.cos(dd);   // 北の向き（画面）
+  const ux = Math.cos(dd), uy = -Math.sin(dd);      // 赤道の向き
+  ctx.strokeStyle = '#ff7043'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(X - axx * (R + 26), Y - axy * (R + 26)); ctx.lineTo(X + axx * (R + 26), Y + axy * (R + 26)); ctx.stroke();
+  labelText('北', X + axx * (R + 40), Y + axy * (R + 40), 15, '#ffab91');
+  // 赤道
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.moveTo(X - ux * R, Y - uy * R); ctx.lineTo(X + ux * R, Y + uy * R); ctx.stroke(); ctx.setLineDash([]);
+  // 日本（北緯35度）の通り道：昼の部分（黄）と夜の部分（青）
+  const f = LAT * Math.PI / 180, ccx = X + axx * R * Math.sin(f), ccy = Y + axy * R * Math.sin(f), rr = R * Math.cos(f);
+  const x1 = ccx - ux * rr, y1 = ccy - uy * rr, x2 = ccx + ux * rr, y2 = ccy + uy * rr;
+  const tSplit = clamp((X - x1) / (x2 - x1), 0, 1);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + (x2 - x1) * tSplit, y1 + (y2 - y1) * tSplit); ctx.stroke();
+  ctx.strokeStyle = '#5c6bc0'; ctx.setLineDash([8, 5]); ctx.beginPath(); ctx.moveTo(x1 + (x2 - x1) * tSplit, y1 + (y2 - y1) * tSplit); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]);
+  // 自転する日本の位置（1日で1回転）
+  const lam = 2 * Math.PI * (E.day % 1) - Math.PI;   // 正午（x.5日）＝太陽の側（左のはし）
+  const jx = ccx - ux * rr * Math.cos(lam), jy = ccy - uy * rr * Math.cos(lam), front = Math.sin(lam) <= 0;
+  ctx.fillStyle = front ? '#ff7043' : 'rgba(255,112,67,0.45)'; ctx.beginPath(); ctx.arc(jx, jy, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  labelText('日本', jx, jy - 18, 14, '#ffab91');
+  // まわる向き
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(X + axx * (R + 14), Y + axy * (R + 14), 22, 7, -dd, 0.2, Math.PI - 0.2); ctx.stroke();
+  labelText('黄＝昼の長さ　青＝夜の長さ（日本の通り道）', X, 388, 13, '#ffe082');
+}
+function recordEarth() {
+  const r = rec('⑤地球', dateText(E.day) + '（' + seasonName() + '・' + ($('chkTilt').checked ? 'かたむきあり' : 'かたむきなし') + '）',
+    '昼の長さ約' + fmt1(dayLength()) + '時間・正午の太陽の高さ約' + Math.round(noonAlt()) + '度');
+  setMsg(r ? '記録したよ。夏至と冬至の昼の長さや太陽の高さをくらべよう。' : 'この日は、もう記録してあるよ。');
+}
+
+// =====================================================================
+// 下の数字（ようす）
+// =====================================================================
+let lastStats = '';
+function updateStats() {
+  let s;
+  if (tab === 'order') s = [['正しい場所', O.checked ? O.order.filter((v, i) => v === i).length + ' / 8' : '―'], ['いちばん近い惑星', O.done ? '水星' : '？'], ['覚え方', O.done ? 'すいきんちかもくどってんかい' : '？']];
+  else if (tab === 'orbit') s = [['たった時間', yearText(OR.t)], ['地球', fmt1(OR.t) + '周'], ['水星', fmt1(OR.t / PLANETS[0].period) + '周']];
+  else if (tab === 'size') s = SZ.mode === 'size' ? [['いちばん大きい惑星', '木星（地球の約11倍）'], ['太陽', '地球の約109倍'], ['いちばん小さい惑星', '水星']]
+    : [['地球まで', '1目もり（光で約8分）'], ['木星まで', '約5目もり'], ['海王星まで', '約30目もり（光で約4時間）']];
+  else if (tab === 'card') s = [['なかま分け', CD.done.length + ' / 8'], ['えらんだ惑星', CD.sel >= 0 ? PLANETS[CD.sel].name : '―'], ['衛星の数', CD.sel >= 0 ? PLANETS[CD.sel].moons : '―']];
+  else s = [['日づけ', dateText(E.day) + '（' + seasonName() + '）'], ['昼の長さ（東京）', '約' + fmt1(dayLength()) + '時間'], ['正午の太陽の高さ', '約' + Math.round(noonAlt()) + '度']];
+  const key = JSON.stringify(s);
+  if (key === lastStats) return;
+  lastStats = key;
+  ['A', 'B', 'C'].forEach((c, i) => { $('l' + c).innerHTML = J(s[i][0]); $('s' + c).innerHTML = J(s[i][1]); });
+}
+function setHelp() {
+  let h;
+  if (tab === 'order') h = '<li>惑星をタップしてえらび、もう1つの惑星をタップすると入れかわる。</li><li>太陽に近い順にならんだと思ったら「答え合わせ」。⭕は正しい場所、✖はちがう場所だよ。</li>';
+  else if (tab === 'orbit') h = '<li>8つの惑星が、太陽のまわりを同じ向きに回っている（公転）。</li><li>スライダーやはやさのボタンで、時間の進み方を変えられる。地球が1周（1年）すると、ほかの惑星が何周したかが記録されるよ。</li><li>太陽に近い惑星ほど、速く回るね。海王星が1周するには、約165年もかかる！</li>';
+  else if (tab === 'size') h = SZ.mode === 'size' ? '<li>地球の直径を1として、同じ縮尺でならべている。左のはしの大きな丸が太陽（ほんの一部）。</li><li>惑星をタップすると、大きさが記録されるよ。</li>'
+    : '<li>太陽から地球までのきょりを1目もりとして、同じ縮尺でならべている。</li><li>図をドラッグするか「見る場所」のスライダーで、横に動かそう。外側の惑星ほど、とても遠いね。</li>';
+  else if (tab === 'card') h = '<li>惑星をタップすると、下に特ちょうが出る。</li><li>□岩石の惑星・○ガスの惑星・◇氷の惑星の、どのなかまか答えよう。</li>';
+  else h = '<li>「動かす」で、地球が自転しながら公転する。ゆっくりにすると、日本が1日で1回転するようすが見えるよ。</li><li>季節のボタンで、夏至と冬至をくらべよう。地じくのかたむきをOFFにすると、どうなるかな？</li><li>「記録する」で、昼の長さと太陽の高さを表に残そう。</li>';
+  $('help').innerHTML = '<h2>📖 ' + J('調べ方') + '</h2><ul>' + J(h) + '</ul>';
+}
+
+// =====================================================================
+// タブ・ボタン
+// =====================================================================
+function setTab(t) {
+  tab = t;
+  document.querySelectorAll('#tabs .chip').forEach(c => c.classList.toggle('active', c.dataset.tab === t));
+  ['Order', 'Orbit', 'Size', 'Card', 'Earth'].forEach(n => $('p' + n).classList.toggle('hidden', t !== n.toLowerCase()));
+  $('cardInfo').classList.toggle('hidden', t !== 'card');
+  $('speedCard').classList.toggle('hidden', !(t === 'orbit' || t === 'earth'));
+  if (t === 'card') renderCardInfo();
+  if (t === 'size') setSizeMode(SZ.mode);
+  setMsg(''); setHelp(); updateStats();
+}
+$('tabs').addEventListener('click', ev => { const b = ev.target.closest('.chip'); if (b) setTab(b.dataset.tab); });
+$('cSpeed').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  speedKey = b.dataset.speed;
+  document.querySelectorAll('#cSpeed .chip').forEach(c => c.classList.toggle('active', c === b));
+  if (tab === 'orbit') { $('rngYear').value = { slow: 15, normal: 50, fast: 85 }[speedKey]; showYearPerSec(); }
+});
+// ①
+$('btnCheck').addEventListener('click', checkOrder);
+$('btnShuffle').addEventListener('click', () => { shuffleOrder(); setMsg('まぜたよ。太陽に近い順にならべよう。'); });
+// ②
+function showYearPerSec() { $('yearPerSec').innerHTML = J(yearText(yearPerSec())); }
+$('rngYear').addEventListener('input', showYearPerSec);
+$('btnPlay').addEventListener('click', () => { OR.playing = !OR.playing; $('btnPlay').innerHTML = OR.playing ? J('⏸ とめる') : J('▶ 動かす'); });
+$('btnResetOrbit').addEventListener('click', () => { OR.t = 0; OR.lastLap = 0; setMsg('はじめにもどしたよ。'); });
+$('btnRecOrbit').addEventListener('click', () => {
+  if (OR.t < 0.05) { setMsg('少し動かしてから記録しよう。'); return; }
+  const ok = rec('②公転', yearText(OR.t) + 'たったとき', PLANETS.map(P => P.name + lapFmt(OR.t / P.period) + '周').join('・'));
+  setMsg(ok ? '記録したよ。' : 'もう記録してあるよ。');
+});
+// ③
+$('cSizeMode').addEventListener('click', ev => { const b = ev.target.closest('.chip'); if (b) setSizeMode(b.dataset.m); });
+const maxPan = () => WORLD - W;
+$('rngPan').addEventListener('input', () => { SZ.pan = $('rngPan').value / 1000 * maxPan(); });
+// ④
+$('cardInfo').addEventListener('click', ev => { const b = ev.target.closest('#cType .chip'); if (b) answerType(b.dataset.k); });
+$('btnResetCard').addEventListener('click', () => { CD.sel = -1; CD.done = []; CD.wrong = false; renderCardInfo(); setMsg(''); });
+// ⑤
+$('cSeason').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  E.day = +b.dataset.d + 0.5; E.playing = false; $('btnPlayE').innerHTML = J('▶ 動かす');
+  setMsg(b.textContent.replace(/[🌸🌻🍁⛄]\s*/u, '') + 'の地球。昼の長さと、正午の太陽の高さを見よう。');
+});
+$('btnPlayE').addEventListener('click', () => { E.playing = !E.playing; $('btnPlayE').innerHTML = J(E.playing ? '⏸ とめる' : '▶ 動かす'); });
+$('btnResetE').addEventListener('click', () => { E.day = 80.5; E.playing = false; $('btnPlayE').innerHTML = J('▶ 動かす'); $('chkTilt').checked = true; setMsg(''); });
+$('btnRecE').addEventListener('click', recordEarth);
+$('chkTilt').addEventListener('change', () => setMsg($('chkTilt').checked ? '地じくをかたむけたよ（約23.4度）。' : '地じくのかたむきをなくすと、1年中、昼の長さがほとんど変わらないね。季節の変化がなくなるよ。'));
+
+// ===== Canvas の操作（マウスでもタッチでも：pointer events） =====
+cv.addEventListener('pointerdown', ev => {
+  const p = canvasXY(ev);
+  if (tab === 'order') orderTap(orderPick(p));
+  else if (tab === 'size') {
+    if (SZ.mode === 'dist') { SZ.drag = { x: p.x, pan: SZ.pan }; cv.setPointerCapture(ev.pointerId); }
+    else {
+      const i = sizePick(p);
+      if (i >= 0) {
+        const P = PLANETS[i];
+        rec('③大きさ', P.name + 'の大きさ（直径）', '地球の約' + P.size + '倍');
+        setMsg(P.name + 'の直径は、地球の約' + P.size + '倍。' + (i === 4 ? 'いちばん大きい惑星だよ！' : i === 0 ? 'いちばん小さい惑星だよ。' : ''));
+      }
+    }
+  } else if (tab === 'card') {
+    const i = cardPick(p);
+    if (i >= 0) { CD.sel = i; CD.wrong = false; renderCardInfo(); setMsg(''); }
+  }
+});
+cv.addEventListener('pointermove', ev => {
+  const p = canvasXY(ev);
+  if (tab === 'size' && SZ.drag) {
+    SZ.pan = clamp(SZ.drag.pan - (p.x - SZ.drag.x) * 2, 0, maxPan());
+    $('rngPan').value = Math.round(SZ.pan / maxPan() * 1000);
+  }
+  cv.style.cursor = (tab === 'order' && orderPick(p) >= 0) || (tab === 'card' && cardPick(p) >= 0) || (tab === 'size' && (SZ.mode === 'dist' || sizePick(p) >= 0)) ? 'pointer' : 'default';
+});
+const endDrag = () => { SZ.drag = null; };
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+// =====================================================================
+// アニメーション
+// =====================================================================
+let last = performance.now();
+function frame(now) {
+  const dt = clamp((now - last) / 1000, 0, 0.05);
+  last = now; clock += dt;
+  stepOrbit(dt); stepEarth(dt);
+  if (tab === 'order') drawOrderTab(); else if (tab === 'orbit') drawOrbitTab(); else if (tab === 'size') drawSizeTab();
+  else if (tab === 'card') drawCardTab(); else drawEarthTab();
+  updateStats();
+  requestAnimationFrame(frame);
+}
+
+// ===== 先生モード =====
+if (TEACHER) {
+  $('tNote').classList.remove('hidden');
+  $('tNote').innerHTML = '👩‍🏫 <b>先生へ</b>：太陽系の惑星は、小学校では発展的な内容です（中学校3年「地球と宇宙」で学習）。数値は教育用のおおよその数です。<br>' +
+    '・②の公転の速さは、本当の公転周期の比（水星0.24年〜海王星約165年）で動かしています。軌道の半径は見やすい等間かくにしているので、きょりの比は③の「きょりモード」で確かめさせてください。<br>' +
+    '・③の大きさモードは直径の比（地球＝1）を同じ縮尺でかいています。きょりモードは1天文単位（約1億5000万km）＝1目もりです。この縮尺では太陽の直径は1pxにも満たないことから、「宇宙はすかすか」であることを実感させます。<br>' +
+    '・④の「氷の惑星」（天王星型惑星）は中学校以上の分類です。小学生には「地球に近い4つは小さな岩石の惑星、外側の4つは大きなガスや氷の惑星」程度で十分です。衛星の数は観測で変わります（2024年ごろの数）。<br>' +
+    '・⑤は東京（北緯35度）での昼の長さ（日の出〜日の入り）と南中高度を、地じくのかたむき23.4度として計算しています（大気による屈折などは考えていません）。夏至約14.4時間・約78度、冬至約9.8時間・約32度になります。かたむきOFFでは1年中約12時間・約55度です。';
+}
+
+// ===== はじめ =====
+document.querySelectorAll('[data-j]').forEach(rubyfy);
+shuffleOrder();
+showYearPerSec();
+setTab('order');
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
