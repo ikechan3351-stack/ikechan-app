@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>区切って数えて ヒストグラム</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：正解＝緑（○）、まちがい・注意＝赤紫（×）。
+     色だけでなく、記号・線の種類でも区別する。
+     この教材では：ヒストグラムの柱＝オレンジ、えらんだ階級＝黄色の太いふち、度数折れ線＝こい青の線と ●。
+     2つをくらべるとき：1組＝オレンジの実線と ●、2組＝青の点線と ■。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --bar: #ffcc80; --barline: #e65100; --sel: #fbc02d; --ok: #2e7d32; --ng: #ad1457; --blue: #1565c0;
+    --ca: #e65100; --cb: #1565c0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input, textarea { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1280px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 46px; padding: 6px 14px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .data-card .chip { min-height: 44px; padding: 4px 11px; font-size: .95rem; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.on { background: #fff8e1; border-color: #fbc02d; }
+  .op-btn.on::before { content: "✔ "; }
+  .op-btn.sm { min-height: 44px; padding: 4px 10px; font-size: .92rem; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 3列（左＝データ・中央＝度数分布表・右＝ヒストグラム） =====
+     表の列をふやしたとき（.wide）は、データを上にして、表とグラフを2列にする */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @container (min-width: 700px) {
+    .board-in { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+    .board-in > .data-card { grid-column: 1 / -1; }
+  }
+  @container (min-width: 940px) {
+    .board-in { grid-template-columns: minmax(0, .78fr) minmax(0, 1fr) minmax(0, 1.3fr); }
+    .board-in > .data-card { grid-column: auto; }
+    .board-in.wide { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+    .board-in.wide > .data-card { grid-column: 1 / -1; }
+    .board-in.wide .vals { max-height: 190px; }
+  }
+
+  /* データ */
+  .info { font-size: .95rem; line-height: 1.6; background: #f5f5f5; border-radius: 10px; padding: 4px 10px; margin: 6px 0; }
+  .vals { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 4px; max-height: 360px; overflow-y: auto; padding: 2px; }
+  .v {
+    border: 2px solid #cfd8dc; border-radius: 8px; background: #fff; text-align: center;
+    font-size: 18px; font-weight: bold; padding: 6px 2px; font-variant-numeric: tabular-nums; position: relative;
+  }
+  .v.done { color: #90a4ae; background: #eceff1; border-style: dashed; }
+  .v.done::after { content: "✓"; position: absolute; right: 2px; top: -2px; font-size: 12px; color: var(--ok); }
+  .v.now { background: #fff59d; border-color: var(--sel); box-shadow: 0 0 0 3px rgba(251,192,45,.45); color: var(--ink); }
+  .v.in { border-color: var(--blue); border-width: 3px; background: #e3f2fd; }
+  .v.edge { text-decoration: underline wavy #ad1457 2px; text-underline-offset: 4px; }
+  .v.vb { border-style: dotted; }
+  .grp-h { grid-column: 1 / -1; font-size: .9rem; font-weight: bold; margin-top: 4px; }
+  .custom { border-top: 2px dashed #cfd8dc; margin-top: 8px; padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .custom textarea { width: 100%; min-height: 110px; font-size: 18px; border: 2px solid var(--soft); border-radius: 10px; padding: 6px; }
+  .custom input { font-size: 18px; border: 2px solid var(--soft); border-radius: 10px; padding: 6px; min-height: 44px; min-width: 0; }
+  .crow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .crow label { font-size: .92rem; font-weight: bold; }
+
+  /* スライダー＋数の入力 */
+  .slider-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-weight: bold; }
+  .slider-row .lab { min-width: 5.6em; white-space: nowrap; }
+  .slider-row input[type=range] { flex: 1; min-width: 60px; height: 36px; }
+  .slider-row input[type=number] { width: 92px; font-size: 1.2rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .slider-row .u { font-size: .9rem; color: #546e7a; min-width: 1.6em; }
+  .slider-row input:disabled { opacity: .5; }
+  .snote { font-size: .85rem; color: #607d8b; text-align: center; }
+  .col-row { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+
+  /* 度数分布表 */
+  .tbl-wrap { max-height: 460px; overflow: auto; border-radius: 8px; margin-top: 6px; }
+  .ft { width: 100%; border-collapse: collapse; text-align: center; font-variant-numeric: tabular-nums; }
+  .ft th { position: sticky; top: 0; z-index: 1; background: #eceff1; font-size: .85rem; padding: 4px; border: 2px solid #b0bec5; line-height: 1.3; }
+  .ft th.a { color: var(--ca); } .ft th.b { color: var(--cb); }
+  .ft th.add { background: #e8eaf6; }
+  .ft td { border: 2px solid #cfd8dc; padding: 3px 6px; font-size: 20px; height: 44px; }
+  .ft td.cls { white-space: nowrap; font-size: 19px; }
+  .ft td.cls small { font-size: .78rem; color: #546e7a; margin: 0 2px; }
+  .ft td.f { font-weight: bold; font-size: 22px; }
+  .ft td.add { background: #fafaff; }
+  .ft td.hid { color: #90a4ae; font-weight: bold; }
+  .ft td.sei { text-align: left; min-width: 70px; }
+  .ft tbody tr { cursor: pointer; }
+  .ft tbody tr.sel td { background: #e3f2fd; box-shadow: inset 0 0 0 2px var(--blue); }
+  .ft tbody tr.now td { background: #fffde7; }
+  .ft tbody tr.empty td.f { color: #90a4ae; }
+  .ft tfoot td { font-weight: bold; background: #fafafa; }
+  .ft.many td { font-size: 18px; padding: 2px 4px; }
+  .ft.many td.cls { font-size: 17px; }
+  .sei svg { vertical-align: middle; margin-right: 3px; }
+  .tnote { font-size: .82rem; color: #607d8b; margin-top: 4px; line-height: 1.5; }
+
+  /* ヒストグラム */
+  #hist { width: 100%; display: block; touch-action: manipulation; user-select: none; }
+  #hist text { font-family: inherit; }
+  #hist .bar { cursor: pointer; }
+  .legend { font-size: .88rem; color: #546e7a; text-align: center; line-height: 1.6; }
+  .legend .la { color: var(--ca); font-weight: bold; } .legend .lb { color: var(--cb); font-weight: bold; }
+
+  /* 正の字で数えるバー */
+  .count-bar { background: #fffde7; border: 3px solid #fbc02d; border-radius: 14px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .count-now { text-align: center; font-weight: bold; font-size: 1.15rem; line-height: 1.6; }
+  .count-now .big { font-size: 1.7rem; background: #fff59d; border: 2px solid var(--sel); border-radius: 10px; padding: 0 10px; margin: 0 4px; }
+
+  /* 練習問題 */
+  .q-card { border: 3px solid var(--accent); }
+  .q-text { text-align: center; font-weight: bold; font-size: 1.12rem; line-height: 1.8; }
+  .q-text .big { font-size: 1.5rem; background: #fff59d; border-radius: 8px; padding: 0 8px; }
+  .q-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px; margin-top: 8px; }
+  .q-choices .op-btn { text-align: left; }
+  .op-btn.ng { border-color: var(--ng); background: #fce4ec; }
+  .op-btn.ng::before { content: "× "; color: var(--ng); }
+  .op-btn.good { border-color: var(--ok); background: #e8f5e9; }
+  .op-btn.good::before { content: "○ "; color: var(--ok); }
+  .ans-line { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 24px; font-weight: bold; margin-top: 8px; }
+  .box { min-width: 130px; min-height: 58px; border: 3px solid #fbc02d; border-radius: 14px; background: #fffde7; font-size: 30px; font-weight: bold; color: var(--ink); padding: 4px 10px; display: inline-flex; align-items: center; justify-content: center; }
+  .keypad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin: 8px auto 0; max-width: 360px; }
+  .key {
+    min-height: 50px; border: 2px solid #b0bec5; background: #fff; border-radius: 12px; font-size: 1.35rem; font-weight: bold;
+    color: var(--ink); cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .key:active { transform: translateY(1px); box-shadow: none; }
+  .key.go { grid-column: span 3; background: var(--ok); border-color: var(--ok); color: #fff; font-size: 1.1rem; }
+  .mini { border-collapse: collapse; margin: 6px auto; text-align: center; font-size: 20px; }
+  .mini th, .mini td { border: 2px solid #cfd8dc; padding: 4px 10px; }
+  .mini td { white-space: nowrap; }
+  .mini th { background: #eceff1; font-size: .9rem; }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 6px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .mark-ok { color: var(--ok); font-weight: 900; }
+  .mark-ng { color: var(--ng); font-weight: 900; }
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  @media (max-width: 420px) {
+    body { padding: 10px 10px 24px; }
+    .ft td { font-size: 17px; padding: 2px 3px; }
+    .ft td.cls { font-size: 16px; }
+    .slider-row .lab { min-width: 0; font-size: .92rem; }
+    .slider-row input[type=number] { width: 78px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>📊 区切って数えて ヒストグラム</h1>
+<p class="subtitle">データを階級に区切って数え、度数分布表とヒストグラムをつくろう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- パート：① 表とヒストグラム ② 2つをくらべる ③ 練習問題 -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnCount">✋ 正の字で数える</button>
+      <button class="op-btn action" id="btnNew">✏️ 練習問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <!-- 正の字で数えているときだけ出る -->
+  <div class="count-bar" id="countBar" hidden>
+    <div class="count-now" id="countNow"></div>
+    <div class="tools">
+      <button class="op-btn action" id="cStep">▶ 1つ数える</button>
+      <button class="op-btn" id="cAuto">⏩ 自動で数える</button>
+      <button class="op-btn" id="cAll">⏭ のこりぜんぶ</button>
+      <button class="op-btn" id="cSelf">👆 自分で表に入れる</button>
+      <button class="op-btn" id="cEnd">✖ おわる</button>
+    </div>
+  </div>
+
+  <div class="board"><div class="board-in" id="boardIn">
+
+    <!-- 練習問題（③ のときだけ、データのかわりに左に出る） -->
+    <div class="card q-card data-card" id="qCard" hidden>
+      <h2>✏️ 練習問題</h2>
+      <div class="q-text" id="qText"></div>
+      <div id="qBody"></div>
+    </div>
+
+    <!-- 左：データ -->
+    <div class="card data-card" id="dataCard">
+      <h2>🔢 データ</h2>
+      <div class="chip-row" id="dsRow"></div>
+      <div class="info" id="info"></div>
+      <div class="chip-row" style="justify-content:flex-start">
+        <button class="chip" data-ord="0" id="ord0">名簿の順</button>
+        <button class="chip" data-ord="1" id="ord1">小さい順</button>
+      </div>
+      <div class="vals" id="vals" style="margin-top:6px"></div>
+      <div class="custom" id="customBox" hidden>
+        <div class="small">数をコピーして貼りつけよう（スペース・改行・「,」「、」で区切る。小数は第2位まで）。</div>
+        <textarea id="cText" placeholder="例）152.3 148.0 160.5 …"></textarea>
+        <div class="crow">
+          <label for="cName">名前</label><input id="cName" style="flex:2" placeholder="例）1年の握力">
+          <label for="cUnit">単位</label><input id="cUnit" style="width:70px" placeholder="kg">
+        </div>
+        <button class="op-btn action" id="cUse">✔ このデータを使う</button>
+      </div>
+    </div>
+
+    <!-- 中央：度数分布表 -->
+    <div class="card">
+      <h2>📋 度数分布表</h2>
+      <div class="slider-row">
+        <span class="lab">階級の幅</span>
+        <input type="range" id="wRange" aria-label="階級の幅">
+        <input type="number" id="wNum" aria-label="階級の幅（数）">
+        <span class="u" id="wUnit"></span>
+      </div>
+      <div class="slider-row">
+        <span class="lab">始まり</span>
+        <input type="range" id="sRange" aria-label="階級の始まり">
+        <input type="number" id="sNum" aria-label="階級の始まり（数）">
+        <span class="u" id="sUnit"></span>
+      </div>
+      <div class="snote">※ 階級の幅をかえると、始まりは幅に合わせて自動できまる（あとで変えられる）。</div>
+      <div class="col-row" id="colRow"></div>
+      <div class="tbl-wrap" id="tblWrap"><table class="ft" id="ft"></table></div>
+      <div class="tnote" id="tNote"></div>
+    </div>
+
+    <!-- 右：ヒストグラム -->
+    <div class="card">
+      <h2 id="hTitle">📊 ヒストグラム</h2>
+      <div class="col-row" id="gRow"></div>
+      <svg id="hist" viewBox="0 0 440 360" aria-label="ヒストグラム"></svg>
+      <div class="legend" id="legend"></div>
+      <div class="msg" id="msg"></div>
+    </div>
+
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 答えを入れて進める</button></div>
+    <div class="small" id="tTalk"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>階級</b>：データを区切った1つ1つの区間。この教材では「<b>○以上 △未満</b>」で区切る（○ は入る、△ は入らない）。</li>
+      <li><b>階級の幅</b>：区間のはば（△ − ○）。<b>度数</b>：その階級に入るデータの個数。<b>階級値</b>：階級のまん中の値（（○＋△）÷ 2）。</li>
+      <li><b>度数分布表</b>：階級ごとに度数をまとめた表。<b>ヒストグラム</b>：度数分布表を、すきまのない柱で表したグラフ（柱の横はば＝階級の幅、高さ＝度数）。</li>
+      <li><b>相対度数</b>：その階級の度数 ÷ 度数の合計。全体のどれだけの割合かを表す。<b>累積度数</b>：いちばん小さい階級から、その階級までの度数の合計。<b>累積相対度数</b>：累積度数 ÷ 度数の合計。</li>
+      <li><b>度数折れ線</b>（度数分布多角形）：ヒストグラムの柱の上の辺のまん中を結んだ折れ線。両はしは、度数 0 の階級があると考えて横の軸まで結ぶ。</li>
+      <li>スライダーか数の入力で、<b>階級の幅</b>と<b>始まり</b>をかえると、表とヒストグラムが同時にかわる。表の行かヒストグラムの柱をタップすると、その階級に入るデータが青くなる。</li>
+      <li>「✋ 正の字で数える」：データを名簿の順に1つずつ階級に入れ、正の字で数える。「👆 自分で表に入れる」にすると、どの階級に入るかを自分で表の行をタップして答える。境目の値（〜〜 の下線）に気をつけよう。</li>
+      <li>② <b>2つをくらべる</b>：人数がちがう2つの組を同じ階級で数え、度数折れ線と相対度数の折れ線をくらべる。</li>
+      <li>③ <b>練習問題</b>：答えの数は下のキーで入れる。相対度数は小数第2位まで（第3位を四捨五入）。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：用意したデータ（50m走・ソフトボール投げ・身長）は、この教材のために作った架空のデータです。小数のデータも、中では 0.1 などを 1 とする整数にして数えているので、境目の値がずれることはありません。相対度数・累積相対度数は小数第3位を四捨五入して出しています（累積相対度数は、累積度数 ÷ 合計 を四捨五入したもの）。そのため、相対度数をたしても 1.00 にならないことがあります。グラフの点は、四捨五入する前の値で打っています。<br>
+    つながる教材：<a href="ならべて くらべて データの調べ方.html">小6 ならべて くらべて データの調べ方（ドットプロット・柱状グラフ）</a></p>
+  </div>
+
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（答え・答えを入れて進める・発問の例・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndTick = () => beep([[660, 0, 0.06, 'sine', 0.06]]);
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+
+  /* =====================================================================
+     1. データ（架空）
+        vals は「名簿の順」。dec は小数のけた数（0＝整数、1＝小数第1位）。
+        w0 は、はじめの階級の幅。hidden: true は「2つをくらべる」だけで使うデータ。
+        データを足すときは、この形で1つ足せばよい。
+     ===================================================================== */
+  const PRESETS = {
+    run1: { name: '50m走（1年1組 30人）', short: '50m走', unit: '秒', cu: '人', dec: 1, w0: 0.5,
+      vals: [8.5, 9.3, 8.4, 9.6, 9.0, 8.4, 8.9, 8.8, 9.0, 10.1, 7.4, 8.4, 8.0, 8.9, 7.9, 8.9, 8.2, 7.8, 8.6, 8.8,
+             9.3, 8.6, 9.1, 9.1, 9.3, 8.2, 8.7, 8.0, 9.5, 7.0] },
+    ball1: { name: 'ソフトボール投げ（1年1組 30人）', short: 'ソフトボール投げ', unit: 'm', cu: '人', dec: 0, w0: 5,
+      vals: [39, 25, 21, 29, 32, 26, 17, 36, 19, 30, 18, 14, 24, 30, 16, 15, 12, 29, 16, 27,
+             28, 34, 28, 17, 31, 17, 27, 15, 20, 18] },
+    hgt: { name: '身長（1年 40人）', short: '身長', unit: 'cm', cu: '人', dec: 1, w0: 5,
+      vals: [148.2, 149.6, 156.2, 144.5, 144.4, 145.2, 145.0, 158.1, 157.2, 154.8, 149.9, 154.8, 155.8, 153.9, 140.7,
+             159.1, 153.8, 151.7, 151.0, 152.3, 166.5, 152.5, 157.6, 156.6, 160.0, 150.1, 150.4, 147.3, 144.5, 151.3,
+             162.4, 150.0, 146.5, 148.5, 157.8, 142.5, 153.2, 154.4, 146.8, 160.3] },
+    run2: { name: '50m走（1年2組 36人）', short: '50m走 2組', unit: '秒', cu: '人', dec: 1, w0: 0.5, hidden: true,
+      vals: [9.0, 8.9, 8.2, 8.5, 8.0, 9.1, 8.2, 7.1, 7.7, 8.3, 9.0, 7.4, 8.2, 7.4, 8.0, 8.3, 8.6, 8.3, 7.5, 8.7,
+             8.2, 9.5, 8.5, 8.6, 9.4, 8.7, 7.7, 7.7, 8.6, 9.3, 8.8, 9.2, 7.5, 8.2, 7.9, 8.8] },
+    ball2: { name: 'ソフトボール投げ（1年2組 36人）', short: 'ソフトボール投げ 2組', unit: 'm', cu: '人', dec: 0, w0: 5, hidden: true,
+      vals: [16, 26, 33, 18, 25, 32, 41, 27, 19, 21, 17, 29, 19, 31, 26, 43, 38, 22, 37, 23,
+             31, 24, 30, 35, 28, 18, 10, 29, 13, 16, 20, 15, 15, 27, 14, 22] },
+  };
+  // 「② 2つをくらべる」の組み合わせ（a＝1組、b＝2組）
+  const PAIRS = {
+    run: { a: 'run1', b: 'run2', name: '50m走', la: '1組', lb: '2組' },
+    ball: { a: 'ball1', b: 'ball2', name: 'ソフトボール投げ', la: '1組', lb: '2組' },
+  };
+
+  // データを「整数」にして持つ形に直す（0.1 秒 → 1 のように）。境目の判定を正確にするため。
+  function makeDS(src) {
+    const p = Math.pow(10, src.dec);
+    const iv = src.vals.map(x => Math.round(x * p));
+    const min = Math.min(...iv), max = Math.max(...iv), range = max - min;
+    // スライダー1目もりの大きさ（整数の単位で）。データのちらばりが大きいときは 10 や 100 きざみにする
+    const step = Math.max(1, Math.pow(10, Math.floor(Math.log10(Math.max(1, range) / 25))));
+    let w0 = src.w0 ? Math.round(src.w0 * p) : niceWidth(range, step);
+    w0 = Math.max(step, Math.round(w0 / step) * step);
+    return { name: src.name, short: src.short || src.name, unit: src.unit || '', cu: src.cu || '', dec: src.dec, p, iv, min, max, range, step, w0 };
+  }
+  // 自分のデータのはじめの幅：階級が 7 こくらいになる「1・2・5 × 10のなんじょう」
+  function niceWidth(range, step) {
+    const raw = Math.max(step, range / 7);
+    const e = Math.pow(10, Math.floor(Math.log10(raw)));
+    for (const m of [1, 2, 5, 10]) if (m * e >= raw) return Math.max(step, m * e);
+    return 10 * e;
+  }
+  // 整数の値 → 画面に出す文字（小数のけたをそろえる）
+  const fmt = (i, d) => (i / d.p).toFixed(d.dec);
+  // 階級の境目・幅・始まりの文字。スライダーのきざみに合わせて、いらない「.0」は書かない（身長 140.0 → 140）
+  const cDec = (d) => Math.max(0, d.dec - Math.round(Math.log10(d.step)));
+  const fmtC = (i, d) => (i / d.p).toFixed(cDec(d));
+  // 階級値（まん中の値）。v2 は「2倍した整数」。7.0〜7.5 → 7.25 のように、けたが1つふえることがある
+  function fmtMid(v2, d) {
+    const x = v2 / (2 * d.p);
+    for (let k = cDec(d); k <= d.dec + 2; k++) if (Math.abs(+x.toFixed(k) - x) < 1e-9) return x.toFixed(k);
+    return String(x);
+  }
+  // 割合を小数第2位まで（第3位を四捨五入）。整数だけで計算して誤差を出さない → 100倍した整数を返す
+  const r100 = (a, b) => Math.floor((200 * a + b) / (2 * b));
+  const fmt100 = (h) => (h / 100).toFixed(2);
+
+  /* =====================================================================
+     2. 状態（ひとつもどす で、この形をまるごと記録する）
+     ===================================================================== */
+  const st = {
+    part: 1,             // 1＝表とヒストグラム、2＝2つをくらべる、3＝練習問題
+    ds: 'run1',          // 使っているデータ（① のとき）
+    pair: 'run',         // くらべる組み合わせ（② のとき）
+    w: 0, s: 0,          // 階級の幅・始まり（整数の単位）
+    ord: 0,              // データのならび方（0＝名簿の順、1＝小さい順）
+    sel: -1,             // えらんだ階級（-1＝なし）
+    cnt: null,           // 正の字で数えているとき {i: 数えた個数, self: 自分で入れるか, last: 最後に入れた階級}
+    custom: null,        // 自分のデータ（PRESETS と同じ形）
+    cols: { mid: false, rel: false, cum: false, crel: false },   // 表に足す列
+    poly: false, bars: true,   // 度数折れ線を重ねる・柱を見せる
+    cy: 'f',             // ② のグラフのたて軸（f＝度数、rel＝相対度数）
+    q: null,             // 練習問題
+    hist: [], sliding: false, timer: null, focus: null, hintLv: 0, sessTrips: {}, lastKey: '',
+  };
+  const DS = {};
+  for (const k in PRESETS) DS[k] = makeDS(PRESETS[k]);
+  // ② では、2つの組をあわせたデータで、階級のはんいを決める
+  for (const k in PAIRS) {
+    const P = PAIRS[k], A = PRESETS[P.a];
+    DS['pair_' + k] = makeDS(Object.assign({}, A, { name: P.name + '（' + P.la + 'と' + P.lb + '）', short: P.name, vals: A.vals.concat(PRESETS[P.b].vals) }));
+  }
+  const DK = () => (st.part === 2 ? 'pair_' + st.pair : st.ds);
+  const D = () => (DK() === 'custom' ? makeDS(st.custom) : DS[DK()]);
+
+  // 階級の幅・始まりの、えらべるはんい
+  function wLimits(d) {
+    // 階級が多すぎない（40 こまで）〜 2こくらいになるまで
+    const jmin = Math.max(1, Math.ceil((d.range + 1) / (40 * d.step)));
+    const jmax = Math.max(jmin + 1, Math.ceil(d.range / d.step));
+    return { min: jmin * d.step, max: jmax * d.step };
+  }
+  function sLimits(d, w) {
+    // 始まりは「最小値 以下」で、「最小値 − 幅 より大きい」（いちばん下の階級が空にならない）
+    const hi = Math.floor(d.min / d.step) * d.step;
+    const lo = Math.floor((d.min - w) / d.step) * d.step + d.step;
+    return { min: Math.min(lo, hi), max: hi };
+  }
+  const niceStart = (d, w) => Math.floor(d.min / w) * w;   // 幅の倍数で、最小値より小さいところ
+
+  /* =====================================================================
+     3. 度数を数える
+     ===================================================================== */
+  // 値が入る階級の番号（0 から）。「以上〜未満」なので、ちょうど境目の値は上の階級に入る
+  const clsOf = (v) => Math.floor((v - st.s) / st.w);
+  // ちょうど境目（ある階級の「以上」の値）か
+  const onEdge = (v) => (v - st.s) % st.w === 0;
+  const countOf = (iv, n, upto) => { const f = new Array(n).fill(0); for (let i = 0; i < upto; i++) f[clsOf(iv[i])]++; return f; };
+  const cumOf = (f) => { let c = 0; return f.map(x => (c += x)); };
+  function table() {
+    const d = D();
+    const n = Math.floor((d.max - st.s) / st.w) + 1;
+    if (st.part === 2) {
+      const P = PAIRS[st.pair], A = DS[P.a], B = DS[P.b];
+      return { d, n, A, B, fa: countOf(A.iv, n, A.iv.length), fb: countOf(B.iv, n, B.iv.length), P };
+    }
+    const upto = st.cnt ? st.cnt.i : d.iv.length;     // 数えているときは、数えたところまで
+    return { d, n, f: countOf(d.iv, n, upto), total: upto, N: d.iv.length };
+  }
+  // 山の数（となりより高いところ。同じ高さがつづくときは1つと数える）
+  function peaks(f) {
+    const g = f.filter((x, i) => i === 0 || x !== f[i - 1]);
+    let c = 0;
+    g.forEach((x, i) => { if (x > (i ? g[i - 1] : 0) && x > (i < g.length - 1 ? g[i + 1] : 0)) c++; });
+    return c;
+  }
+
+  /* =====================================================================
+     4. 画面をかく
+     ===================================================================== */
+  const PARTS = {
+    1: { name: '① 表とヒストグラム', note: '階級の幅と始まりをかえて、度数分布表とヒストグラムをつくろう' },
+    2: { name: '② 2つをくらべる', note: '人数がちがう2つの組。度数でくらべる？ 相対度数でくらべる？' },
+    3: { name: '③ 練習問題', note: '表とヒストグラムを見て答えよう。まちがえ方の型が「あなたのつまずき」に出るよ' },
+  };
+  const locked = () => !!(st.cnt || (st.q && !st.q.done));   // 数えている・問題に答えているときは、設定をかえられない
+
+  function render() {
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === st.part));
+    $('partNote').textContent = PARTS[st.part].note;
+    renderData(); renderCtrl(); renderTable(); renderHist(); renderCountBar(); renderQ();
+    $('btnUndo').disabled = !st.hist.length;
+    $('btnCount').hidden = st.part !== 1;
+    $('btnCount').disabled = !!st.cnt;
+    $('btnNew').hidden = st.part !== 3;
+    renderTrips(); renderTeacher();
+  }
+
+  // ---- 左：データ ----
+  function renderData() {
+    const d = D(), two = st.part === 2;
+    $('dsRow').innerHTML = two
+      ? Object.keys(PAIRS).map(k => `<button class="chip${k === st.pair ? ' active' : ''}" data-pair="${k}">${PAIRS[k].name}</button>`).join('')
+      : Object.keys(PRESETS).filter(k => !PRESETS[k].hidden).map(k => `<button class="chip${k === st.ds ? ' active' : ''}" data-ds="${k}">${PRESETS[k].short}</button>`).join('') +
+        `<button class="chip${st.ds === 'custom' ? ' active' : ''}" data-ds="custom">✍️ 自分のデータ</button>`;
+    $('dsRow').querySelectorAll('.chip').forEach(b => {
+      b.disabled = locked() || st.part === 3;
+      b.addEventListener('click', () => b.dataset.pair ? usePair(b.dataset.pair) : onDsChip(b.dataset.ds));
+    });
+    $('customBox').hidden = two || st.ds !== 'custom' || locked() || st.part === 3;
+    const u = d.unit;
+    [0, 1].forEach(k => $('ord' + k).classList.toggle('active', st.ord === k));
+    const c = st.cnt;
+    const chip = (v, i, extra) => {
+      let cls = 'v' + (extra || '');
+      if (c && i < c.i) cls += ' done';
+      if (c && i === c.i) cls += ' now';
+      if (!c && st.sel >= 0 && clsOf(v) === st.sel) cls += ' in';
+      if (onEdge(v) && v !== st.s) cls += ' edge';
+      return `<div class="${cls}">${fmt(v, d)}</div>`;
+    };
+    const order = (iv) => { const idx = iv.map((v, i) => i); if (st.ord === 1) idx.sort((a, b) => iv[a] - iv[b] || a - b); return idx; };
+    if (two) {
+      const { A, B, P } = table();
+      $('info').innerHTML = `<b>${d.name}</b><br><span style="color:var(--ca)">● ${P.la} ${A.iv.length}人</span>　<span style="color:var(--cb)">■ ${P.lb} ${B.iv.length}人</span>　（人数がちがう）`;
+      $('vals').innerHTML = `<div class="grp-h" style="color:var(--ca)">● ${P.la}（${A.iv.length}人）</div>` + order(A.iv).map(i => chip(A.iv[i], -1)).join('') +
+        `<div class="grp-h" style="color:var(--cb)">■ ${P.lb}（${B.iv.length}人）</div>` + order(B.iv).map(i => chip(B.iv[i], -1, ' vb')).join('');
+      return;
+    }
+    $('info').innerHTML = `<b>${d.name}</b>　データの個数 <b>${d.iv.length}</b><br>最小値 <b>${fmt(d.min, d)}</b>${u}　最大値 <b>${fmt(d.max, d)}</b>${u}　範囲 <b>${fmt(d.range, d)}</b>${u}`;
+    $('vals').innerHTML = order(d.iv).map(i => chip(d.iv[i], i)).join('');
+    // 数えている値が見えるように、データのらんの中だけをスクロールする（ページは動かさない）
+    const now = $('vals').querySelector('.now'), box = $('vals');
+    if (now && (now.offsetTop < box.scrollTop || now.offsetTop + now.offsetHeight > box.scrollTop + box.clientHeight)) box.scrollTop = now.offsetTop - box.clientHeight / 2;
+  }
+
+  // ---- スライダー・表の列・グラフのボタン ----
+  function renderCtrl() {
+    const d = D(), wl = wLimits(d), sl = sLimits(d, st.w);
+    const set = (r, nm, lim, val) => {
+      r.min = lim.min; r.max = lim.max; r.step = d.step; r.value = val;
+      nm.min = fmtC(lim.min, d); nm.max = fmtC(lim.max, d); nm.step = fmtC(d.step, d);
+      if (document.activeElement !== nm) nm.value = fmtC(val, d);
+      r.disabled = nm.disabled = locked() || st.part === 3;
+    };
+    set($('wRange'), $('wNum'), wl, st.w);
+    set($('sRange'), $('sNum'), sl, st.s);
+    $('wUnit').textContent = $('sUnit').textContent = d.unit;
+    // 表に足す列（② では累積はなし）
+    const C = st.part === 2 ? [['mid', '階級値'], ['rel', '相対度数']] : [['mid', '階級値'], ['rel', '相対度数'], ['cum', '累積度数'], ['crel', '累積相対度数']];
+    $('colRow').innerHTML = '<span class="small">表に足す：</span>' + C.map(([k, t]) => `<button class="op-btn sm${st.cols[k] ? ' on' : ''}" data-col="${k}"${st.cnt || (st.q && !st.q.done) ? ' disabled' : ''}>${t}</button>`).join('');
+    $('colRow').querySelectorAll('[data-col]').forEach(b => b.addEventListener('click', () => { pushHist(); st.cols[b.dataset.col] = !st.cols[b.dataset.col]; colMsg(b.dataset.col); render(); }));
+    // グラフのボタン
+    const qq = st.q && !st.q.done;
+    $('gRow').innerHTML = st.part === 2
+      ? `<button class="op-btn sm${st.cy === 'f' ? ' on' : ''}" data-cy="f">度数の折れ線</button><button class="op-btn sm${st.cy === 'rel' ? ' on' : ''}" data-cy="rel">相対度数の折れ線</button>`
+      : `<button class="op-btn sm${st.poly ? ' on' : ''}" id="gPoly"${qq ? ' disabled' : ''}>度数折れ線</button><button class="op-btn sm${st.bars ? ' on' : ''}" id="gBars"${qq ? ' disabled' : ''}>柱</button>`;
+    $('gRow').querySelectorAll('[data-cy]').forEach(b => b.addEventListener('click', () => { if (st.cy === b.dataset.cy) return; pushHist(); st.cy = b.dataset.cy; cyMsg(); render(); }));
+    if ($('gPoly')) {
+      $('gPoly').addEventListener('click', () => { pushHist(); st.poly = !st.poly; if (!st.poly) st.bars = true; setMsg(st.poly ? '度数折れ線を重ねた。柱の上の辺のまん中（階級値）を結び、両はしは度数 0 まで下ろす。' : '度数折れ線を消した。'); render(); });
+      $('gBars').addEventListener('click', () => { pushHist(); st.bars = !st.bars; if (!st.bars) st.poly = true; render(); });
+    }
+  }
+  function colMsg(k) {
+    if (!st.cols[k]) { setMsg('列を消した。'); return; }
+    setMsg({
+      mid: '<b>階級値</b>：階級のまん中の値。（○ ＋ △）÷ 2。',
+      rel: '<b>相対度数</b>：その階級の度数 ÷ 度数の合計。全体のどれだけの割合かを表す（合計は 1）。',
+      cum: '<b>累積度数</b>：いちばん小さい階級から、その階級までの度数をたしたもの。いちばん下は合計と同じになる。',
+      crel: '<b>累積相対度数</b>：累積度数 ÷ 度数の合計。「○未満は全体の何割か」がわかる。いちばん下は 1.00。',
+    }[k]);
+  }
+  function cyMsg() {
+    const { A, B, P } = table();
+    setMsg(st.cy === 'f'
+      ? `度数の折れ線。${P.lb}は ${B.iv.length}人、${P.la}は ${A.iv.length}人で、人数がちがう。人数が多い組のほうが、全体に高く見えてしまう。`
+      : `相対度数の折れ線。どちらも「全体を 1 とした割合」になるので、人数がちがっても同じものさしでくらべられる。`);
+  }
+
+  // 正の字（5本ずつ）。newest＝いま足した1本をオレンジにする
+  const SEI = ['M3 3H21', 'M12 3V21', 'M12 12H19', 'M5 11V21', 'M2 21H22'];
+  function seiSVG(c, newest) {
+    let out = '';
+    for (let g = 0; g * 5 < c; g++) {
+      const k = Math.min(5, c - g * 5);
+      out += '<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">' +
+        SEI.slice(0, k).map((p, j) => `<path d="${p}" stroke="${newest && g * 5 + j === c - 1 ? '#e65100' : '#263238'}" stroke-width="${newest && g * 5 + j === c - 1 ? 3.4 : 2.6}" stroke-linecap="round" fill="none"/>`).join('') +
+        '</svg>';
+    }
+    return out;
+  }
+
+  // ---- 中央：度数分布表 ----
+  // 練習問題で聞いている列は「？」にする
+  const hideCol = () => (st.q && !st.q.done ? st.q.hide : null);
+  function renderTable() {
+    const T = table(), { d, n } = T;
+    const c = st.cnt, hc = hideCol();
+    const cls = (k) => { const lo = st.s + k * st.w; return `${fmtC(lo, d)}<small>以上</small>${fmtC(lo + st.w, d)}<small>未満</small>`; };
+    const mid = (k) => fmtMid(2 * (st.s + k * st.w) + st.w, d);
+    const cell = (col, html) => `<td class="add${hc === col ? ' hid' : ''}">${hc === col ? '？' : html}</td>`;
+    const rowCls = (k, f) => {
+      const rc = [];
+      if (f === 0) rc.push('empty');
+      if (!c && st.sel === k) rc.push('sel');
+      if (c && !c.self && c.i < d.iv.length && k === clsOf(d.iv[c.i])) rc.push('now');
+      if (c && c.last === k) rc.push('sel');
+      if (st.q && st.q.k === k && ['mid', 'rel', 'cum'].includes(st.q.type)) rc.push('sel');   // 練習問題で聞いている階級
+      return rc.join(' ');
+    };
+    const showCol = (k) => st.cols[k] || hc === k;
+    let h, extra = 0;
+    const unitH = `階級${d.unit ? '<br>（' + d.unit + '）' : ''}`;
+    if (st.part === 2) {
+      const { fa, fb, A, B, P } = T, na = A.iv.length, nb = B.iv.length;
+      h = `<thead><tr><th>${unitH}</th>${showCol('mid') ? '<th class="add">階級値</th>' : ''}<th class="a">● ${P.la}<br>度数</th><th class="b">■ ${P.lb}<br>度数</th>` +
+        (showCol('rel') ? `<th class="a add">● ${P.la}<br>相対度数</th><th class="b add">■ ${P.lb}<br>相対度数</th>` : '') + '</tr></thead><tbody>';
+      for (let k = 0; k < n; k++) {
+        h += `<tr data-k="${k}" class="${rowCls(k, fa[k] + fb[k])}"><td class="cls">${cls(k)}</td>` + (showCol('mid') ? cell('mid', mid(k)) : '') +
+          `<td class="f">${fa[k]}</td><td class="f">${fb[k]}</td>` +
+          (showCol('rel') ? cell('rel', fmt100(r100(fa[k], na))) + cell('rel', fmt100(r100(fb[k], nb))) : '') + '</tr>';
+      }
+      h += `</tbody><tfoot><tr><td>合計</td>${showCol('mid') ? '<td></td>' : ''}<td class="f">${na}</td><td class="f">${nb}</td>${showCol('rel') ? '<td>1.00</td><td>1.00</td>' : ''}</tr></tfoot>`;
+      extra = (showCol('mid') ? 1 : 0) + (showCol('rel') ? 2 : 0);
+      $('tNote').innerHTML = showCol('rel') ? sumNote([[fa, na, P.la], [fb, nb, P.lb]]) : '';
+    } else {
+      const { f, total, N } = T, cum = cumOf(f);
+      h = `<thead><tr><th>${unitH}</th>${c ? '<th>正の字</th>' : ''}${showCol('mid') ? '<th class="add">階級値</th>' : ''}<th>度数${d.cu ? '<br>（' + d.cu + '）' : ''}</th>` +
+        (showCol('rel') ? '<th class="add">相対<br>度数</th>' : '') + (showCol('cum') ? '<th class="add">累積<br>度数</th>' : '') + (showCol('crel') ? '<th class="add">累積<br>相対度数</th>' : '') + '</tr></thead><tbody>';
+      for (let k = 0; k < n; k++) {
+        h += `<tr data-k="${k}" class="${rowCls(k, f[k])}"><td class="cls">${cls(k)}</td>` +
+          (c ? `<td class="sei">${seiSVG(f[k], c.last === k)}</td>` : '') + (showCol('mid') ? cell('mid', mid(k)) : '') +
+          `<td class="f">${f[k]}</td>` +
+          (showCol('rel') ? cell('rel', fmt100(r100(f[k], N))) : '') + (showCol('cum') ? cell('cum', cum[k]) : '') + (showCol('crel') ? cell('crel', fmt100(r100(cum[k], N))) : '') + '</tr>';
+      }
+      h += `</tbody><tfoot><tr><td>合計</td>${c ? '<td></td>' : ''}${showCol('mid') ? '<td></td>' : ''}<td class="f">${total}</td>${showCol('rel') ? '<td>1.00</td>' : ''}${showCol('cum') ? '<td></td>' : ''}${showCol('crel') ? '<td></td>' : ''}</tr></tfoot>`;
+      extra = ['mid', 'rel', 'cum', 'crel'].filter(showCol).length;
+      $('tNote').innerHTML = showCol('rel') && !c ? sumNote([[f, N, '']]) : '';
+    }
+    $('ft').innerHTML = h;
+    $('ft').classList.toggle('many', extra >= 2);
+    $('boardIn').classList.toggle('wide', extra >= 2);
+    $('ft').querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', () => onRow(+tr.dataset.k)));
+    // 数えているときは、いま入れた行が見えるようにする
+    const t = $('ft').querySelector('tr.sel') || $('ft').querySelector('tr.now');
+    if (t && (c || st.q)) {
+      const w = $('tblWrap'), top = t.offsetTop, bottom = top + t.offsetHeight;
+      if (top < w.scrollTop + 40 || bottom > w.scrollTop + w.clientHeight) w.scrollTop = top - w.clientHeight / 2;
+    }
+  }
+  // 相対度数を四捨五入してたすと 1.00 にならないときの注意
+  function sumNote(list) {
+    const out = list.map(([f, N, lab]) => { const s = f.reduce((a, x) => a + r100(x, N), 0); return s === 100 ? '' : `${lab ? lab + 'は' : ''}たすと ${fmt100(s)}`; }).filter(Boolean);
+    return out.length ? `※ 相対度数は四捨五入しているので、たしても 1.00 にならないことがある（${out.join('、')}）。合計のらんには 1.00 と書く。` : '';
+  }
+
+  // ---- 右：ヒストグラム・度数折れ線 ----
+  function el(tag, attr, parent, text) {
+    const e = document.createElementNS(SVGNS, tag);
+    for (const k in attr) e.setAttribute(k, attr[k]);
+    if (text !== undefined) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function niceY(m) {   // 縦の目もりの間かく
+    for (const s of [1, 2, 5, 10, 20, 50]) if (m / s <= 8) return s;
+    return 100;
+  }
+  function renderHist() {
+    const T = table(), { d, n } = T;
+    const svg = $('hist');
+    svg.innerHTML = '';
+    const two = st.part === 2, rel = two && st.cy === 'rel';
+    // グラフにかく値の列（② は2本）
+    const series = two
+      ? [{ f: T.fa, N: T.A.iv.length, col: 'var(--ca)', dash: '', mark: 'c' }, { f: T.fb, N: T.B.iv.length, col: 'var(--cb)', dash: '7 5', mark: 's' }]
+      : [{ f: T.f, N: T.N }];
+    const val = (s, k) => (rel ? s.f[k] / s.N : s.f[k]);
+    const showPoly = two || (st.poly && !(st.q && !st.q.done && st.q.type === 'poly'));
+    const ext = showPoly ? 1 : 0;                  // 折れ線のときは、両がわに1つずつ階級を足す
+    const L = 54, R = 412, T0 = 30, B = 300;
+    let ymax, ys, lab;
+    if (rel) {
+      const m = Math.max(0.05, ...series.map(s => Math.max(...s.f) / s.N));
+      ys = m > 0.4 ? 0.1 : 0.05; ymax = Math.ceil(m / ys - 1e-9) * ys; lab = (v) => v.toFixed(2);
+    } else {
+      const fmax = Math.max(1, ...series.map(s => Math.max(...s.f)));
+      ys = niceY(fmax); ymax = Math.ceil(fmax / ys) * ys + (fmax % ys === 0 ? ys : 0); lab = (v) => v;
+    }
+    const k0 = -ext, k1 = n + ext;
+    const X = (k) => L + (R - L) * (k - k0) / (k1 - k0), Y = (v) => B - (B - T0) * v / ymax;
+    // 横の目もり線
+    for (let i = 0; i * ys <= ymax + 1e-9; i++) {
+      const v = i * ys;
+      el('line', { x1: L, y1: Y(v), x2: R, y2: Y(v), stroke: v ? '#e0e0e0' : '#263238', 'stroke-width': v ? 1 : 2 }, svg);
+      el('text', { x: L - 8, y: Y(v) + 6, 'text-anchor': 'end', 'font-size': rel ? 15 : 18, fill: '#455a64' }, svg, lab(v));
+    }
+    el('text', { x: 4, y: T0 - 12, 'text-anchor': 'start', 'font-size': 17, fill: '#455a64', 'font-weight': 'bold' }, svg, rel ? '（相対度数）' : d.cu ? `（${d.cu}）` : '（度数）');
+    el('line', { x1: L, y1: T0 - 4, x2: L, y2: B, stroke: '#263238', 'stroke-width': 2 }, svg);
+    const c = st.cnt;
+    const sk = c ? c.last : st.sel;
+    // 柱（すきまをあけない）。② では柱はかかずに折れ線だけ
+    for (let k = 0; k < n; k++) {
+      const g = el('g', { class: 'bar', 'data-k': k }, svg);
+      el('rect', { x: X(k), y: T0, width: X(k + 1) - X(k), height: B - T0, fill: 'transparent' }, g);   // 柱がないところもタップできるように
+      if (two) { if (k === sk) el('rect', { x: X(k), y: T0, width: X(k + 1) - X(k), height: B - T0, fill: '#e3f2fd' }, g); g.addEventListener('click', () => onRow(k)); continue; }
+      const f = series[0].f;
+      if (st.bars && f[k] > 0) el('rect', { x: X(k), y: Y(f[k]), width: X(k + 1) - X(k), height: B - Y(f[k]),
+        fill: k === sk ? '#fff59d' : 'var(--bar)', stroke: 'var(--barline)', 'stroke-width': 2 }, g);
+      if (st.bars && !showPoly && f[k] > 0 && n <= 24) el('text', { x: (X(k) + X(k + 1)) / 2, y: Y(f[k]) - 6, 'text-anchor': 'middle', 'font-size': n > 14 ? 14 : 20, 'font-weight': 'bold', fill: '#bf360c' }, g, f[k]);
+      g.addEventListener('click', () => onRow(k));
+    }
+    // えらんだ階級は、太い黄色のふち（色だけでなく線の太さでも区別）
+    if (!two && st.bars && sk != null && sk >= 0 && sk < n) {
+      const f = series[0].f;
+      el('rect', { x: X(sk), y: f[sk] ? Y(f[sk]) : B - 4, width: X(sk + 1) - X(sk), height: f[sk] ? B - Y(f[sk]) : 4,
+        fill: 'none', stroke: 'var(--sel)', 'stroke-width': 5, 'pointer-events': 'none' }, svg);
+    }
+    // 度数折れ線：柱の上の辺のまん中を結ぶ。両はしは度数 0 の階級のまん中まで
+    if (showPoly) {
+      series.forEach(s => {
+        const pts = [];
+        for (let k = -1; k <= n; k++) pts.push([(X(k) + X(k + 1)) / 2, Y(k < 0 || k >= n ? 0 : val(s, k))]);
+        const col = s.col || '#0d47a1';
+        el('polyline', { points: pts.map(p => p.join(',')).join(' '), fill: 'none', stroke: col, 'stroke-width': 3.5, 'stroke-dasharray': s.dash || '', 'stroke-linejoin': 'round', 'pointer-events': 'none' }, svg);
+        pts.forEach(([x, y]) => {
+          if (s.mark === 's') el('rect', { x: x - 5.5, y: y - 5.5, width: 11, height: 11, fill: '#fff', stroke: col, 'stroke-width': 3, 'pointer-events': 'none' }, svg);
+          else el('circle', { cx: x, cy: y, r: 5.5, fill: s.mark === 'c' ? '#fff' : col, stroke: col, 'stroke-width': 3, 'pointer-events': 'none' }, svg);
+        });
+      });
+    }
+    // 横の目もり（階級の境目）。多いときは、とびとびに書く
+    const every = Math.ceil((k1 - k0 + 1) / 8);
+    for (let k = k0; k <= k1; k++) {
+      el('line', { x1: X(k), y1: B, x2: X(k), y2: B + 6, stroke: '#263238', 'stroke-width': 1.5 }, svg);
+      if ((k - k0) % every === 0) el('text', { x: X(k), y: B + 24, 'text-anchor': 'middle', 'font-size': 18, fill: '#263238' }, svg, fmtC(st.s + k * st.w, d));
+    }
+    el('line', { x1: L, y1: B, x2: R + 8, y2: B, stroke: '#263238', 'stroke-width': 2 }, svg);
+    el('text', { x: R + 22, y: B + 50, 'text-anchor': 'end', 'font-size': 17, fill: '#455a64', 'font-weight': 'bold' }, svg, d.unit ? `（${d.unit}）` : '');
+    if (two) {
+      $('hTitle').textContent = `📈 ${rel ? '相対度数' : '度数'}の折れ線（${d.short}）`;
+      $('legend').innerHTML = `<span class="la">○—○ ${T.P.la}（${T.A.iv.length}人）実線</span>　<span class="lb">□- -□ ${T.P.lb}（${T.B.iv.length}人）点線</span><br>階級の幅 <b>${fmtC(st.w, d)}${d.unit}</b>　階級の数 <b>${n}</b>こ`;
+    } else {
+      $('hTitle').textContent = `📊 ヒストグラム（${d.short}）`;
+      $('legend').innerHTML = `階級の幅 <b>${fmtC(st.w, d)}${d.unit}</b>　階級の数 <b>${n}</b>こ　／　柱の横はば＝階級の幅、高さ＝度数` +
+        (showPoly ? '<br>こい青の ● と線＝度数折れ線' : '');
+    }
+  }
+
+  // ---- 正の字のバー ----
+  function renderCountBar() {
+    const c = st.cnt;
+    $('countBar').hidden = !c;
+    if (!c) return;
+    const d = D();
+    const done = c.i >= d.iv.length;
+    $('cSelf').classList.toggle('on', c.self);
+    $('cSelf').textContent = c.self ? '👆 自分で入れる' : '👆 自分で表に入れる';
+    ['cStep', 'cAuto', 'cAll'].forEach(id => { $(id).disabled = done || (c.self && id !== 'cAll'); });
+    $('cAuto').textContent = st.timer ? '⏸ とめる' : '⏩ 自動で数える';
+    if (st.timer) $('cAuto').disabled = false;
+    if (done) {
+      $('countNow').innerHTML = `<span class="mark-ok">○</span> 数えおわり！ 合計 <b>${d.iv.length}</b>${d.cu}。データの個数 ${d.iv.length} と同じになったか確かめよう。`;
+      return;
+    }
+    const v = d.iv[c.i];
+    $('countNow').innerHTML = `${c.i + 1}番目のデータ <span class="big">${fmt(v, d)}</span>${d.unit}` +
+      (c.self ? ' → どの階級に入る？ 表の行をタップしよう' : ' → ' + clsLabel(clsOf(v)) + ' に入る');
+  }
+  const clsLabel = (k) => { const d = D(), lo = st.s + k * st.w; return `「${fmtC(lo, d)}以上${fmtC(lo + st.w, d)}未満」`; };
+
+  function setMsg(html, c) { const e = $('msg'); e.innerHTML = html; e.className = 'msg' + (c ? ' ' + c : ''); }
+
+  /* =====================================================================
+     5. 操作
+     ===================================================================== */
+  function snap() { return { part: st.part, ds: st.ds, pair: st.pair, w: st.w, s: st.s, ord: st.ord, sel: st.sel, cnt: st.cnt, custom: st.custom, cols: st.cols, poly: st.poly, bars: st.bars, cy: st.cy, q: st.q }; }
+  function pushHist() { st.hist.push(clone(snap())); if (st.hist.length > 100) st.hist.shift(); }
+  function undo() {
+    if (!st.hist.length) return;
+    stopAuto();
+    Object.assign(st, st.hist.pop());
+    setMsg('↶ ひとつもどした。');
+    render();
+  }
+  function resetAll() {
+    stopAuto();
+    if (st.part === 3 && st.q) { st.q = clone(st.q0); st.hintLv = 0; st.hist = []; setMsg('この問題をはじめからやりなおそう。'); render(); return; }
+    const d = D();
+    st.w = d.w0; st.s = niceStart(d, st.w); st.sel = -1; st.cnt = null; st.ord = 0; st.hist = [];
+    st.cols = { mid: false, rel: false, cum: false, crel: false }; st.poly = false; st.bars = true; st.cy = 'f';
+    setMsg('はじめにもどした。');
+    render();
+  }
+  function onDsChip(key) {
+    if (key === 'custom' && st.ds === 'custom') { $('customBox').hidden = false; return; }
+    if (key === st.ds) return;
+    if (key === 'custom' && !st.custom) {
+      // 自分のデータがまだないときは、入力らんだけ出す
+      $('customBox').hidden = false;
+      $('dsRow').querySelectorAll('.chip').forEach(b => b.classList.toggle('active', b.dataset.ds === 'custom'));
+      setMsg('左の入力らんにデータを貼りつけて「✔ このデータを使う」を押そう。');
+      return;
+    }
+    pushHist();
+    st.ds = key; st.sel = -1;
+    const d = D();
+    st.w = d.w0; st.s = niceStart(d, st.w);
+    setMsg(`「${d.name}」にかえた。`);
+    render();
+  }
+  function usePair(key) {
+    if (key === st.pair) return;
+    pushHist();
+    st.pair = key; st.sel = -1;
+    const d = D();
+    st.w = d.w0; st.s = niceStart(d, st.w);
+    cyMsg();
+    render();
+  }
+
+  // 自分のデータを読みこむ
+  function readCustom() {
+    const txt = $('cText').value.replace(/[０-９．－]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).replace(/ー|−/g, '-');
+    const parts = txt.split(/[\s,、，;；\t]+/).filter(Boolean);
+    const vals = [];
+    let dec = 0;
+    for (const p of parts) {
+      if (!/^-?\d+(\.\d+)?$/.test(p)) { setMsg(`<span class="mark-ng">×</span> 「${p.replace(/[<>&"']/g, '')}」は数として読めません。数だけを貼りつけよう。`, 'ng'); return; }
+      const dp = (p.split('.')[1] || '').length;
+      if (dp > 2) { setMsg('<span class="mark-ng">×</span> 小数は第2位までにしてください。', 'ng'); return; }
+      dec = Math.max(dec, dp); vals.push(parseFloat(p));
+    }
+    if (vals.length < 2) { setMsg('<span class="mark-ng">×</span> 数を2つ以上入れてください。', 'ng'); return; }
+    if (vals.length > 300) { setMsg('<span class="mark-ng">×</span> 300 こまでにしてください。', 'ng'); return; }
+    if (Math.min(...vals) === Math.max(...vals)) { setMsg('<span class="mark-ng">×</span> ぜんぶ同じ数です。ちがう数をまぜてください。', 'ng'); return; }
+    const esc = (s) => s.replace(/[<>&"']/g, '');
+    pushHist();
+    const nm = esc($('cName').value.trim()) || '自分のデータ';
+    st.custom = { name: nm, short: nm, unit: esc($('cUnit').value.trim()).slice(0, 6), cu: '', dec, vals };
+    st.ds = 'custom'; st.sel = -1;
+    const d = D();
+    st.w = d.w0; st.s = niceStart(d, st.w);
+    if (window.Worksheet) Worksheet.appData('custom', st.custom);
+    setMsg(`<span class="mark-ok">○</span> ${vals.length} この数を読みこんだ。`, 'ok');
+    render();
+  }
+  function loadCustom() {
+    const c = window.Worksheet ? Worksheet.appData('custom') : null;
+    if (c && Array.isArray(c.vals) && c.vals.length >= 2) {
+      st.custom = c;
+      $('cText').value = c.vals.map(v => v.toFixed(c.dec)).join(' ');
+      $('cName').value = c.name === '自分のデータ' ? '' : c.name; $('cUnit').value = c.unit;
+    }
+  }
+
+  // 階級の幅・始まりをかえる
+  function setW(w, fromNum) {
+    const d = D(), l = wLimits(d);
+    w = Math.round(w / d.step) * d.step;
+    w = Math.min(l.max, Math.max(l.min, w));
+    if (w === st.w) { render(); return; }
+    if (!st.sliding || fromNum) pushHist();
+    st.w = w; st.s = niceStart(d, w); st.sel = -1;
+    const n = Math.floor((d.max - st.s) / st.w) + 1;
+    setMsg(`階級の幅を <b>${fmtC(w, d)}${d.unit}</b> にした。階級の数は ${n} こ。` + (n > 15 ? '（柱が細かくて、でこぼこが多い？）' : n <= 3 ? '（柱が少なくて、分布のようすがわかる？）' : ''));
+    render();
+  }
+  function setS(s, fromNum) {
+    const d = D(), l = sLimits(d, st.w);
+    s = Math.round(s / d.step) * d.step;
+    s = Math.min(l.max, Math.max(l.min, s));
+    if (s === st.s) { render(); return; }
+    if (!st.sliding || fromNum) pushHist();
+    st.s = s; st.sel = -1;
+    setMsg(`始まりを <b>${fmtC(s, d)}${d.unit}</b> にした。同じ幅でも、区切る場所で形がかわることがある。`);
+    render();
+  }
+  // スライダーは、動かしはじめに1回だけ「ひとつもどす」用に記録する
+  function bindSlider(r, nm, fn) {
+    r.addEventListener('input', () => { if (!st.sliding) { pushHist(); st.sliding = true; } fn(+r.value, false); });
+    r.addEventListener('change', () => { st.sliding = false; });
+    nm.addEventListener('change', () => { const d = D(), x = parseFloat(nm.value); if (isFinite(x)) fn(Math.round(x * d.p), true); else render(); });
+  }
+
+  // 表の行・ヒストグラムの柱をタップしたとき
+  function onRow(k) {
+    const c = st.cnt;
+    if (c) { if (c.self && c.i < D().iv.length) placeSelf(k); return; }
+    if (st.q && !st.q.done) { if (st.q.type === 'edge') answerChoice(k); return; }
+    const T = table(), d = T.d;
+    st.sel = st.sel === k ? -1 : k;
+    if (st.sel < 0) setMsg('');
+    else if (st.part === 2) {
+      const na = T.A.iv.length, nb = T.B.iv.length, a = T.fa[k], b = T.fb[k];
+      setMsg(`${clsLabel(k)}　${T.P.la} <b>${a}</b>人（${a}÷${na}＝${fmt100(r100(a, na))}）　${T.P.lb} <b>${b}</b>人（${b}÷${nb}＝${fmt100(r100(b, nb))}）` +
+        (a !== b && (a - b) * (a * nb - b * na) < 0 ? '<br>👀 度数と相対度数で、多いほうが入れかわった！' : ''));
+    } else {
+      const xs = d.iv.filter(v => clsOf(v) === k).sort((a, b) => a - b);
+      setMsg(`${clsLabel(k)}に入るデータ：${xs.length ? xs.map(v => fmt(v, d)).join('、') : 'なし'}（${xs.length}${d.cu || 'こ'}）`);
+    }
+    render();
+  }
+
+  /* ----- 正の字で数える ----- */
+  function startCount() {
+    pushHist();
+    st.cnt = { i: 0, self: false, last: -1 };
+    st.sel = -1; st.ord = 0;
+    setMsg('名簿の順に、1つずつ階級に入れていこう。「▶ 1つ数える」を押してね。');
+    render();
+    $('countBar').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  function edgeNote(v) {
+    // 境目の値のときは「以上・未満」の説明を出す
+    const d = D(), k = clsOf(v);
+    if (!onEdge(v) || k === 0) return '';
+    return `<br><b>${fmt(v, d)}</b> は境目の値。${clsLabel(k)}に入る（${fmt(v, d)} は ${fmtC(v, d)}「未満」ではないので、${clsLabel(k - 1)}には入らない）。`;
+  }
+  function countOne(quiet) {
+    const c = st.cnt, d = D();
+    if (!c || c.i >= d.iv.length) return false;
+    const v = d.iv[c.i], k = clsOf(v);
+    c.i++; c.last = k;
+    if (!quiet) sndTick();
+    const note = edgeNote(v);
+    setMsg(`${fmt(v, d)}${d.unit} → ${clsLabel(k)}に正の字を1本。` + note, note ? 'ng' : '');
+    if (c.i >= d.iv.length) { stopAuto(); sndOK(); setMsg('<span class="mark-ok">○</span> 数えおわり！ 正の字の数と度数が同じか、合計がデータの個数と同じかを確かめよう。', 'ok'); }
+    return true;
+  }
+  function stepCount() { pushHist(); countOne(); render(); }
+  function placeSelf(k) {
+    const c = st.cnt, d = D(), v = d.iv[c.i], ok = clsOf(v);
+    if (k === ok) { pushHist(); sndOK(); countOne(true); if (c.i < d.iv.length) setMsg(`<span class="mark-ok">○</span> せいかい！ ${fmt(v, d)} は ${clsLabel(ok)}。` + edgeNote(v), 'ok'); render(); return; }
+    sndNG();
+    if (onEdge(v) && k === ok - 1) { addTrip('edgeLow'); tripMsg('edgeLow', `${fmt(v, d)} は ${clsLabel(k)}の「${fmtC(v, d)}未満」には入らない。`); }
+    else { addTrip('clsMiss'); tripMsg('clsMiss', `${fmt(v, d)} は ${clsLabel(k)}には入らない。`); }
+    renderTrips(); renderTeacher();
+  }
+  function toggleAuto() {
+    if (st.timer) { stopAuto(); render(); return; }
+    pushHist();
+    st.timer = setInterval(() => { if (!countOne()) stopAuto(); render(); }, 650);
+    render();
+  }
+  function stopAuto() { if (st.timer) { clearInterval(st.timer); st.timer = null; } }
+  function countAll() { stopAuto(); pushHist(); while (countOne(true)); render(); }
+  function endCount() { stopAuto(); pushHist(); st.cnt = null; setMsg('正の字モードをおわった。'); render(); }
+
+  /* ----- パートをかえる ----- */
+  function setPart(n, opt = {}) {
+    stopAuto();
+    if (!opt.keepFocus) { st.focus = null; $('focusBar').hidden = true; }
+    if (st.part !== n) pushHist();
+    st.part = n; st.cnt = null; st.sel = -1; st.q = null; st.hintLv = 0;
+    const d = D();
+    if (n !== 3 || opt.keep !== true) { st.w = d.w0; st.s = niceStart(d, st.w); }
+    if (n === 2) { st.cy = 'f'; cyMsg(); }
+    if (n === 1) setMsg('階級の幅をかえて、ヒストグラムの形がどうかわるか見てみよう。「✋ 正の字で数える」で、数え方もたしかめられるよ。');
+    render();
+    if (n === 3 && !opt.noQ) newQ();
+  }
+
+  /* =====================================================================
+     6. 練習問題とつまずき検知
+        type：edge（境目の値）・mid（階級値）・rel（相対度数）・cum（累積度数）・poly（度数折れ線）・cmp（人数がちがう組のくらべ方）
+     ===================================================================== */
+  const TRIPS = {
+    edgeLow:    { name: '境目の値を下の階級に入れた', exp: '「○以上 △未満」なので、ちょうど △ の値は、その階級には入らない。△ 以上の、1つ上の階級に入る。', q: 'edge' },
+    clsMiss:    { name: '階級のはんいの読みちがい', exp: '「○以上 △未満」は、○ から △ の手前まで。値が ○ と △ のあいだにあるか確かめよう。', q: 'edge' },
+    midEdge:    { name: '階級値を階級の端にした', exp: '階級値は、階級のまん中の値。（○ ＋ △）÷ 2 で求める。', q: 'mid' },
+    relClasses: { name: '相対度数を階級の数でわった', exp: '相対度数 ＝ その階級の度数 ÷ 度数の合計（データの個数）。階級の数ではわらない。', q: 'rel' },
+    relNoDiv:   { name: '度数や百分率で答えた', exp: '相対度数は割合なので、0 から 1 までの数になる。度数 ÷ 合計 を計算しよう（百分率にしない）。', q: 'rel' },
+    cumSkip:    { name: '累積度数で、前の階級をたしわすれた', exp: '累積度数は、いちばん小さい階級からその階級までの度数を、ぜんぶたしたもの。', q: 'cum' },
+    cumOff:     { name: '累積度数を1つずれた階級までたした', exp: '「その階級まで」をふくめてたす。1つ前で止めたり、1つ先までたしたりしないように。', q: 'cum' },
+    polyEnd:    { name: '度数折れ線の両はしを横の軸まで結んでいない', exp: '度数折れ線は、両はしに度数 0 の階級があると考えて、横の軸まで結ぶ。', q: 'poly' },
+    polyCorner: { name: '度数折れ線を柱の角で結んだ', exp: '度数折れ線は、それぞれの柱の上の辺の「まん中」（階級値の位置）を結ぶ。', q: 'poly' },
+    cmpFreq:    { name: '人数がちがうのに度数でくらべた', exp: '全体の人数がちがうときは、度数ではなく相対度数（割合）でくらべる。', q: 'cmp' },
+  };
+  const QTYPES = ['edge', 'mid', 'rel', 'cum', 'poly', 'cmp'];
+  // 問題に使うデータと階級の幅（整数の単位）
+  const QDATA = { run1: [5, 10, 4], ball1: [5, 10, 4], hgt: [50, 40, 100] };
+
+  // 小数の文字を「分子／10のなんじょう」にして、ぴったり同じかを調べる（小数の誤差を出さない）
+  function parseDec(str) {
+    if (!/^\d+(\.\d+)?$/.test(str)) return null;
+    const k = (str.split('.')[1] || '').length;
+    return { n: Math.round(parseFloat(str) * Math.pow(10, k)), d: Math.pow(10, k) };
+  }
+  const eqv = (x, num, den) => x && x.n * den === num * x.d;
+
+  function newQ(forceType) {
+    pushHist();
+    let type = forceType || (st.focus ? TRIPS[st.focus].q : pick(QTYPES)), q, key, tries = 0;
+    do {
+      q = makeQ(type);
+      key = JSON.stringify(q.key);
+    } while (key === st.lastKey && ++tries < 20);   // 同じ問題が続けて出ないように
+    st.lastKey = key;
+    st.q = q; st.q0 = clone(q); st.hintLv = 0; st.inp = '';
+    setMsg('');
+    render();
+  }
+  function makeQ(type) {
+    if (type === 'poly') {
+      const v = pick(['end', 'pt']);
+      // 図は柱だけ見せる（折れ線は答えのあとで出す）
+      const dk = pick(['run1', 'ball1', 'hgt']);
+      setView(dk, pick(QDATA[dk]));
+      st.poly = false; st.bars = true;
+      const ch = v === 'end'
+        ? [['両がわに度数 0 の階級があると考えて、横の軸まで結ぶ', 'ok'], ['いちばん外の柱の上の辺のまん中で止める', 'polyEnd'], ['いちばん外の柱の外がわの角まで結ぶ', 'polyCorner']]
+        : [['柱の上の辺のまん中（階級値のところ）', 'ok'], ['柱の上の辺の左の角', 'polyCorner'], ['柱の上の辺の右の角', 'polyCorner']];
+      return { type, v, ch: shuffle(ch), hide: null, key: [type, v, dk] };
+    }
+    if (type === 'cmp') {
+      // 人数がちがう2つの組。度数は 2組 が多いのに、相対度数は 1組 が大きくなるように数を先に決める
+      let na, nb, fa, fb;
+      do { na = pick([25, 28, 30, 32]); nb = pick([35, 36, 40]); fa = rint(5, 11); fb = fa + rint(1, 2); } while (!(fa * nb > fb * na));
+      const swap = Math.random() < 0.5;   // 1組と2組の役をいれかえることもある
+      const A = swap ? { n: nb, f: fb } : { n: na, f: fa }, B = swap ? { n: na, f: fa } : { n: nb, f: fb };
+      const ans = swap ? 'b' : 'a';
+      const dk = pick(['run', 'ball']);
+      const d = DS['pair_' + dk];
+      const k = rint(1, 3), lo = niceStart(d, d.w0) + k * d.w0;
+      return { type, A, B, ans, cl: `${fmtC(lo, d)}${d.unit}以上${fmtC(lo + d.w0, d)}${d.unit}未満`, unit: d.unit, name: PAIRS[dk].name, hide: null, key: [type, na, nb, fa, fb] };
+    }
+    // ここからは表を見て答える問題（データと幅をえらぶ）
+    const dk = pick(['run1', 'ball1', 'hgt']);
+    setView(dk, pick(QDATA[dk]));
+    const { d, n, f, N } = table(), cum = cumOf(f);
+    st.poly = false; st.bars = true;
+    if (type === 'edge') {
+      const k = rint(1, n - 1), b = st.s + k * st.w;
+      const opts = [k - 1, k, k + 1].filter(x => x >= 0 && x < n);
+      return { type, k, v: b, opts, hide: null, key: [type, dk, st.w, k] };
+    }
+    if (type === 'mid') {
+      const k = rint(0, n - 1);
+      return { type, k, hide: 'mid', key: [type, dk, st.w, k] };
+    }
+    if (type === 'rel') {
+      const ks = f.map((x, i) => i).filter(i => f[i] > 0);
+      const k = pick(ks);
+      return { type, k, hide: 'rel', key: [type, dk, st.w, k] };
+    }
+    // cum：2番目より下の階級（前の階級をたす必要がある）
+    const ks = f.map((x, i) => i).filter(i => i >= 1 && i < n - 1 && f[i] > 0 && cum[i - 1] > 0);
+    const k = ks.length ? pick(ks) : 1;
+    return { type, k, hide: 'cum', key: [type, dk, st.w, k] };
+  }
+  function setView(dk, w) {
+    st.part = 3; st.ds = dk; st.sel = -1; st.cnt = null;
+    const d = D();
+    st.w = w; st.s = niceStart(d, w);
+  }
+  function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+  // 問題の正しい答え（数で答える問題は「分子・分母」で）
+  function ansOf(q) {
+    const { d, f, N } = table(), cum = cumOf(f);
+    if (q.type === 'mid') return { num: 2 * (st.s + q.k * st.w) + st.w, den: 2 * d.p };
+    if (q.type === 'rel') return { num: r100(f[q.k], N), den: 100 };
+    if (q.type === 'cum') return { num: cum[q.k], den: 1 };
+    return null;
+  }
+  const ansText = (a) => (a.den === 100 ? fmt100(a.num) : fmtMid(a.num * 2 * D().p / a.den, D()));
+
+  function renderQ() {
+    const q = st.q;
+    $('qCard').hidden = st.part !== 3 || !q;
+    $('dataCard').hidden = st.part === 3 && !!q;   // ③ では、データのかわりに問題を出す
+    if (st.part !== 3 || !q) return;
+    const d = D();
+    if (q.type === 'cmp') {
+      $('qText').innerHTML = `${q.name}の記録。<b>${q.cl}</b> の人は、それぞれの組で全体のどれだけ？<br>この階級に入る人の<b>割合</b>が大きいのは、どちらの組？`;
+      $('qBody').innerHTML = `<table class="mini"><tr><th></th><th>組の人数</th><th>${q.cl}の度数</th>${q.done ? '<th>相対度数</th>' : ''}</tr>` +
+        `<tr><td style="color:var(--ca)">● 1組</td><td>${q.A.n}人</td><td>${q.A.f}人</td>${q.done ? `<td>${fmt100(r100(q.A.f, q.A.n))}</td>` : ''}</tr>` +
+        `<tr><td style="color:var(--cb)">■ 2組</td><td>${q.B.n}人</td><td>${q.B.f}人</td>${q.done ? `<td>${fmt100(r100(q.B.f, q.B.n))}</td>` : ''}</tr></table>` +
+        choiceHTML([['a', '● 1組'], ['b', '■ 2組'], ['same', '同じ']]);
+    } else if (q.type === 'poly') {
+      $('qText').innerHTML = q.v === 'end' ? 'このヒストグラムに<b>度数折れ線</b>をかく。左右の<b>両はし</b>はどうする？' : 'このヒストグラムに<b>度数折れ線</b>をかく。それぞれの柱の、どこの点を結ぶ？';
+      $('qBody').innerHTML = choiceHTML(q.ch.map(([t, r], i) => [i, t]));
+    } else if (q.type === 'edge') {
+      $('qText').innerHTML = `記録がちょうど <span class="big">${fmt(q.v, d)}</span>${d.unit} の人は、どの階級に入る？<br><span class="small">（下のボタンか、表の行をタップ）</span>`;
+      $('qBody').innerHTML = choiceHTML(q.opts.map(k => [k, clsLabel(k)]));
+    } else {
+      const lab = clsLabel(q.k);
+      const T = { mid: `${lab}の<b>階級値</b>は？`, rel: `${lab}の<b>相対度数</b>は？<br><span class="small">（小数第2位まで。第3位を四捨五入）</span>`, cum: `${lab}の<b>累積度数</b>は？<br><span class="small">（いちばん小さい階級から、この階級まで）</span>` }[q.type];
+      $('qText').innerHTML = T;
+      $('qBody').innerHTML = `<div class="ans-line"><span class="box" id="qBox">${st.inp || '　'}</span><span>${q.type === 'mid' ? d.unit : q.type === 'cum' ? d.cu : ''}</span></div>` +
+        `<div class="keypad">${['7', '8', '9', '⌫', '4', '5', '6', 'C', '1', '2', '3', '.', '0'].map(k => `<button class="key" data-key="${k}">${k}</button>`).join('')}<button class="key go" data-key="go">こたえる</button></div>`;
+      $('qBody').querySelectorAll('[data-key]').forEach(b => b.addEventListener('click', () => key(b.dataset.key)));
+    }
+    if (q.done) $('qBody').insertAdjacentHTML('beforeend', '<div class="tools" style="margin-top:8px"><button class="op-btn action" id="qNext">▶ つぎの問題</button></div>');
+    if ($('qNext')) $('qNext').addEventListener('click', () => newQ());
+    $('qBody').querySelectorAll('[data-ch]').forEach(b => b.addEventListener('click', () => answerChoice(b.dataset.ch)));
+  }
+  function choiceHTML(list) {
+    const q = st.q;
+    return '<div class="q-choices">' + list.map(([v, t]) => {
+      const tried = (q.wrong || []).includes(String(v)), good = q.done && String(v) === String(q.okv);
+      return `<button class="op-btn${tried ? ' ng' : ''}${good ? ' good' : ''}" data-ch="${v}"${q.done || tried ? ' disabled' : ''}>${t}</button>`;
+    }).join('') + '</div>';
+  }
+  function key(k) {
+    const q = st.q;
+    if (!q || q.done) return;
+    if (k === 'go') { checkNum(); return; }
+    if (k === 'C') st.inp = '';
+    else if (k === '⌫') st.inp = (st.inp || '').slice(0, -1);
+    else if ((st.inp || '').length < 8 && !(k === '.' && (st.inp || '').includes('.'))) st.inp = (st.inp || '') + (k === '.' && !st.inp ? '0.' : k);
+    $('qBox').textContent = st.inp || '　';
+  }
+  function tripMsg(type, lead) {
+    setMsg(`<span class="mark-ng">×</span> ${lead || ''} おしい！ <b>${TRIPS[type].name}</b>かも。<br><span class="small">${TRIPS[type].exp}</span>`, 'ng');
+  }
+  function correct(extra) {
+    const q = st.q;
+    pushHist();
+    q.done = true;
+    sndOK();
+    bumpClear(q.type);
+    // 答えた列を表に出して、たしかめられるようにする
+    if (q.hide) st.cols[q.hide] = true;
+    if (q.type === 'poly') st.poly = true;
+    setMsg(`<span class="mark-ok">○</span> せいかい！ ${extra || ''}`, 'ok');
+    render();
+  }
+  function checkNum() {
+    const q = st.q, x = parseDec(st.inp || '');
+    if (!x) { setMsg('数を入れてから「こたえる」を押そう。'); return; }
+    const a = ansOf(q), { d, f, N, n } = table(), cum = cumOf(f), k = q.k;
+    if (eqv(x, a.num, a.den) || (q.type === 'rel' && eqv(x, f[k], N))) {
+      const how = { mid: `（${fmtC(st.s + k * st.w, d)} ＋ ${fmtC(st.s + (k + 1) * st.w, d)}）÷ 2 ＝ ${ansText(a)}`,
+        rel: `${f[k]} ÷ ${N} ＝ ${(f[k] / N).toFixed(4).replace(/0+$/, '')}… → ${fmt100(a.num)}`,
+        cum: `${f.slice(0, k + 1).join(' ＋ ')} ＝ ${cum[k]}` }[q.type];
+      correct(how);
+      return;
+    }
+    sndNG();
+    let t = null;
+    if (q.type === 'mid' && (eqv(x, st.s + k * st.w, d.p) || eqv(x, st.s + (k + 1) * st.w, d.p))) t = 'midEdge';
+    if (q.type === 'rel') {
+      if (n !== N && (eqv(x, r100(f[k], n), 100) || eqv(x, f[k], n))) t = 'relClasses';
+      else if (eqv(x, f[k], 1) || eqv(x, r100(f[k], N), 1) || eqv(x, Math.round(10000 * f[k] / N), 100)) t = 'relNoDiv';
+    }
+    if (q.type === 'cum') {
+      if (eqv(x, f[k], 1)) t = 'cumSkip';
+      else if ((k > 0 && eqv(x, cum[k - 1], 1)) || (k + 1 < n && eqv(x, cum[k + 1], 1))) t = 'cumOff';
+    }
+    if (t) { addTrip(t); tripMsg(t); }
+    else setMsg('<span class="mark-ng">×</span> ちがうみたい。「💡 ヒント」も使ってみよう。', 'ng');
+    st.inp = ''; renderQ(); renderTrips(); renderTeacher();
+  }
+  function answerChoice(v) {
+    const q = st.q;
+    if (!q || q.done) return;
+    v = String(v);
+    let ok, t = null;
+    if (q.type === 'edge') { ok = +v === q.k; q.okv = q.k; if (!ok) t = +v === q.k - 1 ? 'edgeLow' : 'clsMiss'; }
+    else if (q.type === 'poly') { const r = q.ch[+v][1]; ok = r === 'ok'; q.okv = q.ch.findIndex(c => c[1] === 'ok'); if (!ok) t = r; }
+    else { ok = v === q.ans; q.okv = q.ans; if (!ok) t = v === 'same' ? null : 'cmpFreq'; }
+    if (ok) {
+      const d = D();
+      // 説明の文は、その問題の型のものだけを作る（ほかの型の数はないので）
+      correct({
+        edge: () => `${fmt(q.v, d)} は「${fmtC(q.v, d)}以上」の階級に入る。${clsLabel(q.k - 1)}の「${fmtC(q.v, d)}未満」には入らない。`,
+        poly: () => '折れ線を重ねたよ。柱の上の辺のまん中を結び、両はしは度数 0 の階級のまん中（横の軸の上）まで結ぶ。',
+        cmp: () => `相対度数は 1組 ${q.A.f}÷${q.A.n}＝${fmt100(r100(q.A.f, q.A.n))}、2組 ${q.B.f}÷${q.B.n}＝${fmt100(r100(q.B.f, q.B.n))}。度数は少ないほうが、割合は大きい！`,
+      }[q.type]());
+      return;
+    }
+    sndNG();
+    pushHist();   // 「ひとつもどす」で × の印を消せるように
+    q.wrong = (q.wrong || []).concat(v);
+    if (t) { addTrip(t); tripMsg(t); }
+    else setMsg('<span class="mark-ng">×</span> ちがうみたい。度数 ÷ 組の人数 を計算してくらべよう。', 'ng');
+    renderQ(); renderTrips(); renderTeacher();
+  }
+
+  /* ----- ヒント ----- */
+  function hint() {
+    const q = st.q;
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    if (!q || q.done || st.part !== 3) {
+      setMsg('💡 ' + {
+        1: '階級の幅を小さくすると柱がふえ、大きくすると柱がへる。どの幅のとき、山の形がいちばんわかりやすい？ 「度数折れ線」も重ねてみよう。',
+        2: '人数がちがうので、度数の折れ線は人数が多い組のほうが高くなりがち。「相対度数の折れ線」にかえてくらべよう。',
+        3: '「✏️ 練習問題」を押してね。',
+      }[st.part]);
+      return;
+    }
+    st.hintLv = Math.min(3, st.hintLv + 1);
+    const lv = st.hintLv, { d, f, N } = table(), cum = cumOf(f), k = q.k;
+    const lo = q.k != null ? fmtC(st.s + k * st.w, d) : '', hi = q.k != null ? fmtC(st.s + (k + 1) * st.w, d) : '';
+    const H = {
+      edge: ['', '「○以上」は ○ をふくむ。「△未満」は △ をふくまない。', `${fmt(q.v, d)} は、どの階級の「以上」の数になっている？`, `${fmtC(q.v, d)}以上 の階級をさがそう。`],
+      mid: ['', '階級値は、階級のまん中の値。', `${lo} と ${hi} のまん中。`, `（${lo} ＋ ${hi}）÷ 2 を計算しよう。`],
+      rel: ['', '相対度数 ＝ その階級の度数 ÷ 度数の合計。', `この階級の度数は ${f[k]}、合計は ${N}。`, `${f[k]} ÷ ${N} を計算して、小数第3位を四捨五入しよう。`],
+      cum: ['', '累積度数は、いちばん上の階級から、この階級までの度数をたしたもの。', `たすのは ${k + 1} この階級。`, `${f.slice(0, k + 1).join(' ＋ ')} を計算しよう。`],
+      poly: ['', '度数折れ線は、ヒストグラムの柱の高さ（度数）を、点で表して結んだもの。', '点を打つ横の位置は「階級値」。', '両はしは、となりに度数 0 の階級があると考える。'],
+      cmp: ['', '人数がちがうので、人数そのもの（度数）ではくらべられない。', '割合（相対度数）＝ 度数 ÷ 組の人数。', `1組 ${q.A ? q.A.f + '÷' + q.A.n : ''}、2組 ${q.B ? q.B.f + '÷' + q.B.n : ''} を計算してくらべよう。`],
+    }[q.type];
+    setMsg('💡 ' + H[lv]);
+  }
+
+  /* ----- つまずきの記録（Worksheet.appData('rec') に入れる） ----- */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(t) { bumpRec(r => r.clear[t] = (r.clear[t] || 0) + 1); }
+  function addTrip(type) { st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  const QNAME = { edge: '境目の値', mid: '階級値', rel: '相対度数', cum: '累積度数', poly: '度数折れ線', cmp: '2つの組のくらべ方' };
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div>` +
+          `<div class="tools" style="justify-content:flex-start"><button class="op-btn" data-prac="${k}">🔁 この型を練習（${QNAME[TRIPS[k].q]}）</button>` +
+          `<button class="op-btn" data-view="${k}">👀 図でたしかめる</button></div></div>`).join('')
+      : '<div class="small">まだ ありません。練習問題や「👆 自分で表に入れる」でまちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    $('tripList').querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => viewFor(b.dataset.view)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = 'この端末のきろく：正解 ' + QTYPES.map(t => `${QNAME[t]} ${c[t] || 0}`).join('・') + `　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    setPart(3, { keepFocus: true, noQ: true });
+    newQ(TRIPS[type].q);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  // つまずきの型に合わせて、もとの図（① か ②）を見せる
+  function viewFor(type) {
+    const q = TRIPS[type].q;
+    if (q === 'cmp') { setPart(2); st.cy = 'f'; render(); setMsg('まず「度数の折れ線」。つぎに「相対度数の折れ線」にかえて、くらべやすさをくらべよう。'); }
+    else {
+      setPart(1);
+      if (q === 'edge') { startCount(); st.cnt.self = true; render(); setMsg('境目の値（〜〜 の下線）が出てきたら、「以上」の階級をさがそう。'); }
+      else if (q === 'poly') { st.poly = true; render(); setMsg('こい青の線が度数折れ線。点は柱の上の辺のまん中、両はしは横の軸の上。'); }
+      else { st.cols[q] = true; render(); colMsg(q); }
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     7. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const q = st.q;
+    if (st.part !== 3 || !q) return { 1: '（① の「⏭」は、正の字で1つずつ数えます）', 2: '（② の「⏭」は、度数と相対度数の折れ線を切りかえます）', 3: '（✏️ 練習問題を出すと、ここに答えが出ます）' }[st.part];
+    if (q.done) return '（▶ つぎの問題へ）';
+    if (q.type === 'edge') return '答え：' + clsLabel(q.k);
+    if (q.type === 'poly') return '答え：' + q.ch.find(c => c[1] === 'ok')[0];
+    if (q.type === 'cmp') return '答え：' + (q.ans === 'a' ? '1組' : '2組') + `（${fmt100(r100(q.A.f, q.A.n))} と ${fmt100(r100(q.B.f, q.B.n))}）`;
+    return '答え：' + ansText(ansOf(q));
+  }
+  const TALK = {
+    1: '発問の例：「階級の幅を半分にすると、山の形は？」「幅を大きくしすぎると、何がわからなくなる？」「8.0 秒の人は、どの階級に入る？」「累積相対度数のいちばん下は、いつも何になる？」',
+    2: '発問の例：「度数の折れ線を見ると、2組のほうが速い人が多い？」「人数がちがうとき、どうすればくらべられる？」「相対度数の折れ線にすると、何がかわった？」',
+    3: '発問の例：「境目の値は、なぜ上の階級に入る？」「相対度数をぜんぶたすといくつ？」「累積度数の最後の数は？」',
+  };
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText();
+    $('tTalk').innerHTML = TALK[st.part];
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  // 「答えを入れて進める」：① は正の字で1つ数える、② は折れ線の切りかえ、③ は答えを入れる
+  function teacherStep() {
+    if (st.part === 1) { if (!st.cnt) startCount(); else if (st.cnt.i < D().iv.length) { if (st.cnt.self) placeSelf(clsOf(D().iv[st.cnt.i])); else stepCount(); } else endCount(); return; }
+    if (st.part === 2) { pushHist(); st.cy = st.cy === 'f' ? 'rel' : 'f'; cyMsg(); render(); return; }
+    const q = st.q;
+    if (!q || q.done) { newQ(); return; }
+    if (q.type === 'edge') answerChoice(q.k);
+    else if (q.type === 'poly') answerChoice(q.ch.findIndex(c => c[1] === 'ok'));
+    else if (q.type === 'cmp') answerChoice(q.ans);
+    else { st.inp = ansText(ansOf(q)); checkNum(); }
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     8. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { if (+b.dataset.p !== st.part) setPart(+b.dataset.p); }));
+  [0, 1].forEach(k => $('ord' + k).addEventListener('click', () => { if (st.ord === k) return; pushHist(); st.ord = k; render(); }));
+  bindSlider($('wRange'), $('wNum'), setW);
+  bindSlider($('sRange'), $('sNum'), setS);
+  $('cUse').addEventListener('click', readCustom);
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetAll);
+  $('btnHint').addEventListener('click', hint);
+  $('btnNew').addEventListener('click', () => newQ());
+  $('btnCount').addEventListener('click', startCount);
+  $('cStep').addEventListener('click', stepCount);
+  $('cAuto').addEventListener('click', toggleAuto);
+  $('cAll').addEventListener('click', countAll);
+  $('cSelf').addEventListener('click', () => { stopAuto(); pushHist(); st.cnt.self = !st.cnt.self; setMsg(st.cnt.self ? '黄色のデータが入る階級を、表の行（またはヒストグラム）をタップして答えよう。' : '「▶ 1つ数える」で数えよう。'); render(); });
+  $('cEnd').addEventListener('click', endCount);
+  $('btnWs').addEventListener('click', () => {
+    setPart(1);
+    pushHist();
+    st.ds = 'ball1'; st.w = 10; st.s = niceStart(D(), 10); st.poly = false; st.bars = true;
+    render();
+    if (window.Worksheet) Worksheet.open();
+    setMsg('📄 ワークシートの問題：ソフトボール投げ。階級の幅を <b>10 m → 5 m → 2 m</b> とかえるたびに、ワークシートの「＋ 記録する」を押そう。山の形はどうかわる？');
+  });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '区切って数えて ヒストグラム',
+    question: '階級の幅を半分にすると、ヒストグラムの山の形はどうなるだろうか？　どんな幅にすると見やすいだろうか？',
+    predictions: ['山の形はかわらない', 'でこぼこがふえて、山が2つに見えることもある', '山がなめらかになる', 'わからない'],
+    operationNote: '「📄 ワークシートの問題」でソフトボール投げにして、階級の幅を 10 m → 5 m → 2 m とかえるたびに「＋ 記録する」。ほかのデータや幅でも記録してよい。',
+    open: false,
+    fields: [
+      { key: 'data', label: 'データ', math: false },
+      { key: 'w', label: '階級の幅', math: false },
+      { key: 'n', label: '階級の数', math: false },
+      { key: 'top', label: '度数がいちばん多い階級', math: false },
+      { key: 'peak', label: '山の数', math: false }
+    ],
+    capture: () => {
+      if (st.part !== 1 || st.cnt) { setMsg('① で、正の字モードをおわってから記録しよう。'); return null; }
+      const { d, n, f } = table(), m = Math.max(...f);
+      const tops = f.map((x, i) => i).filter(i => f[i] === m).map(i => clsLabel(i).replace(/[「」]/g, ''));
+      return { data: d.short, w: fmtC(st.w, d) + d.unit, n: n + 'こ', top: tops.join('、') + `（${m}${d.cu || 'こ'}）`, peak: peaks(f) + 'つ' };
+    },
+    summaryHint: '「階級の幅を小さくすると〜。大きくすると〜。見やすいのは〜くらいの幅で、そのわけは〜」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める。10 m では山が1つ（右下がり）に見えるが、5 m にすると 15〜20 m と 25〜30 m に2つの山が見える（2つのグループがまざっている？）。2 m では柱が細かすぎて、度数 0 の階級もでき、でこぼこして全体の形が読みとりにくい。「幅は小さいほどよい」のではないことに気づかせる。',
+      answer: '幅 10 m：階級 3こ、山 1つ。幅 5 m：階級 6こ、山 2つ。幅 2 m：階級 14こ。山は 2つだが、度数 0 の階級ができ、柱が低くでこぼこして形が読みとりにくい。<br>まとめ：階級の幅を小さくすると、細かいでこぼこまで見えるが、全体の形がわかりにくくなる。大きくすると、形が単純になりすぎて特ちょうが見えなくなる。目的に合わせて、分布の特ちょうがよくわかる幅をえらぶ（階級の数が 5〜10 くらいになる幅が見やすいことが多い）。'
+    }
+  });
+
+  setupTeacher();
+  loadCustom();
+  setPart(1);
+  st.hist = [];
+  render();
+})();
+</script>
+
+</body>
+</html>
