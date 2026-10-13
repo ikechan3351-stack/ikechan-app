@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>立体を切る・回す</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：正解＝緑（○）、まちがい・注意＝赤紫（×）。
+     この教材では：切り口（断面）＝オレンジの格子もよう、切る面＝黄色の点線、立体＝青むらさき。
+     色だけでなく、もよう・線の種類でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --sec: #e64a19; --ok: #2e7d32; --ng: #ad1457; --solid: #5c6bc0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 46px; padding: 6px 14px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+  .card h3 { margin: 4px 0; font-size: .95rem; color: var(--accent); text-align: center; }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.on { background: #fff8e1; border-color: #fbc02d; }
+  .op-btn.ng { border-color: var(--ng); background: #fce4ec; }
+  .op-btn.ng::before { content: "× "; color: var(--ng); }
+  .op-btn.ok { border-color: var(--ok); background: #e8f5e9; }
+  .op-btn.ok::before { content: "○ "; color: var(--ok); }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 3D と右の欄（広い画面は2列） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @container (min-width: 780px) {
+    .board-in { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  }
+  .stage-card { padding: 8px; }
+  #stage {
+    width: 100%; max-width: 560px; display: block; margin: 0 auto; touch-action: none; user-select: none; -webkit-user-select: none;
+    background: radial-gradient(circle at 50% 40%, #ffffff 0%, #eef2f7 75%, #e3e9f0 100%); border-radius: 14px; cursor: grab;
+  }
+  #stage.drag { cursor: grabbing; }
+  #stage text { font-family: inherit; font-weight: bold; }
+  .stage-hint { text-align: center; font-size: .82rem; color: #78909c; margin-top: 2px; }
+
+  /* スライダー＋数の入力 */
+  .slider-row { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0; font-weight: bold; }
+  .slider-row .lab { min-width: 5.5em; white-space: nowrap; }
+  .slider-row input[type=range] { flex: 1; min-width: 60px; height: 36px; }
+  .slider-row input[type=number] { width: 84px; font-size: 1.15rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .slider-row input:disabled { opacity: .5; }
+
+  /* 断面の形 */
+  .sec-name { text-align: center; font-size: 28px; font-weight: bold; color: var(--sec); min-height: 42px; line-height: 1.3; }
+  .sec-sub { text-align: center; font-size: .92rem; color: #546e7a; min-height: 1.4em; }
+  #secSvg { width: 100%; max-width: 300px; display: block; margin: 0 auto; }
+  .views { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+  .views svg { width: 100%; display: block; background: #fafafa; border-radius: 10px; border: 1px solid #e0e0e0; }
+  .views .cap { text-align: center; font-size: .85rem; font-weight: bold; color: #455a64; }
+
+  .ask { border-top: 2px dashed #cfd8dc; padding-top: 8px; margin-top: 6px; }
+  .ask-q { text-align: center; font-weight: bold; margin-bottom: 6px; line-height: 1.7; }
+  .choice-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .go {
+    width: 100%; margin-top: 8px; min-height: 52px; border: none; border-radius: 14px; background: var(--accent); color: #fff;
+    font-size: 1.15rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .mark-ok { color: var(--ok); font-weight: 900; }
+  .mark-ng { color: var(--ng); font-weight: 900; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  @media (max-width: 420px) {
+    .slider-row .lab { min-width: 0; }
+    .sec-name { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🧊 立体を切る・回す</h1>
+<p class="subtitle">立体を平面で切った切り口（断面）の形や、図形を回してできる立体を調べよう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- パート：① 切断 ② 回転体 ③ 投影図・見取図 -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="chip-row" id="solidRow"></div>
+    <div class="tools" style="margin-top:8px">
+      <button class="op-btn action" id="btnQuiz">🤔 予想クイズ</button>
+      <button class="op-btn action" id="btnMission">🎯 立方体を3点で切る</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <div class="board"><div class="board-in">
+    <div class="card stage-card">
+      <!-- 切り口のもよう（色だけで区別しないため） -->
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <pattern id="secHatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="9" height="9" fill="#ffab91"/><line x1="0" y1="0" x2="0" y2="9" stroke="#ff7043" stroke-width="2.5"/>
+          <line x1="0" y1="0" x2="9" y2="0" stroke="#ff7043" stroke-width="2.5"/></pattern>
+      </defs></svg>
+      <svg id="stage" viewBox="0 0 440 420" aria-label="立体の見取図"></svg>
+      <div class="stage-hint">立体をドラッグすると、回して見られます</div>
+      <div class="tools" style="margin-top:4px">
+        <button class="op-btn" id="viewSlant">↗ ななめから</button>
+        <button class="op-btn" id="viewTop">⬇ 真上から</button>
+        <button class="op-btn" id="viewFront">➡ 正面から</button>
+        <button class="op-btn" id="btnSep">✂ 切りはなす</button>
+        <button class="op-btn action" id="btnPlay" hidden>▶ 1回転させる</button>
+        <button class="op-btn" id="btnAlt" hidden>↔ 軸にする辺をかえる</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 id="rTitle">🎛 切る面</h2>
+      <div id="ctrl"></div>
+      <div id="R1">
+      <h3>断面（切り口）の形</h3>
+      <div class="sec-name" id="secName"></div>
+      <div class="sec-sub" id="secSub"></div>
+      <svg id="secSvg" viewBox="0 0 300 220" aria-label="断面の形"></svg>
+      <div class="views">
+        <div><div class="cap">上から見た図</div><svg id="viewT" viewBox="0 0 160 160" aria-label="上から見た図"></svg></div>
+        <div><div class="cap">正面から見た図</div><svg id="viewF" viewBox="0 0 160 160" aria-label="正面から見た図"></svg></div>
+      </div>
+      </div>
+      <!-- パート② 回す図形とできる立体 -->
+      <div id="R2" hidden>
+        <h3>回す図形：<span id="profName"></span></h3>
+        <svg id="profSvg" viewBox="0 0 300 200" style="width:100%;max-width:300px;display:block;margin:0 auto" aria-label="回す図形"></svg>
+        <h3>できる立体</h3>
+        <div class="sec-name" id="revName"></div>
+        <div class="sec-sub" id="revSub"></div>
+        <div class="views">
+          <div><div class="cap">上から見た図</div><svg id="viewT2" viewBox="0 0 160 160" aria-label="上から見た図"></svg></div>
+          <div><div class="cap">正面から見た図</div><svg id="viewF2" viewBox="0 0 160 160" aria-label="正面から見た図"></svg></div>
+        </div>
+      </div>
+      <!-- パート③ 投影図 -->
+      <div id="R3" hidden>
+        <div class="sec-name" id="projName"></div>
+        <svg id="projSvg" viewBox="0 0 300 340" style="width:100%;max-width:320px;display:block;margin:0 auto;background:#fafafa;border-radius:10px;border:1px solid #e0e0e0" aria-label="投影図"></svg>
+        <div class="sec-sub">正面図：正面から見た図　平面図：真上から見た図<br>見えない辺は点線でかく</div>
+      </div>
+      <div class="ask" id="ask" hidden></div>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 答えを入れて進める</button></div>
+    <div class="small" id="tTalk"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>断面</b>：立体を平面で切ったときの切り口の面。オレンジの格子もようで表している。</li>
+      <li>切る面は「傾き」「向き」「位置」で動かす。傾き 0° は水平（床と平行）、90° は垂直。位置は立体の中心から切る面までのきょり。</li>
+      <li>「✂ 切りはなす」で、切った上の部分をはなして、切り口を見やすくできる。</li>
+      <li>右には、断面を正面から見たほんとうの形と、立体を<b>上から見た図</b>・<b>正面から見た図</b>が出る。切り口はオレンジ。</li>
+      <li>見取図では、見えない辺を点線でかいている。</li>
+      <li>「🎯 立方体を3点で切る」：立方体の頂点や辺の真ん中の点を3つタップすると、その3点を通る平面で切れる。お題の形を作ろう。</li>
+      <li>② <b>回転体</b>：平面図形を、1つの直線（<b>軸</b>）のまわりに1回転させてできる立体。軸は赤むらさきの一点鎖線。回転体の側面をえがく線分を<b>母線</b>という。</li>
+      <li>③ <b>投影図</b>：立体を正面から見た図（<b>正面図</b>）と真上から見た図（<b>平面図</b>）を組にした図。正面図を上、平面図を下にかき、見えない辺は点線。<b>見取図</b>は立体の形がわかるようにかいた図。</li>
+      <li><b>だ円</b>：円をななめから見たような、ひらたい丸い形。<b>放物線</b>は中3、<b>双曲線</b>は反比例のグラフのなかま（くわしくは高校で学ぶ）。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：円柱・円錐・球は、細かい多角形の面を組み合わせて近い形にしています（円は 48 角形、球は 16 × 32 の面）。そのため、断面の円やだ円もわずかに角ばっています。断面の名前は、辺の長さや角の大きさを小数で計算して決めています（とても近いときは「〜にとても近い」と出します）。立方体は 1辺 6 cm、ほかの立体も高さ 6 cm にそろえています。② の回転体も 48 こに分けて回しています。円錐台は「円錐の上を切り取った形」で、教科書によっては名前が出てきません。<br>
+    つながる教材：<a href="展開図を組み立てよう.html">小4〜 展開図を組み立てよう</a></p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（答え・答えを入れて進める・発問の例・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const f1 = (v) => Math.round(v * 10) / 10;
+  const DEG = Math.PI / 180;
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  /* =====================================================================
+     1. ベクトルの計算（3次元の点は [x, y, z]。z が上、y が奥、x が右）
+     ===================================================================== */
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const len = (a) => Math.hypot(a[0], a[1], a[2]);
+  const norm = (a) => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+
+  /* =====================================================================
+     2. 立体（多面体として持つ。円柱・円錐・球は細かい面の多面体で近づける）
+     立体はすべて「へこみのない形（凸）」なので、切り口はいつも1つの凸多角形になる。
+     大きさ：-1〜1 の箱に入る（1 ＝ 3 cm。立方体は 1辺 6 cm）
+     ===================================================================== */
+  const NSEG = 48;   // 円を何角形で近づけるか
+  function makeSolid(kind) {
+    const V = [], F = [], lab = [];
+    if (kind === 'cube') {
+      // 上の面 ABCD、下の面 EFGH（A の真下が E）。正面は ABFE
+      [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1], [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1]].forEach(p => V.push(p));
+      'ABCDEFGH'.split('').forEach((c, i) => lab.push([i, c]));
+      F.push([0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [2, 6, 7, 3], [1, 5, 6, 2], [3, 7, 4, 0]);
+    } else if (kind === 'pyramid') {
+      // 正四角錐 O-ABCD（底面 ABCD）
+      V.push([0, 0, 1], [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1]);
+      lab.push([0, 'O'], [1, 'A'], [2, 'B'], [3, 'C'], [4, 'D']);
+      F.push([1, 2, 3, 4], [0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1]);
+    } else if (kind === 'cylinder' || kind === 'cone') {
+      for (let i = 0; i < NSEG; i++) V.push([Math.cos(2 * Math.PI * i / NSEG), Math.sin(2 * Math.PI * i / NSEG), -1]);
+      F.push([...Array(NSEG).keys()]);
+      if (kind === 'cylinder') {
+        for (let i = 0; i < NSEG; i++) V.push([Math.cos(2 * Math.PI * i / NSEG), Math.sin(2 * Math.PI * i / NSEG), 1]);
+        F.push([...Array(NSEG).keys()].map(i => NSEG + i));
+        for (let i = 0; i < NSEG; i++) { const j = (i + 1) % NSEG; F.push([i, j, NSEG + j, NSEG + i]); }
+      } else {
+        V.push([0, 0, 1]);
+        for (let i = 0; i < NSEG; i++) F.push([i, (i + 1) % NSEG, NSEG]);
+      }
+    } else if (kind === 'box') {
+      // 直方体（横 6 cm・奥行き 3.6 cm・高さ 4.2 cm くらい）
+      const a = 1.25, b = 0.75, c = 0.85;
+      [[-a, -b, c], [a, -b, c], [a, b, c], [-a, b, c], [-a, -b, -c], [a, -b, -c], [a, b, -c], [-a, b, -c]].forEach(p => V.push(p));
+      F.push([0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [2, 6, 7, 3], [1, 5, 6, 2], [3, 7, 4, 0]);
+    } else if (kind === 'triprism' || kind === 'tripyr') {
+      // 底面は正三角形（1つの頂点が奥）
+      const T = [[0, 1.1], [-0.95, -0.55], [0.95, -0.55]];
+      T.forEach(t => V.push([t[0], t[1], -1]));
+      F.push([0, 1, 2]);
+      if (kind === 'triprism') {
+        T.forEach(t => V.push([t[0], t[1], 1]));
+        F.push([3, 4, 5], [0, 1, 4, 3], [1, 2, 5, 4], [2, 0, 3, 5]);
+      } else {
+        V.push([0, 0, 1]);
+        F.push([0, 1, 3], [1, 2, 3], [2, 0, 3]);
+      }
+    } else if (kind === 'sphere') {
+      const R = 16, L = 32;
+      V.push([0, 0, 1]);
+      for (let j = 1; j < R; j++) for (let i = 0; i < L; i++) {
+        const t = Math.PI * j / R, p = 2 * Math.PI * i / L;
+        V.push([Math.sin(t) * Math.cos(p), Math.sin(t) * Math.sin(p), Math.cos(t)]);
+      }
+      V.push([0, 0, -1]);
+      const id = (j, i) => 1 + (j - 1) * L + (i % L), S = V.length - 1;
+      for (let i = 0; i < L; i++) F.push([0, id(1, i), id(1, i + 1)]);
+      for (let j = 1; j < R - 1; j++) for (let i = 0; i < L; i++) F.push([id(j, i), id(j + 1, i), id(j + 1, i + 1), id(j, i + 1)]);
+      for (let i = 0; i < L; i++) F.push([S, id(R - 1, i + 1), id(R - 1, i)]);
+    }
+    return finish({ kind, V, F, lab });
+  }
+  // 面の向き（外向きの法線）をそろえ、辺の一覧（となりの2面）を作る
+  function finish(S) {
+    S.N = S.F.map((f, k) => {
+      let n = [0, 0, 0];
+      for (let i = 0; i < f.length; i++) { const a = S.V[f[i]], b = S.V[f[(i + 1) % f.length]]; n = add(n, [(a[1] - b[1]) * (a[2] + b[2]), (a[2] - b[2]) * (a[0] + b[0]), (a[0] - b[0]) * (a[1] + b[1])]); }
+      n = norm(n);
+      const c = centroid(f.map(i => S.V[i]));
+      if (dot(n, c) < 0) { S.F[k] = f.slice().reverse(); n = mul(n, -1); }   // 中心から外へ向ける
+      return n;
+    });
+    const map = {};
+    S.F.forEach((f, k) => f.forEach((a, i) => {
+      const b = f[(i + 1) % f.length], key = a < b ? a + '-' + b : b + '-' + a;
+      (map[key] = map[key] || { a: Math.min(a, b), b: Math.max(a, b), f: [] }).f.push(k);
+    }));
+    S.E = Object.values(map).map(e => Object.assign(e, { feature: dot(S.N[e.f[0]], S.N[e.f[1]]) < Math.cos(25 * DEG) }));
+    return S;
+  }
+  const centroid = (pts) => mul(pts.reduce((s, p) => add(s, p), [0, 0, 0]), 1 / pts.length);
+  const SOLIDS = [
+    { kind: 'cube', name: '立方体' }, { kind: 'pyramid', name: '正四角錐' }, { kind: 'cylinder', name: '円柱' },
+    { kind: 'cone', name: '円錐' }, { kind: 'sphere', name: '球' },
+  ];
+  const solidCache = {};
+  const getSolid = (k) => solidCache[k] || (solidCache[k] = makeSolid(k));
+
+  /* =====================================================================
+     3. 切る面と切り口
+     面は 法線 n（傾き th・向き ph から）と 位置 s：n・p ＝ s（s は cm。1 ＝ 3 cm）
+     ===================================================================== */
+  function planeOf(P) {
+    const n = [Math.sin(P.th * DEG) * Math.cos(P.ph * DEG), Math.sin(P.th * DEG) * Math.sin(P.ph * DEG), Math.cos(P.th * DEG)];
+    return { n, s: P.s / 3 };
+  }
+  // 法線と位置から、スライダーの値（傾き・向き・位置）にする
+  function setPlaneFromNormal(P, n, s) {
+    n = norm(n);
+    if (n[2] < -1e-12 || (Math.abs(n[2]) < 1e-12 && (n[1] < -1e-12 || (Math.abs(n[1]) < 1e-12 && n[0] < 0)))) { n = mul(n, -1); s = -s; }
+    P.th = Math.acos(Math.max(-1, Math.min(1, n[2]))) / DEG;
+    P.ph = ((Math.atan2(n[1], n[0]) / DEG) + 360) % 360;
+    if (P.th < 1e-9) P.ph = 0;
+    P.s = s * 3;
+  }
+  // 面の上の2つの向き（u：横、v：たて）。断面をほんとうの形で見せるときに使う
+  function planeBasis(n) {
+    let u = Math.abs(n[2]) > 0.999 ? [1, 0, 0] : norm(cross([0, 0, 1], n));
+    if (Math.abs(n[2]) > 0.999) return { u, v: [0, 1, 0] };
+    return { u, v: norm(cross(n, u)) };
+  }
+  // 切り口の多角形（3次元の点の列。なければ []）
+  function section(S, pl) {
+    const pts = [], d = S.V.map(p => dot(pl.n, p) - pl.s), EPS = 1e-9;
+    S.V.forEach((p, i) => { if (Math.abs(d[i]) < EPS) pts.push(p); });
+    S.E.forEach(e => {
+      const da = d[e.a], db = d[e.b];
+      if ((da < -EPS && db > EPS) || (da > EPS && db < -EPS)) {
+        const t = da / (da - db);
+        pts.push(add(S.V[e.a], mul(sub(S.V[e.b], S.V[e.a]), t)));
+      }
+    });
+    // 同じ点をまとめる
+    const uniq = [];
+    pts.forEach(p => { if (!uniq.some(q => len(sub(p, q)) < 1e-7)) uniq.push(p); });
+    if (uniq.length < 3) return uniq;
+    // 面の上で、中心のまわりの角度の順にならべる（凸なのでこれで多角形になる）
+    const c = centroid(uniq), { u, v } = planeBasis(pl.n);
+    uniq.sort((p, q) => Math.atan2(dot(sub(p, c), v), dot(sub(p, c), u)) - Math.atan2(dot(sub(q, c), v), dot(sub(q, c), u)));
+    // 一直線にならぶ点をのぞく（辺の途中の点）
+    const out = [];
+    for (let i = 0; i < uniq.length; i++) {
+      const a = uniq[(i + uniq.length - 1) % uniq.length], b = uniq[i], cc = uniq[(i + 1) % uniq.length];
+      if (len(cross(sub(b, a), sub(cc, b))) > 1e-7 * len(sub(b, a)) * len(sub(cc, b)) + 1e-12) out.push(b);
+    }
+    return out;
+  }
+  const polyArea = (pts, n) => { let s = [0, 0, 0]; for (let i = 0; i < pts.length; i++) s = add(s, cross(pts[i], pts[(i + 1) % pts.length])); return Math.abs(dot(s, n)) / 2; };
+
+  /* =====================================================================
+     4. 断面の名前を決める
+     多角形（立方体・正四角錐）：辺の長さ・平行・直角で決める。
+     曲面のある立体：切る面の傾きと、底面・上の面にとどくかで決める。
+     ===================================================================== */
+  const TOL = 1e-6, NEAR = 0.03;   // ぴったり／とても近い のめやす
+  const eqL = (a, b, t) => Math.abs(a - b) <= (t || TOL) * Math.max(a, b);
+  function classify(S, pl, poly) {
+    if (poly.length < 3 || polyArea(poly, pl.n) < 1e-6) return { name: poly.length ? '（面が立体にふれているだけ）' : '（切れていない）', key: 'none', k: 0 };
+    const zs = poly.map(p => p[2]), zmin = Math.min(...zs), zmax = Math.max(...zs);
+    const th = Math.acos(Math.min(1, Math.abs(pl.n[2]))) / DEG;
+    if (S.kind === 'sphere') return { name: '円', key: 'circle', k: 0, sub: '球は、どの向きに切っても切り口は円。' };
+    if (S.kind === 'cylinder') {
+      if (th < 0.05) return { name: '円', key: 'circle', k: 0, sub: '底面と平行に切ると、底面と同じ大きさの円。' };
+      if (th > 89.95) return polyName(poly, pl, '底面に垂直に切ると、長方形。');
+      if (zmin > -1 + 1e-6 && zmax < 1 - 1e-6) return { name: 'だ円', key: 'ellipse', k: 0, sub: 'ななめに切ると、円をおしつぶしたような だ円 になる。' };
+      return { name: 'だ円の一部と直線', key: 'ellipsePart', k: 0, sub: '切る面が底面（上の面）にもとどくので、そこが直線になる。' };
+    }
+    if (S.kind === 'cone') {
+      const throughApex = Math.abs(dot(pl.n, [0, 0, 1]) - pl.s) < 1e-6;
+      if (throughApex) return Object.assign(polyName(poly, pl), { sub: '頂点を通るように切ると、三角形（二等辺三角形）になる。' });
+      const crit = 90 - Math.atan(0.5) / DEG;    // 母線と同じ傾き（63.4°）
+      if (th < 0.05) return { name: '円', key: 'circle', k: 0, sub: '底面と平行に切ると円。上で切るほど小さい。' };
+      if (Math.abs(th - crit) < 0.3) return { name: '放物線と直線', key: 'parabola', k: 0, sub: '母線と平行に切ると、放物線（中3 で学ぶ y＝ax² のグラフの形）が出てくる。' };
+      if (th > crit) return { name: '双曲線の一部と直線', key: 'hyperbola', k: 0, sub: '急な角度で切ると、双曲線（反比例のグラフのなかま。高校で学ぶ）が出てくる。' };
+      if (zmin > -1 + 1e-6) return { name: 'だ円', key: 'ellipse', k: 0, sub: 'ななめに切ると だ円。' };
+      return { name: 'だ円の一部と直線', key: 'ellipsePart', k: 0, sub: '切る面が底面にとどくので、そこが直線になる。' };
+    }
+    return polyName(poly, pl);
+  }
+  // 多角形の名前
+  function polyName(poly, pl, sub) {
+    const k = poly.length, L = [], A = [];
+    for (let i = 0; i < k; i++) {
+      const a = poly[(i + k - 1) % k], b = poly[i], c = poly[(i + 1) % k];
+      L.push(len(sub3(c, b)));
+      A.push(Math.acos(Math.max(-1, Math.min(1, dot(norm(sub3(a, b)), norm(sub3(c, b)))))) / DEG);
+    }
+    const allEq = (t) => L.every(l => eqL(l, L[0], t)), angEq = (t) => A.every(x => Math.abs(x - A[0]) <= (t ? 3 : 1e-4));
+    const right = (x) => Math.abs(x - 90) < 1e-4;
+    const par = (i, j, t) => { const d1 = norm(sub3(poly[(i + 1) % k], poly[i])), d2 = norm(sub3(poly[(j + 1) % k], poly[j])); return len(cross(d1, d2)) < (t ? 0.03 : 1e-6); };
+    let name, key, near = '';
+    if (k === 3) {
+      const eqs = [eqL(L[0], L[1]), eqL(L[1], L[2]), eqL(L[2], L[0])].filter(Boolean).length;
+      if (eqs === 3) { name = '正三角形'; key = 'tri3'; }
+      else if (eqs >= 1) { name = A.some(right) ? '直角二等辺三角形' : '二等辺三角形'; key = 'tri2'; }
+      else { name = A.some(right) ? '直角三角形' : '三角形'; key = 'tri'; }
+      if (key !== 'tri3' && allEq(NEAR)) near = '正三角形';
+    } else if (k === 4) {
+      const p1 = par(0, 2), p2 = par(1, 3), eq = allEq(), rt = A.every(right);
+      if (p1 && p2) {
+        if (eq && rt) { name = '正方形'; key = 'square'; }
+        else if (rt) { name = '長方形'; key = 'rect'; if (allEq(NEAR)) near = '正方形'; }
+        else if (eq) { name = 'ひし形'; key = 'rhombus'; }
+        else { name = '平行四辺形'; key = 'para'; }
+      } else if (p1 || p2) { name = (p1 ? eqL(L[1], L[3]) : eqL(L[0], L[2])) ? '台形（等脚台形）' : '台形'; key = 'trap'; }
+      else { name = '四角形'; key = 'quad'; }
+    } else if (k === 5) { name = '五角形'; key = 'penta'; }
+    else if (k === 6) {
+      if (allEq() && angEq()) { name = '正六角形'; key = 'hex6'; }
+      else { name = '六角形'; key = 'hex'; if (allEq(NEAR) && angEq(true)) near = '正六角形'; }
+    } else { name = k + '角形'; key = 'poly'; }
+    return { name, key, k, L, A, near, sub: sub || '' };
+  }
+  const sub3 = sub;
+
+  /* =====================================================================
+     5. 3D の絵（SVG）。見る向き：yaw（まわり）・pitch（見下ろす角）。平行投影
+     ===================================================================== */
+  const st = {
+    part: 1, P: null, P0: null, hist: [], hintLv: 0, sessTrips: {}, focus: null,
+    view: { yaw: -32, pitch: 24 }, drag: null, ctrlPart: 0, last: '',
+  };
+  const SC = 108, CX = 220, CY = 205;   // 1 ＝ 108 px、画面の中心
+  function camera() {
+    const y = st.view.yaw * DEG, p = st.view.pitch * DEG;
+    const cy = Math.cos(y), sy = Math.sin(y), cp = Math.cos(p), sp = Math.sin(p);
+    // 画面の x・y（上が正）・手前ほど大きい数
+    const proj = (q) => {
+      const x1 = q[0] * cy - q[1] * sy, y1 = q[0] * sy + q[1] * cy;
+      return [x1, y1 * sp + q[2] * cp, -y1 * cp + q[2] * sp];
+    };
+    // toV：見る人の方向（世界の向き）。面がこちらを向いているかを調べるのに使う
+    return { proj, toV: [-sy * cp, -cy * cp, sp] };
+  }
+  const scr = (q) => [CX + q[0] * SC, CY - q[1] * SC];
+  function el(tag, attrs, text) {
+    const e = document.createElementNS(SVGNS, tag);
+    for (const k in attrs) if (attrs[k] !== null && attrs[k] !== undefined) e.setAttribute(k, attrs[k]);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  // 凸多角形を半空間（sg × (n・p − s) ≧ 0）で切る
+  function clipPoly(pts, pl, sg) {
+    const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const da = sg * (dot(pl.n, a) - pl.s), db = sg * (dot(pl.n, b) - pl.s);
+      if (da >= 0) out.push(a);
+      if ((da >= 0) !== (db >= 0)) out.push(add(a, mul(sub(b, a), da / (da - db))));
+    }
+    return out;
+  }
+  function clipSeg(a, b, pl, sg) {
+    const da = sg * (dot(pl.n, a) - pl.s), db = sg * (dot(pl.n, b) - pl.s);
+    if (da < 0 && db < 0) return null;
+    if (da >= 0 && db >= 0) return [a, b];
+    const m = add(a, mul(sub(b, a), da / (da - db)));
+    return da >= 0 ? [a, m] : [m, b];
+  }
+  const LIGHT = norm([-0.35, -0.55, 0.85]);
+  const shade = (n, base) => { const k = 0.55 + 0.45 * Math.max(0, dot(n, LIGHT)); return `rgb(${Math.round(base[0] * k)},${Math.round(base[1] * k)},${Math.round(base[2] * k)})`; };
+  const SOLID_RGB = [159, 168, 218];
+
+  // 立体の一部（切った片がわ）を描く。ghost＝うすく、すけて見せる
+  function drawPart(g, S, pl, sg, off, ghost, cam, cap) {
+    const P = (q) => scr(cam.proj(add(q, off)));
+    const faces = [];
+    S.F.forEach((f, k) => {
+      const pts = pl ? clipPoly(f.map(i => S.V[i]), pl, sg) : f.map(i => S.V[i]);
+      if (pts.length >= 3) faces.push({ pts, n: S.N[k] });
+    });
+    if (cap && cap.length >= 3 && !ghost) faces.push({ pts: cap, n: mul(pl.n, sg > 0 ? -1 : 1), cap: true });
+    const front = (n) => dot(n, cam.toV) > 1e-9;
+    // 面（見えている面だけ。すけて見せるときは、うらの面もうすく）
+    faces.forEach(F => {
+      const fr = front(F.n);
+      if (!fr && !ghost) return;
+      const d = F.pts.map(P).map(p => f1(p[0]) + ',' + f1(p[1])).join(' ');
+      if (F.cap) g.appendChild(el('polygon', { points: d, fill: 'url(#secHatch)', stroke: '#d84315', 'stroke-width': 3, 'stroke-linejoin': 'round', opacity: ghost ? 0.25 : 1 }));
+      else g.appendChild(el('polygon', { points: d, fill: ghost ? '#c5cae9' : shade(F.n, SOLID_RGB), 'fill-opacity': ghost ? 0.07 : 1, stroke: ghost ? 'none' : shade(F.n, SOLID_RGB), 'stroke-width': 0.6 }));
+    });
+    // 辺（角になっている辺と、りんかく）。見えない辺は点線
+    const capN = cap && cap.length >= 3 ? mul(pl.n, sg > 0 ? -1 : 1) : null;
+    S.E.forEach(e => {
+      const n1 = S.N[e.f[0]], n2 = S.N[e.f[1]], f1v = front(n1), f2v = front(n2);
+      const sil = f1v !== f2v;
+      if (!e.feature && !sil) return;
+      const seg = pl ? clipSeg(S.V[e.a], S.V[e.b], pl, sg) : [S.V[e.a], S.V[e.b]];
+      if (!seg) return;
+      // 切り口のふちに乗る辺は、切り口の面でかくれるかどうかも見る
+      const vis = f1v || f2v;
+      const [a, b] = [P(seg[0]), P(seg[1])];
+      if (ghost) g.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: '#7986cb', 'stroke-width': 1.5, opacity: 0.45 }));
+      else if (vis) g.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: '#283593', 'stroke-width': 2.5, 'stroke-linecap': 'round' }));
+      else if (e.feature) g.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: '#5c6bc0', 'stroke-width': 1.6, 'stroke-dasharray': '6 5', opacity: 0.8 }));
+    });
+    return faces;
+  }
+  function depthOf(pts, cam, off) { return pts.length ? centroid(pts.map(p => cam.proj(add(p, off)))).slice(2)[0] : 0; }
+
+  function drawStage() {
+    const svg = $('stage'), P = st.P, S = getSolid(P.solid), cam = camera();
+    svg.innerHTML = '';
+    const pl = planeOf(P), poly = section(S, pl);
+    const hasCut = planeOn() && poly.length >= 3 && polyArea(poly, pl.n) > 1e-6;
+    const sep = P.sep && hasCut ? mul(pl.n, 0.9) : [0, 0, 0];
+    // 下の部分（n・p ≦ s）と上の部分（n・p ≧ s）。遠い方から描く
+    // 切り口がこちらを向いている側の部分をふつうに描き、手前の部分はすけて見せる
+    const lowFront = dot(pl.n, cam.toV) > 0;
+    const parts = [
+      { sg: -1, off: [0, 0, 0], ghost: !P.sep && !lowFront },
+      { sg: 1, off: sep, ghost: !P.sep && lowFront },
+    ];
+    const vol = (sg) => { const pts = S.V.filter(p => sg * (dot(pl.n, p) - pl.s) >= 0); return pts.length ? pts : [[0, 0, 0]]; };
+    parts.forEach(pt => pt.depth = depthOf(vol(pt.sg).concat(poly), cam, pt.off));
+    if (!P.sep) parts.sort((a, b) => (a.ghost ? 1 : 0) - (b.ghost ? 1 : 0));
+    else parts.sort((a, b) => a.depth - b.depth);
+    // 切る面（うすい黄色）は、立体のうしろにも前にも少し見えるように、さいしょと さいごに分けずに1回だけ
+    const g = el('g', {});
+    svg.appendChild(g);
+    if (!P.sep && planeOn()) drawPlane(g, pl, cam, true);
+    // 切れていないときは、立体をそのまま1回だけ描く
+    if (hasCut) parts.forEach(pt => drawPart(g, S, pl, pt.sg, pt.off, pt.ghost, cam, pt.sg < 0 ? poly : poly.slice().reverse()));
+    else drawPart(g, S, null, 1, [0, 0, 0], false, cam, null);
+    if (!P.sep && planeOn()) drawPlane(g, pl, cam, false);
+    // 頂点の名前
+    if (S.lab.length) S.lab.forEach(([i, c]) => {
+      const q = S.V[i], off = (P.sep && hasCut && dot(pl.n, q) - pl.s > 1e-9) ? sep : [0, 0, 0];
+      const p = scr(cam.proj(add(q, off))), o = scr(cam.proj(add(mul(q, 1.13), off)));
+      g.appendChild(el('text', { x: f1(o[0]), y: f1(o[1]) + 6, 'text-anchor': 'middle', 'font-size': 17, fill: '#1a237e', stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke' }, c));
+    });
+    // ミッション：タップできる点
+    if (P.mode === 'mission' && !P.sep) drawMissionPts(g, cam);
+  }
+  // ミッションで3点をえらぶまでは、切る面を出さない
+  const planeOn = () => !(st.P.mode === 'mission' && !st.P.mission.done && st.P.mission.pts.length < 3);
+  // 切る面（大きめの正方形を、うすい黄色で）。back＝立体のうしろがわの半分
+  function drawPlane(g, pl, cam, back) {
+    const { u, v } = planeBasis(pl.n), c = mul(pl.n, pl.s), H = 1.85;
+    const pts = [add(add(c, mul(u, -H)), mul(v, -H)), add(add(c, mul(u, H)), mul(v, -H)), add(add(c, mul(u, H)), mul(v, H)), add(add(c, mul(u, -H)), mul(v, H))];
+    const d = pts.map(p => scr(cam.proj(p))).map(p => f1(p[0]) + ',' + f1(p[1])).join(' ');
+    if (back) g.appendChild(el('polygon', { points: d, fill: '#fff59d', 'fill-opacity': 0.35, stroke: 'none' }));
+    else g.appendChild(el('polygon', { points: d, fill: '#fff59d', 'fill-opacity': 0.12, stroke: '#f9a825', 'stroke-width': 2, 'stroke-dasharray': '8 6' }));
+  }
+
+  // ===== 見る向きをドラッグで回す（pointer events。マウスでもタッチでも） =====
+  function stageDown(e) {
+    const P = st.P;
+    if (st.part === 1 && P.mode === 'mission' && !P.mission.done) {
+      const hit = hitMissionPt(e);
+      if (hit >= 0) { tapMissionPt(hit); return; }
+    }
+    st.drag = { x: e.clientX, y: e.clientY, yaw: st.view.yaw, pitch: st.view.pitch };
+    $('stage').classList.add('drag');
+    try { $('stage').setPointerCapture(e.pointerId); } catch (_) { /* 捕まえられなくても続ける */ }
+  }
+  // 左の立体だけ描きなおす（見る向きを変えたとき）
+  const drawLeft = () => (st.part === 1 ? drawStage() : st.part === 2 ? drawStage2() : render3());
+  function stageMove(e) {
+    if (!st.drag) return;
+    st.view.yaw = st.drag.yaw - (e.clientX - st.drag.x) * 0.5;
+    st.view.pitch = Math.max(-10, Math.min(90, st.drag.pitch + (e.clientY - st.drag.y) * 0.5));
+    drawLeft();
+  }
+  function stageUp() { st.drag = null; $('stage').classList.remove('drag'); }
+  function tweenView(yaw, pitch) {
+    stopTimer();
+    const fy = st.view.yaw, fp = st.view.pitch, t0 = performance.now();
+    st.timer = setInterval(() => {
+      const k = Math.min(1, (performance.now() - t0) / 450), e = 1 - (1 - k) ** 3;
+      st.view.yaw = fy + (yaw - fy) * e; st.view.pitch = fp + (pitch - fp) * e;
+      drawLeft();
+      if (k >= 1) stopTimer();
+    }, 30);
+  }
+
+  /* =====================================================================
+     6. 右の欄：断面のほんとうの形・上から見た図・正面から見た図
+     ===================================================================== */
+  function drawSection(poly, pl, info) {
+    const svg = $('secSvg');
+    svg.innerHTML = '';
+    if (poly.length < 3 || info.key === 'none') {
+      svg.appendChild(el('text', { x: 150, y: 115, 'text-anchor': 'middle', 'font-size': 16, fill: '#90a4ae' }, '切る面を立体に重ねよう'));
+      return;
+    }
+    const { u, v } = planeBasis(pl.n), c = centroid(poly);
+    const q = poly.map(p => [dot(sub(p, c), u), dot(sub(p, c), v)]);
+    const xs = q.map(p => p[0]), ys = q.map(p => p[1]);
+    const W = Math.max(...xs) - Math.min(...xs), H = Math.max(...ys) - Math.min(...ys);
+    // 立体と同じ縮尺（1 ＝ 3 cm）で、はみ出すときだけ縮める
+    const K = Math.min(62, 250 / (W || 1), 180 / (H || 1));
+    const mx = (Math.max(...xs) + Math.min(...xs)) / 2, my = (Math.max(...ys) + Math.min(...ys)) / 2;
+    const S2 = q.map(p => [150 + (p[0] - mx) * K, 110 - (p[1] - my) * K]);
+    svg.appendChild(el('polygon', { points: S2.map(p => f1(p[0]) + ',' + f1(p[1])).join(' '), fill: 'url(#secHatch)', stroke: '#d84315', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+    // 等しい辺の印（｜・‖・≡）と直角の印（多角形のときだけ）
+    if (info.L && info.k <= 8) {
+      const groups = [];
+      info.L.forEach((l, i) => {
+        let gi = groups.findIndex(gr => eqL(gr.l, l));
+        if (gi < 0) { groups.push({ l, ids: [] }); gi = groups.length - 1; }
+        groups[gi].ids.push(i);
+      });
+      let mark = 0;
+      groups.forEach(gr => {
+        if (gr.ids.length < 2) return;
+        mark++;
+        gr.ids.forEach(i => {
+          // 辺 i は 点 i と 点 i＋1 の間
+          const a = S2[i], b = S2[(i + 1) % S2.length], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+          const d = norm([b[0] - a[0], b[1] - a[1], 0]), nn = [-d[1], d[0]];
+          for (let t = 0; t < mark; t++) {
+            const o = (t - (mark - 1) / 2) * 5;
+            svg.appendChild(el('line', { x1: f1(m[0] + d[0] * o - nn[0] * 7), y1: f1(m[1] + d[1] * o - nn[1] * 7), x2: f1(m[0] + d[0] * o + nn[0] * 7), y2: f1(m[1] + d[1] * o + nn[1] * 7), stroke: '#263238', 'stroke-width': 2.2 }));
+          }
+        });
+      });
+      info.A.forEach((ang, i) => {
+        if (Math.abs(ang - 90) > 1e-4) return;
+        const b = S2[i], a = S2[(i + S2.length - 1) % S2.length], cc = S2[(i + 1) % S2.length];
+        const d1 = norm([a[0] - b[0], a[1] - b[1], 0]), d2 = norm([cc[0] - b[0], cc[1] - b[1], 0]), r = 11;
+        svg.appendChild(el('path', { d: `M ${f1(b[0] + d1[0] * r)} ${f1(b[1] + d1[1] * r)} L ${f1(b[0] + d1[0] * r + d2[0] * r)} ${f1(b[1] + d1[1] * r + d2[1] * r)} L ${f1(b[0] + d2[0] * r)} ${f1(b[1] + d2[1] * r)}`, fill: 'none', stroke: '#263238', 'stroke-width': 1.8 }));
+      });
+    }
+  }
+  // 上から見た図・正面から見た図（立体のりんかく・辺と、切り口をうつしたもの）
+  function drawViews(S, poly, hasCut) {
+    const V = [
+      { id: 'viewT', f: (p) => [p[0], p[1]] },    // 上から：x が右、y（奥）が上
+      { id: 'viewF', f: (p) => [p[0], p[2]] },    // 正面から：x が右、z が上
+    ];
+    V.forEach(vw => {
+      const svg = $(vw.id), K = 52, m = (p) => { const q = vw.f(p); return [80 + q[0] * K, 80 - q[1] * K]; };
+      svg.innerHTML = '';
+      const hull = convexHull(S.V.map(m));
+      svg.appendChild(el('polygon', { points: hull.map(p => f1(p[0]) + ',' + f1(p[1])).join(' '), fill: '#e8eaf6', stroke: '#283593', 'stroke-width': 2 }));
+      S.E.forEach(e => {
+        if (!e.feature) return;
+        const a = m(S.V[e.a]), b = m(S.V[e.b]);
+        if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.5) return;
+        svg.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: '#283593', 'stroke-width': 1.3, opacity: 0.7 }));
+      });
+      if (hasCut) {
+        const sp = poly.map(m);
+        svg.appendChild(el('polygon', { points: sp.map(p => f1(p[0]) + ',' + f1(p[1])).join(' '), fill: 'url(#secHatch)', 'fill-opacity': 0.85, stroke: '#d84315', 'stroke-width': 2.5, 'stroke-linejoin': 'round' }));
+      }
+    });
+  }
+  function convexHull(pts) {
+    pts = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+    for (const p of pts.slice().reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+    return lo.slice(0, -1).concat(up.slice(0, -1));
+  }
+
+  /* =====================================================================
+     7. パートとつまずきの型
+     ===================================================================== */
+  const PARTS = [null,
+    { name: '① 切断', note: '立体を平面で切ろう。切る面の傾き・向き・位置を変えると、切り口（断面）の形が変わる。' },
+    { name: '② 回転体', note: '平面図形を、軸のまわりに1回転させてできる立体（回転体）。何ができるか予想してから回そう。' },
+    { name: '③ 投影図・見取図', note: '立体を正面から見た図（正面図）と真上から見た図（平面図）。投影図から立体を当てよう。' },
+  ];
+  // つまずきの型（名前・説明・練習するパート）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    cubeHex:     { name: '立方体の断面は三角形か四角形だけ、と思った', part: 1,
+                   exp: '立方体は面が 6つ。切る面が 5つの面を通れば<b>五角形</b>、6つの面ぜんぶを通れば<b>六角形</b>になる。' },
+    regularMix:  { name: '「正」がつく形かどうかの見落とし', part: 1,
+                   exp: '<b>正</b>三角形・<b>正</b>方形・<b>正</b>六角形は、辺の長さが<b>ぜんぶ等しく</b>、角も<b>ぜんぶ等しい</b>形。どれかがちがえば「正」はつかない。' },
+    tiltCircle:  { name: 'ななめに切っても円のまま、と思った', part: 1,
+                   exp: '円柱や円錐を<b>ななめ</b>に切ると、円をおしつぶしたような<b>だ円</b>になる。円になるのは底面と平行に切ったとき。' },
+    sphereCircle:{ name: '球の切り口を だ円 と思った', part: 1,
+                   exp: '球は、どの向きに切っても切り口は<b>円</b>（中心を通ると いちばん大きい円）。' },
+    apexCut:     { name: '円錐を頂点を通って切った形', part: 1,
+                   exp: '頂点を通って底面まで切ると、切り口は<b>三角形</b>（2本の母線と、底面の弦）。母線の長さは等しいので二等辺三角形。' },
+    viewMix:     { name: '切る向きと切り口の形の結びつけ', part: 1,
+                   exp: '底面と<b>平行</b>に切ると底面と同じ形、底面に<b>垂直</b>に切ると、横から見た形に近い形（長方形・三角形）になる。' },
+    rotGuess:    { name: '回転体の予想ちがい', part: 2,
+                   exp: '軸のまわりに回すと、図形の<b>各点が円</b>をえがく。軸と平行な辺は円柱の側面、ななめの辺は円錐の側面、半円は球の面になる。' },
+    rotAngular:  { name: '回転体に角柱・角錐をえらんだ', part: 2,
+                   exp: '回転体を軸に垂直に切ると、切り口はいつも<b>円</b>。だから角柱や角錐（底面が多角形）にはならない。' },
+    holeMiss:    { name: '軸からはなれた図形の回転体', part: 2,
+                   exp: '図形と軸の間にすきまがあると、回したとき<b>まん中に穴</b>があく（すきまの部分は立体にならない）。' },
+    axisMix:     { name: '軸にした辺のとりちがえ', part: 2,
+                   exp: '同じ図形でも、<b>どの辺を軸にするか</b>で立体がかわる。軸にした辺が立体の<b>高さ</b>、もう1つの辺が底面の<b>半径</b>になる。' },
+    viewRound:   { name: '平面図の円と多角形のとりちがえ', part: 3,
+                   exp: '平面図が<b>円</b>なら、底面が円の立体（円柱・円錐・球）。平面図が<b>多角形</b>なら、角柱・角錐。' },
+    viewSwap:    { name: '正面図と平面図のとりちがえ', part: 3,
+                   exp: '上にかくのが<b>正面図</b>（正面から見た図）、下にかくのが<b>平面図</b>（真上から見た図）。立体の高さがわかるのは正面図。' },
+  };
+
+  /* =====================================================================
+     8. パート① 切断
+     P = { solid, th:傾き°, ph:向き°, s:位置 cm, sep, mode:'free'|'quiz'|'mission', quiz, mission }
+     ===================================================================== */
+  const SL = {
+    1: [{ k: 'th', lab: '傾き', min: 0, max: 90, step: 1, unit: '°' }, { k: 'ph', lab: '向き', min: 0, max: 359, step: 1, unit: '°' },
+        { k: 's', lab: '位置', min: -5.4, max: 5.4, step: 0.1, unit: 'cm' }],
+    2: [{ k: 'ang', lab: '回転角', min: 0, max: 360, step: 1, unit: '°' }],
+    3: [],
+  };
+  const fmt = (k, v) => k === 's' ? (Math.round(v * 10) / 10).toString() : (Math.round(v * 10) / 10).toString();
+  function buildCtrl() {
+    const defs = SL[st.part] || [];
+    $('ctrl').innerHTML = defs.map(d => `<div class="slider-row"><span class="lab">${d.lab}</span>` +
+      `<input type="range" id="R_${d.k}" min="${d.min}" max="${d.max}" step="${d.step}" aria-label="${d.lab}">` +
+      `<input type="number" id="N_${d.k}" min="${d.min}" max="${d.max}" step="${d.step}" aria-label="${d.lab}（数）"><span>${d.unit}</span></div>`).join('');
+    defs.forEach(d => {
+      const s = $('R_' + d.k), n = $('N_' + d.k);
+      // スライダー：動かしはじめに1回だけ「ひとつもどす」の記録をとる
+      let pushed = false;
+      const once = () => { if (!pushed) { pushHist(); pushed = true; } };
+      s.addEventListener('pointerdown', once);
+      s.addEventListener('keydown', once);
+      s.addEventListener('input', () => { once(); setVal(d, +s.value); render(); });
+      s.addEventListener('change', () => { pushed = false; });
+      n.addEventListener('change', () => {
+        const v = +n.value;
+        if (n.value === '' || !isFinite(v)) { render(); return; }
+        pushHist(); setVal(d, v); render();
+      });
+    });
+    st.ctrlPart = st.part;
+  }
+  function setVal(d, v) {
+    v = Math.max(d.min, Math.min(d.max, v));
+    stopTimer();
+    st.P[d.k] = v;
+    // 手で面を動かしたら、ミッションの3点はえらびなおし
+    if (st.P.mode === 'mission' && !st.P.mission.done) st.P.mission.pts = [];
+  }
+  function syncCtrl() {
+    if (st.ctrlPart !== st.part) buildCtrl();
+    const P = st.P, lock = st.part === 1 ? (P.mode === 'quiz' && !P.quiz.done) : P.mode !== 'free';
+    (SL[st.part] || []).forEach(d => {
+      const s = $('R_' + d.k), n = $('N_' + d.k);
+      s.value = P[d.k];
+      if (document.activeElement !== n) n.value = fmt(d.k, P[d.k]);
+      s.disabled = n.disabled = lock || (st.part === 1 && d.k === 'ph' && P.th < 1e-9);
+    });
+  }
+  function render1() {
+    const P = st.P, S = getSolid(P.solid), pl = planeOf(P), poly = section(S, pl), info = classify(S, pl, poly);
+    const hasCut = info.key !== 'none';
+    st.info = info;
+    drawStage();
+    const hide = (P.mode === 'quiz' && !P.quiz.done) || !planeOn();
+    $('secName').textContent = hide ? '？' : info.name;
+    $('secSub').innerHTML = !planeOn() ? '3つの点をえらぶと、切る面が決まる' : hide ? '予想してから答えよう' :
+      (info.near ? `（<b>${info.near}</b>にとても近い。ぴったりにするには、もう少し調整しよう）` : (info.sub || (info.k >= 3 ? `辺の数：${info.k}本` : '')));
+    if (hide) $('secSvg').innerHTML = `<text x="150" y="115" text-anchor="middle" font-size="40" fill="#cfd8dc">？</text>`;
+    else drawSection(poly, pl, info);
+    drawViews(S, hide ? [] : poly, hasCut && !hide);
+    $('btnSep').classList.toggle('on', !!P.sep);
+    renderAsk1();
+  }
+
+  // ===== 予想クイズ（立体と切り方を決めて、断面の形を4択で予想） =====
+  // n：切る面の法線、s：位置（1 ＝ 3 cm）。答えの名前は classify で計算する
+  const QUIZ = [
+    { solid: 'cube', n: [0, 0, 1], s: 0.3, ch: ['正方形', '長方形', '円', '正三角形'] },
+    { solid: 'cube', n: [1, -1, 0], s: 0, ch: ['正方形', '長方形', 'ひし形', '六角形'] },
+    { solid: 'cube', n: [1, -1, 1], s: 2, ch: ['正三角形', '二等辺三角形', '正方形', '六角形'] },
+    { solid: 'cube', n: [1, -1, 1], s: 0, ch: ['正方形', '正三角形', '正六角形', '六角形'] },
+    { solid: 'cube', n: [1, -1, 2], s: 1.6, ch: ['三角形', '四角形', '五角形', '六角形'] },
+    { solid: 'cube', n: [0, -1, 1], s: 0.4, ch: ['正方形', '長方形', '台形', '三角形'] },
+    { solid: 'cube', n: [1, -1, 1], s: 0.6, ch: ['正三角形', '五角形', '六角形', '正六角形'] },
+    { solid: 'pyramid', n: [0, 0, 1], s: 0, ch: ['正方形', '長方形', '三角形', '円'] },
+    { solid: 'pyramid', n: [1, 1, 0], s: 0, ch: ['二等辺三角形', '正三角形', '台形', '長方形'] },
+    { solid: 'cylinder', n: [0, 0, 1], s: 0.2, ch: ['円', 'だ円', '長方形', '正方形'] },
+    { solid: 'cylinder', n: [0, -1, 0], s: 0.3, ch: ['円', 'だ円', '長方形', '台形'] },
+    { solid: 'cylinder', n: [0, -0.5, 1], s: 0, ch: ['円', 'だ円', '長方形', '三角形'] },
+    { solid: 'cone', n: [0, 0, 1], s: -0.2, ch: ['円', 'だ円', '三角形', '台形'] },
+    { solid: 'cone', n: [0, -1, 0], s: 0, ch: ['円', 'だ円', '二等辺三角形', '長方形'] },
+    { solid: 'cone', n: [0, -0.6, 1], s: -0.3, ch: ['円', 'だ円', '二等辺三角形', '台形'] },
+    { solid: 'sphere', n: [0, -1, 1], s: 0.3, ch: ['円', 'だ円', '正方形', '三角形'] },
+  ];
+  // 名前のなかま（クイズの答え合わせ用）
+  const BASE = (name) => name.replace('（等脚台形）', '').replace('直角二等辺三角形', '二等辺三角形');
+  function quizItems() {
+    const f = st.focus;
+    let idx = QUIZ.map((q, i) => i);
+    if (f === 'cubeHex') idx = idx.filter(i => QUIZ[i].ch.includes('五角形') || QUIZ[i].ch.includes('六角形') || QUIZ[i].ch.includes('正六角形'));
+    if (f === 'regularMix') idx = idx.filter(i => QUIZ[i].solid === 'cube' || QUIZ[i].solid === 'pyramid');
+    if (f === 'tiltCircle') idx = idx.filter(i => ['cylinder', 'cone'].includes(QUIZ[i].solid));
+    if (f === 'sphereCircle') idx = idx.filter(i => QUIZ[i].solid === 'sphere' || QUIZ[i].solid === 'cylinder');
+    if (f === 'apexCut') idx = idx.filter(i => QUIZ[i].solid === 'cone' || QUIZ[i].solid === 'pyramid');
+    return idx;
+  }
+  function quizAnswer(q) {
+    // 面は n・p ＝ s（n は長さ1でなくてよい）
+    const S = getSolid(q.solid), P = {};
+    setPlaneFromNormal(P, q.n, q.s / len(q.n));
+    const info = classify(S, planeOf(P), section(S, planeOf(P)));
+    let name = BASE(info.name);
+    // 「四角形」「三角形」など大まかな選択肢しかないときは、なかまの名前で答える
+    if (!q.ch.includes(name)) {
+      if (info.k === 3 && q.ch.includes('三角形')) name = '三角形';
+      else if (info.k === 4 && q.ch.includes('四角形')) name = '四角形';
+      else if (info.key === 'ellipsePart' && q.ch.includes('だ円')) name = 'だ円';
+      else if (info.key === 'hex6' && q.ch.includes('六角形')) name = '六角形';
+    }
+    return { P, name, info };
+  }
+  function startQuiz() {
+    stopTimer();
+    pushHist();
+    let i, tries = 0;
+    const idx = quizItems();
+    do { i = pick(idx); tries++; } while (String(i) === st.last && tries < 20);
+    st.last = String(i);
+    const q = QUIZ[i], A = quizAnswer(q);
+    Object.assign(st.P, { solid: q.solid, th: A.P.th, ph: A.P.ph, s: A.P.s, sep: false, mode: 'quiz', quiz: { i, ans: A.name, ch: shuffle(q.ch), wrong: [], done: false } });
+    st.hintLv = 0;
+    render();
+    setMsg('黄色の面で切ると、切り口はどんな形？ 立体を回して見てから予想しよう。');
+  }
+  function answerQuiz(c) {
+    const P = st.P, Q = P.quiz;
+    if (!Q || Q.done) return;
+    if (c === Q.ans) {
+      pushHist();
+      P.quiz.done = true; P.sep = true;
+      bumpClear(1); sndOK();
+      render();
+      setMsg(`<span class="mark-ok">○</span> 正解！ 切り口は <b>${st.info.name}</b>。${st.info.sub || ''}`, 'ok');
+      return;
+    }
+    sndNG();
+    Q.wrong.push(c);
+    const type = quizTrip(Q.ans, c, P.solid);
+    render();
+    if (type) { addTrip(type); setMsg(`<span class="mark-ng">×</span> おしい！ <b>${TRIPS[type].name}</b>かも。<br><span class="small">${TRIPS[type].exp}</span>`, 'ng'); }
+    else setMsg(`<span class="mark-ng">×</span> ちがうみたい。立体を回して、黄色の面が立体のどの面を通るか数えよう。`, 'ng');
+  }
+  // まちがえ方から、つまずきの型を決める
+  function quizTrip(ans, c, solid) {
+    const fam = (n) => /三角形/.test(n) ? 3 : /方形|ひし形|台形|四角形|平行四辺形/.test(n) ? 4 : /五角形/.test(n) ? 5 : /六角形/.test(n) ? 6 : 0;
+    if (solid === 'cube' && fam(ans) >= 5 && fam(c) > 0 && fam(c) <= 4) return 'cubeHex';
+    if (fam(ans) && fam(ans) === fam(c)) return 'regularMix';
+    if (solid === 'sphere' && c === 'だ円') return 'sphereCircle';
+    if ((solid === 'cylinder' || solid === 'cone') && ans === 'だ円' && c === '円') return 'tiltCircle';
+    if (solid === 'cone' && /三角形/.test(ans)) return 'apexCut';
+    if ((ans === '円' || /長方形|三角形/.test(ans)) && c !== ans) return 'viewMix';
+    return null;
+  }
+
+  // ===== ミッション：立方体を3点で切る =====
+  // タップできる点：頂点 8こ ＋ 辺の真ん中 12こ
+  const MPTS = (() => {
+    const S = getSolid('cube'), out = S.V.map((p, i) => ({ p, name: 'ABCDEFGH'[i] }));
+    S.E.filter(e => e.feature).forEach(e => out.push({ p: mul(add(S.V[e.a], S.V[e.b]), 0.5), name: `辺${'ABCDEFGH'[e.a]}${'ABCDEFGH'[e.b]}の真ん中` }));
+    return out;
+  })();
+  const MTARGETS = ['正三角形', '長方形', '台形', 'ひし形', '五角形', '正六角形'];
+  function startMission(target) {
+    stopTimer();
+    pushHist();
+    const P = st.P;
+    const ti = target || MTARGETS[(MTARGETS.indexOf(P.mission && P.mission.target) + 1) % MTARGETS.length];
+    Object.assign(P, { solid: 'cube', sep: false, mode: 'mission', mission: { target: ti, pts: [], done: false, tries: 0 } });
+    st.hintLv = 0;
+    render();
+    setMsg(`🎯 お題：切り口が <b>${ti}</b> になる3点をタップしよう（頂点か、辺の真ん中の点）。`);
+  }
+  function drawMissionPts(g, cam) {
+    const M = st.P.mission;
+    MPTS.forEach((m, i) => {
+      const q = scr(cam.proj(m.p)), sel = M.pts.includes(i);
+      g.appendChild(el('circle', { cx: f1(q[0]), cy: f1(q[1]), r: sel ? 11 : 7, fill: sel ? '#d84315' : '#fff', stroke: sel ? '#fff' : '#d84315', 'stroke-width': 3, style: 'cursor:pointer' }));
+      if (sel) g.appendChild(el('text', { x: f1(q[0]), y: f1(q[1]) + 5, 'text-anchor': 'middle', 'font-size': 13, fill: '#fff' }, String(M.pts.indexOf(i) + 1)));
+    });
+  }
+  function hitMissionPt(e) {
+    const svg = $('stage'), b = svg.getBoundingClientRect(), cam = camera();
+    const x = (e.clientX - b.left) * 440 / b.width, y = (e.clientY - b.top) * 420 / b.height;
+    let best = -1, bd = 22;
+    MPTS.forEach((m, i) => { const q = scr(cam.proj(m.p)), d = Math.hypot(q[0] - x, q[1] - y); if (d < bd) { bd = d; best = i; } });
+    return best;
+  }
+  function tapMissionPt(i) {
+    const P = st.P, M = P.mission;
+    pushHist();
+    if (M.pts.includes(i)) M.pts = M.pts.filter(v => v !== i);
+    else { if (M.pts.length >= 3) M.pts = []; M.pts.push(i); }
+    if (M.pts.length === 3) {
+      const [a, b, c] = M.pts.map(k => MPTS[k].p), n = cross(sub(b, a), sub(c, a));
+      if (len(n) < 1e-9) { render(); setMsg('3つの点が一直線にならんでいると、平面が1つに決まらないよ。べつの点をえらぼう。', 'ng'); return; }
+      setPlaneFromNormal(P, n, dot(norm(n), a));
+      const S = getSolid('cube'), pl = planeOf(P), info = classify(S, pl, section(S, pl));
+      M.tries++;
+      if (BASE(info.name) === M.target || info.name === M.target) {
+        M.done = true;
+        bumpClear(1); sndDone();
+        render();
+        setMsg(`<span class="mark-ok">○</span> ミッション成功！ 切り口は <b>${info.name}</b>。「🎯」をもう一度押すと、つぎのお題。`, 'ok');
+        return;
+      }
+      render();
+      sndNG();
+      setMsg(`できた切り口は <b>${info.name}</b>。お題は ${M.target}。点をタップしてえらびなおそう。`, 'ng');
+      return;
+    }
+    render();
+    setMsg(`${M.pts.length}つ目：${MPTS[i].name}。${3 - M.pts.length}つ えらぼう。`);
+  }
+  // お題の答えになる3点（先生モード・ヒント用。総あたりで見つける）
+  function missionAnswer(target) {
+    const S = getSolid('cube'), n = MPTS.length;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let k = j + 1; k < n; k++) {
+      const [a, b, c] = [MPTS[i].p, MPTS[j].p, MPTS[k].p], nv = cross(sub(b, a), sub(c, a));
+      if (len(nv) < 1e-9) continue;
+      const P = {}; setPlaneFromNormal(P, nv, dot(norm(nv), a));
+      const info = classify(S, planeOf(P), section(S, planeOf(P)));
+      if (BASE(info.name) === target || info.name === target) return [i, j, k];
+    }
+    return null;
+  }
+
+  function renderAsk1() {
+    const P = st.P, box = $('ask');
+    if (P.mode === 'quiz') {
+      box.hidden = false;
+      const Q = P.quiz;
+      if (!Q.done) {
+        box.innerHTML = `<div class="ask-q">🤔 ${SOLIDS.find(s => s.kind === P.solid).name}をこの面で切ると、切り口の形は？</div>
+          <div class="choice-btns">${Q.ch.map(c => `<button class="op-btn${Q.wrong.includes(c) ? ' ng' : ''}" data-c="${c}">${c}</button>`).join('')}</div>`;
+        box.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => answerQuiz(b.dataset.c)));
+      } else {
+        box.innerHTML = `<div class="ask-q">答え：<b>${Q.ans}</b></div><button class="go" id="qNext">▶ つぎの予想クイズ</button><button class="op-btn" id="qEnd" style="width:100%;margin-top:6px">おわる（自由に切る）</button>`;
+        $('qNext').addEventListener('click', startQuiz);
+        $('qEnd').addEventListener('click', endMode);
+      }
+      return;
+    }
+    if (P.mode === 'mission') {
+      box.hidden = false;
+      const M = P.mission;
+      box.innerHTML = `<div class="ask-q">🎯 お題：切り口を <b>${M.target}</b> にしよう</div>
+        <div class="chip-row">${MTARGETS.map(t => `<button class="chip${t === M.target ? ' active' : ''}" data-t="${t}">${t}</button>`).join('')}</div>
+        <div class="tools" style="margin-top:6px"><button class="op-btn" id="mClear">点をえらびなおす</button><button class="op-btn" id="qEnd">おわる</button></div>`;
+      box.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => startMission(b.dataset.t)));
+      $('mClear').addEventListener('click', () => { pushHist(); M.pts = []; M.done = false; P.sep = false; render(); });
+      $('qEnd').addEventListener('click', endMode);
+      return;
+    }
+    box.hidden = true; box.innerHTML = '';
+  }
+  function endMode() { pushHist(); st.P.mode = 'free'; st.P.quiz = null; st.P.mission = null; render(); setMsg('スライダーで自由に切ってみよう。'); }
+
+  /* =====================================================================
+     8-2. パート② 回転体
+     図形は (r, z) の多角形（r：軸からのきょり、z：高さ）。z の軸のまわりに回す。
+     P = { shape, ang:回転角°, mode:'predict'|'free'|'reverse', pred:{ch, ans, wrong, done}, rev:{ans, ch, wrong, done} }
+     ===================================================================== */
+  const semiPts = (() => { const a = []; for (let i = 0; i <= 24; i++) { const t = -Math.PI / 2 + Math.PI * i / 24; a.push([Math.cos(t), Math.sin(t)]); } return a; })();
+  // corner：かどの点（回したときに円をえがく線をかく点）
+  const SHAPES = {
+    rect:    { name: '長方形', pts: [[0, -1], [1, -1], [1, 1], [0, 1]], solid: '円柱', ch: ['円柱', '円錐', '球', '四角柱'],
+               sub: '長方形の1つの辺を軸にして回すと、円柱。軸と平行な辺が側面をえがく（この辺を母線という）。' },
+    rectW:   { name: '長方形（横長）', pts: [[0, -0.5], [2, -0.5], [2, 0.5], [0, 0.5]], solid: '円柱', ch: ['円柱', '円錐', '球', '四角柱'],
+               sub: '短い辺を軸にすると、低くて底面の大きい円柱になる。' },
+    tri:     { name: '直角三角形', pts: [[0, -1], [1, -1], [0, 1]], solid: '円錐', ch: ['円錐', '円柱', '三角錐', '球'],
+               sub: '直角三角形の直角をはさむ辺を軸にして回すと、円錐。斜辺が側面をえがく（母線）。' },
+    triW:    { name: '直角三角形（横長）', pts: [[0, -0.5], [2, -0.5], [0, 0.5]], solid: '円錐', ch: ['円錐', '円柱', '三角錐', '球'],
+               sub: '短い辺を軸にすると、低くて底面の大きい円錐になる。' },
+    semi:    { name: '半円', pts: semiPts, solid: '球', ch: ['球', '円柱', '円錐', '半球'],
+               sub: '半円の直径を軸にして回すと、球。' },
+    trap:    { name: '台形', pts: [[0, -1], [1.2, -1], [0.6, 1], [0, 1]], solid: '円錐台', ch: ['円錐台', '円柱', '円錐', '四角柱'],
+               sub: '直角のある台形を回すと、円錐の上を切り取ったような形（円錐台）。' },
+    pipe:    { name: '軸からはなれた長方形（発展）', pts: [[0.5, -1], [1.3, -1], [1.3, 1], [0.5, 1]], solid: '穴のあいた円柱', ch: ['穴のあいた円柱', '円柱', '円錐', '球'],
+               sub: '図形が軸からはなれていると、まん中に穴があく（パイプのような形）。' },
+  };
+  const SHAPE_ROW = ['rect', 'tri', 'semi', 'trap', 'pipe'];
+  const ALT = { rect: 'rectW', rectW: 'rect', tri: 'triW', triW: 'tri' };   // 軸にする辺をかえる
+  const isCorner = (key, p) => key !== 'semi' || p[0] === 0;
+  function newPredict(shape) {
+    const S = SHAPES[shape];
+    return { shape, ang: 0, mode: 'predict', pred: { ch: shuffle(S.ch), ans: S.solid, wrong: [], done: false }, rev: null };
+  }
+  // 回してできる面（ang までの部分）と、かどがえがく線
+  function revPrims(shape, ang, cam) {
+    const S = SHAPES[shape], pts = S.pts, n = pts.length;
+    const steps = Math.max(1, Math.round(48 * ang / 360));
+    // 角度 0 は右（y＝0 の面）。奥へ向かって回すので、回しているとちゅうは手前にすき間ができて図形が見える
+    const at = (p, a) => [p[0] * Math.cos(a * DEG), p[0] * Math.sin(a * DEG), p[1]];
+    const prims = [];
+    if (ang > 0) for (let i = 0; i < n; i++) {
+      const p = pts[i], q = pts[(i + 1) % n];
+      if (p[0] === 0 && q[0] === 0) continue;                // 軸の上の辺は面をつくらない
+      for (let k = 0; k < steps; k++) {
+        const a0 = ang * k / steps, a1 = ang * (k + 1) / steps;
+        let poly = [at(p, a0), at(q, a0), at(q, a1), at(p, a1)];
+        poly = poly.filter((v, j) => len(sub(v, poly[(j + 1) % 4])) > 1e-9);
+        if (poly.length >= 3) prims.push({ t: 'face', pts: poly });
+      }
+      // かどの点がえがく円（の一部）
+      if (isCorner(shape, p) && p[0] > 0) for (let k = 0; k < steps; k++) prims.push({ t: 'line', a: at(p, ang * k / steps), b: at(p, ang * (k + 1) / steps), c: '#283593', w: 2.2 });
+    }
+    // 回す前の図形（角度 0、うすいオレンジ）と、今の角度の図形（オレンジ）
+    const capPts = (a) => pts.map(p => at(p, a));
+    if (ang < 360) prims.push({ t: 'cap', pts: capPts(0), now: false });
+    prims.push({ t: 'cap', pts: capPts(Math.min(ang, 359.999)), now: true });
+    // 奥から順にならべる（線は少し手前あつかい）
+    prims.forEach(pr => {
+      const c = pr.t === 'line' ? mul(add(pr.a, pr.b), 0.5) : centroid(pr.pts);
+      pr.depth = cam.proj(c)[2] + (pr.t === 'line' ? 0.02 : pr.t === 'cap' ? 0.01 : 0);
+    });
+    prims.sort((A, B) => A.depth - B.depth);
+    return prims;
+  }
+  function revFit(shape) { const pts = SHAPES[shape].pts; return 1 / Math.max(1, ...pts.map(p => Math.max(Math.abs(p[0]), Math.abs(p[1]) * 1.05))); }
+  function drawStage2() {
+    const svg = $('stage'), P = st.P, cam = camera();
+    svg.innerHTML = '';
+    const shape = P.mode === 'reverse' ? P.rev.ans : P.shape;
+    const ang = P.mode === 'reverse' ? 360 : P.ang, K = revFit(shape);
+    const pp = (q) => scr(cam.proj(mul(q, K)));
+    const g = el('g', {});
+    svg.appendChild(g);
+    // 回転の軸（一点鎖線）
+    const axisLine = (front) => { const a = pp([0, 0, -1.45]), b = pp([0, 0, 1.45]); g.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: '#ad1457', 'stroke-width': front ? 2 : 2.5, 'stroke-dasharray': '14 5 3 5', opacity: front ? 0.5 : 1 })); };
+    axisLine(false);
+    revPrims(shape, ang, cam).forEach(pr => {
+      if (pr.t === 'line') { const a = pp(pr.a), b = pp(pr.b); g.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: pr.c, 'stroke-width': pr.w, 'stroke-linecap': 'round' })); return; }
+      const d = pr.pts.map(pp).map(p => f1(p[0]) + ',' + f1(p[1])).join(' ');
+      if (pr.t === 'cap') {
+        if (P.mode === 'reverse' && !P.rev.done) return;        // 「どの図形？」では、図形をかくす
+        g.appendChild(el('polygon', { points: d, fill: pr.now ? 'url(#secHatch)' : '#ffccbc', 'fill-opacity': pr.now ? 1 : 0.6, stroke: '#d84315', 'stroke-width': pr.now ? 3 : 1.5, 'stroke-linejoin': 'round' }));
+        return;
+      }
+      let nv = [0, 0, 0];
+      for (let i = 0; i < pr.pts.length; i++) nv = add(nv, cross(pr.pts[i], pr.pts[(i + 1) % pr.pts.length]));
+      nv = norm(nv);
+      const k = 0.55 + 0.45 * Math.abs(dot(nv, LIGHT)), col = `rgb(${Math.round(159 * k)},${Math.round(168 * k)},${Math.round(218 * k)})`;
+      g.appendChild(el('polygon', { points: d, fill: col, stroke: col, 'stroke-width': 0.7 }));
+    });
+    axisLine(true);
+    const top = pp([0, 0, 1.45]);
+    g.appendChild(el('text', { x: f1(top[0]) + 8, y: f1(top[1]) + 4, 'font-size': 16, fill: '#ad1457', stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke' }, '軸'));
+  }
+  // 右の欄：回す図形（2D）
+  function drawProfile(svg, shape, opt) {
+    opt = opt || {};
+    const pts = SHAPES[shape].pts, W = opt.w || 300, H = opt.h || 200;
+    const rmax = Math.max(...pts.map(p => p[0])), zmax = Math.max(...pts.map(p => Math.abs(p[1])));
+    const K = Math.min((W - 70) / rmax, (H - 30) / (2 * zmax), opt.kmax || 70), ax = 40;
+    svg.innerHTML = '';
+    const m = (p) => [ax + p[0] * K, H / 2 - p[1] * K];
+    svg.appendChild(el('line', { x1: ax, y1: 6, x2: ax, y2: H - 6, stroke: '#ad1457', 'stroke-width': 2.5, 'stroke-dasharray': '12 4 3 4' }));
+    svg.appendChild(el('polygon', { points: pts.map(m).map(p => f1(p[0]) + ',' + f1(p[1])).join(' '), fill: 'url(#secHatch)', stroke: '#d84315', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+    if (!opt.small) svg.appendChild(el('text', { x: ax - 8, y: 20, 'text-anchor': 'end', 'font-size': 14, fill: '#ad1457', 'font-weight': 'bold' }, '軸'));
+  }
+  // 回転体の上から見た図・正面から見た図
+  function drawRevViews(shape) {
+    const pts = SHAPES[shape].pts, rmax = Math.max(...pts.map(p => p[0])), K = 60 / Math.max(rmax, 1.05);
+    // 正面から：図形と、軸で折り返した図形
+    const sv = $('viewF2'); sv.innerHTML = '';
+    const m = (p, sgn) => [80 + sgn * p[0] * K, 80 - p[1] * K];
+    [1, -1].forEach(sgn => sv.appendChild(el('polygon', { points: pts.map(p => m(p, sgn)).map(p => f1(p[0]) + ',' + f1(p[1])).join(' '), fill: '#e8eaf6', stroke: 'none' })));
+    const rin = Math.min(...pts.map(p => p[0]));
+    [1, -1].forEach(sgn => pts.forEach((p, i) => {
+      const q = pts[(i + 1) % pts.length];
+      if (p[0] === 0 && q[0] === 0) return;   // 軸の上の辺は、正面から見ると線にならない
+      const inner = rin > 0 && p[0] === rin && q[0] === rin;   // 穴の内がわの線は見えない（点線）
+      const a = m(p, sgn), b = m(q, sgn);
+      sv.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: '#283593', 'stroke-width': 2, 'stroke-dasharray': inner ? '5 4' : null }));
+    }));
+    // 上から：かどがえがく円
+    const tv = $('viewT2'); tv.innerHTML = '';
+    tv.appendChild(el('circle', { cx: 80, cy: 80, r: f1(rmax * K), fill: '#e8eaf6', stroke: 'none' }));
+    if (rin > 0) tv.appendChild(el('circle', { cx: 80, cy: 80, r: f1(rin * K), fill: '#fafafa', stroke: 'none' }));
+    const rs = [...new Set(pts.filter(p => isCorner(shape, p) && p[0] > 0).map(p => p[0]).concat([rmax]))];
+    rs.forEach(r => tv.appendChild(el('circle', { cx: 80, cy: 80, r: f1(r * K), fill: 'none', stroke: '#283593', 'stroke-width': 2 })));
+    if (pts.some(p => p[0] === 0 && Math.abs(p[1]) > 0) && shape.startsWith('tri')) tv.appendChild(el('circle', { cx: 80, cy: 80, r: 2.5, fill: '#283593' }));
+  }
+  function render2() {
+    const P = st.P, rev = P.mode === 'reverse';
+    $('rTitle').textContent = rev ? '🤔 どの図形を回した？' : '🎛 回す';
+    drawStage2();
+    const shape = rev ? P.rev.ans : P.shape, S = SHAPES[shape];
+    const hideShape = rev && !P.rev.done;
+    if (hideShape) $('profSvg').innerHTML = '<text x="150" y="110" text-anchor="middle" font-size="40" fill="#cfd8dc">？</text>';
+    else drawProfile($('profSvg'), shape);
+    $('profName').textContent = hideShape ? '' : S.name;
+    const showSolid = rev || (P.pred && P.pred.done && P.ang >= 360);
+    $('revName').textContent = showSolid ? S.solid : (P.mode === 'predict' && !P.pred.done ? '？' : `回転角 ${Math.round(P.ang)}°`);
+    $('revSub').innerHTML = showSolid && (!rev || P.rev.done) ? S.sub : (P.mode === 'predict' && !P.pred.done ? '何ができるか予想してから回そう' : '');
+    drawRevViews(shape);
+    $('btnAlt').hidden = !ALT[P.shape] || rev;
+    // 答える欄
+    const box = $('ask');
+    if (P.mode === 'predict' && !P.pred.done) {
+      box.hidden = false;
+      box.innerHTML = `<div class="ask-q">🤔 この${S.name}を、軸のまわりに1回転させると、どんな立体ができる？</div>
+        <div class="choice-btns">${P.pred.ch.map(c => `<button class="op-btn${P.pred.wrong.includes(c) ? ' ng' : ''}" data-c="${c}">${c}</button>`).join('')}</div>`;
+      box.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => answerPred(b.dataset.c)));
+    } else if (rev) {
+      box.hidden = false;
+      const R = P.rev;
+      box.innerHTML = `<div class="ask-q">🤔 この立体は、どの図形を軸のまわりに回してできた？${R.done ? '' : '<br><span class="small">（赤むらさきの一点鎖線が軸）</span>'}</div>
+        <div class="choice-btns">${R.ch.map(k => `<button class="op-btn${R.wrong.includes(k) ? ' ng' : ''}${R.done && k === R.ans ? ' ok' : ''}" data-k="${k}" aria-label="${SHAPES[k].name}"><svg viewBox="0 0 150 110" width="100%" style="max-width:150px;display:block;margin:0 auto" data-thumb="${k}"></svg></button>`).join('')}</div>` +
+        (R.done ? `<button class="go" id="rNext">▶ つぎの問題</button><button class="op-btn" id="qEnd" style="width:100%;margin-top:6px">おわる</button>` : '');
+      box.querySelectorAll('[data-thumb]').forEach(s => drawProfile(s, s.dataset.thumb, { w: 150, h: 110, small: true, kmax: 45 }));
+      if (!R.done) box.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => answerRev(b.dataset.k)));
+      else { $('rNext').addEventListener('click', startReverse); $('qEnd').addEventListener('click', () => { pushHist(); st.P = newPredict('rect'); st.P.pred.done = true; st.P.mode = 'free'; render(); }); }
+    } else { box.hidden = true; box.innerHTML = ''; }
+  }
+  function answerPred(c) {
+    const P = st.P, Q = P.pred;
+    if (Q.done) return;
+    if (c === Q.ans) {
+      pushHist();
+      P.pred.done = true; P.mode = 'free';
+      bumpClear(2); sndOK();
+      render();
+      setMsg(`<span class="mark-ok">○</span> 正解の予想！ 回して確かめよう。`, 'ok');
+      animAng(360, 2200);
+      return;
+    }
+    sndNG();
+    Q.wrong.push(c);
+    const type = /角柱|角錐/.test(c) ? 'rotAngular' : P.shape === 'pipe' ? 'holeMiss' : 'rotGuess';
+    addTrip(type);
+    render();
+    setMsg(`<span class="mark-ng">×</span> おしい！ <b>${TRIPS[type].name}</b>かも。<br><span class="small">${TRIPS[type].exp}</span>`, 'ng');
+  }
+  function animAng(to, ms) {
+    stopTimer();
+    const from = st.P.ang, t0 = performance.now();
+    st.timer = setInterval(() => {
+      const u = Math.min(1, (performance.now() - t0) / ms);
+      st.P.ang = from + (to - from) * u;
+      if (u >= 1) { st.P.ang = to; stopTimer(); render(); if (to >= 360) setMsg(`<span class="mark-ok">○</span> ${SHAPES[st.P.shape].name}を1回転させると <b>${SHAPES[st.P.shape].solid}</b> ができた。`, 'ok'); }
+      else { drawStage2(); syncCtrl(); $('revName').textContent = `回転角 ${Math.round(st.P.ang)}°`; }
+    }, 30);
+  }
+  // 「どの図形を回した？」（立体から図形を当てる）
+  const REV_POOL = ['rect', 'rectW', 'tri', 'triW', 'semi', 'trap', 'pipe'];
+  // まちがえやすい図形（答え → まぎらわしい図形）
+  const REV_DIST = { rect: ['rectW', 'tri', 'trap'], rectW: ['rect', 'triW', 'pipe'], tri: ['triW', 'rect', 'trap'], triW: ['tri', 'rectW', 'semi'], semi: ['tri', 'rect', 'trap'], trap: ['tri', 'rect', 'triW'], pipe: ['rect', 'rectW', 'trap'] };
+  function startReverse() {
+    stopTimer();
+    pushHist();
+    let ans, tries = 0;
+    const pool = st.focus === 'axisMix' ? ['rect', 'rectW', 'tri', 'triW'] : st.focus === 'holeMiss' ? ['pipe', 'rect', 'rectW'] : REV_POOL;
+    do { ans = pick(pool); tries++; } while (ans === st.lastRev && tries < 20);
+    st.lastRev = ans;
+    st.P = { shape: ans, ang: 360, mode: 'reverse', pred: null, rev: { ans, ch: shuffle([ans].concat(REV_DIST[ans])), wrong: [], done: false } };
+    st.hintLv = 0;
+    render();
+    setMsg('立体を回して、高さと底面の大きさをよく見よう。');
+  }
+  function answerRev(k) {
+    const P = st.P, R = P.rev;
+    if (R.done) return;
+    if (k === R.ans) {
+      pushHist();
+      P.rev.done = true; bumpClear(2); sndOK();
+      render();
+      setMsg(`<span class="mark-ok">○</span> 正解！ ${SHAPES[k].name}を回すと${SHAPES[k].solid}。`, 'ok');
+      return;
+    }
+    sndNG();
+    R.wrong.push(k);
+    const type = ALT[R.ans] === k ? 'axisMix' : R.ans === 'pipe' || k === 'pipe' ? 'holeMiss' : 'rotGuess';
+    addTrip(type);
+    render();
+    setMsg(`<span class="mark-ng">×</span> おしい！ <b>${TRIPS[type].name}</b>かも。<br><span class="small">${TRIPS[type].exp}</span>`, 'ng');
+  }
+
+  /* =====================================================================
+     8-3. パート③ 投影図・見取図
+     P = { solid, mode:'free'|'quiz', quiz:{ans, ch, wrong, done} }
+     ===================================================================== */
+  const SOLIDS3 = [
+    { kind: 'cube', name: '立方体', fv: 'sq', pv: 'sq' }, { kind: 'box', name: '直方体', fv: 'rect', pv: 'rect' },
+    { kind: 'triprism', name: '三角柱', fv: 'rect', pv: 'tri' }, { kind: 'cylinder', name: '円柱', fv: 'rect', pv: 'circle' },
+    { kind: 'cone', name: '円錐', fv: 'tri', pv: 'circle' }, { kind: 'pyramid', name: '四角錐', fv: 'tri', pv: 'sq' },
+    { kind: 'tripyr', name: '三角錐', fv: 'tri', pv: 'tri' }, { kind: 'sphere', name: '球', fv: 'circle', pv: 'circle' },
+  ];
+  const s3 = (k) => SOLIDS3.find(s => s.kind === k);
+  // 投影図を1つ描く。dir：'front'（正面から）・'top'（真上から）
+  function drawProj(svg, S, dir, cx, cy, K) {
+    const toV = dir === 'front' ? [0, -1, 0] : [0, 0, 1];
+    const m = (p) => dir === 'front' ? [cx + p[0] * K, cy - p[2] * K] : [cx + p[0] * K, cy - p[1] * K];
+    const hull = convexHull(S.V.map(m));
+    svg.appendChild(el('polygon', { points: hull.map(p => f1(p[0]) + ',' + f1(p[1])).join(' '), fill: '#e8eaf6', stroke: 'none' }));
+    const sgn = (n) => { const d = dot(n, toV); return d > 1e-6 ? 1 : d < -1e-6 ? -1 : 0; };
+    const vis = [], hid = [];
+    S.E.forEach(e => {
+      const a = sgn(S.N[e.f[0]]), b = sgn(S.N[e.f[1]]);
+      if (!e.feature && a === b) return;                   // 角でもりんかくでもない辺はかかない
+      const A = m(S.V[e.a]), B = m(S.V[e.b]);
+      if (Math.hypot(A[0] - B[0], A[1] - B[1]) < 0.3) return;
+      (Math.max(a, b) >= 0 ? vis : hid).push([A, B]);
+    });
+    hid.forEach(([A, B]) => svg.appendChild(el('line', { x1: f1(A[0]), y1: f1(A[1]), x2: f1(B[0]), y2: f1(B[1]), stroke: '#5c6bc0', 'stroke-width': 1.8, 'stroke-dasharray': '6 4' })));
+    vis.forEach(([A, B]) => svg.appendChild(el('line', { x1: f1(A[0]), y1: f1(A[1]), x2: f1(B[0]), y2: f1(B[1]), stroke: '#1a237e', 'stroke-width': 2.4, 'stroke-linecap': 'round' })));
+  }
+  function render3() {
+    const P = st.P, S = getSolid(P.solid), hide = P.mode === 'quiz' && !P.quiz.done;
+    $('rTitle').textContent = '📐 投影図';
+    // 見取図（左）
+    const svg = $('stage'), cam = camera();
+    svg.innerHTML = '';
+    const g = el('g', {});
+    svg.appendChild(g);
+    if (hide) g.appendChild(el('text', { x: 220, y: 230, 'text-anchor': 'middle', 'font-size': 90, fill: '#cfd8dc' }, '？'));
+    else drawPart(g, S, null, 1, [0, 0, 0], false, cam, null);
+    // 投影図（右）：上に正面図、下に平面図。たての位置をそろえる
+    const pv = $('projSvg');
+    pv.innerHTML = '';
+    pv.appendChild(el('line', { x1: 10, y1: 170, x2: 290, y2: 170, stroke: '#90a4ae', 'stroke-width': 1.5 }));
+    drawProj(pv, S, 'front', 165, 88, 62);
+    drawProj(pv, S, 'top', 165, 256, 62);
+    if (P.solid === 'cone') pv.appendChild(el('circle', { cx: 165, cy: 256, r: 3.5, fill: '#1a237e' }));   // 円錐の頂点
+    pv.appendChild(el('text', { x: 14, y: 26, 'font-size': 16, 'font-weight': 'bold', fill: '#37474f' }, '正面図'));
+    pv.appendChild(el('text', { x: 14, y: 194, 'font-size': 16, 'font-weight': 'bold', fill: '#37474f' }, '平面図'));
+    $('projName').textContent = hide ? '？' : s3(P.solid).name;
+    const box = $('ask');
+    if (P.mode === 'quiz') {
+      box.hidden = false;
+      const Q = P.quiz;
+      box.innerHTML = Q.done
+        ? `<div class="ask-q">答え：<b>${s3(Q.ans).name}</b></div><button class="go" id="qNext">▶ つぎの問題</button><button class="op-btn" id="qEnd" style="width:100%;margin-top:6px">おわる（自由に見る）</button>`
+        : `<div class="ask-q">🤔 この投影図（正面図と平面図）は、どの立体？</div><div class="choice-btns">${Q.ch.map(k => `<button class="op-btn${Q.wrong.includes(k) ? ' ng' : ''}" data-k="${k}">${s3(k).name}</button>`).join('')}</div>`;
+      if (Q.done) { $('qNext').addEventListener('click', startQuiz3); $('qEnd').addEventListener('click', () => { pushHist(); P.mode = 'free'; P.quiz = null; render(); }); }
+      else box.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => answerQuiz3(b.dataset.k)));
+    } else { box.hidden = true; box.innerHTML = ''; }
+  }
+  // まぎらわしい立体（正面図か平面図が同じ形のもの）を選択肢にする
+  function startQuiz3() {
+    stopTimer();
+    pushHist();
+    const f = st.focus;
+    let pool = SOLIDS3.map(s => s.kind);
+    if (f === 'viewRound') pool = ['cylinder', 'cone', 'triprism', 'pyramid', 'box'];
+    if (f === 'viewSwap') pool = ['triprism', 'cone', 'pyramid', 'tripyr', 'cylinder'];
+    let ans, tries = 0;
+    do { ans = pick(pool); tries++; } while (ans === st.lastQ3 && tries < 20);
+    st.lastQ3 = ans;
+    const A = s3(ans);
+    const score = (s) => (s.fv === A.fv ? 2 : 0) + (s.pv === A.pv ? 2 : 0) + (s.fv === A.pv ? 1 : 0);
+    const others = shuffle(SOLIDS3.filter(s => s.kind !== ans)).sort((a, b) => score(b) - score(a)).slice(0, 3).map(s => s.kind);
+    st.P = { solid: ans, mode: 'quiz', quiz: { ans, ch: shuffle([ans].concat(others)), wrong: [], done: false } };
+    st.hintLv = 0;
+    render();
+    setMsg('正面図（正面から見た図）と平面図（真上から見た図）を見て、立体を当てよう。');
+  }
+  function answerQuiz3(k) {
+    const P = st.P, Q = P.quiz;
+    if (Q.done) return;
+    if (k === Q.ans) {
+      pushHist();
+      P.quiz.done = true; bumpClear(3); sndOK();
+      render();
+      setMsg(`<span class="mark-ok">○</span> 正解！ ${s3(k).name}。見取図を回して、投影図と見くらべよう。`, 'ok');
+      return;
+    }
+    sndNG();
+    Q.wrong.push(k);
+    const A = s3(Q.ans), C = s3(k);
+    let type = null;
+    if (C.fv === A.fv && ((C.pv === 'circle') !== (A.pv === 'circle'))) type = 'viewRound';
+    // えらんだ立体の正面図が、答えの平面図と同じ形（で、答えの正面図とはちがう）→ 2つの図を取りちがえた
+    else if (C.fv === A.pv && C.fv !== A.fv) type = 'viewSwap';
+    render();
+    if (type) { addTrip(type); setMsg(`<span class="mark-ng">×</span> おしい！ <b>${TRIPS[type].name}</b>かも。<br><span class="small">${TRIPS[type].exp}</span>`, 'ng'); }
+    else setMsg(`<span class="mark-ng">×</span> ちがうみたい。${C.name}の正面図と平面図を思いうかべてみよう。`, 'ng');
+  }
+
+  /* =====================================================================
+     9. 共通の動き
+     ===================================================================== */
+  function stopTimer() { if (st.timer) { clearInterval(st.timer); st.timer = null; } }
+  function pushHist() { st.hist.push(clone({ P: st.P, hintLv: st.hintLv })); if (st.hist.length > 80) st.hist.shift(); $('btnUndo').disabled = false; }
+  function undo() {
+    if (!st.hist.length) return;
+    stopTimer();
+    const h = st.hist.pop();
+    st.P = h.P; st.hintLv = h.hintLv;
+    setMsg('↶ ひとつもどした。');
+    render();
+  }
+  function resetProblem() {
+    stopTimer();
+    st.P = clone(st.P0); st.hist = []; st.hintLv = 0;
+    st.view = { yaw: -32, pitch: 24 };
+    setMsg('はじめからやりなおそう。');
+    render();
+  }
+  // 上のチップ（① 立体 ② 図形 ③ 立体）をえらんだとき
+  function setSolid(k) {
+    stopTimer();
+    pushHist();
+    if (st.part === 1) {
+      Object.assign(st.P, { solid: k, mode: 'free', quiz: null, mission: null, sep: false });
+      render();
+      setMsg(`${SOLIDS.find(s => s.kind === k).name}を切ってみよう。`);
+    } else if (st.part === 2) {
+      st.P = newPredict(k);
+      render();
+      setMsg(`${SHAPES[k].name}を回すと、どんな立体ができる？ 予想しよう。`);
+    } else {
+      st.P = { solid: k, mode: 'free', quiz: null };
+      render();
+      setMsg(`${s3(k).name}の見取図と投影図。見取図を回して、正面図・平面図と見くらべよう。`);
+    }
+  }
+  const PART_P = {
+    1: () => ({ solid: 'cube', th: 0, ph: 0, s: 1.5, sep: false, mode: 'free', quiz: null, mission: null }),
+    2: () => newPredict('rect'),
+    3: () => ({ solid: 'cube', mode: 'free', quiz: null }),
+  };
+  const INTRO = [null,
+    '「傾き」「向き」「位置」のスライダーで、切る面を動かそう。立体はドラッグで回せるよ。',
+    '長方形を、赤むらさきの軸のまわりに1回転させると、どんな立体ができる？ 予想しよう。',
+    '立体をえらぶと、見取図（左）と投影図（右）が出る。「🤔 投影図クイズ」で立体を当てよう。',
+  ];
+  function setPart(n, opt = {}) {
+    stopTimer();
+    st.part = n;
+    if (!opt.keepFocus) { st.focus = null; $('focusBar').hidden = true; }
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === n));
+    $('partNote').textContent = PARTS[n].note;
+    st.P = PART_P[n]();
+    st.P0 = clone(st.P); st.hist = []; st.hintLv = 0;
+    st.view = n === 2 ? { yaw: -28, pitch: 16 } : { yaw: -32, pitch: 24 };
+    setMsg(INTRO[n]);
+    render();
+  }
+  function render() {
+    const P = st.P;
+    [1, 2, 3].forEach(i => { $('R' + i).hidden = st.part !== i; });
+    // 上のチップ
+    const chips = st.part === 1 ? SOLIDS.map(s => [s.kind, s.name, P.solid === s.kind])
+      : st.part === 2 ? SHAPE_ROW.map(k => [k, SHAPES[k].name.replace('（発展）', ''), P.mode !== 'reverse' && (P.shape === k || ALT[k] === P.shape)])
+      : SOLIDS3.map(s => [s.kind, s.name, P.mode === 'free' && P.solid === s.kind]);
+    $('solidRow').innerHTML = chips.map(([k, nm, on]) => `<button class="chip${on ? ' active' : ''}" data-k="${k}">${nm}</button>`).join('');
+    $('solidRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setSolid(b.dataset.k)));
+    // パートごとのボタン
+    $('btnQuiz').textContent = ['', '🤔 予想クイズ', '🤔 どの図形を回した？', '🤔 投影図クイズ'][st.part];
+    $('btnMission').hidden = st.part !== 1;
+    $('btnSep').hidden = st.part !== 1;
+    $('btnPlay').hidden = st.part !== 2;
+    $('btnPlay').disabled = st.part === 2 && P.mode !== 'free';
+    $('btnAlt').hidden = true;
+    syncCtrl();
+    [null, render1, render2, render3][st.part]();
+    renderTrips(); renderTeacher();
+    $('btnUndo').disabled = !st.hist.length;
+  }
+  function setMsg(html, c) { const e = $('msg'); e.innerHTML = html; e.className = 'msg' + (c ? ' ' + c : ''); }
+  function hint() {
+    const P = st.P;
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    st.hintLv = Math.min(3, st.hintLv + 1);
+    const lv = st.hintLv;
+    if (st.part === 2) {
+      if (P.mode === 'reverse' && !P.rev.done) { setMsg('💡 ' + ['', '立体を「➡ 正面から」見てみよう。軸の右がわの形が、回した図形。', '立体の高さが軸にした辺の長さ、底面の半径がもう1つの辺の長さ。', '右の「正面から見た図」の、軸より右の半分を見よう。'][lv]); return; }
+      setMsg('💡 ' + ['', '図形の中の1つの点は、軸のまわりに回すと円をえがく。図形のいちばん外の辺は何をえがく？', '軸と平行な辺は筒（つつ）のような面、ななめの辺はとんがった面、半円の曲線は丸い面をえがく。', '回転角のスライダーで、少しずつ回して見よう（予想のあと）。'][lv]); return;
+    }
+    if (st.part === 3) {
+      setMsg('💡 ' + ['', '正面図（上）で、立体の横から見た形と高さがわかる。', '平面図（下）が円なら底面が円の立体、多角形なら角柱・角錐。', '正面図が長方形なら「柱」、三角形なら「錐」のなかま。'][lv]); return;
+    }
+    if (P.mode === 'quiz' && !P.quiz.done) {
+      setMsg('💡 ' + ['', '立体をいろいろな向きに回して、黄色の面がどの面を通っているか見よう。',
+        '切る面が通る<b>立体の面の数</b>が、切り口の<b>辺の数</b>になる（曲面を通るところは曲線）。',
+        '「⬇ 真上から」「➡ 正面から」でも見てみよう。右の「上から見た図」「正面から見た図」の立体の形もヒント。'][lv]);
+      return;
+    }
+    if (P.mode === 'mission' && !P.mission.done) {
+      const ans = missionAnswer(P.mission.target);
+      const t = {
+        '正三角形': '1つの頂点のとなりにある3つの頂点をえらぶと…？', '長方形': '上の面の1つの辺と、下の面の向かいの辺をふくむように。',
+        '台形': '辺の真ん中の点を2つと、頂点を1つ…平行な2本の線ができるように。', 'ひし形': '向かい合う2つの頂点と、辺の真ん中の点を使う。',
+        '五角形': '辺の真ん中の点を2つ、となり合う辺からえらんで、遠くの頂点を1つ。', '正六角形': '辺の真ん中の点を3つ。立方体の中心を通るように。',
+      }[P.mission.target];
+      setMsg('💡 ' + (lv < 3 || !ans ? t : `たとえば「${ans.map(i => MPTS[i].name).join('」「')}」。`));
+      return;
+    }
+    setMsg('💡 ' + ['', '傾きを 0° にすると、底面と平行に切れる。位置を動かすと切り口の大きさはどうなる？',
+      '立方体で、傾き 55°・向き 45° くらいにして、位置を動かしてみよう。三角形 → 六角形 → 三角形 と変わるよ。',
+      '「🎯 立方体を3点で切る」で、正六角形ができる3点をさがそう。'][lv]);
+  }
+
+  /* =====================================================================
+     10. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(p) { bumpRec(r => r.clear[p] = (r.clear[p] || 0) + 1); }
+  function addTrip(type) { st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><button class="op-btn" data-prac="${k}">🔁 この型を練習（${PARTS[TRIPS[k].part].name}）</button></div>`).join('')
+      : '<div class="small">まだ ありません。予想クイズでまちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = `この端末のきろく：正解 ① ${c[1] || 0}　② ${c[2] || 0}　③ ${c[3] || 0}　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    if (st.part !== TRIPS[type].part) setPart(TRIPS[type].part, { keepFocus: true });
+    if (st.part === 1) startQuiz();
+    else if (st.part === 2) { if (type === 'axisMix') startReverse(); else setSolid(type === 'holeMiss' ? 'pipe' : pick(['tri', 'semi', 'trap'])); }
+    else startQuiz3();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     11. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const P = st.P;
+    if (st.part === 2) {
+      if (P.mode === 'predict') return `答え：${P.pred.ans}`;
+      if (P.mode === 'reverse') return P.rev.done ? '（つぎの問題へ）' : `答え：${SHAPES[P.rev.ans].name}（${SHAPES[P.rev.ans].solid}）`;
+      return `${SHAPES[P.shape].name} → ${SHAPES[P.shape].solid}`;
+    }
+    if (st.part === 3) return P.mode === 'quiz' ? (P.quiz.done ? '（つぎの問題へ）' : `答え：${s3(P.quiz.ans).name}`) : `${s3(P.solid).name}`;
+    if (P.mode === 'quiz') return P.quiz.done ? '（つぎのクイズへ）' : `答え：${P.quiz.ans}（${st.info.name}）`;
+    if (P.mode === 'mission') { const a = missionAnswer(P.mission.target); return a ? `答えの例：${a.map(i => MPTS[i].name).join('・')}` : '（この点では作れません）'; }
+    return `今の切り口：${st.info ? st.info.name : ''}`;
+  }
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText();
+    $('tTalk').innerHTML = [null,
+      '発問の例：「立方体を1回切って、何角形までできる？」「切り口の辺の数と、切る面が通る面の数の関係は？」「正六角形になるのは、どんな切り方？」',
+      '発問の例：「回転体を軸に垂直な面で切ると、切り口は？（円）」「軸をふくむ面で切ると？（もとの図形を2つ合わせた形）」「長方形の短い辺を軸にすると？」',
+      '発問の例：「正面図だけで立体が1つに決まる？」「円柱と四角柱、正面図が同じなのはなぜ？」「見えない辺を点線でかくのはなぜ？」'][st.part];
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function teacherStep() {
+    const P = st.P;
+    if (st.part === 2) {
+      if (P.mode === 'predict') answerPred(P.pred.ans);
+      else if (P.mode === 'reverse') { if (!P.rev.done) answerRev(P.rev.ans); else startReverse(); }
+      else if (P.ang < 360) animAng(360, 2200);
+      else startReverse();
+      return;
+    }
+    if (st.part === 3) { if (P.mode === 'quiz' && !P.quiz.done) answerQuiz3(P.quiz.ans); else startQuiz3(); return; }
+    if (P.mode === 'quiz') { if (!P.quiz.done) answerQuiz(P.quiz.ans); else startQuiz(); return; }
+    if (P.mode === 'mission') {
+      if (P.mission.done) { startMission(); return; }
+      const a = missionAnswer(P.mission.target);
+      if (!a) return;
+      P.mission.pts = [];
+      a.forEach(i => tapMissionPt(i));
+      return;
+    }
+    startQuiz();
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     12. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnQuiz').addEventListener('click', () => [null, startQuiz, startReverse, startQuiz3][st.part]());
+  $('btnPlay').addEventListener('click', () => { if (st.P.mode !== 'free') return; pushHist(); if (st.P.ang >= 360) st.P.ang = 0; animAng(360, 2200); });
+  $('btnAlt').addEventListener('click', () => { const k = ALT[st.P.shape]; if (!k) return; stopTimer(); pushHist(); const ang = st.P.ang, done = st.P.mode === 'free'; st.P = newPredict(k); if (done) { st.P.mode = 'free'; st.P.pred.done = true; st.P.ang = ang; } render(); setMsg(`軸にする辺をかえた。${SHAPES[k].sub}`); });
+  $('btnMission').addEventListener('click', () => startMission(st.P.mode === 'mission' && !st.P.mission.done ? st.P.mission.target : undefined));
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetProblem);
+  $('btnHint').addEventListener('click', hint);
+  $('btnSep').addEventListener('click', () => { pushHist(); st.P.sep = !st.P.sep; render(); });
+  $('viewSlant').addEventListener('click', () => tweenView(-32, 24));
+  $('viewTop').addEventListener('click', () => tweenView(0, 90));
+  $('viewFront').addEventListener('click', () => tweenView(0, 0));
+  const stage = $('stage');
+  stage.addEventListener('pointerdown', stageDown);
+  stage.addEventListener('pointermove', stageMove);
+  stage.addEventListener('pointerup', stageUp);
+  stage.addEventListener('pointercancel', stageUp);
+  $('btnWs').addEventListener('click', () => {
+    setPart(1);
+    pushHist();
+    Object.assign(st.P, { solid: 'cube', th: 55, ph: 315, s: 0, sep: false });
+    render();
+    setMsg('📄 ワークシートの問題：立方体を<b>ななめ</b>に切る（傾き 55°・向き 315°）。「位置」を −5 cm から 5 cm まで動かして、切り口の形が変わるたびに「＋ 記録する」。');
+  });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '立体を切る・回す',
+    question: '立方体を平面でななめに切ると、切り口はどんな形になるだろうか？',
+    predictions: ['三角形だけ', '四角形だけ', '三角形か四角形', '三角形・四角形・五角形・六角形のどれか', '円や だ円', 'わからない'],
+    operationNote: '「📄 ワークシートの問題」で立方体をななめに切り、「位置」を動かして形が変わるたびに「＋ 記録する」。「🎯 立方体を3点で切る」もやってみよう。',
+    fields: [
+      { key: 'solid', label: '立体', math: false },
+      { key: 'cut', label: '切り方（傾き・向き・位置）', math: false },
+      { key: 'k', label: '辺の数', math: false },
+      { key: 'name', label: '切り口の形', math: false }
+    ],
+    capture: () => {
+      const P = st.P, info = st.info;
+      if (st.part !== 1) { setMsg('記録は ① 切断 でしよう。'); return null; }
+      if (P.mode === 'quiz' && !P.quiz.done) { setMsg('予想クイズに答えてから記録しよう。'); return null; }
+      if (!info || info.key === 'none') { setMsg('切る面を立体に重ねてから記録しよう。'); return null; }
+      return { solid: SOLIDS.find(s => s.kind === P.solid).name, cut: `${f1(P.th)}°・${f1(P.ph)}°・${f1(P.s)} cm`, k: info.k ? info.k + '本' : '（曲線）', name: info.name };
+    },
+    summaryHint: '「立方体を平面で切ると、切り口は〜角形から〜角形までできる。切る面が通る立体の面の数が、切り口の〜になる。」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める（「四角形まで」と考える生徒が多い）。位置を動かすと 三角形 → 六角形 → 三角形 と変わることを確かめさせ、「切る面が通る面の数 ＝ 辺の数」に気づかせる。最後に「🎯 3点で切る」で正六角形を作らせる。',
+      answer: '三角形・四角形・五角形・六角形のどれか。<br>立方体の面は6つなので、切る面が通る面の数（3〜6）が切り口の辺の数になる。中心を通り、辺の真ん中の点を通るように切ると正六角形。七角形以上や円はできない。'
+    }
+  });
+
+  setupTeacher();
+  setPart(1);
+})();
+</script>
+
+</body>
+</html>
