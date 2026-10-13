@@ -4,499 +4,1275 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>図形の移動ビューア</title>
+<link rel="stylesheet" href="worksheet.css">
 <style>
-  * { box-sizing: border-box; }
+  /* 色のきまり（中1の教材とそろえる）：移動前＝黄色のぬり・こい灰色の実線、移動後＝水色のぬり・青緑の点線、
+     2回目のあと＝水色、1回目のあと（とちゅう）＝灰色の点線。頂点 A＝オレンジ・B＝青・C＝紫
+     （色に加えて、名前と「｜」の本数 1・2・3 でも区別する）。対称の軸＝赤紫の太線、正解＝緑（○）、まちがい＝赤紫（×）。 */
   :root {
-    --cA: #e53935; --cB: #1e88e5; --cC: #43a047;
-    --orig: #ef6c00; --img: #5e35b1;
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --cA: #e65100; --cB: #1565c0; --cC: #6a1b9a; --ok: #2e7d32; --ng: #ad1457; --img: #00838f;
   }
+  * { box-sizing: border-box; }
   body {
-    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
-    background: linear-gradient(160deg, #fff3e0 0%, #ede7f6 100%);
-    margin: 0;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-    color: #333;
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
   }
-  .back-link { align-self: flex-start; font-size: 0.85rem; color: #5e35b1; text-decoration: none; margin-bottom: 4px; }
-  h1 { margin: 2px 0; font-size: 1.5rem; color: #4527a0; text-align: center; }
-  .subtitle { margin: 0 0 12px; font-size: 0.9rem; color: #5e35b1; text-align: center; line-height: 1.8; }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
 
-  .main {
-    width: 100%; max-width: 1180px;
-    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; align-items: start;
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
   }
-  @media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
-  .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.sm { min-height: 44px; padding: 4px 12px; font-size: .95rem; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
 
-  .card {
-    background: #fff; border-radius: 16px; padding: 12px 14px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
   }
-  .card h2 { font-size: 1rem; margin: 0 0 8px; color: #4527a0; }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
 
-  #plane { width: 100%; height: auto; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
-  .handle { cursor: grab; }
-
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font-size: 0.88rem; font-weight: bold; margin-top: 6px; }
+  /* ===== 座標平面と操作（広い画面は 左＝平面、右＝操作） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @container (min-width: 820px) { .board-in { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+  .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  #graph { width: 100%; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font-size: 0.9rem; font-weight: bold; margin-top: 6px; }
   .legend span { display: inline-flex; align-items: center; gap: 5px; }
-  .sw { width: 18px; height: 14px; border-radius: 3px; display: inline-block; }
+  .sw { width: 20px; height: 14px; border-radius: 3px; display: inline-block; }
 
-  /* モード切りかえ */
-  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .tab {
-    border: 2px solid #d1c4e9; background: #fff; color: #4527a0; border-radius: 12px; padding: 8px 4px;
-    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation; font-family: inherit; line-height: 1.5;
-  }
-  .tab .ic { font-size: 1.3rem; display: block; }
-  .tab.on { background: #5e35b1; color: #fff; border-color: #5e35b1; }
-  .tab rt { font-size: 0.55em; }
+  /* ② 3つをくらべる */
+  .cmp { container-type: inline-size; width: 100%; }
+  .cmp-in { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  @container (min-width: 760px) { .cmp-in { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .cmp-card h2 { text-align: center; }
+  .cmp-num { font-size: .95rem; font-weight: bold; line-height: 1.7; text-align: center; margin-top: 4px; }
+  .cmp-tbl { width: 100%; border-collapse: collapse; font-size: 1rem; line-height: 1.55; }
+  .cmp-tbl th, .cmp-tbl td { border: 2px solid #cfd8dc; padding: 6px 8px; vertical-align: top; }
+  .cmp-tbl th { background: #eceff1; font-size: .92rem; }
+  .cmp-tbl td.h { background: #f5f5f5; font-weight: bold; white-space: nowrap; }
 
-  .pane { display: none; flex-direction: column; gap: 10px; }
-  .pane.on { display: flex; }
-  .slider-row { display: flex; align-items: center; gap: 8px; }
-  .slider-row .lbl { font-weight: bold; font-size: 1rem; white-space: nowrap; min-width: 92px; }
-  .slider-row input[type=range] { flex: 1; accent-color: #5e35b1; height: 28px; min-width: 0; }
-  .slider-row .val { font-weight: bold; font-size: 1.3rem; min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; color: #4527a0; }
-  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .btn {
-    border: none; border-radius: 12px; padding: 9px 16px; font-size: 1rem; font-weight: bold;
-    cursor: pointer; touch-action: manipulation; font-family: inherit; background: #ede7f6; color: #4527a0;
-  }
-  .btn.main-btn { background: #5e35b1; color: #fff; font-size: 1.1rem; padding: 11px 22px; }
-  .radio-row { display: flex; gap: 6px; flex-wrap: wrap; }
-  .radio-row label {
-    border: 2px solid #d1c4e9; border-radius: 10px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 0.95rem;
-  }
-  .radio-row input { display: none; }
-  .radio-row label.on { background: #ede7f6; border-color: #5e35b1; color: #4527a0; }
-  .big-desc { font-size: 1.15rem; font-weight: bold; text-align: center; padding: 8px; border-radius: 12px; background: #f3e5f5; color: #4527a0; }
-  .note { font-size: 0.85rem; color: #666; }
+  .slider-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0; font-weight: bold; }
+  .slider-row .lbl { min-width: 5.5em; }
+  .slider-row input[type=range] { flex: 1; min-width: 140px; height: 36px; }
+  .slider-row input[type=number], .num-in { width: 84px; font-size: 1.2rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .big-desc { font-size: 1.15rem; font-weight: bold; text-align: center; padding: 8px; border-radius: 12px; background: #e0f7fa; color: #006064; margin-top: 4px; line-height: 1.6; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .opt-check { font-size: 0.98rem; font-weight: bold; color: #37474f; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+  .opt-check input { width: 22px; height: 22px; }
+  .qtxt { font-weight: bold; font-size: 1.08rem; line-height: 1.7; margin-bottom: 6px; }
 
-  .check { display: flex; align-items: center; gap: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; }
-  .check input { width: 22px; height: 22px; accent-color: #5e35b1; }
+  /* 答える欄 */
+  .ans-line { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; font-weight: bold; margin: 6px 0; font-size: 1.1rem; }
+  .go { width: 100%; margin-top: 8px; min-height: 54px; border: none; border-radius: 14px; background: var(--ok); color: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+  .go.next { background: var(--accent); }
 
-  /* 性質 */
+  /* きまり */
   .prop-title { font-size: 1.05rem; font-weight: bold; margin-bottom: 6px; line-height: 1.6; }
   .prop-list { display: flex; flex-direction: column; gap: 4px; font-size: 1.05rem; font-weight: bold; font-variant-numeric: tabular-nums; }
   .prop-list .row { padding: 4px 10px; border-radius: 8px; background: #fafafa; }
   .a { color: var(--cA); } .b { color: var(--cB); } .c { color: var(--cC); }
 
-  .help {
-    width: 100%; max-width: 1180px; margin-top: 12px;
-    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
-    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  }
-  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #4527a0; }
+  /* 座標の表 */
+  .tbl-scroll { overflow-x: auto; }
+  .ct { width: 100%; border-collapse: collapse; font-size: 22px; text-align: center; min-width: 420px; }
+  .ct th { background: #eceff1; font-size: .88rem; padding: 4px; border: 2px solid #b0bec5; }
+  .ct td { border: 2px solid #cfd8dc; padding: 4px 6px; height: 48px; font-weight: bold; }
+  .ct td.nm { font-size: 22px; font-weight: 900; }
+  .ct .chg { background: #fff8e1; text-decoration: underline; text-decoration-color: #f9a825; text-decoration-thickness: 3px; }
+  .ct .rule td { background: #e8f5e9; color: #1b5e20; font-size: 20px; }
+  .ct .hidebtn { min-height: 40px; min-width: 96px; border: 2px dashed #90a4ae; background: #fafafa; border-radius: 10px; font-size: 1.1rem; font-weight: bold; color: #78909c; cursor: pointer; }
+  .tbl-note { font-size: .88rem; color: #546e7a; margin-top: 6px; line-height: 1.6; }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
   .help ul { margin: 0; padding-left: 20px; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 8px 12px; line-height: 1.7; }
 </style>
 </head>
 <body>
+
 <a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
-<h1>🔄 図形の<ruby>移動<rt>いどう</rt></ruby>ビューア</h1>
-<p class="subtitle">三角形ABCを「ずらす・うらがえす・まわす」して、移動の前とあとで対応する点のきまりを見つけよう。</p>
+<h1>🔄 図形の移動ビューア</h1>
+<p class="subtitle">△ABC を「ずらす・うらがえす・まわす」。移動の前とあとで、対応する点と座標のきまりを見つけよう。</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
 
-<div class="main">
-  <!-- ===== 左：座標平面 ===== -->
-  <div class="col">
-    <div class="card">
-      <svg id="plane" viewBox="0 0 520 520" aria-label="座標平面">
-        <defs>
-          <clipPath id="clip"><rect x="20" y="20" width="480" height="480"/></clipPath>
-          <marker id="mA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e53935"/></marker>
-          <marker id="mB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1e88e5"/></marker>
-          <marker id="mC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#43a047"/></marker>
-        </defs>
-        <g id="grid"></g>
-        <g id="dyn"></g>
-      </svg>
-      <div class="legend">
-        <span><i class="sw" style="background:#ffe0b2;border:2px solid #ef6c00"></i>移動前（△ABC）</span>
-        <span><i class="sw" style="background:rgba(126,87,194,0.3);border:2px dashed #5e35b1"></i>移動後（△A'B'C'）</span>
-      </div>
+<div class="panel">
+
+  <!-- モード：① 1つの移動 ② 3つをくらべる ③ 2つの移動を続けて ④ どんな移動？ -->
+  <div class="chip-row" id="modeRow"></div>
+  <div class="chip-row" id="kindRow"></div>
+  <div class="part-note" id="modeNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn" id="btnNew">🎲 新しい問題</button>
+      <button class="op-btn" id="btnAgain">▶ もう一度動かす</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+      <label class="opt-check" id="auxWrap"><input type="checkbox" id="auxSw" checked> 対応する点を結ぶ補助線</label>
     </div>
   </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
 
-  <!-- ===== 右：操作パネル ===== -->
-  <div class="col">
-    <div class="card">
-      <div class="tabs">
-        <button class="tab on" data-mode="trans"><span class="ic">➡️</span><ruby>平行<rt>へいこう</rt></ruby>移動</button>
-        <button class="tab" data-mode="reflect"><span class="ic">🪞</span><ruby>対称<rt>たいしょう</rt></ruby>移動</button>
-        <button class="tab" data-mode="rotate"><span class="ic">🔄</span><ruby>回転<rt>かいてん</rt></ruby>移動</button>
+  <!-- ①③④：座標平面と操作 -->
+  <div class="board" id="boardSec"><div class="board-in">
+    <div class="col">
+      <div class="card">
+        <div id="graph"></div>
+        <div class="legend" id="legend"></div>
+        <div class="note" id="graphNote" style="text-align:center;margin-top:4px"></div>
       </div>
     </div>
-
-    <div class="card">
-      <!-- 平行移動 -->
-      <div class="pane on" id="pane-trans">
-        <h2>➡️ 平行移動：同じ向きに同じ長さだけずらす</h2>
-        <div class="slider-row"><span class="lbl">右へ</span><input type="range" id="tx" min="-10" max="10" step="1" value="4"><span class="val" id="txv"></span></div>
-        <div class="slider-row"><span class="lbl">上へ</span><input type="range" id="ty" min="-10" max="10" step="1" value="1"><span class="val" id="tyv"></span></div>
-        <div class="big-desc" id="transDesc"></div>
-        <div class="btn-row"><button class="btn" id="transReset">↺ 0にもどす</button></div>
-      </div>
-
-      <!-- 対称移動 -->
-      <div class="pane" id="pane-reflect">
-        <h2>🪞 対称移動：直線（<ruby>対称の軸<rt>たいしょうのじく</rt></ruby>）を折り目にしてうらがえす</h2>
-        <div class="radio-row" id="axisRow">
-          <label class="on"><input type="radio" name="axis" value="y" checked>y軸</label>
-          <label><input type="radio" name="axis" value="x">x軸</label>
-          <label><input type="radio" name="axis" value="free">自由な直線</label>
-        </div>
-        <div class="note" id="freeNote" style="display:none">紫の ◆ 2つをドラッグして、軸の向きと位置を決めよう。</div>
-        <div class="btn-row"><button class="btn main-btn" id="flipBtn">🔃 反転する</button></div>
-      </div>
-
-      <!-- 回転移動 -->
-      <div class="pane" id="pane-rotate">
-        <h2>🔄 回転移動：点Oを中心に、決まった角度だけまわす</h2>
-        <div class="slider-row"><span class="lbl">回す角度</span><input type="range" id="ang" min="0" max="360" step="1" value="90"><span class="val" id="angv"></span></div>
-        <div class="btn-row">
-          <button class="btn" data-ang="0">0°</button>
-          <button class="btn" data-ang="90">90°</button>
-          <button class="btn" data-ang="180">180°（点対称移動）</button>
-          <button class="btn" data-ang="270">270°</button>
-        </div>
-        <div class="note">反時計回り（時計の針と反対向き）にまわります。中心の点 O もドラッグで動かせます。</div>
+    <div class="col">
+      <div class="card" id="ctrl"></div>
+      <div class="card" id="propsCard">
+        <h2 id="propsTitle"></h2>
+        <div id="props"></div>
       </div>
     </div>
+  </div></div>
 
-    <div class="card">
-      <label class="check"><input type="checkbox" id="auxSw" checked>対応する点を結ぶ補助線を表示</label>
-    </div>
-
-    <div class="card">
-      <h2>🔍 見つけよう！移動のきまり</h2>
-      <div id="props"></div>
-    </div>
-
-    <div class="card">
-      <div class="btn-row">
-        <button class="btn" id="shapeReset">△ABC を最初の形にもどす</button>
-      </div>
-      <div class="note" style="margin-top:6px">頂点 A・B・C をドラッグすると、三角形の形や位置を変えられます。</div>
-    </div>
+  <!-- ②：3つをくらべる -->
+  <div class="cmp" id="cmpSec" hidden><div class="cmp-in">
+    <div class="card cmp-card"><h2>➡️ 平行移動</h2><div id="cmp0"></div><div class="cmp-num" id="cmpN0"></div></div>
+    <div class="card cmp-card"><h2>🪞 対称移動（y軸）</h2><div id="cmp1"></div><div class="cmp-num" id="cmpN1"></div></div>
+    <div class="card cmp-card"><h2>🔄 回転移動（O、90°）</h2><div id="cmp2"></div><div class="cmp-num" id="cmpN2"></div></div>
+  </div></div>
+  <div class="card" id="cmpTblCard" hidden>
+    <h2>📊 くらべてみよう（頂点をドラッグして、形を変えても成り立つ？）</h2>
+    <div class="tbl-scroll"><table class="cmp-tbl" id="cmpTbl"></table></div>
   </div>
+
+  <!-- 座標の表 -->
+  <div class="card" id="tblCard">
+    <h2>📋 座標の変化</h2>
+    <label class="opt-check" id="hideWrap"><input type="checkbox" id="hideSw"> 移動後の座標をかくす（予想してから、タップして見る）</label>
+    <div class="tbl-scroll"><table class="ct" id="ctbl"></table></div>
+    <div class="tbl-note" id="ctNote"></div>
+  </div>
+  <div class="msg" id="msg"></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 答えを入れて見せる</button></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>平行移動</b>：図形を、一定の向きに一定の長さだけずらす。<b>対称移動</b>：直線（<b>対称の軸</b>）を折り目にしてうらがえす。<b>回転移動</b>：点（<b>回転の中心</b>）を中心に、一定の角度だけまわす。180° まわす回転移動を<b>点対称移動</b>という。</li>
+      <li>黄色が移動前、水色が移動後の図形。点線の補助線は、A と A′、B と B′、C と C′ のように<b>対応する点</b>どうしを結んでいる。「｜」の数が同じ線は長さが等しい。□ の印は直角。</li>
+      <li>① 1つの移動：移動の種類を選んで動かし、下の表で座標のきまりを見つける。② 3つをくらべる：対応する点を結ぶ線分の性質と、図形の向き（A→B→C のまわる向き）を、3つならべてくらべる。</li>
+      <li>③ 2つの移動を続けて：1回目のあと △A′B′C′、2回目のあと △A″B″C″。「1回の移動で同じ結果にできる？」に答えよう（1回ではできない組み合わせもある）。</li>
+      <li>④ どんな移動？：移動前と移動後の図形から、移動の種類と、中心・軸・ずらす量を答える。</li>
+      <li>頂点・回転の中心 O・自由な直線の2点はドラッグで動かせる（上の「すいつく」で、整数にすいつく／すいつかない）。スライダーは数でも入れられる。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：長さは、整数でないとき小数第1位までの「約」で出しています。回転の角度が 90° の倍数でないときや、自由な直線で対称移動したときの座標は、小数の「約」で出すことがあります（ぴったりの値は中学の範囲をこえるため）。③ の「平行 → 回転」は、回転の中心を作図（垂直二等分線）で見つけるので「発展」です。<br>
+    つながる教材：<a href="おって まわして 対称な図形.html">小6 おって まわして 対称な図形</a>／<a href="座標でお宝さがし.html">中1 座標でお宝さがし</a>／<a href="作図ツール.html">中1 作図ツール</a></p>
+  </div>
+
 </div>
 
-<div class="help">
-  <h2>📝 使いかた</h2>
-  <ul>
-    <li>右の3つのボタンで、移動の種類を選びます。オレンジが移動前、うすい紫が移動後の図形です。</li>
-    <li>点線の補助線は、A と A'（赤）、B と B'（青）、C と C'（緑）のように、対応する点どうしを結んでいます。</li>
-    <li>線の上の小さな「｜」の数が同じところは、長さが等しいことを表します。□ の印は直角です。</li>
-    <li>頂点や回転の中心 O、自由な直線の ◆ は、ドラッグで動かせます（座標は整数に吸いつきます）。</li>
-  </ul>
-</div>
-
+<script src="math-render.js"></script>
+<script src="graph-engine.js"></script>
+<script src="worksheet.js"></script>
 <script>
 (() => {
-  const NS = 'http://www.w3.org/2000/svg';
-  const $ = id => document.getElementById(id);
-  const R = 9, U = 25, O0 = 260;
-  const sx = x => O0 + U * x, sy = y => O0 - U * y;
-  const COL = ['#e53935', '#1e88e5', '#43a047'];
-  const NAMES = ['A', 'B', 'C'];
-  const MK = ['mA', 'mB', 'mC'];
-  const M = '−';
-  const num = v => (v < 0 ? M + Math.abs(v) : String(v));
-  const f1 = v => { const r = Math.round(v * 10) / 10; return (Object.is(r, -0) ? 0 : r).toFixed(1); };
+  const $ = (id) => document.getElementById(id);
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const F = (v) => Fraction.from(v);
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const num = (f) => { if (typeof f === 'number') return f; f = F(f); return f.n / f.d; };
+  const nm = (v) => String(v).replace('-', '−');
+  const f1 = (v) => { const r = Math.round(v * 10) / 10; return nm(Object.is(r, -0) ? 0 : r); };
+  const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const DEG = Math.PI / 180;
+  const mod360 = (a) => ((Math.round(a) % 360) + 360) % 360;
 
-  // ---- 方眼と軸 ----
-  (() => {
-    const g = $('grid');
-    let h = '';
-    for (let i = -R; i <= R; i++) {
-      const c = i % 5 === 0 ? '#cfd8dc' : '#eceff1';
-      h += `<line x1="${sx(i)}" y1="${sy(R)}" x2="${sx(i)}" y2="${sy(-R)}" stroke="${c}"/>`;
-      h += `<line x1="${sx(-R)}" y1="${sy(i)}" x2="${sx(R)}" y2="${sy(i)}" stroke="${c}"/>`;
-      if (i !== 0) {
-        h += `<text x="${sx(i)}" y="${O0 + 15}" font-size="11" text-anchor="middle" fill="#90a4ae">${num(i)}</text>`;
-        h += `<text x="${O0 - 5}" y="${sy(i)}" font-size="11" text-anchor="end" dominant-baseline="central" fill="#90a4ae">${num(i)}</text>`;
+  // 効果音
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, ln, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.1, t0 + start); gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + ln);
+        o.connect(gn).connect(audioCtx.destination); o.start(t0 + start); o.stop(t0 + start + ln);
       }
-    }
-    h += `<line x1="${sx(-R) - 4}" y1="${O0}" x2="${sx(R) + 4}" y2="${O0}" stroke="#78909c" stroke-width="1.6"/>`;
-    h += `<line x1="${O0}" y1="${sy(-R) - 4}" x2="${O0}" y2="${sy(R) + 4}" stroke="#78909c" stroke-width="1.6"/>`;
-    h += `<text x="${sx(R) + 8}" y="${O0 + 5}" font-size="16" font-style="italic" font-weight="bold" fill="#546e7a">x</text>`;
-    h += `<text x="${O0 + 6}" y="${sy(R) - 6}" font-size="16" font-style="italic" font-weight="bold" fill="#546e7a">y</text>`;
-    g.innerHTML = h;
-  })();
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
 
-  // ---- 状態 ----
-  const START = [{ x: 1, y: 1 }, { x: 4, y: 2 }, { x: 2, y: 5 }];
-  let tri = START.map(p => ({ ...p }));
-  let mode = 'trans';
-  let axis = 'y';
-  let P = { x: -2, y: -6 }, Q = { x: 0, y: 6 };   // 自由な直線の2点
-  let Oc = { x: 0, y: 0 };                         // 回転の中心
-  const tgt = { tx: 4, ty: 1, flip: 0, ang: 90 };
-  const cur = { tx: 0, ty: 0, flip: 0, ang: 0 };
+  const NAMES = ['A', 'B', 'C'];
+  const COL = ['#e65100', '#1565c0', '#6a1b9a'];
+  const VIEW = 9;
 
-  // ---- 計算 ----
+  /* =====================================================================
+     1. 点と移動の計算
+     移動 T ＝ { t:'trans', tx, ty } | { t:'reflect', L:{p,q} }（直線 pq で対称）| { t:'rotate', O, ang }（ang は反時計回りを＋の度）
+     ===================================================================== */
   const sub = (p, q) => ({ x: p.x - q.x, y: p.y - q.y });
   const add = (p, q) => ({ x: p.x + q.x, y: p.y + q.y });
   const mul = (p, k) => ({ x: p.x * k, y: p.y * k });
   const dot = (p, q) => p.x * q.x + p.y * q.y;
-  const len = p => Math.hypot(p.x, p.y);
-  const unit = p => mul(p, 1 / (len(p) || 1));
+  const len = (p) => Math.hypot(p.x, p.y);
+  const unit = (p) => mul(p, 1 / (len(p) || 1));
+  const P0 = (p) => ({ x: num(p.x), y: num(p.y) });
+  const footOn = (pt, L) => { const u = unit(sub(L.q, L.p)); return add(L.p, mul(u, dot(sub(pt, L.p), u))); };
+  const LINE = { x: { p: { x: 0, y: 0 }, q: { x: 1, y: 0 } }, y: { p: { x: 0, y: 0 }, q: { x: 0, y: 1 } }, yx: { p: { x: 0, y: 0 }, q: { x: 1, y: 1 } }, ymx: { p: { x: 0, y: 0 }, q: { x: 1, y: -1 } } };
+  const lineXa = (a) => ({ p: { x: a, y: 0 }, q: { x: a, y: 1 } }), lineYb = (b) => ({ p: { x: 0, y: b }, q: { x: 1, y: b } });
+  const mkTrans = (tx, ty) => ({ t: 'trans', tx, ty });
+  const mkRef = (L, tag) => ({ t: 'reflect', L, tag });
+  const mkRot = (O, ang) => ({ t: 'rotate', O, ang });
+  /** 移動 T で点 p を動かす。e は動かすとちゅう（0〜1） */
+  function apply(T, p, e = 1) {
+    p = P0(p);
+    if (!T) return p;
+    if (T.t === 'trans') return { x: p.x + T.tx * e, y: p.y + T.ty * e };
+    if (T.t === 'reflect') { const f = footOn(p, T.L); return add(f, mul(sub(p, f), 1 - 2 * e)); }
+    const t = T.ang * e * DEG, d = sub(p, T.O);
+    return { x: T.O.x + d.x * Math.cos(t) - d.y * Math.sin(t), y: T.O.y + d.x * Math.sin(t) + d.y * Math.cos(t) };
+  }
+  /** 小数第2位までで表せる数か（分数で厳密に計算してよいか） */
+  const nice = (v) => typeof v !== 'number' || Math.abs(v * 100 - Math.round(v * 100)) < 1e-9;
+  /** 移動したあとの点を、分数で厳密に。できないとき（90°の倍数でない回転など）は小数で { approx:true } */
+  function exactT(T, p) {
+    if (!T) return p;
+    const approx = () => Object.assign(apply(T, p), { approx: true });
+    if (p.approx || !nice(p.x) || !nice(p.y)) return approx();
+    const X = F(p.x), Y = F(p.y);
+    if (T.t === 'trans') return nice(T.tx) && nice(T.ty) ? { x: X.add(T.tx), y: Y.add(T.ty) } : approx();
+    if (T.t === 'reflect') {
+      const L = T.L;
+      if (![L.p.x, L.p.y, L.q.x, L.q.y].every(nice)) return approx();
+      // 直線 PQ での対称移動：足 H ＝ P ＋ d ×（(pt−P)・d ÷ d・d）、うつった点 ＝ 2H − pt（分数で計算できる）
+      const Px = F(L.p.x), Py = F(L.p.y), dx = F(L.q.x).sub(Px), dy = F(L.q.y).sub(Py);
+      const k = X.sub(Px).mul(dx).add(Y.sub(Py).mul(dy)).div(dx.mul(dx).add(dy.mul(dy)));
+      return { x: Px.add(dx.mul(k)).mul(2).sub(X), y: Py.add(dy.mul(k)).mul(2).sub(Y) };
+    }
+    const a = mod360(T.ang);
+    if (Math.abs(T.ang - Math.round(T.ang)) > 1e-9 || a % 90 !== 0 || !nice(T.O.x) || !nice(T.O.y)) return approx();
+    const Ox = F(T.O.x), Oy = F(T.O.y), dx = X.sub(Ox), dy = Y.sub(Oy);
+    const r = { 0: [dx, dy], 90: [dy.neg(), dx], 180: [dx.neg(), dy.neg()], 270: [dy, dx.neg()] }[a];
+    return { x: Ox.add(r[0]), y: Oy.add(r[1]) };
+  }
+  /** 座標の表示（分数は分数のまま、マイナスは −。分母が大きいときや計算できないときは「約」） */
+  function showC(v, approx) {
+    if (approx) return '約 ' + f1(num(v));
+    v = F(v);
+    if (v.d === 1) return nm(v.n);
+    if (v.d > 12) return '約 ' + f1(v.n / v.d);
+    return MathRender.html(v.toString(), { size: 'inherit' });
+  }
+  const pair = (p) => `(${showC(p.x, p.approx)}, ${showC(p.y, p.approx)})`;
+  /** 図形の向き（A→B→C が反時計回りなら 1、時計回りなら −1） */
+  const orient = (ps) => { ps = ps.map(P0); return Math.sign((ps[1].x - ps[0].x) * (ps[2].y - ps[0].y) - (ps[1].y - ps[0].y) * (ps[2].x - ps[0].x)); };
+  const close = (a, b) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
+  const sameTri = (P, Q) => P.every((p, i) => close(P0(p), P0(Q[i])));
+  /** 移動の説明（ことば） */
+  function describe(T) {
+    if (!T) return '1回ではできない';
+    if (T.t === 'trans') { const ps = []; if (T.tx) ps.push(`${T.tx > 0 ? '右' : '左'}へ ${f1(Math.abs(T.tx))}`); if (T.ty) ps.push(`${T.ty > 0 ? '上' : '下'}へ ${f1(Math.abs(T.ty))}`); return '平行移動（' + (ps.join('、') || '動かない') + '）'; }
+    if (T.t === 'reflect') return `対称移動（軸：${T.tag || '直線'}）`;
+    const a = mod360(T.ang);
+    return `回転移動（中心 (${f1(T.O.x)}, ${f1(T.O.y)})、反時計回りに ${a}°${a === 180 ? '・点対称移動' : a === 270 ? '＝時計回りに 90°' : ''}）`;
+  }
 
-  function axisLine() {
-    if (axis === 'x') return { p: { x: 0, y: 0 }, u: { x: 1, y: 0 } };
-    if (axis === 'y') return { p: { x: 0, y: 0 }, u: { x: 0, y: 1 } };
-    return { p: P, u: unit(sub(Q, P)) };
+  /* =====================================================================
+     2. 座標平面（graph-engine.js）と、その上に重ねる絵
+     ドラッグ点は graph-engine.js の点、図形・補助線・印は上に重ねた層にかく。
+     ===================================================================== */
+  const NS = 'http://www.w3.org/2000/svg';
+  function mkPlane(el, view, opt, redrawFn) {
+    const g = GraphEngine.create(el, Object.assign({ xmin: -view, xmax: view, ymin: -view, ymax: view, grid: true, step: 1, pan: false }, opt));
+    const layer = document.createElementNS(NS, 'g');
+    layer.setAttribute('pointer-events', 'none');
+    g.svg.insertBefore(layer, g.svg.querySelector('[data-layer="drag"]'));
+    // ＋ − ⟲（ズーム）や画面の大きさが変わったら、重ねた絵もかき直す
+    el.addEventListener('click', () => setTimeout(redrawFn, 0), true);
+    if (window.ResizeObserver) new ResizeObserver(() => setTimeout(redrawFn, 0)).observe(el);
+    const dims = () => { const vb = g.svg.viewBox.baseVal; return { W: vb.width || 600, H: vb.height || 600 }; };
+    const PX = (p) => { const v = g.view, { W, H } = dims(); return [(p.x - v.xmin) / (v.xmax - v.xmin) * W, H - (p.y - v.ymin) / (v.ymax - v.ymin) * H]; };
+    const pl = { g, layer, PX };
+    pl.UNIT = () => { const v = g.view; return dims().W / (v.xmax - v.xmin); };
+    pl.S = (p) => PX(p).map(v => v.toFixed(1)).join(',');
+    pl.line = (p, q, a) => { const [x1, y1] = PX(p), [x2, y2] = PX(q); return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" ${a}/>`; };
+    pl.ticks = (p, q, n, color) => {
+      const d = sub(q, p), L = len(d);
+      if (L < 0.6) return '';
+      const u = mul(d, 1 / L), nr = { x: -u.y, y: u.x }, m = mul(add(p, q), 0.5);
+      let h = '';
+      for (let i = 0; i < n; i++) { const c = add(m, mul(u, (i - (n - 1) / 2) * 0.22)); h += pl.line(add(c, mul(nr, 0.28)), add(c, mul(nr, -0.28)), `stroke="${color}" stroke-width="2.5"`); }
+      return h;
+    };
+    pl.arrowHead = (p, q, color) => {
+      const [x1, y1] = PX(p), [x2, y2] = PX(q), a = Math.atan2(y2 - y1, x2 - x1), L = 14, w = 7;
+      const bx = x2 - L * Math.cos(a), by = y2 - L * Math.sin(a);
+      return `<path d="M${x2.toFixed(1)},${y2.toFixed(1)}L${(bx + w * Math.sin(a)).toFixed(1)},${(by - w * Math.cos(a)).toFixed(1)}L${(bx - w * Math.sin(a)).toFixed(1)},${(by + w * Math.cos(a)).toFixed(1)}Z" fill="${color}"/>`;
+    };
+    pl.text = (p, text, color, size = 20, anchor = 'middle') => { const [x, y] = PX(p); return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${size}" font-weight="bold" fill="${color}" text-anchor="${anchor}" dominant-baseline="central" stroke="#fff" stroke-width="5" paint-order="stroke">${text}</text>`; };
+    pl.label = (pt, center, text, color, size = 21) => { let d = sub(pt, center); d = len(d) < 0.01 ? { x: 0.7, y: 0.7 } : mul(unit(d), 0.8); return pl.text(add(pt, d), text, color, size); };
+    pl.dot = (p, color, r = 6, op = 0.9) => { const [x, y] = PX(p); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${color}" opacity="${op}"/>`; };
+    return pl;
   }
-  const footOn = (pt, L) => add(L.p, mul(L.u, dot(sub(pt, L.p), L.u)));
-  function rot(pt, deg) {
-    const t = deg * Math.PI / 180, d = sub(pt, Oc);
-    return { x: Oc.x + d.x * Math.cos(t) - d.y * Math.sin(t), y: Oc.y + d.x * Math.sin(t) + d.y * Math.cos(t) };
+  const centroid = (ps) => ({ x: (ps[0].x + ps[1].x + ps[2].x) / 3, y: (ps[0].y + ps[1].y + ps[2].y) / 3 });
+  const STY = {
+    before: 'fill="#fff59d" fill-opacity="0.85" stroke="#455a64" stroke-width="3"',
+    after: 'fill="#4dd0e1" fill-opacity="0.32" stroke="#00838f" stroke-width="3" stroke-dasharray="8 5"',
+    mid: 'fill="#cfd8dc" fill-opacity="0.35" stroke="#78909c" stroke-width="2.5" stroke-dasharray="4 5"',
+    ok: 'fill="none" stroke="#2e7d32" stroke-width="5" stroke-dasharray="3 6" stroke-linecap="round"',
+    ng: 'fill="#f8bbd0" fill-opacity="0.35" stroke="#ad1457" stroke-width="3.5" stroke-dasharray="10 6"',
+  };
+  const polySVG = (pl, pts, kind) => `<polygon points="${pts.map(P0).map(pl.S).join(' ')}" ${STY[kind]} stroke-linejoin="round"/>`;
+  /** 頂点の点と名前（A′ など） */
+  function namesSVG(pl, pts, suffix, opt = {}) {
+    pts = pts.map(P0);
+    const c = centroid(pts);
+    return pts.map((p, i) => (opt.noDot ? '' : pl.dot(p, COL[i], opt.r || 6, opt.op || 0.85)) + pl.label(p, c, NAMES[i] + suffix, COL[i], opt.size || 21)).join('');
   }
-  function imageOf(pt) {
-    if (mode === 'trans') return { x: pt.x + cur.tx, y: pt.y + cur.ty };
-    if (mode === 'reflect') { const f = footOn(pt, axisLine()); return add(f, mul(sub(pt, f), 1 - 2 * cur.flip)); }
-    return rot(pt, cur.ang);
+  /** 対称の軸・回転の中心 */
+  function axisSVG(pl, T, opt = {}) {
+    if (!T) return '';
+    if (T.t === 'reflect') {
+      const L = T.L, dd = unit(sub(L.q, L.p)), col = opt.color || '#ad1457';
+      let h = pl.line(add(L.p, mul(dd, -60)), add(L.p, mul(dd, 60)), `stroke="${col}" stroke-width="${opt.w || 4}"${opt.dash ? ` stroke-dasharray="${opt.dash}"` : ''}`);
+      if (T.tag) h += pl.text(add(add(L.p, mul(dd, opt.tagAt == null ? 6.5 : opt.tagAt)), { x: 0.35, y: 0.45 }), T.tag, col, 18, 'start');
+      return h;
+    }
+    if (T.t === 'rotate' && opt.center !== false) return pl.dot(T.O, '#263238', 7, 1) + pl.text(add(T.O, { x: -0.45, y: -0.5 }), opt.cName || 'O', '#263238', 20);
+    return '';
   }
-
-  // ---- SVG 文字列の道具 ----
-  const S = p => `${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`;
-  const line = (p, q, a) => `<line x1="${sx(p.x)}" y1="${sy(p.y)}" x2="${sx(q.x)}" y2="${sy(q.y)}" ${a}/>`;
-  // 長さが等しい印（線分の真ん中に n 本の短い線）
-  function ticks(p, q, n, color) {
-    const d = sub(q, p), L = len(d);
-    if (L < 0.6) return '';
-    const u = mul(d, 1 / L), nrm = { x: -u.y, y: u.x }, m = mul(add(p, q), 0.5);
+  /** 補助線（対応する点を結ぶ線と印）。e は動かすとちゅう（0〜1） */
+  function auxSVG(pl, T, tri, img, e, opt = {}) {
+    if (!T) return '';
+    tri = tri.map(P0); img = img.map(P0);
+    const u = pl.UNIT();
     let h = '';
-    for (let i = 0; i < n; i++) {
-      const c = add(m, mul(u, (i - (n - 1) / 2) * 0.22));
-      h += line(add(c, mul(nrm, 0.28)), add(c, mul(nrm, -0.28)), `stroke="${color}" stroke-width="2.5"`);
+    if (T.t === 'trans') {
+      tri.forEach((p, i) => { if (len(sub(img[i], p)) < 0.05) return; h += pl.line(p, img[i], `stroke="${COL[i]}" stroke-width="2.5" stroke-dasharray="7 5"`) + pl.arrowHead(p, img[i], COL[i]) + pl.ticks(p, img[i], 1, COL[i]); });
+    } else if (T.t === 'reflect') {
+      const ud = unit(sub(T.L.q, T.L.p));
+      tri.forEach((p, i) => {
+        const f = footOn(p, T.L), d = sub(p, f);
+        if (len(d) < 0.05) return;
+        h += pl.line(p, img[i], `stroke="${COL[i]}" stroke-width="2.5" stroke-dasharray="7 5"`);
+        const n = unit(d), s = 0.38, a = add(f, mul(ud, s)), b = add(a, mul(n, s)), c = add(f, mul(n, s));
+        h += `<polyline points="${pl.S(a)} ${pl.S(b)} ${pl.S(c)}" fill="none" stroke="#ad1457" stroke-width="2"/>` + pl.dot(f, '#ad1457', 4, 1);
+        if (e > 0.98) h += pl.ticks(p, f, i + 1, COL[i]) + pl.ticks(f, img[i], i + 1, COL[i]);
+      });
+    } else {
+      const A = T.ang * e, O = T.O;
+      tri.forEach((p, i) => {
+        h += pl.line(O, p, `stroke="${COL[i]}" stroke-width="2.5" stroke-dasharray="7 5"`) + pl.line(O, img[i], `stroke="${COL[i]}" stroke-width="2.5" stroke-dasharray="7 5"`);
+        h += pl.ticks(O, p, i + 1, COL[i]) + pl.ticks(O, img[i], i + 1, COL[i]);
+        const r = 0.9 + 0.35 * i;
+        if (Math.abs(A) > 1 && len(sub(p, O)) > 0.1) {
+          const [cx, cy] = pl.PX(O), a0 = Math.atan2(p.y - O.y, p.x - O.x), R = r * u;
+          if (Math.abs(A) >= 359.5) h += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${R.toFixed(1)}" fill="none" stroke="${COL[i]}" stroke-width="2.2"/>`;
+          else {
+            const a1 = a0 + A * DEG, s0 = add(O, { x: r * Math.cos(a0), y: r * Math.sin(a0) }), s1 = add(O, { x: r * Math.cos(a1), y: r * Math.sin(a1) });
+            h += `<path d="M${pl.S(s0)} A${R.toFixed(1)},${R.toFixed(1)} 0 ${Math.abs(A) > 180 ? 1 : 0} ${A > 0 ? 0 : 1} ${pl.S(s1)}" fill="none" stroke="${COL[i]}" stroke-width="2.2"/>`;
+            const a2 = a1 - Math.sign(A) * 0.12;
+            h += pl.arrowHead(add(O, { x: r * Math.cos(a2), y: r * Math.sin(a2) }), s1, COL[i]);
+          }
+        }
+      });
     }
     return h;
   }
-  function label(pt, center, text, color, size = 17) {
-    let d = sub(pt, center);
-    d = len(d) < 0.01 ? { x: 0.7, y: 0.7 } : mul(unit(d), 0.75);
-    const p = add(pt, d);
-    return `<text x="${sx(p.x)}" y="${sy(p.y)}" font-size="${size}" font-weight="bold" fill="${color}" text-anchor="middle" dominant-baseline="central" stroke="#fff" stroke-width="4" paint-order="stroke">${text}</text>`;
+  /** 回転の中心から各頂点までの円（うすい点線。同じ距離のところを見せる） */
+  function circlesSVG(pl, O, tri) {
+    const [cx, cy] = pl.PX(O), u = pl.UNIT();
+    return tri.map(P0).map((p, i) => `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(len(sub(p, O)) * u).toFixed(1)}" fill="none" stroke="${COL[i]}" stroke-width="1.3" opacity="0.4" stroke-dasharray="3 4"/>`).join('');
   }
-  const centroid = ps => ({ x: (ps[0].x + ps[1].x + ps[2].x) / 3, y: (ps[0].y + ps[1].y + ps[2].y) / 3 });
-
-  // ---- 描画 ----
-  function render() {
-    const img = tri.map(imageOf);
-    const aux = $('auxSw').checked;
-    let h = '<g clip-path="url(#clip)">';
-
-    // 軸・中心などの土台
-    if (mode === 'reflect') {
-      const L = axisLine();
-      h += line(add(L.p, mul(L.u, -40)), add(L.p, mul(L.u, 40)), 'stroke="#8e24aa" stroke-width="3.5"');
-    }
-    if (mode === 'rotate' && aux) {
-      tri.forEach((p, i) => {
-        const r = len(sub(p, Oc));
-        h += `<circle cx="${sx(Oc.x)}" cy="${sy(Oc.y)}" r="${r * U}" fill="none" stroke="${COL[i]}" stroke-width="1.2" opacity="0.35" stroke-dasharray="3 4"/>`;
-      });
-    }
-
-    // 移動前
-    h += `<polygon points="${tri.map(S).join(' ')}" fill="#ffe0b2" fill-opacity="0.85" stroke="#ef6c00" stroke-width="3" stroke-linejoin="round"/>`;
-    // 移動後（半透明）
-    h += `<polygon points="${img.map(S).join(' ')}" fill="#7e57c2" fill-opacity="0.28" stroke="#5e35b1" stroke-width="3" stroke-dasharray="8 5" stroke-linejoin="round"/>`;
-
-    // 補助線
-    if (aux) {
-      if (mode === 'trans') {
-        tri.forEach((p, i) => {
-          if (len(sub(img[i], p)) < 0.05) return;
-          h += line(p, img[i], `stroke="${COL[i]}" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#${MK[i]})"`);
-          h += ticks(p, img[i], 1, COL[i]);
-        });
-      } else if (mode === 'reflect') {
-        const L = axisLine(), nAll = [];
-        tri.forEach((p, i) => {
-          const f = footOn(p, L), d = sub(p, f);
-          if (len(d) < 0.05) return;
-          h += line(p, img[i], `stroke="${COL[i]}" stroke-width="2.5" stroke-dasharray="7 5"`);
-          // 直角の印
-          const n = unit(d), s = 0.38;
-          const a = add(f, mul(L.u, s)), b = add(a, mul(n, s)), c = add(f, mul(n, s));
-          h += `<polyline points="${S(a)} ${S(b)} ${S(c)}" fill="none" stroke="#8e24aa" stroke-width="1.8"/>`;
-          h += `<circle cx="${sx(f.x)}" cy="${sy(f.y)}" r="3.5" fill="#8e24aa"/>`;
-          if (cur.flip > 0.98) { h += ticks(p, f, i + 1, COL[i]); h += ticks(f, img[i], i + 1, COL[i]); }
-        });
-      } else {
-        tri.forEach((p, i) => {
-          h += line(Oc, p, `stroke="${COL[i]}" stroke-width="2.5" stroke-dasharray="7 5"`);
-          h += line(Oc, img[i], `stroke="${COL[i]}" stroke-width="2.5" stroke-dasharray="7 5"`);
-          h += ticks(Oc, p, i + 1, COL[i]); h += ticks(Oc, img[i], i + 1, COL[i]);
-          // 回転角の弧
-          const r = 0.9 + 0.35 * i, ang = cur.ang;
-          if (ang > 1 && len(sub(p, Oc)) > 0.1) {
-            const a0 = Math.atan2(p.y - Oc.y, p.x - Oc.x);
-            if (ang >= 359.5) {
-              h += `<circle cx="${sx(Oc.x)}" cy="${sy(Oc.y)}" r="${r * U}" fill="none" stroke="${COL[i]}" stroke-width="2"/>`;
-            } else {
-              const a1 = a0 + ang * Math.PI / 180;
-              const s0 = { x: Oc.x + r * Math.cos(a0), y: Oc.y + r * Math.sin(a0) };
-              const s1 = { x: Oc.x + r * Math.cos(a1), y: Oc.y + r * Math.sin(a1) };
-              h += `<path d="M${S(s0)} A${r * U},${r * U} 0 ${ang > 180 ? 1 : 0} 0 ${S(s1)}" fill="none" stroke="${COL[i]}" stroke-width="2"/>`;
-            }
-          }
-        });
-      }
-    }
-    h += '</g>';
-
-    // 頂点の点とラベル
-    const c0 = centroid(tri), c1 = centroid(img);
-    img.forEach((p, i) => {
-      h += `<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="5" fill="${COL[i]}" opacity="0.8"/>`;
-      h += label(p, c1, NAMES[i] + "'", COL[i], 16);
-    });
-    tri.forEach((p, i) => {
-      h += label(p, c0, NAMES[i], COL[i], 19);
-      h += `<g class="handle" data-h="${i}" transform="translate(${sx(p.x)},${sy(p.y)})"><circle r="20" fill="transparent"/><circle r="8" fill="${COL[i]}" stroke="#fff" stroke-width="2.5"/></g>`;
-    });
-    if (mode === 'rotate') {
-      h += `<g class="handle" data-h="O" transform="translate(${sx(Oc.x)},${sy(Oc.y)})"><circle r="20" fill="transparent"/><circle r="8" fill="#263238" stroke="#fff" stroke-width="2.5"/></g>`;
-      h += `<text x="${sx(Oc.x) - 12}" y="${sy(Oc.y) + 18}" font-size="17" font-weight="bold" fill="#263238" text-anchor="middle" stroke="#fff" stroke-width="4" paint-order="stroke">O</text>`;
-    }
-    if (mode === 'reflect' && axis === 'free') {
-      [P, Q].forEach((p, k) => {
-        h += `<g class="handle" data-h="${k ? 'Q' : 'P'}" transform="translate(${sx(p.x)},${sy(p.y)})"><circle r="20" fill="transparent"/><rect x="-8" y="-8" width="16" height="16" transform="rotate(45)" fill="#8e24aa" stroke="#fff" stroke-width="2.5"/></g>`;
-      });
-    }
-    $('dyn').innerHTML = h;
-    renderProps(img);
+  /** 図形の向き（A→B→C のまわる向き）を、三角形の中の小さい矢印で */
+  function orientSVG(pl, pts, color) {
+    pts = pts.map(P0);
+    const c = centroid(pts), s = orient(pts), r = 0.5, a0 = Math.PI / 2;
+    const P = [];
+    for (let k = 0; k <= 20; k++) { const a = a0 + s * (k / 20) * 1.6 * Math.PI; P.push({ x: c.x + r * Math.cos(a), y: c.y + r * Math.sin(a) }); }
+    return `<polyline points="${P.map(pl.S).join(' ')}" fill="none" stroke="${color}" stroke-width="3"/>` + pl.arrowHead(P[P.length - 2], P[P.length - 1], color);
   }
 
-  // ---- 「きまり」の表示 ----
-  const N = (i, dash) => `<span class="${'abc'[i]}">${NAMES[i]}${dash ? "'" : ''}</span>`;
-  function renderProps(img) {
+  /* =====================================================================
+     3. 状態
+     ===================================================================== */
+  const START = [{ x: 1, y: 1 }, { x: 4, y: 2 }, { x: 2, y: 5 }];
+  const DEF1 = { tx: 4, ty: 1, axis: 'y', a: 2, b: -1, P: { x: -3, y: -5 }, Q: { x: 1, y: 6 }, O: { x: 0, y: 0 }, ang: 90, dir: 1, flip: 1 };
+  const DEF3 = { preset: 'rr2', a1: 3, b1: 2, a2: 2, b2: -4, xa: -1, xb: 2, th: 45, r1: 90, r2: 90, ga: 4, va: 2, vb: 4, phi: 90 };
+  const st = {
+    mode: 1, kind: 'trans', tri: clone(START), hist: [], prev: null, revealed: {},
+    m1: clone(DEF1), m3: clone(DEF3), s3: 0, s3t: 0, showMid: true,
+    q4: null, e4: 0, ans: null, hintLv: 0, sessTrips: {}, focus: null, last4: '',
+  };
+  const cur = { tx: 0, ty: 0, flip: 0, ang: 0 };     // ① のアニメ（cur が m1 の値に近づいていく）
+
+  const MODES = [null,
+    { name: '① 1つの移動', note: '移動の種類を選んで動かそう。下の表で、座標のきまりを見つけよう。' },
+    { name: '② 3つをくらべる', note: '同じ △ABC を3つの移動で動かした。対応する点を結ぶ線分と、図形の向きをくらべよう。' },
+    { name: '③ 2つの移動を続けて', note: '2回続けて移動すると △A″B″C″。それは「1回の移動」で同じ結果にできる？' },
+    { name: '④ どんな移動？', note: '△ABC を1回移動したら △A′B′C′ になった。移動の種類と、中心・軸・ずらす量を答えよう。' },
+  ];
+  const KINDS = {
+    trans:   { name: '➡️ 平行移動', note: '平行移動：図形を、一定の向きに一定の長さだけずらす。' },
+    reflect: { name: '🪞 対称移動', note: '対称移動：直線（対称の軸）を折り目にして、図形をうらがえす。' },
+    rotate:  { name: '🔄 回転移動', note: '回転移動：点 O（回転の中心）を中心に、図形を一定の角度だけまわす。' },
+  };
+  // つまずきの型（名前・説明・練習するモード）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    flipMix:      { name: 'うらがえるかどうかの見落とし（対称移動と回転・平行移動の取りちがえ）', mode: 4, kind: 'reflect',
+                    exp: 'A→B→C のまわる向きが、移動の前とあとで<b>反対</b>なら対称移動（うらがえる）。<b>同じ</b>なら平行移動か回転移動。' },
+    rotDir:       { name: '回転の向きの取りちがえ', mode: 4, kind: 'rotate',
+                    exp: '時計の針と<b>反対</b>の向きが反時計回り。反時計回りに 90° は、時計回りに 270°。' },
+    centerMis:    { name: '回転の中心の取りちがえ', mode: 4, kind: 'rotate',
+                    exp: '回転の中心は、対応する点（A と A′、B と B′）から<b>等しい距離</b>にある。AA′ と BB′ の<b>垂直二等分線の交点</b>が中心。' },
+    axisPos:      { name: '対称の軸の位置のずれ', mode: 4, kind: 'reflect',
+                    exp: '対称の軸は、対応する点を結ぶ線分の<b>垂直二等分線</b>。A と A′ の<b>真ん中</b>を通る。' },
+    transSign:    { name: '平行移動の向き（符号）の取りちがえ', mode: 4, kind: 'trans',
+                    exp: 'A から A′ へ、右へ何、上へ何。<b>左・下はマイナス</b>。x と y を入れかえない。' },
+    corr:         { name: '対応する頂点の取りちがえ', mode: 4,
+                    exp: 'A は A′、B は B′、C は C′ にうつる。形だけ重なっても、頂点の名前がずれていたら別の移動。' },
+    doubleForget: { name: '2回の対称移動で「2倍」を忘れた', mode: 3, preset: 'rr2',
+                    exp: '軸が平行な2回の対称移動は、軸の間の長さの<b>2倍</b>の平行移動。軸が交わるときは、軸の間の角の<b>2倍</b>の回転移動。' },
+    glideNo:      { name: '1回ではできない組み合わせ', mode: 3, preset: 'glide',
+                    exp: 'うらがえって（向きが反対）、しかも軸にそってずれている。1回の対称移動では、軸の上の点は動かないので<b>1回ではできない</b>。' },
+  };
+
+  /* =====================================================================
+     4. 平面（①③④ は大きい平面 M、② は小さい平面 3 つ）
+     ===================================================================== */
+  const M = mkPlane($('graph'), VIEW, { controls: true, coords: true }, () => draw());
+  const H = {};                                         // M の上のドラッグ点
+  function clearHandles() { Object.values(H).forEach(h => h.remove()); for (const k in H) delete H[k]; }
+  function makeHandles() {
+    clearHandles();
+    if (st.mode === 1 || st.mode === 3) st.tri.forEach((p, i) => { H[i] = M.g.draggable(p.x, p.y, { label: NAMES[i], color: COL[i], onChange: (h) => movedVertex(i, h), onEnd: commit }); });
+    if (st.mode === 1 && st.kind === 'rotate') H.O = M.g.draggable(st.m1.O.x, st.m1.O.y, { label: 'O', color: '#263238', onChange: (h) => { st.m1.O = P0(h); changed(); }, onEnd: commit });
+    if (st.mode === 1 && st.kind === 'reflect' && st.m1.axis === 'free') {
+      ['P', 'Q'].forEach(k => { H[k] = M.g.draggable(st.m1[k].x, st.m1[k].y, { color: '#ad1457', onChange: (h) => movedAxis(k, h), onEnd: commit }); });
+    }
+  }
+  function movedVertex(i, h) {
+    const p = P0(h);
+    if (st.tri.some((q, j) => j !== i && close(q, p))) { h.set(st.tri[i].x, st.tri[i].y, true); return; }   // 頂点どうしは重ねない
+    st.tri[i] = p; changed();
+  }
+  function movedAxis(k, h) {
+    const p = P0(h), o = k === 'P' ? st.m1.Q : st.m1.P;
+    if (close(o, p)) { h.set(st.m1[k].x, st.m1[k].y, true); return; }
+    st.m1[k] = p; changed();
+  }
+
+  /* =====================================================================
+     5. モード① 1つの移動
+     ===================================================================== */
+  function axis1() {
+    const m = st.m1;
+    return { y: LINE.y, x: LINE.x, xa: lineXa(m.a), yb: lineYb(m.b), free: { p: m.P, q: m.Q } }[m.axis];
+  }
+  const tag1 = () => ({ x: 'x軸', y: 'y軸', xa: `x＝${nm(st.m1.a)}`, yb: `y＝${nm(st.m1.b)}`, free: '対称の軸' })[st.m1.axis];
+  /** ① のいまの移動（めあての値） */
+  function T1() {
+    const m = st.m1;
+    if (st.kind === 'trans') return mkTrans(m.tx, m.ty);
+    if (st.kind === 'reflect') return m.flip ? mkRef(axis1(), tag1()) : null;
+    return mkRot(m.O, m.ang * m.dir);
+  }
+  /** ① のアニメのとちゅうの移動 */
+  function T1cur() {
+    const m = st.m1;
+    if (st.kind === 'trans') return [mkTrans(cur.tx, cur.ty), 1];
+    if (st.kind === 'reflect') return [mkRef(axis1(), tag1()), cur.flip];
+    return [mkRot(m.O, cur.ang * m.dir), 1];
+  }
+  /** どの点にも成り立つ座標のきまり（① の文字の式）。出せないときは null */
+  function ruleText1() {
+    const m = st.m1, sg = (k) => k === 0 ? '' : (k > 0 ? ' ＋ ' + k : ' − ' + Math.abs(k));
+    if (st.kind === 'trans') return `(x${sg(m.tx)}, y${sg(m.ty)})`;
+    if (st.kind === 'reflect') {
+      if (!m.flip) return '(x, y)';
+      if (m.axis === 'y') return '(−x, y)';
+      if (m.axis === 'x') return '(x, −y)';
+      if (m.axis === 'xa') return m.a === 0 ? '(−x, y)' : `(${nm(2 * m.a)} − x, y)`;
+      if (m.axis === 'yb') return m.b === 0 ? '(x, −y)' : `(x, ${nm(2 * m.b)} − y)`;
+      const d = sub(m.Q, m.P);
+      if (Math.abs(d.x - d.y) < 1e-9 && Math.abs(m.P.x - m.P.y) < 1e-9) return '(y, x)<span class="note">（直線 y＝x）</span>';
+      if (Math.abs(d.x + d.y) < 1e-9 && Math.abs(m.P.x + m.P.y) < 1e-9) return '(−y, −x)<span class="note">（直線 y＝−x）</span>';
+      return null;
+    }
+    const a = mod360(m.ang * m.dir);
+    if (a % 90 !== 0) return null;
+    const { x: p, y: q } = m.O;
+    if (p === 0 && q === 0) return { 0: '(x, y)', 90: '(−y, x)', 180: '(−x, −y)', 270: '(y, −x)' }[a];
+    if (a === 180) return `(${nm(2 * p)} − x, ${nm(2 * q)} − y)`;
+    if (a === 0) return '(x, y)';
+    return null;
+  }
+  function draw1() {
+    const [T, e] = T1cur(), tri = st.tri, img = tri.map(p => apply(T, p, e)), aux = $('auxSw').checked;
     let h = '';
-    if (mode === 'trans') {
-      const L = Math.hypot(tgt.tx, tgt.ty);
-      h += `<div class="prop-title">対応する点を結ぶ線分は、<u>3本とも平行</u>で、<u>長さが等しい</u>。</div><div class="prop-list">`;
-      h += `<div class="row">${N(0)}${N(0, 1)} ＝ ${N(1)}${N(1, 1)} ＝ ${N(2)}${N(2, 1)} ＝ ${f1(L)}</div>`;
-      h += `<div class="row">どの線分も「右へ ${num(tgt.tx)}、上へ ${num(tgt.ty)}」の向き</div></div>`;
-    } else if (mode === 'reflect') {
-      const Lx = axisLine();
-      h += `<div class="prop-title">対称の軸は、対応する点を結ぶ線分の<u>垂直二等分線</u>になる。<br><span class="note">（線分と軸は垂直に交わり、軸で線分がちょうど半分に分かれる）</span></div><div class="prop-list">`;
-      tri.forEach((p, i) => {
-        const f = footOn(p, Lx);
-        h += `<div class="row">${N(i)}から軸まで ${f1(len(sub(p, f)))} ／ ${N(i, 1)}から軸まで ${f1(len(sub(img[i], f)))}</div>`;
-      });
-      h += `</div>`;
-      if (cur.flip < 0.98 && tgt.flip === 0) h += `<div class="note" style="margin-top:6px">「🔃 反転する」を押して、うらがえしてみよう。</div>`;
+    if (st.kind === 'reflect') h += axisSVG(M, mkRef(axis1(), tag1()), { tagAt: st.m1.axis === 'free' ? 0 : 6.5 });
+    if (st.kind === 'rotate' && aux) h += circlesSVG(M, st.m1.O, tri);
+    h += polySVG(M, tri, 'before') + polySVG(M, img, 'after');
+    if (aux) h += auxSVG(M, T, tri, img, e);
+    h += namesSVG(M, img, '′');
+    M.layer.innerHTML = h;
+  }
+  function sliderRow(id, lab, min, max, step, val, unitTxt) {
+    return `<div class="slider-row"><span class="lbl">${lab}</span><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}" aria-label="${lab}"><input type="number" id="${id}N" min="${min}" max="${max}" step="${step}" value="${val}" aria-label="${lab}（数）">${unitTxt || ''}</div>`;
+  }
+  function bindSlider(id, fn) {
+    const r = $(id), n = $(id + 'N');
+    const set = (v, done) => { v = Math.min(+r.max, Math.max(+r.min, Math.round((+v || 0) / +r.step) * +r.step)); r.value = v; n.value = v; fn(v); if (done) commit(); };
+    r.addEventListener('input', () => set(r.value));
+    r.addEventListener('change', () => set(r.value, true));
+    n.addEventListener('change', () => set(n.value, true));
+  }
+  function renderCtrl1() {
+    const m = st.m1;
+    let h = '';
+    if (st.kind === 'trans') {
+      h += '<h2>➡️ どれだけずらす？</h2>' + sliderRow('tx', '右へ', -10, 10, 1, m.tx) + sliderRow('ty', '上へ', -10, 10, 1, m.ty);
+      h += '<div class="note">左へずらすときは「右へ」をマイナス、下へずらすときは「上へ」をマイナスにする。</div><div class="big-desc" id="desc"></div>';
+    } else if (st.kind === 'reflect') {
+      h += '<h2>🪞 対称の軸</h2><div class="chip-row">' + [['y', 'y軸'], ['x', 'x軸'], ['xa', '直線 x＝a'], ['yb', '直線 y＝b'], ['free', '自由な直線']].map(([k, n]) => `<button class="chip sm${m.axis === k ? ' active' : ''}" data-axis="${k}">${n}</button>`).join('') + '</div>';
+      if (m.axis === 'xa') h += sliderRow('ax', 'a ＝', -6, 6, 1, m.a);
+      if (m.axis === 'yb') h += sliderRow('by', 'b ＝', -6, 6, 1, m.b);
+      if (m.axis === 'free') h += '<div class="note">赤紫の2つの点をドラッグして、軸の向きと位置を決めよう。</div>';
+      h += `<div class="tools" style="margin-top:6px"><button class="op-btn action" id="flipBtn">${m.flip ? '↩ もとにもどす' : '🔃 うらがえす'}</button></div>`;
     } else {
-      h += `<div class="prop-title">回転の中心 O から対応する点までの<u>きょりが等しく</u>、<u>まわした角度もすべて等しい</u>。</div><div class="prop-list">`;
-      tri.forEach((p, i) => {
-        h += `<div class="row">O${N(i)} ＝ O${N(i, 1)} ＝ ${f1(len(sub(p, Oc)))}</div>`;
-      });
-      h += `<div class="row">∠${N(0)}O${N(0, 1)} ＝ ∠${N(1)}O${N(1, 1)} ＝ ∠${N(2)}O${N(2, 1)} ＝ ${Math.round(cur.ang)}°</div></div>`;
+      h += '<h2>🔄 どれだけまわす？</h2>' + sliderRow('ang', '角度', 0, 360, 1, m.ang, '°');
+      h += '<div class="tools">' + [90, 180, 270].map(a => `<button class="op-btn" data-ang="${a}">${a}°${a === 180 ? '（点対称移動）' : ''}</button>`).join('') + '</div>';
+      h += `<div class="chip-row" style="margin-top:6px"><button class="chip sm${m.dir === 1 ? ' active' : ''}" data-dir="1">↺ 反時計回り</button><button class="chip sm${m.dir === -1 ? ' active' : ''}" data-dir="-1">↻ 時計回り</button></div>`;
+      h += '<div class="note">回転の中心 O もドラッグで動かせる。時計の針と同じ向きが時計回り。</div><div class="big-desc" id="desc"></div>';
+    }
+    $('ctrl').innerHTML = h;
+    if (st.kind === 'trans') { bindSlider('tx', v => { m.tx = v; changed(); }); bindSlider('ty', v => { m.ty = v; changed(); }); }
+    if (st.kind === 'reflect') {
+      $('ctrl').querySelectorAll('[data-axis]').forEach(b => b.addEventListener('click', () => { m.axis = b.dataset.axis; m.flip = 1; cur.flip = 0; makeHandles(); renderCtrl1(); changed(); commit(); }));
+      if ($('ax')) bindSlider('ax', v => { m.a = v; changed(); });
+      if ($('by')) bindSlider('by', v => { m.b = v; changed(); });
+      $('flipBtn').addEventListener('click', () => { m.flip = m.flip ? 0 : 1; $('flipBtn').textContent = m.flip ? '↩ もとにもどす' : '🔃 うらがえす'; changed(); commit(); });
+    }
+    if (st.kind === 'rotate') {
+      bindSlider('ang', v => { m.ang = v; changed(); });
+      $('ctrl').querySelectorAll('[data-ang]').forEach(b => b.addEventListener('click', () => { m.ang = +b.dataset.ang; $('ang').value = m.ang; $('angN').value = m.ang; changed(); commit(); }));
+      $('ctrl').querySelectorAll('[data-dir]').forEach(b => b.addEventListener('click', () => { m.dir = +b.dataset.dir; cur.ang = 0; renderCtrl1(); changed(); commit(); }));
+    }
+    paintDesc1();
+  }
+  function paintDesc1() {
+    if (!$('desc')) return;
+    const m = st.m1;
+    if (st.kind === 'trans') {
+      const parts = [];
+      if (m.tx) parts.push(`${m.tx > 0 ? '右' : '左'}へ ${Math.abs(m.tx)}`);
+      if (m.ty) parts.push(`${m.ty > 0 ? '上' : '下'}へ ${Math.abs(m.ty)}`);
+      $('desc').textContent = parts.length ? parts.join('、') + ' ずらす' : '動いていない';
+    } else $('desc').textContent = `点 O(${nm(m.O.x)}, ${nm(m.O.y)}) を中心に、${m.dir === 1 ? '反時計回り' : '時計回り'}に ${m.ang}° まわす`;
+  }
+  const N = (i, dash) => `<span class="${'abc'[i]}">${NAMES[i]}${dash || ''}</span>`;
+  const L1 = (v) => (Math.abs(v - Math.round(v)) < 1e-9 ? nm(Math.round(v)) : '約 ' + f1(v));
+  function renderProps1() {
+    const tri = st.tri, T = T1(), img = tri.map(p => apply(T, p)), m = st.m1;
+    let h = '';
+    if (st.kind === 'trans') {
+      h += '<div class="prop-title">対応する点を結ぶ線分は、<u>3本とも平行</u>で、<u>長さが等しい</u>。</div><div class="prop-list">';
+      h += `<div class="row">${N(0)}${N(0, '′')} ＝ ${N(1)}${N(1, '′')} ＝ ${N(2)}${N(2, '′')} ＝ ${L1(Math.hypot(m.tx, m.ty))}</div>`;
+      h += `<div class="row">どの線分も「右へ ${nm(m.tx)}、上へ ${nm(m.ty)}」の向き（矢印の向きがそろう）</div></div>`;
+    } else if (st.kind === 'reflect') {
+      const L = axis1();
+      h += '<div class="prop-title">対称の軸は、対応する点を結ぶ線分の<u>垂直二等分線</u>になる。<br><span class="note">（線分と軸は垂直に交わり、軸で線分がちょうど半分に分かれる）</span></div><div class="prop-list">';
+      tri.forEach((p, i) => { const f = footOn(p, L); h += `<div class="row">${N(i)} から軸まで ${L1(len(sub(p, f)))} ／ ${N(i, '′')} から軸まで ${L1(len(sub(img[i], f)))}</div>`; });
+      h += '</div>';
+      if (!m.flip) h += '<div class="note" style="margin-top:6px">「🔃 うらがえす」を押してみよう。</div>';
+    } else {
+      h += '<div class="prop-title">回転の中心 O から対応する点までの<u>距離が等しく</u>、<u>まわした角度もすべて等しい</u>。</div><div class="prop-list">';
+      tri.forEach((p, i) => { h += `<div class="row">O${N(i)} ＝ O${N(i, '′')} ＝ ${L1(len(sub(p, m.O)))}</div>`; });
+      h += `<div class="row">∠${N(0)}O${N(0, '′')} ＝ ∠${N(1)}O${N(1, '′')} ＝ ∠${N(2)}O${N(2, '′')} ＝ ${m.ang}°</div></div>`;
     }
     $('props').innerHTML = h;
   }
 
-  // ---- なめらかに動かす ----
-  let raf = 0;
+  /* =====================================================================
+     6. 座標の表（①③④ 共通）
+     cols … 列の一覧 [{ head, pts:[点×3], suffix, hide }]、rule … きまりの行
+     ===================================================================== */
+  function renderTable(cols, rule, note) {
+    const hide = $('hideSw').checked;
+    let h = '<tr><th>頂点</th>' + cols.map(c => `<th>${c.head}</th>`).join('') + '</tr>';
+    for (let i = 0; i < 3; i++) {
+      h += `<tr><td class="nm" style="color:${COL[i]}">${NAMES[i]}</td>`;
+      cols.forEach((c, k) => {
+        const p = c.pts[i], prev = k ? cols[k - 1].pts[i] : null;
+        if (hide && c.hide && !st.revealed[k + ':' + i]) { h += `<td><button class="hidebtn" data-rev="${k}:${i}">？</button></td>`; return; }
+        const chx = prev && Math.abs(num(p.x) - num(prev.x)) > 1e-9, chy = prev && Math.abs(num(p.y) - num(prev.y)) > 1e-9;
+        h += `<td>${c.suffix ? `<span class="small" style="color:${COL[i]}">${NAMES[i]}${c.suffix}</span> ` : ''}(<span class="${chx ? 'chg' : ''}">${showC(p.x, p.approx)}</span>, <span class="${chy ? 'chg' : ''}">${showC(p.y, p.approx)}</span>)</td>`;
+      });
+      h += '</tr>';
+    }
+    if (rule !== undefined) {
+      const showRule = !hide || cols.every((c, k) => !c.hide || [0, 1, 2].every(i => st.revealed[k + ':' + i]));
+      h += `<tr class="rule"><td>きまり</td><td colspan="${cols.length}">${showRule ? (rule ? rule : '<span class="note">（このときは、文字の式のきまりは出さない）</span>') : '？'}</td></tr>`;
+    }
+    $('ctbl').innerHTML = h;
+    $('ctbl').querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', () => { st.revealed[b.dataset.rev] = true; renderTableNow(); }));
+    $('ctNote').innerHTML = note || '';
+  }
+  function renderTableNow() {
+    if (st.mode === 1) {
+      const T = T1(), m = st.m1;
+      let note = '黄色の下線＝移動前からかわった座標。';
+      if (st.kind === 'trans') note += '平行移動では、x 座標には「右へ」の数、y 座標には「上へ」の数がたされる。';
+      else if (st.kind === 'reflect') note += { y: 'y軸で対称移動すると、x 座標の符号だけが反対になる。', x: 'x軸で対称移動すると、y 座標の符号だけが反対になる。', xa: `軸 x＝${nm(m.a)} からの左右の距離が同じ → x と x′ の真ん中が ${nm(m.a)}。`, yb: `軸 y＝${nm(m.b)} からの上下の距離が同じ → y と y′ の真ん中が ${nm(m.b)}。`, free: '自由な直線の軸でも、対応する点の真ん中は軸の上にある。' }[m.axis];
+      else note += m.O.x === 0 && m.O.y === 0 ? '原点を中心に 180° まわすと、x 座標も y 座標も符号が反対になる（点対称移動）。90° のときは、x と y が入れかわる。' : '中心を原点にすると、きまりが見つけやすい。';
+      const r = ruleText1();
+      renderTable([{ head: '移動前 (x, y)', pts: st.tri, suffix: '' }, { head: '移動後 (x′, y′)', pts: st.tri.map(p => exactT(T, p)), suffix: '′', hide: true }], r ? '(x, y) → ' + r : null, note);
+    } else if (st.mode === 3) {
+      const [Ta, Tb] = T3(), p1 = st.tri.map(p => exactT(Ta, p)), p2 = p1.map(p => exactT(Tb, p));
+      renderTable([{ head: '移動前', pts: st.tri, suffix: '' }, { head: '1回目のあと', pts: p1, suffix: '′', hide: true }, { head: '2回目のあと', pts: p2, suffix: '″', hide: true }], rule3(), PRESETS[st.m3.preset].tblNote || '');
+    } else if (st.mode === 4) {
+      const q = st.q4;
+      renderTable([{ head: '移動前', pts: q.tri, suffix: '' }, { head: '移動後', pts: q.img, suffix: '′' }], undefined, 'A と A′、B と B′、C と C′ の座標をくらべてみよう。');
+    }
+  }
+
+  /* =====================================================================
+     7. モード② 3つをくらべる（小さい平面 3 つ）
+     ===================================================================== */
+  const CMP_T = [mkTrans(-6, -3), mkRef(LINE.y, 'y軸'), mkRot({ x: 0, y: 0 }, 90)];
+  let CP = null;
+  function setupCmp() {
+    if (CP) return;
+    CP = [0, 1, 2].map(k => {
+      const pl = mkPlane($('cmp' + k), 7, { controls: false, coords: false }, () => drawCmp());
+      pl.H = st.tri.map((p, i) => pl.g.draggable(p.x, p.y, { label: NAMES[i], color: COL[i], onChange: (h) => movedCmp(k, i, h), onEnd: commit }));
+      return pl;
+    });
+  }
+  function movedCmp(k, i, h) {
+    const p = P0(h);
+    if (st.tri.some((q, j) => j !== i && close(q, p))) { h.set(st.tri[i].x, st.tri[i].y, true); return; }
+    st.tri[i] = p;
+    CP.forEach((pl, kk) => { if (kk !== k) pl.H[i].set(p.x, p.y, true); });
+    drawCmp();
+  }
+  function drawCmp() {
+    if (!CP) return;
+    const tri = st.tri;
+    CP.forEach((pl, k) => {
+      const T = CMP_T[k], img = tri.map(p => apply(T, p));
+      let h = axisSVG(pl, T, { tagAt: 4.5 });
+      if (k === 2) h += circlesSVG(pl, T.O, tri);
+      h += polySVG(pl, tri, 'before') + polySVG(pl, img, 'after') + auxSVG(pl, T, tri, img, 1);
+      h += orientSVG(pl, tri, '#455a64') + orientSVG(pl, img, '#00838f') + namesSVG(pl, img, '′', { size: 18 });
+      pl.layer.innerHTML = h;
+    });
+    const img = CMP_T.map(T => tri.map(p => apply(T, p)));
+    const ds = img[0].map((q, i) => len(sub(q, tri[i])));
+    $('cmpN0').innerHTML = `${N(0)}${N(0, '′')} ＝ ${N(1)}${N(1, '′')} ＝ ${N(2)}${N(2, '′')} ＝ ${L1(ds[0])}<br>3本とも平行（矢印が同じ向き）`;
+    $('cmpN1').innerHTML = tri.map((p, i) => `${N(i)} と ${N(i, '′')} は軸から ${L1(Math.abs(p.x))}`).join('<br>');
+    $('cmpN2').innerHTML = tri.map((p, i) => `O${N(i)} ＝ O${N(i, '′')} ＝ ${L1(len(p))}`).join('<br>') + '<br>∠AOA′ ＝ ∠BOB′ ＝ ∠COC′ ＝ 90°';
+    const o0 = orient(tri) > 0 ? '↺ 反時計回り' : '↻ 時計回り', o1 = orient(img[1]) > 0 ? '↺ 反時計回り' : '↻ 時計回り';
+    $('cmpTbl').innerHTML = `<tr><th></th><th>➡️ 平行移動</th><th>🪞 対称移動</th><th>🔄 回転移動</th></tr>
+      <tr><td class="h">対応する点を<br>結ぶ線分</td><td>3本とも<b>平行</b>で、<b>長さが等しい</b>（同じ向き・同じ長さ）</td><td>対称の軸が、その線分の<b>垂直二等分線</b>（垂直に交わり、軸で半分に分かれる）</td><td>回転の中心 O から、対応する点までの<b>距離が等しい</b>（OA ＝ OA′）。<br>∠AOA′ などは、どれも<b>まわした角度</b>に等しい</td></tr>
+      <tr><td class="h">動かない点</td><td>ない</td><td><b>軸の上</b>の点</td><td><b>中心 O</b></td></tr>
+      <tr><td class="h">図形の向き<br>（A→B→C）</td><td>同じ（${o0}）</td><td><b>反対</b>になる（${o0} → ${o1}）<br>＝<b>うらがえる</b></td><td>同じ（${o0}）</td></tr>
+      <tr><td class="h">座標のきまり<br>（この図）</td><td>(x, y) → (x − 6, y − 3)</td><td>(x, y) → (−x, y)</td><td>(x, y) → (−y, x)</td></tr>`;
+  }
+
+  /* =====================================================================
+     8. モード③ 2つの移動を続けて
+     PRESETS：1回目 T1・2回目 T2・1回でできる移動（single。できないとき null）・パラメータの操作
+     ===================================================================== */
+  const rotC = (v, phi) => {
+    // 平行移動 v のあと、原点中心に phi 回転 ＝ 中心 C で phi 回転。(I − R)C ＝ R v を解く
+    const c = Math.cos(phi * DEG), s = Math.sin(phi * DEG), Rv = { x: c * v.x - s * v.y, y: s * v.x + c * v.y };
+    const a = 1 - c, b = s, det = a * a + b * b;            // I − R ＝ [[a, b], [−b, a]]
+    return { x: (a * Rv.x - b * Rv.y) / det, y: (b * Rv.x + a * Rv.y) / det };
+  };
+  const O0 = { x: 0, y: 0 };
+  const PRESETS = {
+    tt: {
+      name: '平行 → 平行',
+      T: (m) => [mkTrans(m.a1, m.b1), mkTrans(m.a2, m.b2)], single: (m) => mkTrans(m.a1 + m.a2, m.b1 + m.b2),
+      ctrl: (m) => sliderRow('a1', '1回目 右へ', -6, 6, 1, m.a1) + sliderRow('b1', '1回目 上へ', -6, 6, 1, m.b1) + sliderRow('a2', '2回目 右へ', -6, 6, 1, m.a2) + sliderRow('b2', '2回目 上へ', -6, 6, 1, m.b2),
+      keys: ['a1', 'b1', 'a2', 'b2'],
+      why: (m) => `ずらす量を<b>たした</b>平行移動になる（右へ ${m.a1}＋${nm(m.a2)}、上へ ${m.b1}＋${nm(m.b2)}）。`,
+      rule: (m) => { const sg = (k) => k === 0 ? '' : (k > 0 ? ' ＋ ' + k : ' − ' + Math.abs(k)); return `(x, y) → (x${sg(m.a1)}, y${sg(m.b1)}) → (x${sg(m.a1 + m.a2)}, y${sg(m.b1 + m.b2)})`; },
+    },
+    rr2: {
+      name: '対称 → 対称（軸が平行）',
+      T: (m) => [mkRef(lineXa(m.xa), `x＝${nm(m.xa)}`), mkRef(lineXa(m.xb), `x＝${nm(m.xb)}`)], single: (m) => mkTrans(2 * (m.xb - m.xa), 0),
+      ctrl: (m) => sliderRow('xa', '1回目の軸 x＝', -5, 5, 1, m.xa) + sliderRow('xb', '2回目の軸 x＝', -5, 5, 1, m.xb),
+      keys: ['xa', 'xb'], check: (m) => m.xa !== m.xb,
+      why: (m) => `軸の間の長さは ${Math.abs(m.xb - m.xa)}。その<b>2倍</b>の ${Math.abs(2 * (m.xb - m.xa))} だけ、軸に垂直な向きにずれる平行移動になる。`,
+      rule: (m) => `(x, y) → (${nm(2 * m.xa)} − x, y) → (x ${2 * (m.xb - m.xa) >= 0 ? '＋' : '−'} ${Math.abs(2 * (m.xb - m.xa))}, y)`,
+    },
+    rrX: {
+      name: '対称 → 対称（軸が交わる）',
+      T: (m) => [mkRef(LINE.x, 'x軸'), mkRef({ p: O0, q: { x: Math.cos(m.th * DEG), y: Math.sin(m.th * DEG) } }, `ℓ（x軸と ${m.th}°）`)], single: (m) => mkRot(O0, 2 * m.th),
+      ctrl: (m) => '<div class="slider-row"><span class="lbl">2回目の軸 ℓ</span>' + [30, 45, 60, 90].map(t => `<button class="chip sm${m.th === t ? ' active' : ''}" data-th="${t}">x軸と ${t}°</button>`).join('') + '</div><div class="note">1回目は x軸、2回目は原点を通る直線 ℓ。2本の軸は原点で交わる。</div>',
+      why: (m) => `2本の軸の交点（原点）を中心に、軸の間の角 ${m.th}° の<b>2倍</b>の ${2 * m.th}° だけ回転する回転移動になる。`,
+      rule: (m) => m.th === 45 ? '(x, y) → (x, −y) → (−y, x)' : m.th === 90 ? '(x, y) → (x, −y) → (−x, −y)' : null,
+    },
+    rot2: {
+      name: '回転 → 回転（同じ中心）',
+      T: (m) => [mkRot(O0, m.r1), mkRot(O0, m.r2)], single: (m) => mkRot(O0, m.r1 + m.r2),
+      ctrl: (m) => sliderRow('r1', '1回目', 0, 360, 15, m.r1, '°') + sliderRow('r2', '2回目', 0, 360, 15, m.r2, '°') + '<div class="note">どちらも原点 O を中心に、反時計回り。</div>',
+      keys: ['r1', 'r2'],
+      why: (m) => `同じ中心で、まわした角度を<b>たした</b> ${m.r1 + m.r2}°${m.r1 + m.r2 >= 360 ? `（＝ ${mod360(m.r1 + m.r2)}°）` : ''} の回転移動になる。`,
+      rule: () => null,
+    },
+    xy: {
+      name: 'x軸で対称 → y軸で対称',
+      T: () => [mkRef(LINE.x, 'x軸'), mkRef(LINE.y, 'y軸')], single: () => mkRot(O0, 180),
+      ctrl: () => '<div class="note">1回目は x軸、2回目は y軸で対称移動。（ワークシートの問題）</div>',
+      why: () => '原点を中心に <b>180°</b> 回転する移動（<b>点対称移動</b>）と同じ。x軸と y軸の間の角 90° の2倍。',
+      rule: () => '(x, y) → (x, −y) → (−x, −y)',
+      tblNote: 'x軸で対称 → y の符号が反対、y軸で対称 → x の符号が反対。2回で両方の符号が反対 ＝ 原点を中心に 180° 回転のきまり。',
+    },
+    glide: {
+      name: '対称 → 軸にそって平行',
+      T: (m) => [mkRef(LINE.x, 'x軸'), mkTrans(m.ga, 0)], single: () => null,
+      ctrl: (m) => sliderRow('ga', '2回目 右へ', -6, 6, 1, m.ga) + '<div class="note">1回目は x軸で対称移動、2回目は x軸にそって平行移動。</div>',
+      keys: ['ga'], check: (m) => m.ga !== 0,
+      why: () => '向きが反対（うらがえる）なので、1回でするなら対称移動しかない。でも対称移動では軸の上の点は動かないのに、ここでは軸にそってずれている。だから<b>1回ではできない</b>。',
+      rule: (m) => `(x, y) → (x, −y) → (x ${m.ga >= 0 ? '＋' : '−'} ${Math.abs(m.ga)}, −y)`,
+    },
+    tr: {
+      name: '平行 → 回転（発展）',
+      T: (m) => [mkTrans(m.va, m.vb), mkRot(O0, m.phi)], single: (m) => mkRot(rotC({ x: m.va, y: m.vb }, m.phi), m.phi),
+      ctrl: (m) => sliderRow('va', '1回目 右へ', -6, 6, 1, m.va) + sliderRow('vb', '1回目 上へ', -6, 6, 1, m.vb) + '<div class="slider-row"><span class="lbl">2回目</span>' + [90, 180, 270].map(t => `<button class="chip sm${m.phi === t ? ' active' : ''}" data-phi="${t}">原点で ${t}°</button>`).join('') + '</div><div class="note">【発展】回転の中心は、AA″ と BB″ の垂直二等分線の交点（作図ツールで習った作図）。</div>',
+      keys: ['va', 'vb'],
+      why: (m) => { const C = rotC({ x: m.va, y: m.vb }, m.phi); return `中心を (${f1(C.x)}, ${f1(C.y)}) にうつした、${m.phi}° の回転移動になる。中心は、AA″ と BB″ の<b>垂直二等分線の交点</b>（作図で見つけられる）。`; },
+      rule: () => null,
+    },
+  };
+  const T3 = () => PRESETS[st.m3.preset].T(st.m3);
+  const rule3 = () => PRESETS[st.m3.preset].rule(st.m3);
+  function renderCtrl3() {
+    const m = st.m3, pr = PRESETS[m.preset];
+    let h = '<h2>🔁 どの2つを続ける？</h2><div class="chip-row">' + Object.entries(PRESETS).map(([k, p]) => `<button class="chip sm${m.preset === k ? ' active' : ''}" data-pre="${k}">${p.name}</button>`).join('') + '</div>';
+    h += '<div style="margin-top:6px">' + pr.ctrl(m) + '</div>';
+    h += '<div class="tools" style="margin-top:6px"><button class="op-btn" id="p1">▶ 1回目</button><button class="op-btn" id="p2">▶ 2回目</button><button class="op-btn action" id="p12">▶ 続けて動かす</button></div>';
+    h += `<label class="opt-check"><input type="checkbox" id="midSw"${st.showMid ? ' checked' : ''}> とちゅう（△A′B′C′）も見せる</label>`;
+    h += `<div class="big-desc">1回目：${describe(T3()[0])}<br>2回目：${describe(T3()[1])}</div>`;
+    $('ctrl').innerHTML = h;
+    $('ctrl').querySelectorAll('[data-pre]').forEach(b => b.addEventListener('click', () => { m.preset = b.dataset.pre; reset3(); commit(); }));
+    (pr.keys || []).forEach(k => bindSlider(k, v => { if (pr.check && !pr.check(Object.assign({}, m, { [k]: v }))) { $(k).value = m[k]; $(k + 'N').value = m[k]; return; } m[k] = v; reset3(true); }));
+    $('ctrl').querySelectorAll('[data-th]').forEach(b => b.addEventListener('click', () => { m.th = +b.dataset.th; reset3(); commit(); }));
+    $('ctrl').querySelectorAll('[data-phi]').forEach(b => b.addEventListener('click', () => { m.phi = +b.dataset.phi; reset3(); commit(); }));
+    $('p1').addEventListener('click', () => { st.s3 = 0; st.s3t = 1; animate(); });
+    $('p2').addEventListener('click', () => { if (st.s3 < 1) st.s3 = 1; st.s3t = 2; animate(); });
+    $('p12').addEventListener('click', () => { st.s3 = 0; st.s3t = 2; animate(); });
+    $('midSw').addEventListener('change', e => { st.showMid = e.target.checked; draw(); });
+  }
+  /** ③ のパラメータを変えたら：答えをけして、はじめから動かす */
+  function reset3(keepCtrl) {
+    st.ans = newAns(); st.hintLv = 0; st.revealed = {};
+    st.s3 = 0; st.s3t = 2;
+    if (!keepCtrl) renderCtrl3(); else { const d = $('ctrl').querySelector('.big-desc'); if (d) d.innerHTML = `1回目：${describe(T3()[0])}<br>2回目：${describe(T3()[1])}`; }
+    renderAns(); renderTableNow(); draw(); animate(); renderTeacher();
+  }
+  function draw3() {
+    const [Ta, Tb] = T3(), tri = st.tri, aux = $('auxSw').checked;
+    const s = st.s3, e1 = Math.min(1, s), e2 = Math.max(0, s - 1);
+    const mid = tri.map(p => apply(Ta, p, e1)), midF = tri.map(p => apply(Ta, p)), fin = midF.map(p => apply(Tb, p, e2));
+    let h = axisSVG(M, Ta, { color: '#ad1457', w: 3, tagAt: 6.5 }) + axisSVG(M, Tb, { color: '#6a1b9a', w: 3, dash: '10 6', tagAt: -6.5, cName: 'O' });
+    h += polySVG(M, tri, 'before');
+    if (s <= 1) { h += polySVG(M, mid, 'after'); if (aux) h += auxSVG(M, Ta, tri, mid, e1); h += namesSVG(M, mid, '′'); }
+    else {
+      if (st.showMid) h += polySVG(M, midF, 'mid') + namesSVG(M, midF, '′', { size: 17, op: 0.5 });
+      h += polySVG(M, fin, 'after');
+      if (aux) h += auxSVG(M, Tb, midF, fin, e2);
+      h += namesSVG(M, fin, '″');
+    }
+    h += candSVG(M, tri);
+    M.layer.innerHTML = h;
+  }
+
+  /* =====================================================================
+     9. 答える欄（③ の「1回の移動で同じ結果にできる？」と ④ の「どんな移動？」）
+     ===================================================================== */
+  const AXES = [['x', 'x軸'], ['y', 'y軸'], ['xa', '直線 x＝□'], ['yb', '直線 y＝□'], ['yx', '直線 y＝x'], ['ymx', '直線 y＝−x']];
+  const newAns = () => ({ type: null, tx: '', ty: '', axis: 'x', a: '', cx: '', cy: '', ang: '90', dir: 1, done: false, cand: null, ok: false });
+  /** 答えから、移動 T をつくる（足りないときは null と理由） */
+  function readAns() {
+    const a = st.ans, n = (v) => (v === '' || v == null || isNaN(+v) ? null : +v);
+    if (a.type === 'none') return { none: true };
+    if (a.type === 'trans') { const tx = n(a.tx), ty = n(a.ty); if (tx == null || ty == null) return { err: '右へ・上へ の数を入れよう（左・下はマイナス）。' }; return { T: mkTrans(tx, ty) }; }
+    if (a.type === 'reflect') {
+      if (a.axis === 'xa' || a.axis === 'yb') { const v = n(a.a); if (v == null) return { err: '直線の式の数を入れよう。' }; return { T: mkRef(a.axis === 'xa' ? lineXa(v) : lineYb(v), a.axis === 'xa' ? `x＝${nm(v)}` : `y＝${nm(v)}`) }; }
+      return { T: mkRef(LINE[a.axis], AXES.find(x => x[0] === a.axis)[1].replace('直線 ', '')) };
+    }
+    if (a.type === 'rotate') { const cx = n(a.cx), cy = n(a.cy), ang = n(a.ang); if (cx == null || cy == null || ang == null) return { err: '回転の中心の座標と、角度を入れよう。' }; return { T: mkRot({ x: cx, y: cy }, ang * a.dir) }; }
+    return { err: 'まず、移動の種類を選ぼう。' };
+  }
+  function renderAns() {
+    const a = st.ans, m3 = st.mode === 3;
+    let h = m3 ? '<div class="qtxt">△ABC → △A″B″C″ は、<b>1回の移動</b>で同じ結果にできる？ できるなら、どんな移動？</div>' : '';
+    h += '<div class="chip-row">' + [['trans', '➡️ 平行移動'], ['reflect', '🪞 対称移動'], ['rotate', '🔄 回転移動']].concat(m3 ? [['none', '🚫 1回ではできない']] : []).map(([k, n]) => `<button class="chip sm${a.type === k ? ' active' : ''}" data-at="${k}">${n}</button>`).join('') + '</div>';
+    if (a.type === 'trans') h += `<div class="ans-line">右へ <input class="num-in" data-f="tx" type="number" step="0.5" value="${a.tx}" aria-label="右へ"> 上へ <input class="num-in" data-f="ty" type="number" step="0.5" value="${a.ty}" aria-label="上へ"></div><div class="note" style="text-align:center">左・下へは、マイナスの数で。</div>`;
+    if (a.type === 'reflect') {
+      h += '<div class="chip-row" style="margin-top:6px">' + AXES.map(([k, n]) => `<button class="chip sm${a.axis === k ? ' active' : ''}" data-ax="${k}">${n}</button>`).join('') + '</div>';
+      if (a.axis === 'xa' || a.axis === 'yb') h += `<div class="ans-line">直線 ${a.axis === 'xa' ? 'x' : 'y'} ＝ <input class="num-in" data-f="a" type="number" step="0.5" value="${a.a}" aria-label="直線の式の数"></div>`;
+    }
+    if (a.type === 'rotate') {
+      h += `<div class="ans-line">中心 ( <input class="num-in" data-f="cx" type="number" step="0.5" value="${a.cx}" aria-label="中心の x 座標"> , <input class="num-in" data-f="cy" type="number" step="0.5" value="${a.cy}" aria-label="中心の y 座標"> )</div>`;
+      h += `<div class="ans-line"><input class="num-in" data-f="ang" type="number" step="15" min="0" max="360" value="${a.ang}" aria-label="角度">° ` + [60, 90, 120, 180, 270].map(t => `<button class="chip sm${+a.ang === t ? ' active' : ''}" data-ag="${t}">${t}°</button>`).join('') + '</div>';
+      h += `<div class="chip-row"><button class="chip sm${a.dir === 1 ? ' active' : ''}" data-dr="1">↺ 反時計回り</button><button class="chip sm${a.dir === -1 ? ' active' : ''}" data-dr="-1">↻ 時計回り</button></div>`;
+    }
+    h += `<button class="go${a.ok ? ' next' : ''}" id="ansGo">${a.ok ? (m3 ? '🔁 ほかの組み合わせへ' : '🎲 つぎの問題') : '✔ こたえる'}</button>`;
+    const box = st.mode === 3 ? $('props') : $('ansBox');
+    box.innerHTML = h;
+    box.querySelectorAll('[data-at]').forEach(b => b.addEventListener('click', () => { a.type = b.dataset.at; a.cand = null; renderAns(); draw(); }));
+    box.querySelectorAll('[data-ax]').forEach(b => b.addEventListener('click', () => { a.axis = b.dataset.ax; renderAns(); }));
+    box.querySelectorAll('[data-ag]').forEach(b => b.addEventListener('click', () => { a.ang = b.dataset.ag; renderAns(); }));
+    box.querySelectorAll('[data-dr]').forEach(b => b.addEventListener('click', () => { a.dir = +b.dataset.dr; renderAns(); }));
+    box.querySelectorAll('[data-f]').forEach(inp => inp.addEventListener('input', () => { a[inp.dataset.f] = inp.value; }));
+    $('ansGo').addEventListener('click', () => { if (a.ok) { if (m3) { const ks = Object.keys(PRESETS); st.m3.preset = ks[(ks.indexOf(st.m3.preset) + 1) % ks.length]; reset3(); } else newProblem(); } else checkAns(); });
+  }
+  /** 答えた移動で動かした図形（重ねて見せる） */
+  function candSVG(pl, tri) {
+    const a = st.ans;
+    if (!a || !a.cand) return '';
+    const pts = tri.map(p => apply(a.cand, p));
+    return axisSVG(pl, a.cand, { color: a.ok ? '#2e7d32' : '#ad1457', w: 2.5, dash: '4 6', tagAt: 3, cName: '中心' }) + polySVG(pl, pts, a.ok ? 'ok' : 'ng') + (a.ok ? '' : namesSVG(pl, pts, '?', { size: 16, op: 0.6 }));
+  }
+  /** 答えを確かめる */
+  function checkAns() {
+    const r = readAns(), a = st.ans;
+    if (r.err) { setMsg(r.err, 'ng'); return; }
+    let target, correct, tri;
+    if (st.mode === 3) { const [Ta, Tb] = T3(); tri = st.tri; target = tri.map(p => apply(Tb, apply(Ta, p))); correct = PRESETS[st.m3.preset].single(st.m3); }
+    else { tri = st.q4.tri; target = st.q4.img; correct = st.q4.T; }
+    a.cand = r.T || null;
+    if (r.none) {
+      if (!correct) { a.ok = true; okDone(`○ 正解！ ${PRESETS[st.m3.preset].why(st.m3)}`); return; }
+      a.ok = false; sndNG();
+      setMsg('× 1回でできるよ。対応する点を結ぶ線分を見て、平行移動・対称移動・回転移動のどれか考えよう。', 'ng');
+      renderAns(); draw(); return;
+    }
+    const pts = tri.map(p => apply(r.T, p));
+    if (sameTri(pts, target)) {
+      a.ok = true;
+      okDone(`○ 正解！ ${describe(r.T)}。` + (st.mode === 3 ? PRESETS[st.m3.preset].why(st.m3) : ''));
+      return;
+    }
+    a.ok = false; sndNG();
+    const trip = classify(r.T, correct, pts, target, tri);
+    if (trip) addTrip(trip);
+    setMsg(`× 赤紫の図形が、あなたの答えで動かしたところ。水色とずれているね。` + (trip ? `<br><span class="bad">つまずき：${TRIPS[trip].name}</span> ― ${TRIPS[trip].exp}` : '<br>💡 ヒントも使ってみよう。'), 'ng');
+    renderAns(); renderTrips(); draw();
+  }
+  function okDone(text) {
+    sndDone(); bumpClear(st.mode);
+    st.ans.done = true;
+    setMsg(text, 'ok');
+    if (st.mode === 4) { st.e4 = 0; animate(); }
+    renderAns(); renderTrips(); draw();
+  }
+  /** まちがいの型を見分ける */
+  function classify(cand, correct, pts, target, tri) {
+    // 形は重なるのに、頂点の名前がずれている
+    const asSet = pts.every(p => target.some(q => close(p, q)));
+    if (asSet) return 'corr';
+    if (st.mode === 3) {
+      const pre = st.m3.preset;
+      if (pre === 'glide') return 'glideNo';
+      if (pre === 'rr2' && cand.t === 'trans' && correct && Math.abs(Math.abs(cand.tx) * 2 - Math.abs(correct.tx)) < 1e-6 && Math.abs(cand.ty) < 1e-6) return 'doubleForget';
+      if ((pre === 'rrX' || pre === 'xy') && cand.t === 'rotate' && close(cand.O, O0) && (mod360(cand.ang) === mod360(correct.ang / 2) || mod360(cand.ang) === mod360(-correct.ang / 2))) return 'doubleForget';
+    }
+    if (!correct) return null;
+    const oCand = cand.t === 'reflect' ? -1 : 1, oCor = correct.t === 'reflect' ? -1 : 1;
+    if (oCand !== oCor) return 'flipMix';
+    if (cand.t === 'trans' && correct.t === 'trans') {
+      const a = correct.tx, b = correct.ty, x = cand.tx, y = cand.ty;
+      if ((x === -a && y === -b) || (x === -a && y === b) || (x === a && y === -b) || (x === b && y === a)) return 'transSign';
+    }
+    if (cand.t === 'rotate' && correct.t === 'rotate') {
+      if (close(cand.O, correct.O) && mod360(cand.ang) === mod360(-correct.ang)) return 'rotDir';
+      if (mod360(cand.ang) === mod360(correct.ang) && !close(cand.O, correct.O)) return 'centerMis';
+    }
+    if (cand.t === 'reflect' && correct.t === 'reflect') {
+      const d1 = unit(sub(cand.L.q, cand.L.p)), d2 = unit(sub(correct.L.q, correct.L.p));
+      if (Math.abs(d1.x * d2.y - d1.y * d2.x) < 1e-6) return 'axisPos';
+    }
+    return null;
+  }
+
+  /* =====================================================================
+     10. モード④ どんな移動？（問題をつくる）
+     ===================================================================== */
+  function gen4() {
+    const focusKind = st.focus && TRIPS[st.focus].kind;
+    for (let k = 0; k < 500; k++) {
+      const type = focusKind || pick(['trans', 'reflect', 'rotate']);
+      // 三角形（3辺の長さがちがう、面積がほどほど）
+      const A = { x: ri(-6, 5), y: ri(-6, 5) };
+      const tri = [A, { x: A.x + ri(2, 4), y: A.y + ri(-1, 2) }, { x: A.x + ri(0, 2), y: A.y + ri(2, 4) }].map(p => ({ x: p.x, y: p.y }));
+      const sides = [0, 1, 2].map(i => len(sub(tri[i], tri[(i + 1) % 3])));
+      const area = Math.abs(orient(tri) ? ((tri[1].x - tri[0].x) * (tri[2].y - tri[0].y) - (tri[1].y - tri[0].y) * (tri[2].x - tri[0].x)) / 2 : 0);
+      if (area < 2 || Math.abs(sides[0] - sides[1]) < 1e-6 || Math.abs(sides[1] - sides[2]) < 1e-6 || Math.abs(sides[0] - sides[2]) < 1e-6) continue;
+      let T;
+      if (type === 'trans') { const a = ri(-7, 7), b = ri(-7, 7); if (Math.abs(a) + Math.abs(b) < 3) continue; T = mkTrans(a, b); }
+      else if (type === 'reflect') {
+        const ax = pick(['x', 'y', 'xa', 'yb', 'yx', 'ymx']);
+        if (ax === 'xa' || ax === 'yb') { const v = pick([-3, -2, -1, 1, 2, 3]); T = mkRef(ax === 'xa' ? lineXa(v) : lineYb(v), ax === 'xa' ? `x＝${nm(v)}` : `y＝${nm(v)}`); }
+        else T = mkRef(LINE[ax], AXES.find(x => x[0] === ax)[1].replace('直線 ', ''));
+      } else T = mkRot({ x: ri(-3, 3), y: ri(-3, 3) }, pick([90, 180, 270]));
+      const img = tri.map(p => apply(T, p)).map(p => ({ x: Math.round(p.x * 1e6) / 1e6, y: Math.round(p.y * 1e6) / 1e6 }));
+      if (!img.every(p => Math.abs(p.x) <= 8 && Math.abs(p.y) <= 8)) continue;
+      if (img.some(p => tri.some(q => close(p, q))) && type !== 'reflect') continue;
+      if (len(sub(centroid(img), centroid(tri))) < 3.5) continue;          // 重なりすぎると見にくい
+      const sig = JSON.stringify([tri, T.t]);
+      if (sig === st.last4) continue;
+      st.last4 = sig;
+      return { tri, T, img };
+    }
+    return { tri: clone(START), T: mkTrans(-6, -4), img: START.map(p => ({ x: p.x - 6, y: p.y - 4 })) };
+  }
+  function renderCtrl4() {
+    $('ctrl').innerHTML = '<h2>🔍 どんな移動？</h2><div class="qtxt">黄色の △ABC を<b>1回</b>移動したら、水色の △A′B′C′ になった。移動の種類と、中心・軸・ずらす量を答えよう。</div><div id="ansBox"></div>';
+    renderAns();
+  }
+  function draw4() {
+    const q = st.q4, aux = $('auxSw').checked || st.hintLv >= 2;
+    let h = polySVG(M, q.tri, 'before') + namesSVG(M, q.tri, '') + polySVG(M, q.img, 'after') + namesSVG(M, q.img, '′');
+    if (st.hintLv >= 1) h += orientSVG(M, q.tri, '#455a64') + orientSVG(M, q.img, '#00838f');
+    if (aux && !st.ans.done) q.tri.forEach((p, i) => { h += M.line(p, q.img[i], `stroke="${COL[i]}" stroke-width="2" stroke-dasharray="3 6"`); });
+    if (st.hintLv >= 3 && !st.ans.done) h += hint4SVG();
+    if (st.ans.done) {
+      // 正解したら、移動のようすを見せる
+      const pts = q.tri.map(p => apply(q.T, p, st.e4));
+      h += axisSVG(M, q.T, { tagAt: 6 }) + polySVG(M, pts, 'ok') + auxSVG(M, q.T, q.tri, pts, st.e4);
+    } else h += candSVG(M, q.tri);
+    M.layer.innerHTML = h;
+  }
+  /** ヒント3：中点や垂直二等分線を見せる */
+  function hint4SVG() {
+    const q = st.q4, T = q.T;
+    let h = '';
+    if (T.t === 'reflect' || T.t === 'rotate') {
+      q.tri.slice(0, T.t === 'reflect' ? 3 : 2).forEach((p, i) => {
+        const m = mul(add(p, q.img[i]), 0.5), d = sub(q.img[i], p);
+        if (len(d) < 0.05) return;
+        const n = unit({ x: -d.y, y: d.x });
+        h += M.dot(m, COL[i], 5, 1) + M.line(add(m, mul(n, -20)), add(m, mul(n, 20)), `stroke="${COL[i]}" stroke-width="1.8" stroke-dasharray="2 5"`);
+      });
+    }
+    return h;
+  }
+
+  /* =====================================================================
+     11. 共通の動き（かく・アニメ・もどす）
+     ===================================================================== */
+  function draw() {
+    if (st.mode === 1) draw1();
+    else if (st.mode === 2) drawCmp();
+    else if (st.mode === 3) draw3();
+    else draw4();
+  }
+  let timer = 0;
+  /** アニメ（setInterval。画面が見えていないと requestAnimationFrame が止まるため） */
   function animate() {
-    let moving = false;
-    for (const k of ['tx', 'ty', 'ang']) {
-      const d = tgt[k] - cur[k];
-      if (Math.abs(d) > 0.01) { cur[k] += d * 0.2; moving = true; } else cur[k] = tgt[k];
+    if (timer) return;
+    timer = setInterval(() => {
+      let moving = false;
+      if (st.mode === 1) {
+        const m = st.m1;
+        for (const [k, t] of [['tx', m.tx], ['ty', m.ty], ['ang', m.ang]]) { const d = t - cur[k]; if (Math.abs(d) > 0.01) { cur[k] += d * 0.2; moving = true; } else cur[k] = t; }
+        const df = m.flip - cur.flip;
+        if (Math.abs(df) > 0.001) { cur.flip += Math.sign(df) * Math.min(Math.abs(df), 0.04); moving = true; } else cur.flip = m.flip;
+      } else if (st.mode === 3) {
+        const d = st.s3t - st.s3;
+        if (Math.abs(d) > 0.001) { st.s3 += Math.sign(d) * Math.min(Math.abs(d), 0.03); moving = true; } else st.s3 = st.s3t;
+      } else if (st.mode === 4 && st.ans.done) {
+        if (st.e4 < 1) { st.e4 = Math.min(1, st.e4 + 0.025); moving = true; }
+      }
+      draw();
+      if (!moving) { clearInterval(timer); timer = 0; }
+    }, 30);
+  }
+  function changed() {
+    st.revealed = {};
+    if (st.mode === 1) { paintDesc1(); renderProps1(); }
+    if (st.mode === 3 && st.ans) { const had = st.ans.cand || st.ans.ok; st.ans.cand = null; st.ans.ok = false; st.ans.done = false; if (had) renderAns(); }
+    renderTableNow(); renderTeacher(); draw(); animate();
+  }
+  const snap = () => clone({ mode: st.mode, kind: st.kind, tri: st.tri, m1: st.m1, m3: st.m3 });
+  /** 操作が1つ終わったら、その前の状態を「ひとつもどす」用にとっておく */
+  function commit() {
+    const now = snap();
+    if (st.prev && JSON.stringify(st.prev) !== JSON.stringify(now)) { st.hist.push(st.prev); if (st.hist.length > 80) st.hist.shift(); }
+    st.prev = now;
+    paintButtons();
+  }
+  function undo() {
+    if (!st.hist.length) return;
+    const s = st.hist.pop();
+    Object.assign(st, clone(s));
+    st.prev = snap();
+    enterMode(st.mode, { keep: true });
+    setMsg('↶ ひとつもどした。');
+  }
+  function paintButtons() {
+    $('btnUndo').disabled = !st.hist.length || st.mode === 4;
+    $('btnNew').hidden = st.mode !== 4;
+    $('btnHint').hidden = st.mode < 3;
+    $('btnAgain').hidden = st.mode === 2;
+    $('auxWrap').hidden = st.mode === 2;
+  }
+  function setMsg(html, c) { const el = $('msg'); el.innerHTML = html || ''; el.className = 'msg' + (c ? ' ' + c : ''); }
+  function setKind(k) {
+    st.kind = k;
+    document.querySelectorAll('#kindRow .chip').forEach(b => b.classList.toggle('active', b.dataset.k === k));
+    $('modeNote').textContent = KINDS[k].note;
+    cur.tx = 0; cur.ty = 0; cur.ang = 0; cur.flip = 0;      // 切りかえたら 0 から動かして、移動のようすを見せる
+    makeHandles(); renderCtrl1(); changed();
+  }
+  const LEG = {
+    1: '<span><i class="sw" style="background:#fff59d;border:2px solid #455a64"></i>移動前（△ABC）</span><span><i class="sw" style="background:#b2ebf2;border:2px dashed #00838f"></i>移動後（△A′B′C′）</span>',
+    3: '<span><i class="sw" style="background:#fff59d;border:2px solid #455a64"></i>移動前</span><span><i class="sw" style="background:#eceff1;border:2px dashed #78909c"></i>1回目のあと（△A′B′C′）</span><span><i class="sw" style="background:#b2ebf2;border:2px dashed #00838f"></i>2回目のあと（△A″B″C″）</span><span><i class="sw" style="border:3px dashed #ad1457"></i>あなたの答え</span>',
+    4: '<span><i class="sw" style="background:#fff59d;border:2px solid #455a64"></i>移動前（△ABC）</span><span><i class="sw" style="background:#b2ebf2;border:2px dashed #00838f"></i>移動後（△A′B′C′）</span><span><i class="sw" style="border:3px dashed #ad1457"></i>あなたの答え</span>',
+  };
+  /** モードに入る */
+  function enterMode(n, opt = {}) {
+    clearInterval(timer); timer = 0;
+    st.mode = n;
+    document.querySelectorAll('#modeRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.m === n));
+    if (!opt.keepFocus && !opt.keep) { st.focus = null; $('focusBar').hidden = true; }
+    $('kindRow').hidden = n !== 1;
+    $('boardSec').hidden = n === 2; $('tblCard').hidden = n === 2;
+    $('cmpSec').hidden = n !== 2; $('cmpTblCard').hidden = n !== 2;
+    $('hideWrap').hidden = n === 4;
+    $('legend').innerHTML = LEG[n] || '';
+    $('graphNote').textContent = n === 4 ? '' : '頂点 A・B・C はドラッグで動かせる（上の「すいつく」で、整数にすいつく／すいつかない を切りかえ）。';
+    st.hintLv = 0; st.revealed = {};
+    if (!opt.keep) setMsg('');
+    if (n === 1) { $('propsTitle').textContent = '🔍 見つけよう！ 移動のきまり'; $('propsCard').hidden = false; setKind(st.kind); }
+    else if (n === 2) { $('modeNote').textContent = MODES[2].note; clearHandles(); setupCmp(); CP.forEach(pl => pl.H.forEach((h, i) => h.set(st.tri[i].x, st.tri[i].y, true))); setTimeout(drawCmp, 30); }
+    else if (n === 3) {
+      $('modeNote').textContent = MODES[3].note; $('propsTitle').textContent = '🤔 1回の移動で同じ結果にできる？'; $('propsCard').hidden = false;
+      makeHandles(); st.ans = newAns(); renderCtrl3(); reset3();
+    } else {
+      $('modeNote').textContent = MODES[4].note; $('propsCard').hidden = true;
+      clearHandles(); newProblem();
     }
-    // 反転は一定の速さで「パタン」と
-    const df = tgt.flip - cur.flip;
-    if (Math.abs(df) > 0.001) { cur.flip += Math.sign(df) * Math.min(Math.abs(df), 0.035); moving = true; } else cur.flip = tgt.flip;
-    render();
-    raf = moving ? requestAnimationFrame(animate) : 0;
+    paintButtons(); renderTrips(); renderTeacher();
   }
-  const kick = () => { if (!raf) raf = requestAnimationFrame(animate); };
-
-  // ---- 操作パネル ----
-  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
-    mode = b.dataset.mode;
-    document.querySelectorAll('.tab').forEach(o => o.classList.toggle('on', o === b));
-    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + mode));
-    // 切りかえたら 0 から動かしなおして、移動のようすを見せる
-    cur.tx = 0; cur.ty = 0; cur.ang = 0; cur.flip = 0;
-    if (mode === 'reflect') tgt.flip = 0, updateFlipBtn();
-    render(); kick();
-  }));
-
-  const txs = $('tx'), tys = $('ty'), angs = $('ang');
-  function updateTrans() {
-    tgt.tx = +txs.value; tgt.ty = +tys.value;
-    $('txv').textContent = num(tgt.tx); $('tyv').textContent = num(tgt.ty);
-    const parts = [];
-    if (tgt.tx) parts.push(`${tgt.tx > 0 ? '右' : '左'}に ${Math.abs(tgt.tx)}`);
-    if (tgt.ty) parts.push(`${tgt.ty > 0 ? '上' : '下'}に ${Math.abs(tgt.ty)}`);
-    $('transDesc').textContent = parts.length ? parts.join('、') + ' 移動' : '動いていない';
-    kick();
+  function newProblem() {
+    if (st.mode !== 4) return;
+    st.q4 = gen4(); st.ans = newAns(); st.hintLv = 0; st.e4 = 0;
+    renderCtrl4(); renderTableNow(); draw(); renderTeacher();
+    setMsg('A→A′、B→B′、C→C′。対応する点の位置をよく見よう。');
   }
-  txs.addEventListener('input', updateTrans); tys.addEventListener('input', updateTrans);
-  $('transReset').addEventListener('click', () => { txs.value = 0; tys.value = 0; updateTrans(); });
-
-  function updateAng() { tgt.ang = +angs.value; $('angv').textContent = tgt.ang + '°'; kick(); }
-  angs.addEventListener('input', updateAng);
-  document.querySelectorAll('[data-ang]').forEach(b => b.addEventListener('click', () => { angs.value = b.dataset.ang; updateAng(); }));
-
-  function updateFlipBtn() { $('flipBtn').textContent = tgt.flip ? '↩ もとにもどす' : '🔃 反転する'; }
-  $('flipBtn').addEventListener('click', () => { tgt.flip = tgt.flip ? 0 : 1; updateFlipBtn(); kick(); });
-  document.querySelectorAll('#axisRow input').forEach(r => r.addEventListener('change', () => {
-    axis = r.value;
-    document.querySelectorAll('#axisRow label').forEach(l => l.classList.toggle('on', l.contains(r)));
-    $('freeNote').style.display = axis === 'free' ? '' : 'none';
-    render();
-  }));
-  $('auxSw').addEventListener('change', render);
-  $('shapeReset').addEventListener('click', () => { tri = START.map(p => ({ ...p })); Oc = { x: 0, y: 0 }; render(); });
-
-  // ---- ドラッグ ----
-  const svg = $('plane');
-  let drag = null;
-  function toCoord(e) {
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX; pt.y = e.clientY;
-    const p = pt.matrixTransform(svg.getScreenCTM().inverse());
-    const c = v => Math.max(-R, Math.min(R, Math.round(v)));
-    return { x: c((p.x - O0) / U), y: c((O0 - p.y) / U) };
+  function again() {
+    if (st.mode === 1) { cur.tx = 0; cur.ty = 0; cur.ang = 0; cur.flip = 0; draw(); animate(); }
+    else if (st.mode === 3) { st.s3 = 0; st.s3t = 2; animate(); }
+    else if (st.mode === 4) { if (st.ans.done) { st.e4 = 0; animate(); } else setMsg('答えが合ったら、移動のようすを動かして見せるよ。'); }
   }
-  const same = (p, q) => p.x === q.x && p.y === q.y;
-  svg.addEventListener('pointerdown', e => {
-    const h = e.target.closest('.handle');
-    if (!h) return;
-    e.preventDefault();
-    drag = h.dataset.h;
-    svg.setPointerCapture(e.pointerId);
-  });
-  svg.addEventListener('pointermove', e => {
-    if (drag === null) return;
-    const p = toCoord(e);
-    if (drag === 'O') { if (!same(p, Oc)) { Oc = p; render(); } return; }
-    if (drag === 'P' || drag === 'Q') {
-      const other = drag === 'P' ? Q : P;
-      if (same(p, other)) return;
-      if (drag === 'P') P = p; else Q = p;
-      render(); return;
+  function resetAll() {
+    commit();
+    if (st.mode === 1 || st.mode === 2) { st.tri = clone(START); st.m1 = clone(DEF1); }
+    if (st.mode === 3) { st.tri = clone(START); const p = st.m3.preset; st.m3 = clone(DEF3); st.m3.preset = p; }
+    if (st.mode === 4) { st.ans = newAns(); st.hintLv = 0; renderCtrl4(); draw(); return; }
+    commit();
+    enterMode(st.mode, { keep: true });
+    setMsg('はじめにもどした。');
+  }
+  function hint() {
+    if (st.mode < 3) return;
+    st.hintLv = Math.min(3, st.hintLv + 1);
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    const lv = st.hintLv;
+    if (st.mode === 4) {
+      const t = st.q4.T.t;
+      const tx = ['', 'A→B→C と A′→B′→C′ のまわる向き（三角形の中の矢印）をくらべよう。<b>反対</b>ならうらがえっている → 対称移動。<b>同じ</b>なら平行移動か回転移動。',
+        '対応する点を結ぶ線をかいたよ。3本が<b>平行で同じ長さ</b>なら平行移動。',
+        t === 'trans' ? 'A から A′ へ、右へいくつ、上へいくつ？（方眼を数えよう）' : t === 'reflect' ? 'A と A′ の<b>真ん中</b>の点と、AA′ に垂直な直線をかいたよ。3つとも同じ直線の上にあれば、それが軸。' : 'AA′ と BB′ の<b>垂直二等分線</b>をかいたよ。その交点が回転の中心。'][lv];
+      setMsg('💡 ' + tx); draw(); return;
     }
-    const i = +drag;
-    if (tri.some((q, j) => j !== i && same(q, p))) return; // 頂点どうしは重ねない
-    if (same(tri[i], p)) return;
-    tri[i] = p; render();
-  });
-  const end = () => { drag = null; };
-  svg.addEventListener('pointerup', end);
-  svg.addEventListener('pointercancel', end);
+    const pre = st.m3.preset;
+    const tx = ['', 'A→B→C と A″→B″→C″ のまわる向きをくらべよう。うらがえっている（反対）なら、1回でするなら対称移動しかない。',
+      { tt: 'ずらす量をたしてみよう。', rr2: '2本の軸の間の長さと、A から A″ までの長さをくらべよう。', rrX: '2本の軸の間の角と、∠AOA″ をくらべよう。', rot2: '2回の角度をたしてみよう。', xy: '表で、x 座標と y 座標の符号がどうなったか見よう。', glide: '対称移動なら、軸の上の点は動かないはず。', tr: 'A と A″、B と B″ の垂直二等分線の交点をさがそう（発展）。' }[pre],
+      '答えを1つ入れて「こたえる」を押すと、赤紫でその移動の結果が重なる。ずれ方を見て直そう。'][lv];
+    setMsg('💡 ' + tx);
+  }
 
-  updateTrans(); updateAng(); updateFlipBtn();
-  render();
+  /* =====================================================================
+     12. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(p) { bumpRec(r => r.clear[p] = (r.clear[p] || 0) + 1); }
+  function addTrip(type) { st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><button class="op-btn" data-prac="${k}">🔁 この型を練習（${MODES[TRIPS[k].mode].name}）</button></div>`).join('')
+      : '<div class="small">まだ ありません。③ ④ でまちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = `この端末のきろく：正解 ③ ${c[3] || 0}　④ ${c[4] || 0}　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    const T = TRIPS[type];
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${T.name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    if (T.preset) st.m3.preset = T.preset;
+    enterMode(T.mode, { keepFocus: true });
+    setMsg('🔁 ' + T.exp);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     13. 先生モード
+     ===================================================================== */
+  function renderTeacher() {
+    if (!TEACHER) return;
+    let t = '';
+    if (st.mode === 1) t = {
+      trans: '発問：「A と A′、B と B′、C と C′ を結ぶ線分には、どんな関係がある？」→ 平行で長さが等しい。<br>表：「移動後の座標を予想しよう」（かくすにチェック）。x には右への数、y には上への数がたされる。',
+      reflect: '発問：「軸と、A と A′ を結ぶ線分は、どんな関係？」→ 垂直に交わり、軸で二等分される（垂直二等分線）。<br>表：y軸 → x の符号だけが反対、x軸 → y の符号だけが反対。直線 x＝a では「x と x′ の真ん中が a」。',
+      rotate: '発問：「O から A、O から A′ までの長さは？」「∠AOA′ は？」→ 等しい、どの点も同じ角度。<br>表：原点中心 180°（点対称移動）で (−x, −y)、反時計回り 90° で (−y, x)。',
+    }[st.kind];
+    else if (st.mode === 2) t = '3つの移動を見くらべ、「対応する点を結ぶ線分」の性質を表で確認する。頂点をドラッグして形を変えても成り立つことを見せる。「うらがえるのは対称移動だけ」（A→B→C の矢印の向き）も押さえる。';
+    else if (st.mode === 3) t = `答え：${describe(PRESETS[st.m3.preset].single(st.m3))}<br>${PRESETS[st.m3.preset].why(st.m3)}`;
+    else if (st.q4) t = `答え：${describe(st.q4.T)}`;
+    $('tAns').innerHTML = t;
+    $('tStep').hidden = st.mode < 3;
+    const r = getRec(), ks = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (ks.length ? ks.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  /** 正しい答えを入れて確かめる */
+  function teacherStep() {
+    const T = st.mode === 3 ? PRESETS[st.m3.preset].single(st.m3) : st.q4 && st.q4.T;
+    if (st.mode < 3) return;
+    if (st.ans.ok) { if (st.mode === 4) newProblem(); return; }
+    const a = st.ans;
+    if (!T) a.type = 'none';
+    else if (T.t === 'trans') Object.assign(a, { type: 'trans', tx: String(T.tx), ty: String(T.ty) });
+    else if (T.t === 'rotate') Object.assign(a, { type: 'rotate', cx: String(Math.round(T.O.x * 100) / 100), cy: String(Math.round(T.O.y * 100) / 100), ang: String(mod360(T.ang)), dir: 1 });
+    else {
+      const k = Object.keys(LINE).find(k => LINE[k] === T.L);
+      if (k) Object.assign(a, { type: 'reflect', axis: k });
+      else if (Math.abs(T.L.p.y) < 1e-9 && T.L.q.x === T.L.p.x) Object.assign(a, { type: 'reflect', axis: 'xa', a: String(T.L.p.x) });
+      else Object.assign(a, { type: 'reflect', axis: 'yb', a: String(T.L.p.y) });
+    }
+    checkAns();
+  }
+
+  /* =====================================================================
+     14. はじめの準備
+     ===================================================================== */
+  $('modeRow').innerHTML = [1, 2, 3, 4].map(n => `<button class="chip" data-m="${n}">${MODES[n].name}</button>`).join('');
+  $('modeRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { enterMode(+b.dataset.m); commit(); }));
+  $('kindRow').innerHTML = Object.entries(KINDS).map(([k, v]) => `<button class="chip sm" data-k="${k}">${v.name}</button>`).join('');
+  $('kindRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { setKind(b.dataset.k); commit(); }));
+  $('auxSw').addEventListener('change', draw);
+  $('hideSw').addEventListener('change', () => { st.revealed = {}; renderTableNow(); });
+  $('btnAgain').addEventListener('click', again);
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetAll);
+  $('btnNew').addEventListener('click', newProblem);
+  $('btnHint').addEventListener('click', hint);
+  $('btnWs').addEventListener('click', () => {
+    st.m3.preset = 'xy';
+    enterMode(3); commit();
+    setMsg('📄 ワークシートの問題：x軸で対称移動したあと、y軸で対称移動する。1回のどんな移動と同じ？ 予想を書いてから「▶ 続けて動かす」。表の座標をワークシートに「＋ 記録する」。');
+  });
+  if (TEACHER) {
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => { if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return; setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher(); });
+  }
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  const ptxt = (p) => `(${p.approx ? f1(num(p.x)) : F(p.x).toString()}, ${p.approx ? f1(num(p.y)) : F(p.y).toString()})`;
+  if (window.Worksheet) Worksheet.init({
+    title: '図形の移動ビューア',
+    question: '△ABC を x軸で対称移動したあと、さらに y軸で対称移動する。これは、1回のどんな移動と同じになるだろうか？',
+    predictions: ['平行移動', 'x軸か y軸での対称移動', '原点を中心にした 180° の回転移動（点対称移動）', '1回ではできない', 'わからない'],
+    operationNote: '「📄 ワークシートの問題」で ③ の「x軸で対称 → y軸で対称」を開き、「▶ 続けて動かす」。「＋ 記録する」で A・B・C の座標が3行入る。頂点を動かして、もう一度記録してもよい。',
+    fields: [
+      { key: 'pt', label: '頂点', math: false },
+      { key: 'p0', label: 'はじめ (x, y)' },
+      { key: 'p1', label: 'x軸で対称移動' },
+      { key: 'p2', label: 'さらに y軸で対称移動' },
+    ],
+    capture: () => {
+      if (st.mode !== 3 || st.m3.preset !== 'xy') { setMsg('③ の「x軸で対称 → y軸で対称」を開いてから記録しよう（📄 ワークシートの問題）。'); return null; }
+      const [Ta, Tb] = T3();
+      const rows = st.tri.map((p, i) => { const a = exactT(Ta, p), b = exactT(Tb, a); return { pt: NAMES[i], p0: ptxt(p), p1: ptxt(a), p2: ptxt(b) }; });
+      Worksheet.addRecord(rows[0]); Worksheet.addRecord(rows[1]);
+      return rows[2];
+    },
+    summaryHint: '「x軸で対称移動すると (x, y) → (x, 〜)、さらに y軸で対称移動すると → (〜, 〜)。これは原点を中心に〜° の回転移動と同じ」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める（「平行移動」「対称移動」と考える生徒がいる）。③ で動かし、表で (x, y) → (x, −y) → (−x, −y) を確認。① の回転移動で原点中心 180° のきまり (−x, −y) とくらべさせる。「2本の軸の間の角 90° の2倍」につなげ、「対称 → 対称（軸が交わる）」で 30°・45°・60° も試す。',
+      answer: '原点を中心にした 180° の回転移動（点対称移動）。<br>(x, y) → (x, −y) → (−x, −y) で、これは原点を中心に 180° 回転したときの座標のきまりと同じ。<br>まとめ：2本の軸が交わる2回の対称移動は、軸の交点を中心に、軸の間の角の2倍だけ回転する回転移動と同じ。2回うらがえすので、向きはもとにもどる。'
+    }
+  });
+
+  enterMode(1);
+  commit();
 })();
 </script>
+
 </body>
 </html>
