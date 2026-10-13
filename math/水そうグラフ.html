@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>水そうグラフ</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：増える＝オレンジ、減る＝青、正解＝緑（○）、まちがい・注意＝赤紫（×）。
+     グラフの区間 ア・イ・ウ・エ は、色に加えて文字でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457; --inv: #6a1b9a; --water: #42a5f5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.sm { min-height: 44px; padding: 4px 12px; font-size: .95rem; }
+  .chip:disabled { opacity: .35; cursor: default; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.pour { background: #1976d2; border-color: #1976d2; color: #fff; min-width: 9em; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 水そう・グラフ・下の作業らん（広い画面は 左＝水そう、右＝グラフ、下＝作業） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start;
+    grid-template-areas: "tank" "graph" "work"; }
+  .tank-card { grid-area: tank; }
+  .graph-card { grid-area: graph; padding: 8px; }
+  .work-card { grid-area: work; }
+  @container (min-width: 760px) {
+    .board-in { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); grid-template-areas: "tank graph" "work work"; }
+  }
+
+  #tank svg { display: block; width: 100%; height: auto; max-height: 420px; }
+  .tank-ph { text-align: center; color: #78909c; font-weight: bold; padding: 70px 10px; border: 3px dashed #cfd8dc; border-radius: 14px; font-size: 1.2rem; }
+  .readout { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 6px 0; }
+  .ro { background: #eceff1; border-radius: 12px; padding: 4px 12px; text-align: center; min-width: 6.5em; }
+  .ro .lab { font-size: .8rem; color: #546e7a; display: block; }
+  .ro .v { font-size: 26px; font-weight: bold; }
+  .ro.t .v { color: var(--pos); }
+  .ro.h .v { color: var(--neg); }
+  .slider-row { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 6px 0; font-weight: bold; }
+  .slider-row input[type=range] { flex: 1; min-width: 150px; height: 36px; }
+  .slider-row input[type=number] { width: 84px; font-size: 1.2rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .q-text { text-align: center; font-weight: bold; color: #1565c0; margin: 4px 0; }
+  .opt-check { font-size: 0.95rem; font-weight: bold; color: #37474f; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+  .opt-check input { width: 22px; height: 22px; }
+  .row-gap { margin-top: 6px; }
+
+  #graph { width: 100%; }
+  .graph-opts { display: flex; gap: 6px 12px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+  .graph-note { text-align: center; font-size: .9rem; color: #546e7a; margin-top: 4px; }
+
+  /* 区間の表 */
+  .tbl-scroll { overflow-x: auto; }
+  .sec { width: 100%; border-collapse: collapse; font-size: 19px; text-align: center; min-width: 560px; }
+  .sec th { background: #eceff1; font-size: .85rem; padding: 4px; border: 2px solid #b0bec5; }
+  .sec td { border: 2px solid #cfd8dc; padding: 4px 6px; height: 44px; }
+  .sec td.k { font-weight: 900; font-size: 22px; }
+  .sec tr.cur td { background: #fffde7; }
+  .sec .tag { display: inline-block; font-size: .75rem; background: #e8f5e9; color: var(--ok); border-radius: 8px; padding: 0 6px; margin-left: 4px; }
+  .sec .dim { color: #b0bec5; }
+  .tbl-note { font-size: .88rem; color: #546e7a; margin-top: 6px; line-height: 1.6; }
+
+  /* 答える欄とキーパッド */
+  .ask-q { text-align: center; font-weight: bold; margin-bottom: 6px; line-height: 1.6; font-size: 1.1rem; }
+  .ans-line { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; font-size: 26px; font-weight: bold; margin: 4px 0; }
+  .box {
+    min-width: 110px; min-height: 58px; border: 3px solid var(--soft); border-radius: 14px; background: #fafafa;
+    font-size: 30px; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation; padding: 0 8px;
+  }
+  .box.active { border-color: #fbc02d; background: #fffde7; box-shadow: 0 0 0 4px rgba(251,192,45,.35); }
+  .box.ng { border-color: var(--ng); background: #fce4ec; }
+  .box.ok { border-color: var(--ok); background: #e8f5e9; }
+  .ask-wrap { max-width: 460px; margin: 0 auto; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 8px; }
+  .key {
+    min-height: 48px; border: 2px solid #b0bec5; background: #fff; border-radius: 12px; font-size: 1.35rem; font-weight: bold;
+    color: var(--ink); cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .key:active { transform: translateY(1px); box-shadow: none; }
+  .go {
+    width: 100%; margin-top: 8px; min-height: 54px; border: none; border-radius: 14px; background: var(--ok); color: #fff;
+    font-size: 1.2rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go.next { background: var(--accent); }
+
+  /* 候補（グラフ・水そう） */
+  .cands { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  @container (max-width: 560px) { .cands { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .cand {
+    border: 3px solid #cfd8dc; background: #fff; border-radius: 14px; padding: 4px; cursor: pointer; touch-action: manipulation;
+    display: flex; flex-direction: column; align-items: center; font-weight: bold; font-size: 1.1rem; color: var(--ink); min-height: 44px;
+  }
+  .cand svg { width: 100%; height: auto; display: block; }
+  .cand:hover { border-color: #90caf9; }
+  .cand.pick { border-color: #fbc02d; background: #fffde7; }
+  .cand.ok { border-color: var(--ok); background: #e8f5e9; }
+  .cand.ok .cl::after { content: " ○"; color: var(--ok); }
+  .cand.ng { border-color: var(--ng); background: #fce4ec; }
+  .cand.ng .cl::after { content: " ×"; color: var(--ng); }
+  .cand:disabled { cursor: default; }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  @media (max-width: 420px) { .box { min-width: 86px; font-size: 26px; } .ro .v { font-size: 22px; } }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🚰 水そうグラフ</h1>
+<p class="subtitle">水そうの形と、水位のグラフを結びつけよう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- モード：① 入れてみる ② 読み取り ③ 予想する ④ 逆から -->
+  <div class="chip-row" id="modeRow"></div>
+  <div class="part-note" id="modeNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">🎲 新しい問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <div class="board"><div class="board-in">
+    <!-- 左：水そう -->
+    <div class="card tank-card">
+      <h2>🚰 水そう <span class="small" id="tankName"></span></h2>
+      <div class="chip-row" id="shapeRow"></div>
+      <div class="chip-row" id="optRow"></div>
+      <div id="tank"></div>
+      <div class="readout">
+        <div class="ro t"><span class="lab">時間 x</span><span class="v" id="roT">0</span> 分</div>
+        <div class="ro h"><span class="lab">水位 y</span><span class="v" id="roH">0</span> cm</div>
+        <div class="ro"><span class="lab">入った水</span><span class="v" id="roV">0</span> L</div>
+      </div>
+      <div class="tools" id="pourRow"></div>
+      <div id="qRow"></div>
+    </div>
+    <!-- 右：グラフ -->
+    <div class="card graph-card">
+      <div id="graph"></div>
+      <div class="graph-note"><b>横軸 x ＝ 時間（分）</b>　<b>縦軸 y ＝ 水位（cm）</b></div>
+      <div class="graph-note" id="graphNote"></div>
+      <div class="graph-opts" id="graphOpts"></div>
+    </div>
+    <!-- 下：作業らん（表・答える欄・候補） -->
+    <div class="card work-card">
+      <h2 id="workTitle"></h2>
+      <div id="work"></div>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 答えを入れて進める（自動で見せる）</button></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>水位</b>：水の深さ（水そうの底から水面までの高さ）。グラフは 横軸 x ＝ 時間（分）、縦軸 y ＝ 水位（cm）。</li>
+      <li>毎分同じ量の水を入れると、<b>細いところ</b>では水位が<b>速く</b>上がる（グラフが急）、<b>太いところ</b>ではゆっくり上がる（グラフがゆるやか）。</li>
+      <li><b>1分で上がる高さ ＝ 1分に入る水の量 ÷ 底面積</b>。1 L ＝ 1000 cm³。グラフでは、これが<b>傾き</b>（中2 の一次関数で「変化の割合」という）。</li>
+      <li>太さがずっと同じあいだは<b>直線</b>、太さが変わる高さで<b>折れる</b>、太さが少しずつ変わると<b>曲線</b>になる。</li>
+      <li>① 入れてみる：形をえらんで ▶。グラフが描かれる。「1分あたりの量」を変えると傾きが変わる（前のグラフは点線で残る）。</li>
+      <li>② 読み取り：とちゅうで止まったときの「何分？ 水位は？」をグラフから読む。③ 予想する：水そうからグラフを選ぶ。④ 逆から：グラフから水そうを選ぶ。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：水は蛇口から毎分同じ量で出つづけるものとします。円柱は立体に、ほかの水そうは<b>横から見た図</b>で描いています（奥行きはどこも 25 cm で同じ。横はばが2倍なら底面積も2倍）。かべ・仕切り・管の厚さ、管の中の水、水面のゆれは考えません。③ の曲線は計算で描いていますが、式は中学の範囲をこえるので出しません。<br>
+    つながる教材：<a href="おれ線グラフで 変わり方.html">小4 おれ線グラフで変わり方</a>／<a href="まぜて のばして 比と比例.html">小6 まぜて のばして 比と比例</a>／<a href="比例をつくろう.html">中1 比例をつくろう</a></p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="graph-engine.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（答え・答えを入れて進める・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const F = (v) => Fraction.from(v);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const num = (f) => { f = F(f); return f.n / f.d; };
+  const r4 = (v) => Math.round(v * 1e4) / 1e4;                 // 座標平面に渡す数（長すぎる小数を分数にしないため）
+  const d1 = (v) => String(+(+v).toFixed(1));                 // 表示用（小数第1位まで）
+  const mr = (f, size) => MathRender.html(F(f).toString(), { size: size || 'inherit' });
+  const mrs = (s, size) => MathRender.html(s, { size: size || 'inherit' });
+  // 分数を見せる：分母が 2 と 5 だけでできていれば小数、それ以外は分数
+  function showF(f) {
+    f = F(f);
+    let d = f.d; while (d % 2 === 0) d /= 2; while (d % 5 === 0) d /= 5;
+    return d === 1 ? String(+(f.n / f.d).toFixed(4)) : mr(f);
+  }
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  /* =====================================================================
+     1. 水そうのデータ
+     高さはどれも 40 cm。parts は下から順に [高さ cm, 下の底面積 cm², 上の底面積 cm²]。
+     下と上の底面積が同じなら「まっすぐな壁」、ちがえば「かたむいた壁」。
+     conn は連結した2つの水そう（a1＝蛇口がわ、a2＝反対がわの底面積、pipe＝つなぐ管の高さ）。
+     ここに1行足せば、③ ④ の候補に使える水そうがふえる（DIST にも足す）。
+     ===================================================================== */
+  const DEPTH = 25;          // 奥行き（cm）。横から見た図の横はば ＝ 底面積 ÷ 25
+  const HT = 40;             // 水そうの高さ（cm）
+  const TANKS = {
+    cyl:      { name: '円柱',                     parts: [[40, 1000, 1000]], cyl: true },
+    stepWN:   { name: '段つき（下が太い）',       parts: [[20, 2000, 2000], [20, 1000, 1000]] },
+    stepNW:   { name: '段つき（下が細い）',       parts: [[20, 1000, 1000], [20, 2000, 2000]] },
+    stepWN10: { name: '段つき（段が低い）',       parts: [[10, 2000, 2000], [30, 1000, 1000]] },
+    stepNW30: { name: '段つき（段が高い）',       parts: [[30, 1000, 1000], [10, 2000, 2000]] },
+    step3:    { name: '3段（上ほど細い）',        parts: [[10, 2000, 2000], [20, 1000, 1000], [10, 500, 500]] },
+    step3r:   { name: '3段（上ほど太い）',        parts: [[10, 500, 500], [20, 1000, 1000], [10, 2000, 2000]] },
+    tiltUp:   { name: 'かたむいた壁（上が広い）', parts: [[40, 500, 1500]] },
+    tiltDown: { name: 'かたむいた壁（上がせまい）', parts: [[40, 1500, 500]] },
+    connL:    { name: '連結（蛇口がわの水位）',   conn: { a1: 1000, a2: 1000, pipe: 20 }, side: 'L' },
+    connR:    { name: '連結（反対がわの水位）',   conn: { a1: 1000, a2: 1000, pipe: 20 }, side: 'R' },
+    connL10:  { name: '連結（管が低い）',         conn: { a1: 1000, a2: 1000, pipe: 10 }, side: 'L' },
+  };
+  // ③ ④ の候補：正解の水そう → [まちがいの候補, 選んだときのつまずきの型]
+  const DIST = {
+    cyl:      [['tiltUp', 'lineCurve'], ['tiltDown', 'lineCurve'], ['stepWN', 'breakWhy'], ['stepNW', 'breakWhy']],
+    stepWN:   [['stepNW', 'thickSwap'], ['stepWN10', 'breakPos'], ['cyl', 'breakWhy'], ['tiltDown', 'lineCurve']],
+    stepNW:   [['stepWN', 'thickSwap'], ['stepNW30', 'breakPos'], ['cyl', 'breakWhy'], ['tiltUp', 'lineCurve']],
+    step3:    [['step3r', 'thickSwap'], ['stepWN', 'breakPos'], ['tiltDown', 'lineCurve'], ['cyl', 'breakWhy']],
+    tiltUp:   [['tiltDown', 'thickSwap'], ['cyl', 'lineCurve'], ['stepNW', 'lineCurve']],
+    tiltDown: [['tiltUp', 'thickSwap'], ['cyl', 'lineCurve'], ['stepWN', 'lineCurve']],
+    connL:    [['connR', 'sideMix'], ['stepNW', 'flatForget'], ['connL10', 'breakPos'], ['cyl', 'breakWhy']],
+    connR:    [['connL', 'sideMix'], ['stepNW', 'flatForget'], ['cyl', 'breakWhy']],
+  };
+  const KANA = ['ア', 'イ', 'ウ', 'エ', 'オ'];
+  const PH_COL = ['#e65100', '#1565c0', '#8e24aa', '#00838f', '#6d4c41'];   // 区間の色（文字 ア イ ウ でも区別）
+
+  /**
+   * 水を入れたときの「区間」の一覧を作る（時間・水位は分数で厳密に）。
+   * 区間 = { t0, t1, L0, L1, R0, R1, aL, aR, Q, curve }
+   *   t0〜t1：時間（分）、L0〜L1：蛇口がわの水位、R0〜R1：反対がわの水位（連結のときだけ）
+   *   aL・aR：その区間で水位が上がっている水そうの底面積（上がっていなければ null）
+   *   curve：かたむいた壁のとき { as：区間のはじめの底面積, k：1cm 上がるごとの底面積のふえ方 }
+   */
+  function phasesOf(id, q) {
+    const T = TANKS[id], Q = F(q).mul(1000);      // 1分に入る水（cm³）
+    const out = [];
+    if (T.conn) {
+      const { a1, a2, pipe: p } = T.conn;
+      const t1 = F(p * a1).div(Q), t2 = t1.add(F(p * a2).div(Q)), t3 = t2.add(F((HT - p) * (a1 + a2)).div(Q));
+      out.push({ t0: F(0), t1, L0: F(0), L1: F(p), R0: F(0), R1: F(0), aL: a1, aR: null });          // 蛇口がわだけたまる
+      out.push({ t0: t1, t1: t2, L0: F(p), L1: F(p), R0: F(0), R1: F(p), aL: null, aR: a2 });         // 管からとなりへ流れる
+      out.push({ t0: t2, t1: t3, L0: F(p), L1: F(HT), R0: F(p), R1: F(HT), aL: a1 + a2, aR: a1 + a2 }); // いっしょに上がる
+    } else {
+      let t = F(0), y = 0;
+      for (const [h, a0, a1] of T.parts) {
+        if (a0 === a1) {
+          const t1 = t.add(F(h * a0).div(Q));
+          out.push({ t0: t, t1, L0: F(y), L1: F(y + h), aL: a0 });
+          t = t1; y += h;
+        } else {
+          // かたむいた壁：10 cm ごとの区間に分ける（体積 ＝ 高さ ×（下の面積＋上の面積）÷ 2）
+          for (let k = 0; k < h; k += 10) {
+            const as = a0 + (a1 - a0) * k / h, ae = a0 + (a1 - a0) * (k + 10) / h;
+            const t1 = t.add(F(10 * (as + ae) / 2).div(Q));
+            out.push({ t0: t, t1, L0: F(y), L1: F(y + 10), aL: null, curve: { as, k: (ae - as) / 10 } });
+            t = t1; y += 10;
+          }
+        }
+      }
+    }
+    out.forEach(p => { p.Q = num(Q); if (!T.conn) { p.R0 = p.L0; p.R1 = p.L1; p.aR = p.aL; } });
+    return out;
+  }
+  const endOf = (ph) => num(ph[ph.length - 1].t1);
+  const sideOf = (id) => TANKS[id].side || 'L';
+  const hs = (p, side) => side === 'R' ? [p.R0, p.R1] : [p.L0, p.L1];
+
+  /** 区間 p の中で、時間 t（小数）のときの水位（小数） */
+  function hIn(p, t, side) {
+    const [a, b] = hs(p, side).map(num), t0 = num(p.t0), t1 = num(p.t1);
+    if (a === b) return a;
+    if (!p.curve) return a + (b - a) * (t - t0) / (t1 - t0);
+    // かたむいた壁：as×x ＋ k×x²÷2 ＝ 入った水 を x について解く（2次方程式。ここは計算だけ）
+    const dV = p.Q * (t - t0), { as, k } = p.curve;
+    const x = Math.abs(k) < 1e-12 ? dV / as : (-as + Math.sqrt(as * as + 2 * k * dV)) / k;
+    return a + x;
+  }
+  /** 時間 t のときの水位（小数）。side は 'L'（蛇口がわ）か 'R'（反対がわ） */
+  function levelAt(ph, t, side) {
+    if (t <= 0) return num(hs(ph[0], side)[0]);
+    for (const p of ph) if (t <= num(p.t1) + 1e-9) return hIn(p, Math.max(t, num(p.t0)), side);
+    return num(hs(ph[ph.length - 1], side)[1]);
+  }
+  /** 直線の区間で、時間 T（分数）のときの水位（分数）。曲線なら null */
+  function exactLevel(ph, T, side) {
+    for (const p of ph) {
+      if (num(T) > num(p.t1) + 1e-12) continue;
+      if (p.curve) return null;
+      const [a, b] = hs(p, side);
+      return a.add(b.sub(a).mul(T.sub(p.t0)).div(p.t1.sub(p.t0)));
+    }
+    return null;
+  }
+  /** 水位が H（分数）になる時間（分数）。平らなところで H になるとき（決まらない）や曲線は null */
+  function exactTime(ph, H, side) {
+    for (const p of ph) {
+      const [a, b] = hs(p, side);
+      if (a.equals(b)) { if (a.equals(H)) return null; continue; }
+      if (num(H) > num(a) && num(H) <= num(b)) {
+        if (p.curve) return null;
+        // 次の区間が平らで、同じ高さなら「何分」が1つに決まらない
+        const nx = ph[ph.indexOf(p) + 1];
+        if (nx && H.equals(b) && hs(nx, side)[0].equals(hs(nx, side)[1])) return null;
+        return p.t0.add(H.sub(a).mul(p.t1.sub(p.t0)).div(b.sub(a)));
+      }
+    }
+    return null;
+  }
+  /** 区間の「1分で上がる高さ」（分数）。曲線は null */
+  function rateOf(p, side) {
+    const [a, b] = hs(p, side);
+    if (p.curve) return null;
+    return b.sub(a).div(p.t1.sub(p.t0));
+  }
+  /** 入っている水の量（L） */
+  const litersAt = (q, t) => q * t;
+
+  /* =====================================================================
+     2. 水そうの絵（SVG。単位は cm。底は y＝62、上のふちは y＝22）
+     o = { hL, hR, flow:蛇口から水が出ている, bands:区間, small:小さい絵, mark:見る水そうの印 }
+     ===================================================================== */
+  const BASE = 62, CX = 62;
+  const WATER = '#64b5f6', WATER_TOP = '#1e88e5';
+  function partsWidth(T) { return Math.max(...T.parts.map(p => Math.max(p[1], p[2]))) / DEPTH; }
+  function tankSVG(id, o) {
+    o = Object.assign({ hL: 0, hR: 0, flow: false, bands: null, small: false, mark: true }, o || {});
+    const T = TANKS[id];
+    let s = '';
+    const Y = (h) => BASE - h;
+    let fx;                                        // 蛇口の水が落ちる x
+    if (T.conn) {
+      const { a1, a2, pipe } = T.conn, w1 = a1 / DEPTH, w2 = a2 / DEPTH, gap = 8;
+      const x1 = CX - (w1 + w2 + gap) / 2, x2 = x1 + w1 + gap;
+      fx = x1 + 10;
+      // 水（管が水につかっていれば、管の中も水色）
+      s += `<rect x="${x1}" y="${Y(o.hL)}" width="${w1}" height="${o.hL}" fill="${WATER}" opacity=".75"/>`;
+      s += `<rect x="${x2}" y="${Y(o.hR)}" width="${w2}" height="${o.hR}" fill="${WATER}" opacity=".75"/>`;
+      if (o.hL >= pipe - 1e-6) s += `<rect x="${x1 + w1}" y="${Y(pipe + 2.4)}" width="${gap}" height="2.4" fill="${WATER}" opacity=".75"/>`;
+      // となりへ流れおちる水
+      if (o.flow && o.hL >= pipe - 1e-6 && o.hR < pipe - 1e-6) s += `<rect x="${x2}" y="${Y(pipe + 1.2)}" width="1.6" height="${pipe + 1.2 - o.hR}" fill="${WATER_TOP}" opacity=".8"/>`;
+      if (o.hL > 0) s += `<line x1="${x1}" x2="${x1 + w1}" y1="${Y(o.hL)}" y2="${Y(o.hL)}" stroke="${WATER_TOP}" stroke-width=".8"/>`;
+      if (o.hR > 0) s += `<line x1="${x2}" x2="${x2 + w2}" y1="${Y(o.hR)}" y2="${Y(o.hR)}" stroke="${WATER_TOP}" stroke-width=".8"/>`;
+      // 水そうのかべと管
+      const box = (x, w) => `<path d="M${x},${Y(HT)}V${BASE}H${x + w}V${Y(HT)}" fill="none" stroke="#37474f" stroke-width="1.2" stroke-linejoin="round"/>`;
+      s += box(x1, w1) + box(x2, w2);
+      s += `<path d="M${x1 + w1},${Y(pipe + 2.4)}H${x2}M${x1 + w1},${Y(pipe)}H${x2}" stroke="#37474f" stroke-width="1"/>`;
+      // 白くぬって、かべに管の口をあける
+      s += `<line x1="${x1 + w1}" x2="${x1 + w1}" y1="${Y(pipe + 2.4) + .6}" y2="${Y(pipe) - .6}" stroke="${o.hL >= pipe ? WATER : '#fff'}" stroke-width="1.6"/>`;
+      s += `<line x1="${x2}" x2="${x2}" y1="${Y(pipe + 2.4) + .6}" y2="${Y(pipe) - .6}" stroke="${o.hL >= pipe ? WATER : '#fff'}" stroke-width="1.6"/>`;
+      if (!o.small) s += `<text x="${x1 + w1 + gap / 2}" y="${Y(pipe + 2.4) - 1.4}" font-size="2.4" text-anchor="middle" fill="#546e7a">管</text>`;
+      // 見ている水そうの印
+      if (o.mark) {
+        const mx = T.side === 'R' ? x2 + w2 / 2 : x1 + w1 / 2 + 6;
+        s += `<text x="${mx}" y="${Y(HT) - 2}" font-size="${o.small ? 5 : 3.6}" text-anchor="middle" font-weight="bold" fill="#ad1457">▼ここの水位</text>`;
+      }
+      if (!o.small) {
+        s += `<text x="${x1 + w1 / 2}" y="${BASE + 4.5}" font-size="2.8" text-anchor="middle" fill="#455a64">底面積 ${a1}cm²</text>`;
+        s += `<text x="${x2 + w2 / 2}" y="${BASE + 4.5}" font-size="2.8" text-anchor="middle" fill="#455a64">底面積 ${a2}cm²</text>`;
+      }
+    } else {
+      // まっすぐ・段・かたむいた壁：中心をそろえて、高さごとの横はばで描く
+      const wAt = (y) => {
+        let b = 0;
+        for (const [h, a0, a1] of T.parts) { if (y <= b + h + 1e-9) return (a0 + (a1 - a0) * (y - b) / h) / DEPTH; b += h; }
+        return T.parts[T.parts.length - 1][2] / DEPTH;
+      };
+      // 高さ top までの、左のかべの点と右のかべの点（下から上へ）
+      const side = (top) => {
+        const L = [], R = []; let b = 0;
+        for (const [h, a0, a1] of T.parts) {
+          if (b >= top - 1e-9) break;
+          const ya = b, yb = Math.min(top, b + h), wa = a0 / DEPTH, wb = (a0 + (a1 - a0) * (yb - b) / h) / DEPTH;
+          L.push([CX - wa / 2, Y(ya)], [CX - wb / 2, Y(yb)]); R.push([CX + wa / 2, Y(ya)], [CX + wb / 2, Y(yb)]);
+          b += h;
+        }
+        return { L, R };
+      };
+      // 区間ごとの帯（うすい色）と ア イ ウ
+      if (o.bands) o.bands.forEach((p, i) => {
+        const y0 = num(p.L0), y1 = num(p.L1), wm = wAt((y0 + y1) / 2);
+        if (y1 < HT) s += `<line x1="${CX - wAt(y1) / 2 - 3}" x2="${CX + wAt(y1) / 2 + 3}" y1="${Y(y1)}" y2="${Y(y1)}" stroke="${PH_COL[i]}" stroke-width=".5" stroke-dasharray="1.5 1"/>`;
+        s += `<text x="${CX + Math.max(wm, wAt(y0), wAt(y1)) / 2 + 2}" y="${Y((y0 + y1) / 2) + 1.6}" font-size="4.4" font-weight="bold" fill="${PH_COL[i]}">${KANA[i]}</text>`;
+      });
+      // 水
+      if (o.hL > 0) {
+        const { L, R } = side(o.hL);
+        s += `<polygon points="${L.concat(R.reverse()).map(p => p.join(',')).join(' ')}" fill="${WATER}" opacity=".75"/>`;
+        const w = wAt(o.hL);
+        if (T.cyl) s += `<ellipse cx="${CX}" cy="${Y(o.hL)}" rx="${w / 2}" ry="2.6" fill="#90caf9" stroke="${WATER_TOP}" stroke-width=".7"/>`;
+        else s += `<line x1="${CX - w / 2}" x2="${CX + w / 2}" y1="${Y(o.hL)}" y2="${Y(o.hL)}" stroke="${WATER_TOP}" stroke-width=".8"/>`;
+      }
+      // かべ（上はあいている）
+      const { L, R } = side(HT);
+      const pts = L.slice().reverse().concat(R);
+      s += `<path d="M${pts.map(p => p.join(',')).join('L')}" fill="none" stroke="#37474f" stroke-width="1.2" stroke-linejoin="round"/>`;
+      if (T.cyl) {
+        const w = wAt(HT);
+        s += `<ellipse cx="${CX}" cy="${Y(HT)}" rx="${w / 2}" ry="2.6" fill="none" stroke="#37474f" stroke-width="1.1"/>`;
+        s += `<path d="M${CX - w / 2},${BASE}A${w / 2},2.6 0 0 0 ${CX + w / 2},${BASE}" fill="none" stroke="#37474f" stroke-width="1.1"/>`;
+      }
+      if (!o.small) {
+        // 底面積の書きこみ（区間ごと。かたむいた壁は下と上）
+        let b = 0;
+        T.parts.forEach(([h, a0, a1]) => {
+          if (a0 === a1) s += `<text x="${CX}" y="${Y(b + h / 2) + 1.2}" font-size="2.8" text-anchor="middle" fill="#37474f">底面積 ${a0}cm²</text>`;
+          else s += `<text x="${CX}" y="${Y(b) - 1.4}" font-size="2.6" text-anchor="middle" fill="#37474f">底 ${a0}cm²</text><text x="${CX}" y="${Y(b + h) + 3.4}" font-size="2.6" text-anchor="middle" fill="#37474f">上 ${a1}cm²</text>`;
+          b += h;
+        });
+      }
+      fx = CX - wAt(HT) / 2 + 7;
+    }
+    // ものさし（左）
+    if (!o.small) {
+      s += `<line x1="9" x2="9" y1="${BASE}" y2="${Y(HT)}" stroke="#78909c" stroke-width=".5"/>`;
+      for (let h = 0; h <= HT; h += 5) {
+        const big = h % 10 === 0;
+        s += `<line x1="${big ? 7 : 8}" x2="10" y1="${Y(h)}" y2="${Y(h)}" stroke="#78909c" stroke-width=".5"/>`;
+        if (big) s += `<text x="6.5" y="${Y(h) + 1.1}" font-size="3" text-anchor="end" fill="#546e7a">${h}</text>`;
+      }
+      s += `<text x="6.5" y="${Y(HT) - 4}" font-size="2.6" text-anchor="end" fill="#546e7a">cm</text>`;
+      // 蛇口と、出ている水
+      s += `<path d="M${fx - 14},6H${fx + 1.5}V10" fill="none" stroke="#78909c" stroke-width="2.6" stroke-linecap="round"/>`;
+      s += `<rect x="${fx - 10}" y="3" width="4" height="2" rx=".6" fill="#90a4ae"/>`;
+      if (o.flow) s += `<rect x="${fx + .3}" y="11" width="2.4" height="${Math.max(0, Y(o.hL) - 11)}" fill="${WATER_TOP}" opacity=".7"/>`;
+    }
+    const vb = o.small ? '4 14 116 52' : '0 0 124 68';
+    return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" font-family="Hiragino Sans, Meiryo, sans-serif" role="img" aria-label="${TANKS[id].name}の水そう">${s}</svg>`;
+  }
+
+  /** 小さいグラフ（③ の候補）。時間と水位の向きだけを見せる（目もりはなし。横は満水までの時間でそろえる） */
+  function miniGraphSVG(id) {
+    const ph = phasesOf(id, 2), end = endOf(ph), side = sideOf(id);
+    const X = (t) => 12 + t / end * 98, Y = (h) => 80 - h / HT * 68;
+    let d = '';
+    ph.forEach((p, i) => {
+      const t0 = num(p.t0), t1 = num(p.t1);
+      if (i === 0) d += `M${X(t0)},${Y(levelAt(ph, t0, side))}`;
+      const n = p.curve ? 16 : 1;
+      for (let k = 1; k <= n; k++) { const t = t0 + (t1 - t0) * k / n; d += `L${X(t).toFixed(2)},${Y(hIn(p, t, side)).toFixed(2)}`; }
+    });
+    return `<svg viewBox="0 0 120 92" xmlns="http://www.w3.org/2000/svg" font-family="Hiragino Sans, Meiryo, sans-serif">
+      <path d="M12,82V6M10,8L12,4L14,8M10,80H114M112,78L116,80L112,82" fill="none" stroke="#546e7a" stroke-width="1.2"/>
+      <text x="15" y="10" font-size="8" fill="#546e7a">水位</text><text x="114" y="90" font-size="8" text-anchor="end" fill="#546e7a">時間</text>
+      <text x="9" y="88" font-size="7" fill="#546e7a">O</text>
+      <path d="${d}" fill="none" stroke="#263238" stroke-width="3" stroke-linejoin="round"/></svg>`;
+  }
+
+  /* =====================================================================
+     3. モードとつまずきの型
+     ===================================================================== */
+  const MODES = [null,
+    { name: '① 入れてみる', note: '形をえらんで ▶ 水を入れる。水位のグラフが描かれる。1分あたりの量を変えると、傾きはどうなる？' },
+    { name: '② 読み取り',   note: 'グラフから「何分？」「水位は何cm？」を読み取ろう。横軸と縦軸の1目もりに注意。' },
+    { name: '③ 予想する',   note: '水そうの形を見て、水位のグラフを4つから予想しよう。選んだら水を入れて確かめる。' },
+    { name: '④ 逆から',     note: 'グラフを見て、どんな形の水そうか選ぼう。選んだ水そうに水を入れて、グラフを重ねて確かめる。' },
+  ];
+  // つまずきの型（名前・説明・練習するモード・練習に出す水そう）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    thickSwap:  { name: '太い・細いと、急・ゆるやかの取りちがえ', mode: 3, pool: ['stepWN', 'stepNW', 'tiltUp', 'tiltDown', 'step3'],
+                  exp: '同じ量の水を入れても、<b>細い</b>ところは水位が<b>速く</b>上がる → グラフは<b>急</b>。<b>太い</b>ところはゆっくり → <b>ゆるやか</b>。' },
+    breakWhy:   { name: '形の変わり目と、グラフの折れ目', mode: 3, pool: ['cyl', 'stepWN', 'stepNW', 'step3'],
+                  exp: 'グラフが折れるのは、水そうの<b>太さが変わる高さ</b>だけ。太さが変わらなければ1本の直線、変われば折れる。' },
+    breakPos:   { name: '折れる高さのずれ', mode: 4, pool: ['stepWN', 'stepNW', 'step3', 'connL'],
+                  exp: 'グラフが折れるのは、水位が<b>段（管）の高さ</b>になったとき。縦軸（水位）で、折れたところの高さを読もう。' },
+    lineCurve:  { name: '直線と曲線の取りちがえ', mode: 3, pool: ['tiltUp', 'tiltDown', 'cyl'],
+                  exp: '太さがずっと同じあいだは<b>直線</b>。壁がかたむいて太さが<b>少しずつ</b>変わると、傾きも少しずつ変わって<b>曲線</b>になる。' },
+    flatForget: { name: '連結の「平らな所」を忘れた', mode: 3, pool: ['connL', 'connR'],
+                  exp: '水が管を通って<b>となりへ流れているあいだ</b>は、蛇口がわの水位は上がらない → グラフは<b>横に平ら</b>（反対がわは、はじめが平ら）。' },
+    sideMix:    { name: 'どちらの水そうの水位かの取りちがえ', mode: 3, pool: ['connL', 'connR'],
+                  exp: '「▼ここの水位」の水そうを見る。反対がわは、蛇口がわが管の高さになるまで水が来ないので <b>0 のまま</b>。' },
+    axisSwap:   { name: '時間と水位（横軸と縦軸）の取りちがえ', mode: 2,
+                  exp: '横軸 x が<b>時間（分）</b>、縦軸 y が<b>水位（cm）</b>。点から<b>真下</b>に下ろすと時間、<b>真横</b>に動かすと水位。' },
+    scaleMis:   { name: '目もりの読みちがえ', mode: 2,
+                  exp: '先に<b>1目もりがいくつか</b>を確かめる。横軸と縦軸で、1目もりの大きさがちがうことが多い。' },
+  };
+
+  /* =====================================================================
+     4. 状態
+     P はいまのモードのデータ（ふつうの値だけ。ひとつもどす で写しやすい）
+     ===================================================================== */
+  const SPEED = { slow: 600, normal: 250, fast: 90 };       // 1分を何ミリ秒で見せるか
+  const st = { mode: 1, P: null, P0: null, hist: [], hintLv: 0, g: null, gKey: '', playing: false, raf: 0,
+               speed: 'normal', inp: { vals: [], cur: 0 }, sessTrips: {}, focus: null, last: {} };
+
+  /** いま水を入れている水そう */
+  function curTank() {
+    const P = st.P;
+    if (st.mode === 1) {
+      if (P.shape === 'cyl') return 'cyl';
+      if (P.shape === 'step') return P.flip ? 'stepNW' : 'stepWN';
+      if (P.shape === 'tilt') return P.flip ? 'tiltDown' : 'tiltUp';
+      return P.side === 'R' ? 'connR' : 'connL';
+    }
+    if (st.mode === 4) return P.picked;
+    return P.tank;
+  }
+
+  /* =====================================================================
+     5. 座標平面（時間−水位のグラフ）
+     ===================================================================== */
+  const YMAX = 46, YMIN = -4.5, XPAD = 0.09;   // 軸の数字が入るよう、少し外側まで見せる
+  const niceEnd = (t) => Math.max(10, Math.ceil(t * 1.06 / 5) * 5);
+  function makeGraph(xmax) {
+    const key = st.mode + ':' + xmax;
+    if (st.g && st.gKey === key) return st.g;
+    st.gKey = key;
+    st.g = GraphEngine.create($('graph'), {
+      xmin: -xmax * XPAD, xmax, ymin: YMIN, ymax: YMAX, grid: true, equalScale: false,
+      controls: st.mode === 1, coords: st.mode === 1, snap: false, axisLabels: ['x', 'y（cm）'],
+    });
+    // ドラッグする点はないので「すいつく」ボタンはかくす
+    $('graph').querySelectorAll('button[title*="すいつ"]').forEach(b => { b.hidden = true; });
+    return st.g;
+  }
+  /** 目もりの幅（graph-engine.js と同じ決め方）。② の問題を、目もりの上に来る数で作るため */
+  function gridSteps(xmax) {
+    const nice = (v) => { const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 2, 5, 10]) if (m * p >= v - 1e-12) return m * p; return 10 * p; };
+    const auto = (u) => (u >= 28 && u < 90 ? 1 : nice(28 / u));
+    const W = Math.max(200, Math.round($('graph').clientWidth || 600)), H = Math.round(W * 0.75);
+    return { sx: auto(W / (xmax * (1 + XPAD))), sy: auto(H / (YMAX - YMIN)) };
+  }
+  /** 水位のグラフを描く。upto までの部分。scaleT を書くと時間をのばして描く（③ の予想の重ね書き） */
+  function drawSeries(g, id, q, upto, style, opt) {
+    opt = opt || {};
+    const ph = phasesOf(id, q), side = sideOf(id), sc = opt.scaleT || 1;
+    ph.forEach((p, i) => {
+      const t0 = num(p.t0), t1 = num(p.t1);
+      if (t0 >= upto - 1e-9 && !(t0 === 0 && upto > 0)) return;
+      const te = Math.min(t1, upto);
+      const stl = Object.assign({ color: PH_COL[i], width: 4 }, style || {});
+      if (p.curve) g.plot(x => hIn(p, x / sc, side), Object.assign({}, stl, { from: r4(t0 * sc), to: r4(te * sc) }));
+      else g.segment([r4(t0 * sc), r4(hIn(p, t0, side))], [r4(te * sc), r4(hIn(p, te, side))], stl);
+      // 区間の名前（ア イ ウ）。じゅうぶん描けたら出す
+      if (opt.labels && te - t0 > (t1 - t0) * 0.35) {
+        const tm = (t0 + te) / 2;
+        g.text(r4(tm * sc), r4(hIn(p, tm, side) + 3.2), KANA[i], { color: PH_COL[i], anchor: 'end' });
+      }
+    });
+  }
+
+  /* =====================================================================
+     6. 画面をかく（水そう・数・グラフ）
+     ===================================================================== */
+  function paintTank() {
+    const P = st.P, id = curTank();
+    if (!id) { $('tank').innerHTML = '<div class="tank-ph">？<br>どの水そうかな？<br><span class="small">下の4つから選ぼう</span></div>'; $('tankName').textContent = ''; return; }
+    const ph = phasesOf(id, P.q), t = P.now;
+    const hL = levelAt(ph, t, 'L'), hR = levelAt(ph, t, 'R');
+    $('tank').innerHTML = tankSVG(id, { hL, hR, flow: st.playing, bands: st.mode === 1 && !TANKS[id].conn ? ph : null });
+    $('tankName').textContent = '― ' + TANKS[id].name;
+    // 数の表示（② では答えるまでかくす）
+    const hide = st.mode === 2 && !P.done;
+    const h = levelAt(ph, t, sideOf(id));
+    $('roT').textContent = hide ? '？' : d1(t);
+    $('roH').textContent = hide ? '？' : d1(h);
+    $('roV').textContent = hide ? '？' : d1(litersAt(P.q, t));
+  }
+  function paintGraph() {
+    const P = st.P, g = st.g;
+    if (!g) return;
+    g.clear();
+    if (st.mode === 1) {
+      (P.kept || []).forEach(k => {
+        drawSeries(g, k.id, k.q, Infinity, { color: '#90a4ae', width: 3, dash: '8 6' });
+        const ph = phasesOf(k.id, k.q), e = endOf(ph);
+        g.text(r4(e), HT + 1.5, `${k.q}L/分`, { color: '#78909c', anchor: 'middle' });
+      });
+      drawSeries(g, curTank(), P.q, P.now, null, { labels: true });
+    } else if (st.mode === 2) {
+      drawSeries(g, P.tank, P.q, P.now, null, {});
+      const ph = phasesOf(P.tank, P.q), side = sideOf(P.tank);
+      if (P.kind === 'stop' && P.now > 0) {
+        const h = levelAt(ph, P.now, side);
+        if (P.guide || P.done) guides(g, P.now, h);
+        g.point(r4(P.now), r4(h), P.done ? '' : 'P', { color: '#263238' });
+      }
+      if (P.kind !== 'stop' && (P.guide || P.done)) guides(g, num(P.T), num(P.H));
+    } else if (st.mode === 3) {
+      if (P.picked) {
+        const ph = phasesOf(P.tank, P.q), e = endOf(ph), pe = endOf(phasesOf(P.picked, P.q));
+        drawSeries(g, P.picked, P.q, Infinity, { color: '#ad1457', width: 3, dash: '3 5' }, { scaleT: e / pe });
+        drawSeries(g, P.tank, P.q, P.now, null, { labels: true });
+      }
+    } else {
+      // ④ 目あてのグラフ（選ぶ前は黒い線、選んだあとはうすい太い線にして、選んだ水そうのグラフを重ねる）
+      drawSeries(g, P.tank, P.q, Infinity, P.picked ? { color: '#b0bec5', width: 10 } : { color: '#263238', width: 4 });
+      if (P.picked) drawSeries(g, P.picked, P.q, P.now, null, { labels: true });
+    }
+  }
+  // 点から軸へ下ろした点線（読み取りのたすけ）
+  function guides(g, t, h) {
+    g.segment([r4(t), 0], [r4(t), r4(h)], { color: '#ad1457', width: 2, dash: '5 4' });
+    g.segment([0, r4(h)], [r4(t), r4(h)], { color: '#ad1457', width: 2, dash: '5 4' });
+    g.point(r4(t), r4(h), '', { color: '#ad1457', r: 5 });
+  }
+  function paintLive() {
+    paintTank(); paintGraph();
+    if (st.mode === 1) paintTable();
+    paintPour();
+  }
+
+  /* =====================================================================
+     7. 水を入れる（アニメーション）
+     ===================================================================== */
+  function endNow() { const id = curTank(); return id ? endOf(phasesOf(id, st.P.q)) : 0; }
+  function play() {
+    if (st.playing || !curTank()) return;
+    const P = st.P, end = endNow();
+    if (P.now >= end - 1e-9) P.now = 0;
+    st.playing = true;
+    // setInterval で動かす（requestAnimationFrame は、画面が見えていないと止まることがあるため）
+    let last = performance.now();
+    st.raf = setInterval(() => {
+      const ts = performance.now();
+      P.now += Math.max(0, ts - last) / SPEED[st.speed]; last = ts;
+      let stopAt = end;
+      if (st.mode === 2 && P.kind === 'stop') stopAt = num(P.T);
+      if (P.now >= stopAt - 1e-9) { P.now = stopAt; clearInterval(st.raf); st.playing = false; paintLive(); onStopped(); return; }
+      paintLive();
+    }, 40);
+    paintLive();
+  }
+  function pause(silent) {
+    if (!st.playing) return;
+    st.playing = false; clearInterval(st.raf);
+    if (!silent) { paintLive(); if (st.mode === 1) setMsg(`⏸ とめた。いま ${d1(st.P.now)} 分、水位 ${d1(levelAt(phasesOf(curTank(), st.P.q), st.P.now, sideOf(curTank())))} cm。グラフの点と、水そうの水面をくらべよう。`); }
+  }
+  /** 止まったとき（満水・② の止まる時間） */
+  function onStopped() {
+    const P = st.P, id = curTank();
+    if (st.mode === 1) { sndDone(); setMsg('🎉 満水！ ' + insight(id, P.q), 'ok'); }
+    else if (st.mode === 2) { setMsg('⏹ ストップ！ グラフの点 P を読んで、下の2つのらんに答えよう。'); beep([[660, 0, .12]]); renderWork(); }
+    else if (st.mode === 3 || st.mode === 4) finishCheck();
+  }
+  /** 満水になったときの気づき（区間ごとの1分で上がる高さをくらべる） */
+  function insight(id, q) {
+    const ph = phasesOf(id, q), side = sideOf(id);
+    if (ph.some(p => p.curve)) {
+      const tt = ph.map(p => d1(num(p.t1.sub(p.t0))));
+      const up = TANKS[id].parts[0][2] > TANKS[id].parts[0][1];
+      return `10 cm 上がるのにかかった時間は ${tt.join(' → ')} 分。上に行くほど${up ? '広い → 時間がかかる → グラフは<b>だんだんゆるやか</b>' : 'せまい → 速く上がる → グラフは<b>だんだん急</b>'}な曲線になった。`;
+    }
+    const parts = ph.map((p, i) => `${KANA[i]} は 1分で ${showF(rateOf(p, side))} cm`);
+    let s = parts.join('、') + '。';
+    if (ph.length === 1) s += '太さが同じなので、ずっと同じ速さ → <b>1本の直線</b>（比例）。';
+    else if (TANKS[id].conn) s += side === 'L' ? '管からとなりへ流れるあいだ（イ）は<b>平ら</b>。いっしょに上がるとき（ウ）は底面積が2つ分 → ゆるやか。' : 'はじめ（ア）は水が来ないので 0 のまま<b>平ら</b>。';
+    else s += '細いところほど速く上がる → グラフは<b>急</b>、太いところは<b>ゆるやか</b>。太さが変わる高さで<b>折れる</b>。';
+    return s;
+  }
+
+  /* =====================================================================
+     8. モード① 入れてみる
+     P = { shape:'cyl'|'step'|'tilt'|'conn', flip, side, q, now, kept:[{id,q}] }
+     ===================================================================== */
+  const SHAPES = [['cyl', '① 円柱'], ['step', '② 段つき'], ['tilt', '③ かたむいた壁'], ['conn', '④ 連結']];
+  function gen1(o) { return Object.assign({ shape: 'step', flip: false, side: 'L', q: 2, now: 0, kept: [] }, o || {}); }
+  function xmax1() {
+    const P = st.P;
+    let e = endOf(phasesOf(curTank(), P.q));
+    (P.kept || []).forEach(k => { e = Math.max(e, endOf(phasesOf(k.id, k.q))); });
+    return niceEnd(e);
+  }
+  function render1() {
+    const P = st.P;
+    $('shapeRow').innerHTML = SHAPES.map(([k, n]) => `<button class="chip sm${P.shape === k ? ' active' : ''}" data-shape="${k}">${n}</button>`).join('');
+    $('shapeRow').querySelectorAll('[data-shape]').forEach(b => b.addEventListener('click', () => change1({ shape: b.dataset.shape, flip: false, side: 'L' })));
+    let opt = '';
+    if (P.shape === 'step' || P.shape === 'tilt') opt = `<label class="opt-check"><input type="checkbox" id="optFlip"${P.flip ? ' checked' : ''}> 上下さかさにする</label>`;
+    if (P.shape === 'conn') opt = `<button class="chip sm${P.side === 'L' ? ' active' : ''}" data-side="L">▼ 蛇口がわを見る</button><button class="chip sm${P.side === 'R' ? ' active' : ''}" data-side="R">▼ 反対がわを見る</button>`;
+    $('optRow').innerHTML = opt;
+    if ($('optFlip')) $('optFlip').addEventListener('change', e => change1({ flip: e.target.checked }));
+    $('optRow').querySelectorAll('[data-side]').forEach(b => b.addEventListener('click', () => change1({ side: b.dataset.side })));
+    $('qRow').innerHTML = `<div class="slider-row">1分あたりの量 <input type="range" id="qRange" min="0.5" max="5" step="0.5" value="${P.q}" aria-label="1分あたりの量"> <input type="number" id="qNum" min="0.5" max="5" step="0.5" value="${P.q}" aria-label="1分あたりの量（数）"> L</div>`;
+    $('qRange').addEventListener('input', e => setQ(e.target.value));
+    $('qNum').addEventListener('change', e => setQ(e.target.value));
+    $('graphOpts').innerHTML = `<button class="op-btn" id="btnKeep">📌 グラフを残す</button><button class="op-btn" id="btnClearKept"${P.kept.length ? '' : ' disabled'}>🧹 残したグラフを消す</button>`;
+    $('btnKeep').addEventListener('click', keep1);
+    $('btnClearKept').addEventListener('click', () => { pause(true); pushHist(); P.kept = []; makeGraph(xmax1()); setMsg('残したグラフを消した。'); render(); });
+    $('graphNote').textContent = '色の線＝いまのグラフ（区間 ア・イ…）、灰色の点線＝残したグラフ';
+    $('workTitle').textContent = '📋 区間ごとの水位の上がり方';
+    makeGraph(xmax1());
+    paintLive();
+  }
+  function change1(o) {
+    pause(true); pushHist();
+    Object.assign(st.P, o, { now: 0 });
+    st.hintLv = 0;
+    setMsg('▶ 水を入れる を押そう。' + (st.P.shape === 'conn' ? '水は管の高さ（20 cm）まで来ると、となりへ流れる。' : ''));
+    render();
+  }
+  function setQ(v) {
+    let q = Math.round(Math.min(5, Math.max(0.5, +v || 2)) * 2) / 2;
+    const P = st.P;
+    if (q === P.q) { render1(); return; }
+    pause(true); pushHist();
+    let note = '';
+    if (P.now > 0) {   // 前のグラフを点線で残してから、はじめから入れなおす
+      P.kept.push({ id: curTank(), q: P.q }); if (P.kept.length > 4) P.kept.shift();
+      note = `前のグラフ（${P.q} L）を点線で残したよ。`;
+    }
+    P.q = q; P.now = 0;
+    setMsg(`1分あたり ${q} L にした。${note}▶ で入れて、傾きをくらべよう。`);
+    render();
+  }
+  function keep1() {
+    const P = st.P;
+    if (P.now <= 0) { setMsg('先に ▶ で水を入れてから残そう。'); return; }
+    pause(true); pushHist();
+    P.kept.push({ id: curTank(), q: P.q }); if (P.kept.length > 4) P.kept.shift();
+    P.now = 0;
+    setMsg('📌 グラフを点線で残した。形や量を変えて、くらべてみよう。');
+    render();
+  }
+  function paintTable() {
+    const P = st.P, id = curTank(), ph = phasesOf(id, P.q), side = sideOf(id), T = TANKS[id];
+    let h = '<div class="tbl-scroll"><table class="sec"><tr><th>区間</th><th>時間 x（分）</th><th>水位 y（cm）</th><th>水位が上がる水そうの<br>底面積（cm²）</th><th>1分で上がる高さ（cm）<br>＝ ' + (P.q * 1000) + ' ÷ 底面積</th><th>式</th></tr>';
+    ph.forEach((p, i) => {
+      const t0 = num(p.t0);
+      if (P.now < t0 - 1e-9 || (P.now === 0 && i > 0)) { h += `<tr><td class="k" style="color:${PH_COL[i]}">${KANA[i]}</td><td class="dim" colspan="5">（まだ）</td></tr>`; return; }
+      const done = P.now >= num(p.t1) - 1e-9, cur = !done;
+      const [a, b] = hs(p, side), r = rateOf(p, side);
+      const area = side === 'R' ? p.aR : p.aL;
+      let rate, eq;
+      if (p.curve) { rate = `約 ${d1(10 / num(p.t1.sub(p.t0)))}（平均）`; eq = '<span class="small">曲線（式はあつかわない）</span>'; }
+      else {
+        rate = showF(r);
+        const bb = a.sub(r.mul(p.t0));
+        eq = mrs('y=' + MathRender.terms([[r, 'x'], [bb, '']])) + (bb.n === 0 && r.n !== 0 ? '<span class="tag">比例</span>' : '') + (r.n === 0 ? '<span class="tag">平ら</span>' : '');
+      }
+      const areaTxt = p.curve ? `${p.curve.as}→${p.curve.as + p.curve.k * 10}` : area ? (T.conn && area === T.conn.a1 + T.conn.a2 ? `${area}（2つ分）` : area) : `<span class="small">—（水は${side === 'R' ? '蛇口がわに' : 'となりへ'}）</span>`;
+      const tf = (f) => p.curve && F(f).d !== 1 ? '約' + d1(num(f)) : showF(f);
+      const tTxt = `${tf(p.t0)} 〜 ${done ? tf(p.t1) : '…'}`;
+      const hTxt = `${a.toString()} 〜 ${done ? b.toString() : '…'}`;
+      h += `<tr class="${cur ? 'cur' : ''}"><td class="k" style="color:${PH_COL[i]}">${KANA[i]}</td><td>${tTxt}</td><td>${hTxt}</td><td>${areaTxt}</td><td>${rate}</td><td>${eq}</td></tr>`;
+    });
+    h += '</table></div><div class="tbl-note">1 L ＝ 1000 cm³。1分で上がる高さが、グラフの<b>傾き</b>（中2 の一次関数で「変化の割合」）。区間の式 y ＝ ax ＋ b の a がこれ。</div>';
+    $('work').innerHTML = h;
+  }
+
+  /* =====================================================================
+     9. モード② 読み取り
+     P = { tank, q, kind:'stop'|'atT'|'atH', T, H（分数の文字列）, now, guide, done, tries }
+     ===================================================================== */
+  const POOL2 = ['cyl', 'stepWN', 'stepNW', 'step3', 'connL', 'connR'];
+  const QS2 = [1, 1.5, 2, 2.5, 3, 4];
+  function gen2() {
+    for (let k = 0; k < 400; k++) {
+      const tank = pick(POOL2), q = pick(QS2), kind = pick(['stop', 'stop', 'atT', 'atH']);
+      const ph = phasesOf(tank, q), side = sideOf(tank), end = endOf(ph), xmax = niceEnd(end);
+      const { sx, sy } = gridSteps(xmax);
+      const cands = [];
+      if (kind === 'atH') {
+        for (let H = sy; H <= HT; H += sy) {
+          const T = exactTime(ph, F(H), side);
+          if (T && T.d === 1 && T.n % sx === 0 && num(T) < end - 1e-9) cands.push([T, F(H)]);
+        }
+      } else {
+        for (let t = sx; t < end - 1e-9; t += sx) {
+          const H = exactLevel(ph, F(t), side);
+          if (H && H.d === 1 && H.n > 0 && H.n % sy === 0) cands.push([F(t), H]);
+        }
+      }
+      if (!cands.length) continue;
+      const [T, H] = pick(cands);
+      const sig = tank + q + kind + T;
+      if (sig === st.last.r2) continue;
+      st.last.r2 = sig;
+      return { tank, q, kind, T: T.toString(), H: H.toString(), sx, sy, now: kind === 'stop' ? 0 : end, guide: false, done: false, tries: 0 };
+    }
+    return { tank: 'cyl', q: 2, kind: 'atT', T: '10', H: '20', sx: 2, sy: 5, now: 20, guide: false, done: false, tries: 0 };
+  }
+  function render2() {
+    const P = st.P;
+    $('shapeRow').innerHTML = ''; $('optRow').innerHTML = '';
+    $('qRow').innerHTML = `<div class="q-text">1分あたり ${P.q} L の水を入れる</div>`;
+    $('graphOpts').innerHTML = '';
+    $('graphNote').textContent = `横軸の1目もり＝？分、縦軸の1目もり＝？cm（自分で確かめよう）`;
+    $('workTitle').textContent = '📏 グラフを読み取ろう';
+    makeGraph(niceEnd(endOf(phasesOf(P.tank, P.q))));
+    renderWork();
+    paintLive();
+  }
+  function renderWork() {
+    if (st.mode !== 2) return;
+    const P = st.P;
+    let q, rows;
+    if (P.kind === 'stop') {
+      if (P.now < num(P.T) - 1e-9) { $('work').innerHTML = '<div class="ask-q">▶ 水を入れる を押そう。とちゅうで <b>ストップ</b> するよ。<br>止まったときの点 P を、グラフから読み取る。</div>'; return; }
+      q = '止まったのは<b>何分後</b>？ そのときの<b>水位</b>は何 cm？（グラフの点 P を読む）';
+      rows = [['x ＝', '分'], ['y ＝', 'cm']];
+    } else if (P.kind === 'atT') { q = `水を入れはじめてから <b>${P.T} 分後</b>の水位は何 cm？`; rows = [['水位', 'cm']]; }
+    else { q = `水位が <b>${P.H} cm</b> になるのは、入れはじめてから何分後？`; rows = [['', '分後']]; }
+    if (st.inp.vals.length !== rows.length) st.inp = { vals: rows.map(() => ''), cur: 0 };
+    $('work').innerHTML = `<div class="ask-wrap"><div class="ask-q">${q}</div>` +
+      rows.map((r, i) => `<div class="ans-line">${r[0]}<button class="box" data-i="${i}" aria-label="答え${i + 1}"><span class="bv"></span></button>${r[1]}</div>`).join('') +
+      keypadHTML() + `<button class="go${P.done ? ' next' : ''}">${P.done ? '▶ つぎの問題' : '✔ こたえる'}</button></div>`;
+    $('work').querySelectorAll('.box').forEach(b => b.addEventListener('click', () => { st.inp.cur = +b.dataset.i; paintBoxes(); }));
+    $('work').querySelectorAll('.key').forEach(b => b.addEventListener('click', () => press(b.dataset.k)));
+    $('work').querySelector('.go').addEventListener('click', () => P.done ? newProblem() : check2());
+    paintBoxes();
+  }
+  const KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.', '⌫'];
+  function keypadHTML() {
+    return '<div class="keypad">' + KEYS.map(k => `<button class="key" data-k="${k}" aria-label="${k}">${k === '.' ? '．' : k}</button>`).join('') + '</div>';
+  }
+  function press(k) {
+    if (st.mode !== 2 || st.P.done) return;
+    const i = st.inp.cur;
+    let v = st.inp.vals[i] || '';
+    if (k === '⌫') v = v.slice(0, -1);
+    else if (k === '.') { if (!v.includes('.') && /\d$/.test(v)) v += '.'; }
+    else if (v.length < 5) v += k;
+    st.inp.vals[i] = v;
+    paintBoxes();
+  }
+  function paintBoxes() {
+    document.querySelectorAll('#work .box').forEach((b, i) => {
+      const v = st.inp.vals[i];
+      b.querySelector('.bv').textContent = v === '' || v == null ? '　' : v;
+      b.classList.toggle('active', i === st.inp.cur && !st.P.done);
+    });
+  }
+  document.addEventListener('keydown', e => {
+    if (st.mode !== 2) return;
+    if (e.target.closest && e.target.closest('.ws-panel, input, textarea')) return;
+    if (e.target.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+    if (e.key === 'Enter') { const go = document.querySelector('#work .go'); if (go) { go.click(); e.preventDefault(); } return; }
+    if (e.key === 'Tab' && st.inp.vals.length > 1) { st.inp.cur = (st.inp.cur + 1) % st.inp.vals.length; paintBoxes(); e.preventDefault(); return; }
+    const map = { '.': '.', 'Backspace': '⌫' };
+    if (/^[0-9]$/.test(e.key)) { press(e.key); e.preventDefault(); }
+    else if (map[e.key]) { press(map[e.key]); e.preventDefault(); }
+  });
+  const parseV = (s) => (s && /^\d+(\.\d+)?$/.test(s) ? F(s) : null);
+  /** 目もりの読みちがえか（目もりの数を答えた・1目もりずれた・もう一方の軸の目もりで数えた） */
+  function isScaleMis(v, w, s, s2) {
+    const vn = num(v), wn = num(w);
+    return (s !== 1 && Math.abs(vn - wn / s) < 1e-9) || Math.abs(Math.abs(vn - wn) - s) < 1e-9 || (s !== s2 && Math.abs(vn - wn / s * s2) < 1e-9);
+  }
+  function check2() {
+    const P = st.P;
+    if (P.kind === 'stop' && P.now < num(P.T) - 1e-9) { setMsg('先に ▶ で水を入れよう。'); return; }
+    const vals = st.inp.vals.map(parseV);
+    if (vals.some(v => !v)) { setMsg('数を入れてから「こたえる」を押そう。', 'ng'); return; }
+    pushHist();
+    const T = F(P.T), H = F(P.H);
+    const want = P.kind === 'stop' ? [T, H] : P.kind === 'atT' ? [H] : [T];
+    const steps = P.kind === 'stop' ? [[P.sx, P.sy], [P.sy, P.sx]] : P.kind === 'atT' ? [[P.sy, P.sx]] : [[P.sx, P.sy]];
+    const ok = vals.map((v, i) => v.equals(want[i]));
+    document.querySelectorAll('#work .box').forEach((b, i) => { b.classList.toggle('ok', ok[i]); b.classList.toggle('ng', !ok[i]); });
+    if (ok.every(Boolean)) {
+      P.done = true; bumpClear(2); sndOK();
+      setMsg(`○ 正解！ ${P.T} 分後に水位 ${P.H} cm。点線のように、点から<b>真下</b>が時間、<b>真横</b>が水位。（横の1目もり ${P.sx} 分、縦の1目もり ${P.sy} cm）`, 'ok');
+      render();
+      return;
+    }
+    P.tries++; sndNG();
+    // つまずきの型を見分ける
+    let trip = null;
+    const other = P.kind === 'stop' ? null : (P.kind === 'atT' ? T : H);
+    if (P.kind === 'stop' && vals[0].equals(H) && vals[1].equals(T)) trip = 'axisSwap';
+    else if (other && vals[0].equals(other)) trip = 'axisSwap';
+    else if (vals.some((v, i) => !ok[i] && isScaleMis(v, want[i], steps[i][0], steps[i][1]))) trip = 'scaleMis';
+    if (trip) addTrip(trip);
+    if (P.tries >= 2) P.guide = true;
+    const wrongs = ok.map((o, i) => o ? '' : (P.kind === 'stop' ? ['時間', '水位'][i] : P.kind === 'atT' ? '水位' : '時間')).filter(Boolean).join('と');
+    setMsg(`× ${wrongs}がちがうよ。` + (trip ? `<br><span class="bad">つまずき：${TRIPS[trip].name}</span> ― ${TRIPS[trip].exp}` : '<br>1目もりがいくつかを確かめて、もう一度。') + (P.guide ? '<br>点線を出したよ。点線が軸とぶつかる目もりを読もう。' : ''), 'ng');
+    renderTrips();
+    paintGraph();
+  }
+
+  /* =====================================================================
+     10. モード③ 予想する・④ 逆から
+     P = { tank（正解）, q, cands:[水そうの名前], picked, now }
+     ===================================================================== */
+  const POOL34 = ['cyl', 'stepWN', 'stepNW', 'step3', 'tiltUp', 'tiltDown', 'connL', 'connR'];
+  function gen34() {
+    let pool = POOL34;
+    if (st.focus && TRIPS[st.focus].pool) pool = TRIPS[st.focus].pool.filter(id => DIST[id]);
+    let tank;
+    for (let k = 0; k < 20; k++) { tank = pick(pool); if (tank !== st.last.r34) break; }
+    st.last.r34 = tank;
+    // まちがいの候補を3つ（練習中の型があれば、それを入れる）
+    let ds = shuffle(DIST[tank]);
+    if (st.focus) ds.sort((a, b) => (b[1] === st.focus) - (a[1] === st.focus));
+    const cands = shuffle([tank].concat(ds.slice(0, 3).map(d => d[0])));
+    return { tank, q: pick([1.5, 2, 2.5, 3]), cands, picked: null, now: 0 };
+  }
+  function xmax34() {
+    const P = st.P;
+    const ids = st.mode === 4 ? P.cands : [P.tank];
+    return niceEnd(Math.max(...ids.map(id => endOf(phasesOf(id, P.q)))));
+  }
+  function render34() {
+    const P = st.P, m4 = st.mode === 4;
+    $('shapeRow').innerHTML = ''; $('optRow').innerHTML = ''; $('graphOpts').innerHTML = '';
+    $('qRow').innerHTML = `<div class="q-text">1分あたり ${P.q} L の水を入れる</div>`;
+    $('graphNote').textContent = m4 ? (P.picked ? 'うすい太い線＝問題のグラフ、色の線＝選んだ水そうのグラフ' : 'このグラフになるのは、どの水そう？')
+                                    : (P.picked ? '赤紫の点線＝選んだ予想、色の線＝本当のグラフ' : 'どんなグラフになるかな？ 下から選ぼう');
+    $('workTitle').textContent = m4 ? '🔍 どの水そうかな？' : '🔮 グラフを予想しよう';
+    makeGraph(xmax34());
+    $('work').innerHTML = '<div class="cands">' + P.cands.map((id, i) => {
+      let c = '';
+      if (P.picked) { if (id === P.tank) c = ' ok'; else if (id === P.picked) c = ' ng'; }
+      return `<button class="cand${c}" data-id="${id}"${P.picked ? ' disabled' : ''}>${m4 ? tankSVG(id, { small: true }) : miniGraphSVG(id)}<span class="cl">${'ABCD'[i]}</span>${P.picked && m4 ? `<span class="small">${TANKS[id].name}</span>` : ''}</button>`;
+    }).join('') + '</div>' + (P.picked && P.now >= endNow() - 1e-9 ? '<div class="tools row-gap"><button class="op-btn action" id="btnNext">▶ つぎの問題</button></div>' : '');
+    $('work').querySelectorAll('.cand').forEach(b => b.addEventListener('click', () => choose34(b.dataset.id)));
+    if ($('btnNext')) $('btnNext').addEventListener('click', () => newProblem());
+    paintLive();
+  }
+  function choose34(id) {
+    const P = st.P;
+    if (P.picked) return;
+    pushHist();
+    P.picked = id; P.now = 0;
+    const ok = id === P.tank;
+    if (ok) { bumpClear(st.mode); sndOK(); setMsg('○ 正解！ 水を入れて確かめよう…', 'ok'); }
+    else {
+      sndNG();
+      const d = DIST[P.tank].find(x => x[0] === id), trip = d ? d[1] : null;
+      if (trip) addTrip(trip);
+      setMsg('× 水を入れて、くらべてみよう…' + (trip ? `<br><span class="bad">つまずき：${TRIPS[trip].name}</span>` : ''), 'ng');
+    }
+    render();
+    // 水を入れて見せる（④ は選んだ水そう、③ は問題の水そう）
+    play();
+  }
+  function finishCheck() {
+    const P = st.P, ok = P.picked === P.tank, m4 = st.mode === 4;
+    const d = DIST[P.tank].find(x => x[0] === P.picked), trip = d ? d[1] : null;
+    const why = insight(P.tank, P.q);
+    if (ok) setMsg(`○ ${m4 ? 'グラフがぴったり重なった！' : '予想どおり！'} ${why}`, 'ok');
+    else setMsg(`× ${m4 ? 'グラフが重ならなかった。正解は ' + TANKS[P.tank].name + '（緑のわく）。' : '予想とちがった。正解は緑のわくのグラフ。'}<br>${trip ? `<span class="bad">${TRIPS[trip].name}</span> ― ${TRIPS[trip].exp}<br>` : ''}${m4 ? '' : why}`, 'ng');
+    renderTrips();
+    render34();
+  }
+
+  /* =====================================================================
+     11. ボタンのならび（水を入れる・とめる・速さ）
+     ===================================================================== */
+  function paintPour() {
+    const P = st.P;
+    const showPour = st.mode === 1 || (st.mode === 2 && P.kind === 'stop' && !P.done && P.now < num(P.T) - 1e-9) || ((st.mode === 3 || st.mode === 4) && P.picked);
+    if (!showPour) { $('pourRow').innerHTML = ''; return; }
+    const end = endNow(), full = P.now >= end - 1e-9;
+    const want = st.playing ? 'pause' : 'play';
+    const key = [st.mode, want, full, st.speed, P.now > 0].join();
+    if ($('pourRow').dataset.key === key) return;    // 同じなら描きなおさない（押している最中のボタンが消えないように）
+    $('pourRow').dataset.key = key;
+    let h = st.playing ? '<button class="op-btn pour" id="btnPause">⏸ とめる</button>'
+                       : `<button class="op-btn pour" id="btnPlay">${full && P.now > 0 ? '⟲ もう一度入れる' : P.now > 0 ? '▶ つづきを入れる' : '▶ 水を入れる'}</button>`;
+    if (st.mode === 1) h += '<button class="op-btn" id="btnEnd">⏭ 満水まで</button>';
+    h += '<span class="chip-row">' + [['slow', '🐢'], ['normal', 'ふつう'], ['fast', '🐇']].map(([k, n]) => `<button class="chip sm${st.speed === k ? ' active' : ''}" data-sp="${k}" aria-label="速さ ${n}">${n}</button>`).join('') + '</span>';
+    $('pourRow').innerHTML = h;
+    if ($('btnPlay')) $('btnPlay').addEventListener('click', () => { if (st.mode === 1 && P.now === 0) pushHist(); if (st.mode === 1 && P.now >= endNow() - 1e-9) { pushHist(); P.now = 0; } play(); if (st.mode === 1) setMsg('水を入れているよ。グラフの<b>傾き</b>が変わるところに注目。'); });
+    if ($('btnPause')) $('btnPause').addEventListener('click', () => pause());
+    if ($('btnEnd')) $('btnEnd').addEventListener('click', () => { pause(true); pushHist(); P.now = endNow(); paintLive(); onStopped(); });
+    $('pourRow').querySelectorAll('[data-sp]').forEach(b => b.addEventListener('click', () => { st.speed = b.dataset.sp; $('pourRow').dataset.key = ''; paintPour(); }));
+  }
+
+  /* =====================================================================
+     12. 共通の動き
+     ===================================================================== */
+  function pushHist() { st.hist.push(clone({ P: st.P, hintLv: st.hintLv })); if (st.hist.length > 60) st.hist.shift(); $('btnUndo').disabled = false; }
+  function undo() {
+    if (!st.hist.length) return;
+    pause(true);
+    const h = st.hist.pop();
+    st.P = h.P; st.hintLv = h.hintLv;
+    if (st.mode === 2) st.inp = { vals: [], cur: 0 };
+    setMsg('↶ ひとつもどした。');
+    render();
+  }
+  function resetProblem() {
+    pause(true);
+    if (st.mode === 1) { pushHist(); st.P.now = 0; }
+    else { st.P = clone(st.P0); st.hist = []; st.inp = { vals: [], cur: 0 }; }
+    st.hintLv = 0;
+    setMsg('はじめからやりなおそう。');
+    render();
+  }
+  function introOf() {
+    return {
+      1: '▶ 水を入れる を押そう。左の水そうと、右のグラフを見くらべよう。',
+      2: st.P.kind === 'stop' ? '▶ 水を入れる を押そう。とちゅうで止まるよ。' : 'グラフを読んで答えよう。',
+      3: '水そうの形をよく見て、グラフを A〜D から選ぼう。',
+      4: 'グラフの形をよく見て、水そうを A〜D から選ぼう。',
+    }[st.mode];
+  }
+  function newProblem(opt = {}) {
+    pause(true);
+    st.hist = []; st.hintLv = 0; st.inp = { vals: [], cur: 0 };
+    if (st.mode === 1) st.P = gen1(opt);
+    else if (st.mode === 2) st.P = gen2();
+    else st.P = gen34();
+    st.P0 = clone(st.P);
+    st.gKey = '';                // グラフを作りなおす
+    setMsg(introOf());
+    render();
+  }
+  function setMode(n, opt = {}) {
+    pause(true);
+    st.mode = n;
+    if (!opt.keepFocus) { st.focus = null; $('focusBar').hidden = true; }
+    document.querySelectorAll('#modeRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.m === n));
+    $('modeNote').textContent = MODES[n].note;
+    $('btnNew').hidden = n === 1;
+    $('pourRow').dataset.key = '';
+    newProblem(opt);
+  }
+  function render() {
+    $('pourRow').dataset.key = '';
+    if (st.mode === 1) render1();
+    else if (st.mode === 2) render2();
+    else render34();
+    renderTrips(); renderTeacher();
+    $('btnUndo').disabled = !st.hist.length;
+  }
+  function setMsg(html, c) { const el = $('msg'); el.innerHTML = html; el.className = 'msg' + (c ? ' ' + c : ''); }
+  function hint() {
+    const P = st.P;
+    st.hintLv = Math.min(3, st.hintLv + 1);
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    const lv = st.hintLv;
+    let t = '';
+    if (st.mode === 1) t = ['', '同じ量の水を入れたとき、水位が速く上がるのは、太いところ？ 細いところ？', '1分で上がる高さ ＝ 1分に入る水の量（cm³）÷ 底面積（cm²）。1 L ＝ 1000 cm³。', '1分あたりの量を2倍にすると、1分で上がる高さも2倍 → グラフの傾きも2倍（急になる）。'][lv];
+    else if (st.mode === 2) {
+      if (lv >= 2) { P.guide = true; paintGraph(); }
+      t = ['', `まず1目もりを確かめよう。横軸は1目もり ${P.sx} 分、縦軸は1目もり ${P.sy} cm。`, '点線を出したよ。点から真下に下ろしたところが時間、真横に動かしたところが水位。', `横軸は 0 から ${P.sx} 分ずつ、縦軸は 0 から ${P.sy} cm ずつ数えよう。`][lv];
+    } else if (st.mode === 3) {
+      const T = TANKS[P.tank];
+      t = T.conn ? ['', '水が管の高さまで来たら、どこへ流れる？', 'となりへ流れているあいだ、▼ の水そうの水位は上がる？ 止まる？', '止まっているあいだは、グラフは横に平ら。'][lv]
+        : ['', '水そうの太さが変わるところはある？ ある高さで、グラフも折れる。', '細いところは水位が速く上がる → グラフは急。太いところはゆるやか。', '太さが少しずつ変わる（かたむいた壁）なら、傾きも少しずつ変わる → 曲線。'][lv];
+    } else t = ['', 'グラフが折れているところはある？ その高さ（縦軸）で、水そうの太さが変わる。', 'グラフが急なところ → 水そうは細い。ゆるやかなところ → 太い。', '曲線なら、壁がかたむいて太さが少しずつ変わる水そう。平らなところがあれば、となりへ流れる連結。'][lv];
+    setMsg('💡 ' + t);
+  }
+
+  /* =====================================================================
+     13. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(p) { bumpRec(r => r.clear[p] = (r.clear[p] || 0) + 1); }
+  function addTrip(type) { st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><button class="op-btn" data-prac="${k}">🔁 この型を練習（${MODES[TRIPS[k].mode].name}）</button></div>`).join('')
+      : '<div class="small">まだ ありません。まちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = `この端末のきろく：正解 ② ${c[2] || 0}　③ ${c[3] || 0}　④ ${c[4] || 0}　／ ヒント ${r.hint || 0}回`;
+    renderTeacher();
+  }
+  function practice(type) {
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    setMode(TRIPS[type].mode, { keepFocus: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     14. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const P = st.P;
+    if (!P) return '';
+    if (st.mode === 1) return '（▶ で入れて、区間ごとの「1分で上がる高さ」と水そうの太さをくらべさせる）';
+    if (st.mode === 2) return P.kind === 'stop' ? `答え：x ＝ ${P.T} 分、y ＝ ${P.H} cm` : P.kind === 'atT' ? `答え：${P.H} cm` : `答え：${P.T} 分後`;
+    return `答え：${'ABCD'[P.cands.indexOf(P.tank)]}（${TANKS[P.tank].name}）`;
+  }
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText();
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function teacherStep() {
+    const P = st.P;
+    if (st.mode === 1) { pause(true); P.now = 0; st.speed = 'normal'; play(); return; }
+    if (st.mode === 2) {
+      if (P.done) { newProblem(); return; }
+      if (P.kind === 'stop' && P.now < num(P.T) - 1e-9) { st.speed = 'fast'; play(); return; }
+      st.inp.vals = P.kind === 'stop' ? [P.T, P.H] : P.kind === 'atT' ? [P.H] : [P.T];
+      paintBoxes(); check2(); return;
+    }
+    if (!P.picked) choose34(P.tank); else if (!st.playing) newProblem();
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     15. はじめの準備
+     ===================================================================== */
+  $('modeRow').innerHTML = [1, 2, 3, 4].map(n => `<button class="chip" data-m="${n}">${MODES[n].name}</button>`).join('');
+  $('modeRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setMode(+b.dataset.m)));
+  $('btnNew').addEventListener('click', () => newProblem());
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetProblem);
+  $('btnHint').addEventListener('click', hint);
+  $('btnWs').addEventListener('click', () => {
+    setMode(1, { shape: 'step', flip: false, q: 2 });
+    setMsg('📄 ワークシートの問題：<b>下が太く上が細い</b>段のある水そう。グラフはどんな形になる？ ワークシートに予想を書いてから ▶ を押そう。区間 ア・イ ごとに「＋ 記録する」。');
+  });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '水そうグラフ',
+    question: '下が太く上が細い「段のある水そう」に、毎分同じ量の水を入れる。時間と水位のグラフは、どんな形になるだろうか？',
+    predictions: ['まっすぐな1本の直線', 'とちゅうから急になる折れ線', 'とちゅうからゆるやかになる折れ線', 'なめらかな曲線', 'わからない'],
+    operationNote: '「📄 ワークシートの問題」で ① の段つき水そうを開き、▶ で水を入れよう。区間 ア・イ のそれぞれで（水位が上がっているときに）「＋ 記録する」。ほかの形でもためそう。',
+    fields: [
+      { key: 'katachi', label: '水そうの形', math: false },
+      { key: 'q', label: '1分の量', unit: 'L' },
+      { key: 'kukan', label: '区間', math: false },
+      { key: 'area', label: '底面積', unit: 'cm²' },
+      { key: 'rate', label: '1分で上がる高さ', unit: 'cm' },
+      { key: 'shiki', label: '式' }
+    ],
+    capture: () => {
+      if (st.mode !== 1 || st.P.now <= 0) { setMsg('① 入れてみる で水を入れてから記録しよう。'); return null; }
+      const P = st.P, id = curTank(), ph = phasesOf(id, P.q), side = sideOf(id);
+      let i = ph.findIndex(p => P.now <= num(p.t1) + 1e-9); if (i < 0) i = ph.length - 1;
+      const p = ph[i], r = rateOf(p, side);
+      const area = p.curve ? `${p.curve.as}〜${p.curve.as + p.curve.k * 10}` : String((side === 'R' ? p.aR : p.aL) || '—');
+      return {
+        katachi: TANKS[id].name, q: String(P.q), kukan: KANA[i], area,
+        rate: r ? r.toString() : '約' + d1(10 / num(p.t1.sub(p.t0))),
+        shiki: r ? 'y=' + MathRender.terms([[r, 'x'], [hs(p, side)[0].sub(r.mul(p.t0)), '']]) : '（曲線）',
+      };
+    },
+    summaryHint: '「グラフの傾きが変わるのは、水そうの〜が変わる高さ。細いところでは水位が〜上がるのでグラフは〜、太いところでは〜」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める（「上が細いのでゆるやか」と考える生徒がいる）。① で 2 L/分 のとき、ア（底面積 2000 cm²）は 1分で 1 cm、イ（1000 cm²）は 1分で 2 cm になることを表で確かめさせ、1分で上がる高さ ＝ 2000 ÷ 底面積 を説明させる。1分あたりの量を変えて、傾きが比例して変わることも見せる。③ かたむいた壁・④ 連結へ広げる。',
+      answer: 'とちゅうから急になる折れ線。<br>ア：y ＝ x（0 ≦ x ≦ 20）、イ：y ＝ 2x − 20（20 ≦ x ≦ 30）。<br>まとめ：グラフの傾きが変わるのは、水そうの太さ（底面積）が変わる高さ。細いところでは水位が速く上がるのでグラフは急、太いところではゆるやか。太さが同じあいだは直線（一次関数）になり、1分で上がる高さ（＝1分に入る水の量 ÷ 底面積）が傾きになる。'
+    }
+  });
+
+  setupTeacher();
+  setMode(1);
+})();
+</script>
+
+</body>
+</html>
