@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>作図ツール</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：作図の弧＝灰青の細い線、ひいた直線＝オレンジ、できた線＝緑（○）、
+     まちがい・注意＝赤紫（×）、作図でできた点＝紫。色だけでなく、線の太さ・記号・文字でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457; --inv: #6a1b9a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.sm { min-height: 44px; padding: 4px 12px; font-size: .95rem; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.on { background: #fffde7; border-color: #fbc02d; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .tool-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center; padding: 2px 8px; border-left: 2px dashed #cfd8dc; }
+  .tool-group:first-child { border-left: none; }
+  .tool-group .lab { font-size: .8rem; color: #78909c; font-weight: bold; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 作図エリアと手順（広い画面は 左＝作図、右＝手順） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @container (min-width: 900px) { .board-in { grid-template-columns: minmax(0, 2.2fr) minmax(250px, 1fr); } }
+  .draw-card { padding: 8px; }
+  #board { display: block; width: 100%; height: auto; background: #fffef8; border-radius: 12px; border: 2px solid #cfd8dc; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+  .goal { font-weight: bold; font-size: 1.05rem; line-height: 1.6; margin-bottom: 6px; }
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .steps li { border: 2px solid #cfd8dc; border-radius: 12px; padding: 6px 10px 6px 40px; position: relative; line-height: 1.55; font-size: 1rem; }
+  .steps li::before { content: attr(data-n); position: absolute; left: 10px; top: 6px; font-weight: 900; color: #78909c; }
+  .steps li.cur { border-color: #fbc02d; background: #fffde7; font-weight: bold; }
+  .steps li.done { border-color: #a5d6a7; background: #f1f8e9; color: #33691e; }
+  .steps li.done::before { content: "✓"; color: var(--ok); font-size: 1.2rem; }
+  .side-sub { margin-top: 10px; border-top: 2px dashed #cfd8dc; padding-top: 8px; }
+  .ws-line { font-size: 1.15rem; font-weight: bold; text-align: center; line-height: 1.8; }
+  .ws-line .pa { color: var(--pos); } .ws-line .pb { color: var(--neg); }
+  .slider-row { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 6px 0; font-weight: bold; }
+  .slider-row input[type=range] { flex: 1; min-width: 140px; height: 36px; }
+  .slider-row input[type=number] { width: 84px; font-size: 1.2rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .reason-text { font-size: 1.08rem; line-height: 1.75; background: #f3e5f5; border-radius: 12px; padding: 8px 12px; min-height: 5em; }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>📐 作図ツール</h1>
+<p class="subtitle">コンパスと定規だけで、垂直二等分線・角の二等分線・垂線をかこう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- パート：① 垂直二等分線 ② 角の二等分線 ③ 垂線 ④ 応用 ⑤ 作図の理由 -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="chip-row" id="probRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card" id="toolCard">
+    <div class="tools">
+      <div class="tool-group"><span class="lab">作図</span>
+        <button class="op-btn" data-tool="compass">🧭 コンパス</button>
+        <button class="op-btn" data-tool="ruler">📏 定規</button>
+        <button class="op-btn" id="btnSpin">🔄 まわす</button>
+      </div>
+      <div class="tool-group"><span class="lab">確かめ</span>
+        <button class="op-btn" data-tool="measure">📐 長さを測る</button>
+        <button class="op-btn" data-tool="erase">🧽 消す</button>
+      </div>
+      <div class="tool-group">
+        <button class="op-btn" id="btnNew">🎲 新しい問題</button>
+        <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+        <button class="op-btn" id="btnReset">⟲ もういちど</button>
+        <button class="op-btn" id="btnHint">💡 ヒント</button>
+        <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+      </div>
+    </div>
+    <div class="chip-row" style="margin-top:6px">
+      <span class="small">定規でひく線：</span>
+      <button class="chip sm" data-lm="line">直線</button><button class="chip sm" data-lm="seg">線分</button>
+      <span class="small" style="margin-left:10px">吸いつき（点・交点）：</span>
+      <button class="chip sm" data-snap="1">あり</button><button class="chip sm" data-snap="0">なし</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <div class="board"><div class="board-in">
+    <div class="card draw-card">
+      <svg id="board" viewBox="0 0 960 640" role="img" aria-label="作図エリア">
+        <g id="gGiven"></g><g id="gShapes"></g><g id="gPts"></g><g id="gCheck"></g><g id="gHandles"></g><g id="gTool"></g>
+      </svg>
+      <div class="msg" id="msg"></div>
+    </div>
+    <div class="card" id="sideCard">
+      <div class="goal" id="goal"></div>
+      <ol class="steps" id="steps"></ol>
+      <div class="side-sub" id="sideSub"></div>
+    </div>
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools">
+      <button class="op-btn action" id="tStep">⏭ つぎの手順を自動で</button>
+      <button class="op-btn" id="tAll">⏩ 最後まで自動</button>
+    </div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>作図</b>：コンパスと定規（目もりを使わない）だけで図をかくこと。定規は線をひくだけ、コンパスは円をかく・長さを写しとるだけに使う。</li>
+      <li><b>🧭 コンパス</b>：<b>はり</b>をドラッグ → コンパスごと動く（円の中心）。<b>えんぴつ</b>をドラッグ → 開き（半径）が変わる。上の<b>つまみ</b>をドラッグしてまわす → まわした分だけ円の一部（弧）がかける。「🔄 まわす」で1周の円。</li>
+      <li><b>📏 定規</b>：点から点へドラッグすると、その2点を通る直線（または線分）がひける。</li>
+      <li>はり・えんぴつ・定規のはしは、<b>点や交点</b>の近くではなすと吸いつく（「吸いつき なし」で切れる）。</li>
+      <li><b>📐 長さを測る</b>・分度器（できたあとの「確かめる」ボタン）は、作図が<b>できたあとに確かめる</b>ための道具。<b>🧽 消す</b>はタップした線を消す。</li>
+      <li><b>垂直二等分線</b>：線分の真ん中（中点）を通り、その線分に垂直な直線。<b>垂線</b>：ある直線に垂直な直線。<b>角の二等分線</b>：角を2つの等しい角に分ける半直線。</li>
+      <li>はじめの図（A・B などの点）は、作図をはじめる前ならドラッグで動かせる。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：画面の 1 目もり（40 点）を 1 cm として長さを出しています（実物の 1 cm ではありません）。コンパスの中心・半径・直線が正しいかは、少しの誤差（中心 0.15 cm、半径 0.12 cm、角 1.5° ほど）をゆるして判定しています。円の接線は中3 で学ぶので「発展」です。<br>
+    つながる教材：<a href="円とコンパス.html">小3 コンパスで円をかこう</a>／<a href="おって まわして 対称な図形.html">小6 おって まわして 対称な図形</a></p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const TAU = Math.PI * 2;
+  const DEG = Math.PI / 180;
+  const d1 = (v) => String(+(+v).toFixed(1));
+
+  /* =====================================================================
+     1. 大きさのきまり（作図エリアの中では長さを cm で持つ。SVG にかくときだけ U をかける）
+     ===================================================================== */
+  const U = 40;               // 1 cm ＝ SVG の 40
+  const BW = 24, BH = 16;     // 作図エリア（よこ 24 cm・たて 16 cm）
+  const LEG = 6.5;            // コンパスの足の長さ（cm）
+  const RMIN = 0.4, RMAX = 13;
+  const MAG = 0.45;           // 点・交点の近く（この長さいない）では吸いつく
+  // 正しいかを見るときにゆるす誤差
+  const TOL = { c: 0.15, r: 0.12, on: 0.12, ang: 1.5 * DEG };
+  const px = (v) => +(v * U).toFixed(1);
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const angOf = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
+  const add = (p, ang, L) => ({ x: p.x + L * Math.cos(ang), y: p.y + L * Math.sin(ang) });
+  const normA = (a) => { while (a <= -Math.PI) a += TAU; while (a > Math.PI) a -= TAU; return a; };
+  /** 2つの直線の向きのちがい（0〜90°。向きの反対は同じとみる） */
+  const lineAngDiff = (a, b) => { let d = Math.abs(normA(a - b)); if (d > Math.PI / 2) d = Math.PI - d; return d; };
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.1, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+  const sndTick = () => beep([[1500, 0, 0.03, 'sine', 0.04]]);
+
+  /* =====================================================================
+     2. 図形の計算（円・弧と、直線・線分・半直線の交点）
+     曲線 = { k:'C', cx, cy, r, a0?, span? }（span がなければ1周の円）
+          | { k:'L', p, q, mode:'line'|'seg'|'ray' }（ray は p から q の向きへ）
+     ===================================================================== */
+  function onArc(c, p) {
+    if (c.span == null || Math.abs(c.span) >= TAU - 1e-6) return true;
+    const e = 0.04;
+    let d = Math.atan2(p.y - c.cy, p.x - c.cx) - c.a0;
+    if (c.span < 0) d = -d;
+    d = ((d % TAU) + TAU) % TAU;
+    return d <= Math.abs(c.span) + e || d >= TAU - e;
+  }
+  const lenL = (l) => dist(l.p, l.q);
+  function paramL(l, p) { const dx = l.q.x - l.p.x, dy = l.q.y - l.p.y; return ((p.x - l.p.x) * dx + (p.y - l.p.y) * dy) / (dx * dx + dy * dy); }
+  function distLine(l, p) { const dx = l.q.x - l.p.x, dy = l.q.y - l.p.y; return Math.abs(dx * (p.y - l.p.y) - dy * (p.x - l.p.x)) / Math.hypot(dx, dy); }
+  function inL(l, t, tol) { const e = (tol || 0.02) / lenL(l); return l.mode === 'line' || (l.mode === 'seg' ? t >= -e && t <= 1 + e : t >= -e); }
+  /** 点 p が直線（線分・半直線）の上にあるか */
+  function onLine(l, p, tol = TOL.on) { return distLine(l, p) <= tol && inL(l, paramL(l, p), tol); }
+  function interCC(a, b) {
+    const d = Math.hypot(b.cx - a.cx, b.cy - a.cy);
+    if (d < 1e-9 || d > a.r + b.r + 1e-9 || d < Math.abs(a.r - b.r) - 1e-9) return [];
+    const x = (d * d + a.r * a.r - b.r * b.r) / (2 * d), h = Math.sqrt(Math.max(0, a.r * a.r - x * x));
+    const ux = (b.cx - a.cx) / d, uy = (b.cy - a.cy) / d, mx = a.cx + ux * x, my = a.cy + uy * x;
+    const pts = h < 1e-6 ? [{ x: mx, y: my }] : [{ x: mx - uy * h, y: my + ux * h }, { x: mx + uy * h, y: my - ux * h }];
+    return pts.filter(p => onArc(a, p) && onArc(b, p));
+  }
+  function interCL(c, l) {
+    const dx = l.q.x - l.p.x, dy = l.q.y - l.p.y, fx = l.p.x - c.cx, fy = l.p.y - c.cy;
+    const A = dx * dx + dy * dy, B = 2 * (fx * dx + fy * dy), C = fx * fx + fy * fy - c.r * c.r, D = B * B - 4 * A * C;
+    if (D < 0) return [];
+    const s = Math.sqrt(D), ts = s < 1e-9 ? [-B / (2 * A)] : [(-B - s) / (2 * A), (-B + s) / (2 * A)];
+    return ts.filter(t => inL(l, t)).map(t => ({ x: l.p.x + dx * t, y: l.p.y + dy * t })).filter(p => onArc(c, p));
+  }
+  function interLL(a, b) {
+    const d1x = a.q.x - a.p.x, d1y = a.q.y - a.p.y, d2x = b.q.x - b.p.x, d2y = b.q.y - b.p.y;
+    const den = d1x * d2y - d1y * d2x;
+    if (Math.abs(den) < 1e-9) return [];
+    const t = ((b.p.x - a.p.x) * d2y - (b.p.y - a.p.y) * d2x) / den, u = ((b.p.x - a.p.x) * d1y - (b.p.y - a.p.y) * d1x) / den;
+    return inL(a, t) && inL(b, u) ? [{ x: a.p.x + d1x * t, y: a.p.y + d1y * t }] : [];
+  }
+  function inter(a, b) {
+    if (a.k === 'C' && b.k === 'C') return interCC(a, b);
+    if (a.k === 'C') return interCL(a, b);
+    if (b.k === 'C') return interCL(b, a);
+    return interLL(a, b);
+  }
+  const full = (p, r) => ({ k: 'C', cx: p.x, cy: p.y, r });           // 1周の円（自動の作図で先に交点を計算するとき）
+  const LN = (p, q, mode) => ({ k: 'L', p, q, mode: mode || 'line' });
+  /** 直線 l を作図エリアのはしまでのばした2点 */
+  function clipLine(l) {
+    if (l.mode === 'seg') return [l.p, l.q];
+    const dx = l.q.x - l.p.x, dy = l.q.y - l.p.y, ts = [];
+    const tx = (x) => (x - l.p.x) / dx, ty = (y) => (y - l.p.y) / dy;
+    if (Math.abs(dx) > 1e-9) ts.push(tx(0), tx(BW));
+    if (Math.abs(dy) > 1e-9) ts.push(ty(0), ty(BH));
+    let ins = ts.map(t => ({ t, x: l.p.x + dx * t, y: l.p.y + dy * t })).filter(p => p.x > -1e-6 && p.x < BW + 1e-6 && p.y > -1e-6 && p.y < BH + 1e-6);
+    if (l.mode === 'ray') ins = ins.filter(p => p.t >= 0).concat([{ t: 0, x: l.p.x, y: l.p.y }]);
+    if (ins.length < 2) return [l.p, l.q];
+    ins.sort((a, b) => a.t - b.t);
+    return [ins[0], ins[ins.length - 1]];
+  }
+  /** 円の一部をかく向き：点の列をおおう弧（a0 と span）。2点が反対がわなら1周 */
+  function arcCover(c, pts, pad = 0.35) {
+    const as = pts.map(p => Math.atan2(p.y - c.y, p.x - c.x));
+    if (as.length === 1) return { a0: as[0] - pad, span: 2 * pad };
+    const base = as[0];
+    const rel = as.map(a => normA(a - base));
+    const lo = Math.min(...rel), hi = Math.max(...rel);
+    if (hi - lo > Math.PI - 0.4) return { a0: base, span: TAU };
+    return { a0: base + lo - pad, span: hi - lo + 2 * pad };
+  }
+
+  /* =====================================================================
+     3. 問題（はじめの図・手順の判定・自動の作図）
+     G は はじめの図の点（{x,y}）。given(G) で はじめの図の線、analyze で手順の進み具合を出す。
+     analyze の戻り値：{ steps:[{t,done}], named:{名前:点}, ok, target:{p,ang}（できるべき直線）, pairs, checks }
+       pairs：つまずきを見るための組（{kind:'half',X,Y} 同じ半径・半分より大きく／{kind:'len',X,L} 半径を L に）
+     auto(i, G, an)：先生モード・お手本で、手順 i を自動でかく動き（[{arc:{c,r,pts}} | {line:[p,q,mode]}]）
+     ===================================================================== */
+  /** 点 X を中心にした（ユーザーがかいた）円・弧 */
+  const circAt = (sc, X) => sc.user.filter(c => c.k === 'C' && Math.hypot(c.cx - X.x, c.cy - X.y) < TOL.c);
+  /** X・Y を中心に、同じ半径（XY の半分より大きい）でかいた2つの円の交点 */
+  function bisect(sc, X, Y) {
+    const d = dist(X, Y);
+    let best = null;
+    for (const a of circAt(sc, X)) for (const b of circAt(sc, Y)) {
+      if (Math.abs(a.r - b.r) > TOL.r || a.r <= d / 2 + 0.02) continue;
+      const pts = interCC(a, b);
+      if (!best || pts.length > best.pts.length) best = { pts, r: a.r };
+    }
+    return best;
+  }
+  /** p と q を通る（ユーザーがひいた）直線 */
+  const lineThru = (sc, p, q) => sc.user.find(l => l.k === 'L' && onLine(l, p) && onLine(l, q));
+  /** 円 c と曲線 g の交点を、中心が X の円ぜんぶについて */
+  function hitsAt(sc, X, g) { for (const c of circAt(sc, X)) { const pts = inter(c, g); if (pts.length) return { c, pts }; } return null; }
+  function hits2At(sc, X, g) { for (const c of circAt(sc, X)) { const pts = inter(c, g); if (pts.length >= 2) return { c, pts }; } return null; }
+  const far = (pts, from) => pts.filter(p => dist(p, from) > 0.3).sort((a, b) => dist(b, from) - dist(a, from))[0];
+  const byX = (pts) => pts.slice().sort((a, b) => a.x - b.x);
+  const byY = (pts) => pts.slice().sort((a, b) => a.y - b.y);
+  const S = (t, done) => ({ t, done: !!done });
+  /** 中心にする円の半径（自動のとき）：もうかいてある半径があればそれ、なければ基本の値 */
+  function rUse(sc, X, Y, def) {
+    const d = dist(X, Y);
+    for (const c of circAt(sc, X).concat(circAt(sc, Y))) if (c.r > d / 2 + 0.05) return c.r;
+    return def;
+  }
+  /** X・Y を中心に同じ半径で円の一部をかく（自動）。交点 near の近くをおおう */
+  function autoPair(sc, X, Y, r, pickFn) {
+    const ip = interCC(full(X, r), full(Y, r));
+    const pts = pickFn ? [pickFn(ip)].filter(Boolean) : ip;
+    return [{ arc: { c: X, r, pts } }, { arc: { c: Y, r, pts } }];
+  }
+
+  const PROBS = {
+    // ---------------- ① 垂直二等分線 ----------------
+    pb: {
+      part: 1, name: '垂直二等分線', goal: '線分 AB の<b>垂直二等分線</b>を作図しよう。',
+      gen: () => { const A = { x: rnd(6.5, 8), y: rnd(7.5, 9.5) }, th = rnd(-20, 20) * DEG, L = rnd(7, 9); return { A, B: add(A, th, L) }; },
+      given: (G) => [LN(G.A, G.B, 'seg')],
+      shown: ['A', 'B'],
+      analyze(G, sc) {
+        const { A, B } = G, d = dist(A, B);
+        const s1 = circAt(sc, A).concat(circAt(sc, B)).some(c => c.r > d / 2 + 0.02);
+        const bp = bisect(sc, A, B), pts = bp ? byY(bp.pts) : [];
+        const named = {};
+        if (pts[0]) named.C = pts[0];
+        if (pts[1]) named.D = pts[1];
+        const s4 = pts.length === 2 && lineThru(sc, pts[0], pts[1]);
+        return {
+          steps: [
+            S('点 A を中心に、AB の<b>半分より大きい</b>半径で円（の一部）をかく', s1),
+            S('コンパスの開きを<b>変えないで</b>、点 B を中心に円（の一部）をかく', bp),
+            S('2つの円の交点を C、D とする', pts.length === 2),
+            S('定規で、C と D を通る直線をひく', s4),
+          ],
+          named, target: { p: mid(A, B), ang: angOf(A, B) + Math.PI / 2 }, pairs: [{ kind: 'half', X: A, Y: B }],
+        };
+      },
+      auto(i, G, an, sc) {
+        const { A, B } = G, r = rUse(sc, A, B, Math.round(dist(A, B) * 0.68 * 10) / 10);
+        const pr = autoPair(sc, A, B, r);
+        if (i === 0) return [pr[0]];
+        if (i === 1 || i === 2) return [pr[1]];
+        return [{ line: [an.named.C, an.named.D] }];
+      },
+      checks(G, an) {
+        const M = mid(G.A, G.B), toC = angOf(M, an.named.C || add(M, angOf(G.A, G.B) - Math.PI / 2, 1));
+        return [
+          { label: '📐 分度器で角を測る', svg: () => protractorSVG(M, angOf(M, G.B), toC), msg: 'AB と、かいた直線のつくる角は <b>90°</b>。垂直になっている。' },
+          { label: '📏 AM と MB を測る', svg: () => dimSVG(G.A, M, 'AM', '#e65100', -1) + dimSVG(M, G.B, 'MB', '#1565c0', -1) + ptSVG(M, 'M', '#6a1b9a'), msg: `AM ＝ ${d1(dist(G.A, M))} cm、MB ＝ ${d1(dist(M, G.B))} cm。M は AB の<b>中点</b>（真ん中）。` },
+        ];
+      },
+    },
+    // ---------------- ② 角の二等分線 ----------------
+    ab: {
+      part: 2, name: '角の二等分線', goal: '∠XOY の<b>二等分線</b>を作図しよう。',
+      gen: () => { const O = { x: rnd(4, 6), y: rnd(12, 13.5) }, t1 = rnd(-12, 4) * DEG, t2 = t1 - rnd(40, 85) * DEG; return { O, X: add(O, t1, 14), Y: add(O, t2, 11) }; },
+      given: (G) => [LN(G.O, G.X, 'ray'), LN(G.O, G.Y, 'ray')],
+      shown: ['O', 'X', 'Y'],
+      analyze(G, sc) {
+        const { O, X, Y } = G;
+        const named = {};
+        let A, B;
+        for (const c of circAt(sc, O)) {
+          const a = inter(c, LN(O, X, 'ray')), b = inter(c, LN(O, Y, 'ray'));
+          if (a.length && b.length) { A = a[0]; B = b[0]; break; }
+        }
+        if (A) { named.A = A; named.B = B; }
+        const s2 = A && circAt(sc, A).concat(circAt(sc, B)).some(c => c.r > dist(A, B) / 2 + 0.02);
+        const bp = A && bisect(sc, A, B), P = bp && far(bp.pts, O);
+        if (P) named.P = P;
+        const s4 = P && lineThru(sc, O, P);
+        return {
+          steps: [
+            S('点 O を中心に円（の一部）をかき、辺 OX・OY との交点を A、B とする', A),
+            S('点 A を中心に円（の一部）をかく（AB の半分より大きい半径で）', s2),
+            S('開きを<b>変えないで</b>、点 B を中心に円（の一部）をかき、交点を P とする', P),
+            S('定規で、O と P を通る直線（半直線 OP）をひく', s4),
+          ],
+          named, target: { p: O, ang: (angOf(O, X) + normA(angOf(O, Y) - angOf(O, X)) / 2) },
+          pairs: A ? [{ kind: 'half', X: A, Y: B }] : [],
+        };
+      },
+      auto(i, G, an, sc) {
+        const { O, X, Y } = G;
+        if (i === 0) { const r = Math.min(dist(O, X), dist(O, Y)) * 0.42; return [{ arc: { c: O, r, pts: [add(O, angOf(O, X), r), add(O, angOf(O, Y), r)] } }]; }
+        const { A, B } = an.named;
+        const pr = autoPair(sc, A, B, rUse(sc, A, B, dist(A, B) * 0.8), ip => far(ip, O));
+        if (i === 1) return [pr[0]];
+        if (i === 2) return [pr[1]];
+        return [{ line: [O, an.named.P, 'ray'] }];
+      },
+      checks(G, an) {
+        const { O, X, Y } = G, P = an.named.P || add(O, an.target.ang, 3);
+        const a1 = Math.abs(normA(angOf(O, P) - angOf(O, X))) / DEG, a2 = Math.abs(normA(angOf(O, Y) - angOf(O, P))) / DEG;
+        return [
+          { label: '📐 分度器で2つの角を測る', svg: () => protractorSVG(O, angOf(O, X), angOf(O, P), angOf(O, Y)), msg: `∠XOP ＝ ${Math.round(a1)}°、∠POY ＝ ${Math.round(a2)}°。<b>同じ大きさ</b>に分かれている。` },
+        ];
+      },
+      tripCheck(sh, prev, G) {
+        // 辺の上の点を中心にした円で、O を中心にした円がまだないとき（OA＝OB にしていない）
+        if (prev.steps[0].done) return null;
+        const c = { x: sh.cx, y: sh.cy };
+        if (dist(c, G.O) < TOL.c) return null;
+        if (onLine(LN(G.O, G.X, 'ray'), c, 0.2) || onLine(LN(G.O, G.Y, 'ray'), c, 0.2)) return 'unequalOA';
+        return null;
+      },
+    },
+    // ---------------- ③ 垂線（直線の外の点から） ----------------
+    perpOut: {
+      part: 3, name: '点 P から直線 ℓ への垂線', goal: '点 P を通り、直線 ℓ に<b>垂直な直線（垂線）</b>を作図しよう。',
+      gen: () => { const y = rnd(10.5, 12.5), dy = rnd(-1.5, 1.5); return { L1: { x: 1, y }, L2: { x: 23, y: y + dy }, P: { x: rnd(9, 14), y: rnd(3, 5) } }; },
+      given: (G) => [LN(G.L1, G.L2, 'line')],
+      shown: ['P'], lineName: 'ℓ',
+      analyze(G, sc) {
+        const { P } = G, l = LN(G.L1, G.L2), named = {};
+        const h = hits2At(sc, P, l);
+        let A, B;
+        if (h) { [A, B] = byX(h.pts); named.A = A; named.B = B; }
+        const s2 = A && circAt(sc, A).concat(circAt(sc, B)).some(c => c.r > dist(A, B) / 2 + 0.02);
+        const bp = A && bisect(sc, A, B), Q = bp && far(bp.pts, P);
+        if (Q) named.Q = Q;
+        const s4 = Q && lineThru(sc, P, Q);
+        return {
+          steps: [
+            S('点 P を中心に円（の一部）をかき、ℓ との交点を A、B とする', A),
+            S('点 A を中心に円（の一部）をかく', s2),
+            S('開きを<b>変えないで</b>、点 B を中心に円（の一部）をかき、交点を Q とする', Q),
+            S('定規で、P と Q を通る直線をひく', s4),
+          ],
+          named, target: { p: P, ang: angOf(G.L1, G.L2) + Math.PI / 2 }, pairs: A ? [{ kind: 'half', X: A, Y: B }] : [],
+        };
+      },
+      auto(i, G, an, sc) {
+        const { P } = G, l = LN(G.L1, G.L2);
+        if (i === 0) { const r = distLine(l, P) * 1.55; return [{ arc: { c: P, r, pts: interCL(full(P, r), l) } }]; }
+        const { A, B } = an.named;
+        const pr = autoPair(sc, A, B, rUse(sc, A, B, dist(A, B) * 0.85), ip => far(ip, P));
+        if (i === 1) return [pr[0]];
+        if (i === 2) return [pr[1]];
+        return [{ line: [P, an.named.Q] }];
+      },
+      checks(G, an) { return perpChecks(G.L1, G.L2, G.P, an.named.Q); },
+      tripCheck(sh, prev, G) {
+        if (prev.steps[0].done) return null;
+        const c = { x: sh.cx, y: sh.cy };
+        // 教科書のべつの方法（ℓ の上の点を中心に、P を通る円）はまちがいにしない
+        if (dist(c, G.P) >= TOL.c && Math.abs(dist(c, G.P) - sh.r) > TOL.r) return 'perpCenter';
+        return null;
+      },
+    },
+    // ---------------- ③ 垂線（直線の上の点を通る） ----------------
+    perpOn: {
+      part: 3, name: '直線 ℓ 上の点 P を通る垂線', goal: '直線 ℓ 上の点 P を通り、ℓ に<b>垂直な直線（垂線）</b>を作図しよう。',
+      gen: () => { const y = rnd(9.5, 11.5), dy = rnd(-1.5, 1.5), L1 = { x: 1, y }, L2 = { x: 23, y: y + dy }, t = rnd(0.42, 0.58); return { L1, L2, P: { x: L1.x + (L2.x - L1.x) * t, y: L1.y + (L2.y - L1.y) * t } }; },
+      given: (G) => [LN(G.L1, G.L2, 'line')],
+      shown: ['P'], lineName: 'ℓ',
+      analyze(G, sc) {
+        const { P } = G, l = LN(G.L1, G.L2), named = {};
+        const h = hits2At(sc, P, l);
+        let A, B;
+        if (h) { [A, B] = byX(h.pts); named.A = A; named.B = B; }
+        const s2 = A && circAt(sc, A).concat(circAt(sc, B)).some(c => c.r > dist(A, B) / 2 + 0.02);
+        const bp = A && bisect(sc, A, B), Q = bp && far(bp.pts, P);
+        if (Q) named.Q = Q;
+        const s4 = Q && lineThru(sc, P, Q);
+        return {
+          steps: [
+            S('点 P を中心に円（の一部）をかき、ℓ との交点を A、B とする', A),
+            S('点 A を中心に円（の一部）をかく（AB の半分より大きい半径で）', s2),
+            S('開きを<b>変えないで</b>、点 B を中心に円（の一部）をかき、交点を Q とする', Q),
+            S('定規で、P と Q を通る直線をひく', s4),
+          ],
+          named, target: { p: P, ang: angOf(G.L1, G.L2) + Math.PI / 2 }, pairs: A ? [{ kind: 'half', X: A, Y: B }] : [],
+        };
+      },
+      auto(i, G, an, sc) {
+        const { P } = G, l = LN(G.L1, G.L2);
+        if (i === 0) return [{ arc: { c: P, r: 3, pts: interCL(full(P, 3), l) } }];
+        const { A, B } = an.named;
+        const pr = autoPair(sc, A, B, rUse(sc, A, B, dist(A, B) * 0.8), ip => byY(ip)[0]);
+        if (i === 1) return [pr[0]];
+        if (i === 2) return [pr[1]];
+        return [{ line: [P, an.named.Q] }];
+      },
+      checks(G, an) { return perpChecks(G.L1, G.L2, G.P, an.named.Q); },
+    },
+    // ---------------- ④ 応用：円の中心 ----------------
+    center: {
+      part: 4, name: '円の中心', goal: '円の<b>中心 O</b> を作図で見つけよう（円周上の点 A、B、C を使う）。',
+      gen: () => { const Z = { x: rnd(11, 13), y: 8 }, R = rnd(5, 6), b = rnd(0, 360) * DEG; return { Z, R, A: add(Z, b, R), B: add(Z, b + rnd(95, 125) * DEG, R), C: add(Z, b + rnd(215, 245) * DEG, R) }; },
+      given: (G) => [full(G.Z, G.R)],
+      shown: ['A', 'B', 'C'], hide: ['Z'],
+      analyze(G, sc) {
+        const { A, B, C, Z } = G, named = {};
+        const chords = [[A, B], [B, C], [C, A]];
+        const arcs = chords.some(([X, Y]) => { const bp = bisect(sc, X, Y); return bp && bp.pts.length === 2; });
+        // 弦の垂直二等分線になっている直線（作図の点を2つ以上通る）
+        const lines = [];
+        for (const [X, Y] of chords) {
+          const l = sc.user.find(u => u.k === 'L' && matchTarget(u, { p: mid(X, Y), ang: angOf(X, Y) + Math.PI / 2 }) && throughCount(u) >= 2);
+          if (l && !lines.includes(l)) lines.push(l);
+        }
+        let ok = false;
+        if (lines.length >= 2) { const O = interLL(Object.assign({}, lines[0], { mode: 'line' }), Object.assign({}, lines[1], { mode: 'line' }))[0]; if (O && dist(O, Z) < 0.2) { named.O = O; ok = true; } }
+        return {
+          steps: [
+            S('A と B を中心に、同じ半径で円（の一部）をかき、交点を2つつくる', arcs || lines.length),
+            S('その2つの交点を通る直線（弦 AB の垂直二等分線）をひく', lines.length >= 1),
+            S('B と C でも同じようにして、弦 BC の垂直二等分線をひく', lines.length >= 2),
+            S('2本の直線の交点が、円の中心 O', ok),
+          ],
+          named, ok, pairs: chords.map(([X, Y]) => ({ kind: 'half', X, Y })),
+        };
+      },
+      auto(i, G, an, sc) {
+        const { A, B, C } = G;
+        const pairLine = (X, Y) => { const r = rUse(sc, X, Y, dist(X, Y) * 0.75); const ip = interCC(full(X, r), full(Y, r)); return [{ arc: { c: X, r, pts: ip } }, { arc: { c: Y, r, pts: ip } }, { line: ip }]; };
+        if (i === 0) return pairLine(A, B).slice(0, 2);
+        if (i === 1) return pairLine(A, B).slice(2);
+        if (i === 2) return pairLine(B, C);
+        return [];
+      },
+      checks(G, an) {
+        const O = an.named.O || G.Z;
+        return [{ label: '📏 OA・OB・OC を測る', svg: () => dimSVG(O, G.A, 'OA', '#e65100', 1) + dimSVG(O, G.B, 'OB', '#1565c0', 1) + dimSVG(O, G.C, 'OC', '#2e7d32', 1), msg: `OA ＝ ${d1(dist(O, G.A))}、OB ＝ ${d1(dist(O, G.B))}、OC ＝ ${d1(dist(O, G.C))} cm。どれも<b>半径</b>で等しい。` }];
+      },
+    },
+    // ---------------- ④ 応用：正三角形 ----------------
+    tri: {
+      part: 4, name: '正三角形', goal: '線分 AB を1辺とする<b>正三角形 ABC</b> を作図しよう。',
+      gen: () => { const A = { x: rnd(7.5, 9.5), y: rnd(11.5, 12.5) }; return { A, B: add(A, rnd(-10, 10) * DEG, rnd(6, 7.5)) }; },
+      given: (G) => [LN(G.A, G.B, 'seg')],
+      shown: ['A', 'B'],
+      analyze(G, sc) {
+        const { A, B } = G, d = dist(A, B), named = {};
+        const ca = circAt(sc, A).filter(c => Math.abs(c.r - d) <= TOL.r), cb = circAt(sc, B).filter(c => Math.abs(c.r - d) <= TOL.r);
+        let C;
+        for (const a of ca) for (const b of cb) { const p = byY(interCC(a, b))[0]; if (p) C = p; }
+        if (C) named.C = C;
+        const s4 = C && lineThru(sc, A, C) && lineThru(sc, B, C);
+        return {
+          steps: [
+            S('コンパスを AB の長さに開き、点 A を中心に円（の一部）をかく', ca.length),
+            S('開きを<b>変えないで</b>、点 B を中心に円（の一部）をかく', cb.length),
+            S('2つの円の交点を C とする', C),
+            S('定規で、A と C、B と C を結ぶ', s4),
+          ],
+          named, ok: !!s4, pairs: [{ kind: 'len', X: A, L: d }, { kind: 'len', X: B, L: d }],
+        };
+      },
+      auto(i, G, an) {
+        const { A, B } = G, d = dist(A, B), C = byY(interCC(full(A, d), full(B, d)))[0];
+        if (i === 0) return [{ arc: { c: A, r: d, pts: [C] } }];
+        if (i === 1 || i === 2) return [{ arc: { c: B, r: d, pts: [C] } }];
+        return [{ line: [A, an.named.C || C, 'seg'] }, { line: [B, an.named.C || C, 'seg'] }];
+      },
+      checks(G, an) {
+        const C = an.named.C;
+        return [{ label: '📏 3つの辺を測る', svg: () => dimSVG(G.A, G.B, 'AB', '#e65100', 1) + dimSVG(G.B, C, 'BC', '#1565c0', -1) + dimSVG(C, G.A, 'CA', '#2e7d32', -1), msg: `AB ＝ ${d1(dist(G.A, G.B))}、BC ＝ ${d1(dist(G.B, C))}、CA ＝ ${d1(dist(C, G.A))} cm。3つの辺が<b>等しい</b> → 正三角形（角はどれも 60°）。` }];
+      },
+    },
+    // ---------------- ④ 応用：正六角形 ----------------
+    hex: {
+      part: 4, name: '正六角形', goal: '円 O に入る<b>正六角形</b>を作図しよう（円周を半径で区切る）。',
+      gen: () => { const O = { x: 12, y: 8 }, R = rnd(4.5, 5.5); return { O, R, A: add(O, rnd(-30, 30) * DEG + Math.PI, R) }; },
+      given: (G) => [full(G.O, G.R)],
+      shown: ['O', 'A'], drag: ['A'],
+      analyze(G, sc) {
+        const { O, R, A } = G, circle = full(O, R);
+        // A から、半径 R の円で円周をたどってできた点
+        const found = [A];
+        let more = true;
+        while (more) {
+          more = false;
+          for (const X of found.slice()) for (const c of circAt(sc, X)) {
+            if (Math.abs(c.r - R) > TOL.r) continue;
+            for (const p of interCC(c, circle)) if (!found.some(q => dist(q, p) < 0.3)) { found.push(p); more = true; }
+          }
+        }
+        const named = {};
+        const a0 = angOf(O, A);
+        found.forEach(p => { const k = ((Math.round(-normA(angOf(O, p) - a0) / (Math.PI / 3)) % 6) + 6) % 6; named['ABCDEF'[k]] = p; });
+        delete named.A;
+        const V = 'ABCDEF'.split('').map(k => k === 'A' ? A : named[k]);
+        const sides = V.every(Boolean) && V.every((p, i) => lineThru(sc, p, V[(i + 1) % 6]));
+        return {
+          steps: [
+            S('コンパスを半径 OA の長さに開き、A を中心に円の一部をかいて、円周との交点を B とする', found.length >= 2),
+            S('開きを<b>変えないで</b>、B を中心に同じようにかいて、交点を C とする', found.length >= 3),
+            S('同じようにくり返して、D、E、F をとる（円周が 6 つに区切られる）', found.length >= 6),
+            S('定規で A〜F を順に結ぶ', sides),
+          ],
+          named, ok: !!sides, pairs: found.map(X => ({ kind: 'len', X, L: R })),
+        };
+      },
+      auto(i, G, an) {
+        const { O, R, A } = G, a0 = angOf(O, A);
+        const v = (k) => add(O, a0 - k * Math.PI / 3, R);
+        const arcAt = (k) => ({ arc: { c: v(k), r: R, pts: [v(k + 1)] } });
+        if (i === 0) return [arcAt(0)];
+        if (i === 1) return [arcAt(1)];
+        if (i === 2) return [arcAt(2), arcAt(3), arcAt(4)];
+        return [0, 1, 2, 3, 4, 5].map(k => ({ line: [v(k), v(k + 1), 'seg'] }));
+      },
+      checks(G) {
+        const { O, R, A } = G, a0 = angOf(O, A), v = (k) => add(O, a0 - k * Math.PI / 3, R);
+        return [{ label: '📏 辺と半径を測る', svg: () => [0, 1, 2, 3, 4, 5].map(k => dimSVG(v(k), v(k + 1), '', '#e65100', 1)).join('') + dimSVG(O, A, 'OA', '#1565c0', 1), msg: `6つの辺はどれも ${d1(R)} cm で、半径 OA と<b>等しい</b>。（正六角形は、正三角形 6 つでできている）` }];
+      },
+    },
+    // ---------------- ④ 応用：30° ----------------
+    deg30: {
+      part: 4, name: '30° の角', goal: '半直線 OX と <b>30°</b> の角をつくる半直線を作図しよう（正三角形 → 角の二等分線）。',
+      gen: () => { const O = { x: rnd(4, 5.5), y: rnd(12.5, 13.5) }; return { O, X: add(O, rnd(-8, 4) * DEG, 16) }; },
+      given: (G) => [LN(G.O, G.X, 'ray')],
+      shown: ['O', 'X'],
+      analyze(G, sc) {
+        const { O, X } = G, named = {};
+        let A, c0;
+        for (const c of circAt(sc, O)) { const a = inter(c, LN(O, X, 'ray')); if (a.length) { A = a[0]; c0 = c; break; } }
+        if (A) named.A = A;
+        let B;
+        if (A) for (const c of circAt(sc, A)) { if (Math.abs(c.r - dist(O, A)) > TOL.r) continue; const p = byY(interCC(c, c0))[0]; if (p) { B = p; break; } }
+        if (B) named.B = B;
+        const bp = B && bisect(sc, A, B), P = bp && far(bp.pts, O);
+        if (P) named.P = P;
+        const s4 = P && lineThru(sc, O, P);
+        const up = B ? Math.sign(normA(angOf(O, B) - angOf(O, X))) || -1 : -1;
+        return {
+          steps: [
+            S('点 O を中心に円（の一部）をかき、OX との交点を A とする', A),
+            S('開きを<b>変えないで</b>、A を中心に円の一部をかき、交点を B とする（∠AOB ＝ 60°）', B),
+            S('A と B を中心に同じ半径で円の一部をかき、交点を P とする（60° の二等分）', P),
+            S('定規で、O と P を通る半直線をひく', s4),
+          ],
+          named, target: { p: O, ang: angOf(O, X) + up * 30 * DEG },
+          pairs: B ? [{ kind: 'half', X: A, Y: B }] : A ? [{ kind: 'len', X: A, L: dist(O, A) }] : [],
+        };
+      },
+      auto(i, G, an, sc) {
+        const { O, X } = G, r = 5, A = add(O, angOf(O, X), r), B = add(O, angOf(O, X) - 60 * DEG, r);
+        if (i === 0) return [{ arc: { c: O, r, pts: [A, B] } }];
+        if (i === 1) return [{ arc: { c: an.named.A || A, r, pts: [B] } }];
+        const A2 = an.named.A || A, B2 = an.named.B || B;
+        if (i === 2) return autoPair(sc, A2, B2, rUse(sc, A2, B2, r * 0.8), ip => far(ip, O));
+        return [{ line: [O, an.named.P, 'ray'] }];
+      },
+      checks(G, an) { const P = an.named.P || add(G.O, an.target.ang, 3); return [{ label: '📐 分度器で角を測る', svg: () => protractorSVG(G.O, angOf(G.O, G.X), angOf(G.O, P)), msg: '∠XOP ＝ <b>30°</b>。正三角形の角 60° を二等分した。' }]; },
+    },
+    // ---------------- ④ 応用：45° ----------------
+    deg45: {
+      part: 4, name: '45° の角', goal: '直線 ℓ 上の点 O で、ℓ と <b>45°</b> の角をつくる直線を作図しよう（垂線 → 角の二等分線）。',
+      gen: () => { const y = rnd(11.5, 12.5), dy = rnd(-1, 1), L1 = { x: 1, y }, L2 = { x: 23, y: y + dy }, t = rnd(0.38, 0.5); return { L1, L2, O: { x: L1.x + (L2.x - L1.x) * t, y: L1.y + (L2.y - L1.y) * t } }; },
+      given: (G) => [LN(G.L1, G.L2, 'line')],
+      shown: ['O'], lineName: 'ℓ',
+      analyze(G, sc) {
+        const { O } = G, l = LN(G.L1, G.L2), named = {};
+        const h = hits2At(sc, O, l);
+        let A, B, c0;
+        if (h) { [B, A] = byX(h.pts); c0 = h.c; named.A = A; named.B = B; }
+        // O を通る ℓ の垂線（作図の点を2つ以上通る直線）
+        const perp = sc.user.find(u => u.k === 'L' && matchTarget(u, { p: O, ang: angOf(G.L1, G.L2) + Math.PI / 2 }) && throughCount(u) >= 2);
+        let D;
+        if (perp && c0) D = byY(inter(c0, Object.assign({}, perp, { mode: 'line' })))[0];
+        if (D) named.D = D;
+        let E;
+        if (D) for (const X of [A, B]) { const bp = bisect(sc, X, D); const p = bp && far(bp.pts, O); if (p) { E = p; break; } }
+        if (E) named.E = E;
+        const s4 = E && lineThru(sc, O, E);
+        return {
+          steps: [
+            S('点 O を中心に円をかき、ℓ との交点を A、B とする', A),
+            S('A と B を中心に同じ半径の円で交点をつくり、O を通る ℓ の<b>垂線</b>をひく', perp),
+            S('垂線と①の円の交点を D とし、A と D を中心に同じ半径で円の一部をかいて、交点を E とする', E),
+            S('定規で、O と E を通る直線をひく（直角の二等分）', s4),
+          ],
+          named, target: { p: O, ang: angOf(G.L1, G.L2) - 45 * DEG, alt: angOf(G.L1, G.L2) + 45 * DEG },
+          pairs: (A ? [{ kind: 'half', X: A, Y: B }] : []).concat(D ? [{ kind: 'half', X: A, Y: D }, { kind: 'half', X: B, Y: D }] : []),
+        };
+      },
+      auto(i, G, an, sc) {
+        const { O } = G, l = LN(G.L1, G.L2), r = 3.2;
+        if (i === 0) return [{ arc: { c: O, r, full: true } }];
+        const { A, B } = an.named;
+        if (i === 1) { const rr = rUse(sc, A, B, dist(A, B) * 0.75), ip = interCC(full(A, rr), full(B, rr)), C = byY(ip)[0]; return [{ arc: { c: A, r: rr, pts: [C] } }, { arc: { c: B, r: rr, pts: [C] } }, { line: [O, C] }]; }
+        const D = an.named.D;
+        if (i === 2) return autoPair(sc, A, D, rUse(sc, A, D, dist(A, D) * 0.8), ip => far(ip, O));
+        return [{ line: [O, an.named.E] }];
+      },
+      checks(G, an) { const E = an.named.E || add(G.O, an.target.ang, 3); return [{ label: '📐 分度器で角を測る', svg: () => protractorSVG(G.O, angOf(G.O, an.named.A || G.L2), angOf(G.O, E)), msg: 'ℓ とのつくる角は <b>45°</b>。直角（90°）を二等分した。' }]; },
+    },
+    // ---------------- ④ 応用：円の接線（発展） ----------------
+    tangent: {
+      part: 4, name: '円の接線（発展）', goal: '【発展】円 O 上の点 A を通る<b>接線</b>を作図しよう（接線は半径 OA に垂直）。',
+      gen: () => { const O = { x: rnd(8.5, 10), y: rnd(7.5, 8.5) }, R = rnd(3.5, 4.2); return { O, R, A: add(O, rnd(-35, 25) * DEG, R) }; },
+      given: (G) => [full(G.O, G.R)],
+      shown: ['O', 'A'], drag: ['A'],
+      analyze(G, sc) {
+        const { O, A } = G, named = {};
+        const lOA = sc.user.find(u => u.k === 'L' && onLine(u, O) && onLine(u, A));
+        let B, C;
+        if (lOA) { const h = hits2At(sc, A, Object.assign({}, lOA)); if (h) { [B, C] = h.pts.sort((p, q) => dist(p, O) - dist(q, O)); named.B = B; named.C = C; } }
+        const bp = B && bisect(sc, B, C), P = bp && far(bp.pts, A);
+        if (P) named.P = P;
+        const s4 = P && lineThru(sc, A, P);
+        return {
+          steps: [
+            S('定規で直線 OA をひく（A の先までのばす）', lOA),
+            S('A を中心に円をかき、直線 OA との交点を B、C とする', B),
+            S('B と C を中心に同じ半径で円の一部をかき、交点を P とする', P),
+            S('定規で、A と P を通る直線をひく（これが接線）', s4),
+          ],
+          named, target: { p: A, ang: angOf(O, A) + Math.PI / 2 }, pairs: B ? [{ kind: 'half', X: B, Y: C }] : [],
+        };
+      },
+      auto(i, G, an, sc) {
+        const { O, A } = G;
+        if (i === 0) return [{ line: [O, A] }];
+        if (i === 1) return [{ arc: { c: A, r: 1.8, full: true } }];
+        const { B, C } = an.named;
+        if (i === 2) return autoPair(sc, B, C, rUse(sc, B, C, dist(B, C) * 0.8), ip => byY(ip)[0]);
+        return [{ line: [A, an.named.P] }];
+      },
+      checks(G, an) { const P = an.named.P || add(G.A, an.target.ang, 3); return [{ label: '📐 分度器で角を測る', svg: () => protractorSVG(G.A, angOf(G.A, G.O), angOf(G.A, P)), msg: '半径 OA と接線のつくる角は <b>90°</b>。円の接線は、接点を通る半径に垂直。' }]; },
+    },
+  };
+  /** 垂線の確かめ（ℓ との交点 H で角を測る） */
+  function perpChecks(L1, L2, P, Q) {
+    const l = LN(L1, L2), H = Q ? interLL(l, LN(P, Q))[0] : null;
+    if (!H) return [];
+    const to = dist(P, H) > 0.3 ? P : Q;
+    return [{ label: '📐 分度器で角を測る', svg: () => protractorSVG(H, angOf(L1, L2), angOf(H, to)) + ptSVG(H, 'H', '#6a1b9a'), msg: 'ℓ と、かいた直線のつくる角は <b>90°</b>。垂直になっている（H は垂線と ℓ の交点）。' }];
+  }
+
+  const PARTS = [null,
+    { name: '① 垂直二等分線', probs: ['pb'], note: '線分 AB の両はしから同じ距離にある点を2つつくって、結ぶ。' },
+    { name: '② 角の二等分線', probs: ['ab'], note: '角の2つの辺に、頂点から同じ距離の点をとってから、同じ半径の円で交点をつくる。' },
+    { name: '③ 垂線', probs: ['perpOut', 'perpOn'], note: 'ℓ の上に、P から同じ距離の点 A、B をとると、AB の垂直二等分線が垂線になる。' },
+    { name: '④ 応用', probs: ['center', 'tri', 'hex', 'deg30', 'deg45', 'tangent'], note: '①〜③ の作図を組み合わせよう。' },
+    { name: '⑤ 作図の理由', probs: ['rPb', 'rAb', 'rPerp'], note: '「なぜこれでできる？」をひし形・たこ形（線対称な図形）で見よう。' },
+  ];
+  const PROB_NAMES = { pb: '垂直二等分線', ab: '角の二等分線', perpOut: '外の点から', perpOn: '直線上の点で', center: '円の中心', tri: '正三角形', hex: '正六角形', deg30: '30°', deg45: '45°', tangent: '接線（発展）', rPb: '垂直二等分線', rAb: '角の二等分線', rPerp: '垂線' };
+
+  // つまずきの型（名前・説明・練習する問題）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    shortR:     { name: '半径が短くて、2つの円が交わらない', prob: 'pb',
+                  exp: '2つの点を中心にする円の半径は、2点の間の長さの<b>半分より大きく</b>する。半分以下だと交点ができない。' },
+    diffR:      { name: '2つの円の半径を変えた', prob: 'pb',
+                  exp: '<b>同じ半径</b>でかくから、交点は2つの点から同じ距離になる。半径がちがうと、垂直でも<b>真ん中を通らない</b>。' },
+    needleOff:  { name: 'はりが点にささっていない', prob: 'pb',
+                  exp: 'コンパスのはりは、点（交点）に<b>ぴったり</b>さす。点の近くではなすと吸いつく。' },
+    freeLine:   { name: '定規を交点に当てていない', prob: 'pb',
+                  exp: '作図の直線は、<b>2つの点（交点）</b>に定規を当ててひく。目分量でひかない。' },
+    measureUse: { name: '目もりで測って作図しようとした', prob: 'pb',
+                  exp: '作図では、定規は線をひくだけ、コンパスは円をかく・長さを写しとるだけ。<b>測るのは、できたあとの確かめ</b>で。' },
+    unequalOA:  { name: '角の辺の上に、同じ距離の点をとっていない', prob: 'ab',
+                  exp: 'まず頂点 O を中心に円をかいて、2つの辺との交点 A、B を<b>同じ距離</b>（OA ＝ OB）にとる。' },
+    perpCenter: { name: '垂線で、P を中心にしないで円をかいた', prob: 'perpOut',
+                  exp: '直線の外の点 P から下ろす垂線は、まず <b>P を中心</b>に円をかいて、ℓ との交点を2つつくる。' },
+    triR:       { name: '半径を辺の長さにしていない', prob: 'tri',
+                  exp: '正三角形・正六角形は、コンパスで<b>辺（半径）の長さを写しとって</b>かく。えんぴつを点にぴったり合わせる。' },
+  };
+
+  /* =====================================================================
+     4. 状態
+     shapes … かいた線 { t:'circle'|'arc', cx, cy, r, a0?, span? } | { t:'line'|'seg', x1, y1, x2, y2 }
+     ===================================================================== */
+  const st = {
+    part: 1, prob: 'pb', G: null, G0: null, shapes: [], measures: [], hist: [], checks: [],
+    tool: 'compass', lineMode: 'line', snap: true,
+    N: { x: 3, y: 14 }, r: 3, ang: 0, side: 1,
+    drag: null, trace: null, lineTrace: null, busy: false,
+    sc: null, an: null, lastStep: 0, okShown: false, wsT: null, hintLv: 0,
+    sessTrips: {}, focus: null, reason: { step: 0, r: 5.5, fold: 0 },
+  };
+  const PEN = () => ({ x: st.N.x + st.r * Math.cos(st.ang), y: st.N.y + st.r * Math.sin(st.ang) });
+  const prob = () => PROBS[st.prob];
+  const isReason = () => st.part === 5;
+
+  /* =====================================================================
+     5. 場面の計算（線の一覧・交点・吸いつく点）と判定
+     ===================================================================== */
+  function userCurves() {
+    return st.shapes.map(s => s.t === 'circle' ? { k: 'C', cx: s.cx, cy: s.cy, r: s.r }
+      : s.t === 'arc' ? { k: 'C', cx: s.cx, cy: s.cy, r: s.r, a0: s.a0, span: s.span }
+      : { k: 'L', p: { x: s.x1, y: s.y1 }, q: { x: s.x2, y: s.y2 }, mode: s.t === 'seg' ? 'seg' : 'line' });
+  }
+  function buildScene() {
+    const user = userCurves(), given = prob().given(st.G);
+    const all = given.concat(user), inters = [];
+    for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+      for (const p of inter(all[i], all[j])) if (p.x > -0.5 && p.x < BW + 0.5 && p.y > -0.5 && p.y < BH + 0.5) {
+        const same = inters.find(q => dist(q, p) < 0.05);
+        if (same) same.by.push([all[i], all[j]]); else inters.push({ x: p.x, y: p.y, by: [[all[i], all[j]]] });
+      }
+    }
+    return { user, given, inters };
+  }
+  /** 吸いつく点：はじめの図の点・作図でできた点・交点 */
+  function magnets() {
+    const P = prob(), out = [];
+    (P.shown || []).forEach(k => out.push(st.G[k]));
+    if (st.an) Object.values(st.an.named).forEach(p => out.push(p));
+    if (st.sc) st.sc.inters.forEach(p => out.push(p));
+    return out;
+  }
+  const magnetNear = (p, except) => st.snap ? magnets().filter(q => dist(q, p) < MAG && (!except || dist(q, except) > RMIN)).sort((a, b) => dist(a, p) - dist(b, p))[0] : null;
+  /** 直線が、吸いつく点をいくつ通るか（作図の点を通っているか）。その直線自身がつくった交点は数えない */
+  function throughCount(l) {
+    const ms = magnets().filter(m => !m.by || m.by.some(([a, b]) => a !== l && b !== l));
+    let n = 0; const used = []; for (const m of ms) if (onLine(l, m, 0.1) && !used.some(u => dist(u, m) < 0.2)) { used.push(m); n++; } return n; }
+  /** 直線 l が、できるべき直線 tg（点 p を通り、向き ang）と同じか */
+  function matchTarget(l, tg) {
+    if (distLine(l, tg.p) > TOL.on) return false;
+    const a = angOf(l.p, l.q);
+    return lineAngDiff(a, tg.ang) <= TOL.ang || (tg.alt != null && lineAngDiff(a, tg.alt) <= TOL.ang);
+  }
+  function analyzeNow() {
+    st.sc = buildScene();
+    st.an = { named: {} };
+    st.an = prob().analyze(st.G, st.sc);
+    // べつの方法でも、正しい直線が作図の点を2つ以上通ってひけていれば「できた」とする
+    if (st.an.ok == null) st.an.ok = st.an.steps.every(s => s.done);
+    if (!st.an.ok && st.an.target) {
+      const l = st.sc.user.find(u => u.k === 'L' && matchTarget(u, st.an.target) && throughCount(u) >= 2);
+      if (l) { st.an.ok = true; st.an.alt = true; }
+    }
+    st.an.cur = st.an.steps.findIndex(s => !s.done);
+  }
+
+  /* =====================================================================
+     6. かく（はじめの図・かいた線・点・確かめ）
+     ===================================================================== */
+  function svgText(x, y, text, col, fs = 24, anchor = 'middle') {
+    return `<text x="${px(x)}" y="${px(y)}" font-size="${fs}" font-weight="bold" text-anchor="${anchor}" fill="${col}" stroke="#fff" stroke-width="5" paint-order="stroke" stroke-linejoin="round">${text}</text>`;
+  }
+  function arcPath(cx, cy, r, a0, span) {
+    if (span == null || Math.abs(span) >= TAU - 1e-6) {
+      a0 = a0 || 0;
+      const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0), x1 = cx - r * Math.cos(a0), y1 = cy - r * Math.sin(a0);
+      return `M${px(x0)},${px(y0)} A${px(r)},${px(r)} 0 1 1 ${px(x1)},${px(y1)} A${px(r)},${px(r)} 0 1 1 ${px(x0)},${px(y0)}`;
+    }
+    const a1 = a0 + span;
+    return `M${px(cx + r * Math.cos(a0))},${px(cy + r * Math.sin(a0))} A${px(r)},${px(r)} 0 ${Math.abs(span) > Math.PI ? 1 : 0} ${span > 0 ? 1 : 0} ${px(cx + r * Math.cos(a1))},${px(cy + r * Math.sin(a1))}`;
+  }
+  function ptSVG(p, name, col = '#263238', off) {
+    const o = off || { x: 0.35, y: -0.3 };
+    return `<circle cx="${px(p.x)}" cy="${px(p.y)}" r="6" fill="${col}"/>` + (name ? svgText(p.x + o.x, p.y + o.y, name, col, 24, 'start') : '');
+  }
+  /** 名前を、図の中心から外がわに置く */
+  function labelOff(p) {
+    const P = prob(), c = st.G.O || st.G.Z || mid(st.G.A || p, st.G.B || p);
+    let a = Math.atan2(p.y - c.y, p.x - c.x); if (dist(p, c) < 0.3) a = -Math.PI / 4;
+    return { x: 0.55 * Math.cos(a) - 0.2, y: 0.55 * Math.sin(a) + 0.25 };
+  }
+  function lineSVG(l, col, w, dash) {
+    const [a, b] = clipLine(l);
+    return `<line x1="${px(a.x)}" y1="${px(a.y)}" x2="${px(b.x)}" y2="${px(b.y)}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
+  }
+  /** 長さの書きこみ（寸法線）。side はずらす向き（1 か −1） */
+  function dimSVG(p, q, name, col, side = 1) {
+    const a = angOf(p, q), n = a + side * Math.PI / 2, o = 0.45;
+    const P2 = add(p, n, o), Q2 = add(q, n, o), M = add(mid(p, q), n, o + 0.45);
+    return `<line x1="${px(P2.x)}" y1="${px(P2.y)}" x2="${px(Q2.x)}" y2="${px(Q2.y)}" stroke="${col}" stroke-width="3" stroke-dasharray="7 5"/>` +
+      `<circle cx="${px(P2.x)}" cy="${px(P2.y)}" r="4" fill="${col}"/><circle cx="${px(Q2.x)}" cy="${px(Q2.y)}" r="4" fill="${col}"/>` +
+      svgText(M.x, M.y + 0.25, (name ? name + ' ' : '') + d1(dist(p, q)) + 'cm', col, 21);
+  }
+  /** 分度器（V が中心、base が 0° の向き、rays の向きの角を読む） */
+  function protractorSVG(V, base, ...rays) {
+    const R = 2.6;
+    const rel = rays.map(a => normA(a - base));
+    const s = rel.filter(x => Math.abs(x) > 0.01).every(x => x > 0) ? 1 : rel.every(x => x <= 0.01) ? -1 : (rel[0] >= 0 ? 1 : -1);
+    let h = `<path d="${arcPath(V.x, V.y, R, base, s * Math.PI)} Z" fill="#e3f2fd" fill-opacity=".75" stroke="#1565c0" stroke-width="2"/>`;
+    for (let k = 0; k <= 180; k += 10) {
+      const a = base + s * k * DEG, L = k % 30 === 0 ? 0.45 : 0.25;
+      const p1 = add(V, a, R), p2 = add(V, a, R - L);
+      h += `<line x1="${px(p1.x)}" y1="${px(p1.y)}" x2="${px(p2.x)}" y2="${px(p2.y)}" stroke="#1565c0" stroke-width="1.5"/>`;
+      if (k % 30 === 0) { const t = add(V, a, R - 0.8); h += `<text x="${px(t.x)}" y="${px(t.y) + 5}" font-size="13" text-anchor="middle" fill="#1565c0">${k}</text>`; }
+    }
+    let prev = 0;
+    rays.forEach((a, i) => {
+      const deg = Math.abs(normA(a - base)) / DEG;
+      const e = add(V, a, R + 1.2);
+      h += `<line x1="${px(V.x)}" y1="${px(V.y)}" x2="${px(e.x)}" y2="${px(e.y)}" stroke="#ad1457" stroke-width="3"/>`;
+      // 角の印と大きさ（前の線からの角）
+      const a0 = i === 0 ? base : rays[i - 1], part = Math.abs(normA(a - a0)) / DEG, r2 = 1.1 + i * 0.35;
+      h += `<path d="${arcPath(V.x, V.y, r2, a0, normA(a - a0))}" fill="none" stroke="#ad1457" stroke-width="3"/>`;
+      const m = add(V, a0 + normA(a - a0) / 2, R + 0.9 + i * 0.1);
+      h += svgText(m.x, m.y + 0.2, `${Math.round(part * 10) / 10}°`, '#ad1457', 26);
+      prev = deg;
+    });
+    return `<g>${h}</g>`;
+  }
+  function renderBoard() {
+    const P = prob(), G = st.G;
+    if (isReason()) { renderReason(); return; }
+    // はじめの図
+    let g = '';
+    P.given(G).forEach(c => {
+      if (c.k === 'C') g += `<circle cx="${px(c.cx)}" cy="${px(c.cy)}" r="${px(c.r)}" fill="none" stroke="#263238" stroke-width="3.5"/>`;
+      else g += lineSVG(c, '#263238', 4);
+    });
+    if (P.lineName) { const l = P.given(G)[0], [, b] = clipLine(l); g += svgText(b.x - 0.6, b.y - 0.35, P.lineName, '#263238', 26); }
+    $('gGiven').innerHTML = g;
+    // かいた線（弧＝細い灰青、直線＝オレンジ、できた直線＝緑）
+    let s = '';
+    st.shapes.forEach(sh => {
+      if (sh.t === 'circle' || sh.t === 'arc') s += `<path d="${arcPath(sh.cx, sh.cy, sh.r, sh.a0, sh.span)}" fill="none" stroke="#546e7a" stroke-width="2.4"/>`;
+      else {
+        const l = LN({ x: sh.x1, y: sh.y1 }, { x: sh.x2, y: sh.y2 }, sh.t === 'seg' ? 'seg' : 'line');
+        const good = st.an.ok && st.an.target && matchTarget(l, st.an.target);
+        s += lineSVG(l, good ? '#2e7d32' : '#e65100', good ? 5 : 3.5);
+      }
+    });
+    // まわしているとちゅうの弧・ひいているとちゅうの線
+    if (st.trace) s += `<path d="${arcPath(st.N.x, st.N.y, st.r, st.trace.a0, st.trace.span)}" fill="none" stroke="#546e7a" stroke-width="2.4"/>`;
+    $('gShapes').innerHTML = s;
+    // 点：交点は小さい ×、名前のある点は紫
+    let pt = '';
+    st.sc.inters.forEach(p => { if (!Object.values(st.an.named).some(q => dist(q, p) < 0.1)) pt += `<path d="M${px(p.x) - 6},${px(p.y) - 6}l12,12m0,-12l-12,12" stroke="#78909c" stroke-width="2.5"/>`; });
+    (P.shown || []).forEach(k => { pt += ptSVG(G[k], k, '#263238', labelOff(G[k])); });
+    Object.entries(st.an.named).forEach(([k, p]) => { pt += ptSVG(p, k, '#6a1b9a', labelOff(p)); });
+    $('gPts').innerHTML = pt;
+    // 確かめ（分度器・長さ）・測った長さ・ワークシートの点
+    let ch = '';
+    st.measures.forEach(m => { ch += dimSVG(m.p, m.q, '', '#00838f', 1); });
+    if (st.an.ok && P.checks) { const cs = P.checks(G, st.an); st.checks.forEach(k => { if (cs[k]) ch += cs[k].svg(); }); }
+    if (st.wsT != null && wsLine()) {
+      const W = wsPoint();
+      ch += `<line x1="${px(W.x)}" y1="${px(W.y)}" x2="${px(G.A.x)}" y2="${px(G.A.y)}" stroke="#e65100" stroke-width="3" stroke-dasharray="8 5"/>`;
+      ch += `<line x1="${px(W.x)}" y1="${px(W.y)}" x2="${px(G.B.x)}" y2="${px(G.B.y)}" stroke="#1565c0" stroke-width="3" stroke-dasharray="2 5" stroke-linecap="round"/>`;
+      const ma = mid(W, G.A), mb = mid(W, G.B);
+      ch += svgText(ma.x - 0.2, ma.y - 0.2, 'PA ' + d1(dist(W, G.A)), '#e65100', 21) + svgText(mb.x + 0.2, mb.y - 0.2, 'PB ' + d1(dist(W, G.B)), '#1565c0', 21);
+      ch += `<circle cx="${px(W.x)}" cy="${px(W.y)}" r="11" fill="#fbc02d" stroke="#e65100" stroke-width="3"/>` + svgText(W.x + 0.45, W.y - 0.35, 'P', '#e65100', 26, 'start');
+    }
+    $('gCheck').innerHTML = ch;
+    // はじめの図の点をつかむ所（作図をはじめる前だけ）・ワークシートの点
+    let hd = '';
+    if (!st.shapes.length && !st.measures.length && !st.busy) (P.drag || P.shown || []).forEach(k => { hd += `<circle data-h="g:${k}" cx="${px(G[k].x)}" cy="${px(G[k].y)}" r="22" fill="#26323810" stroke="#26323855" stroke-width="2" stroke-dasharray="4 4" style="cursor:move"/>`; });
+    if (st.wsT != null && wsLine()) { const W = wsPoint(); hd += `<circle data-h="ws" cx="${px(W.x)}" cy="${px(W.y)}" r="30" fill="transparent" style="cursor:grab"/>`; }
+    $('gHandles').innerHTML = hd;
+    renderTool();
+  }
+
+  /* =====================================================================
+     7. コンパスと定規の絵（「円とコンパス」と同じ形）
+     ===================================================================== */
+  function legPoly(H, T, w0, w1, stopAt) {
+    const dx = T.x - H.x, dy = T.y - H.y, L = Math.hypot(dx, dy);
+    const vx = dx / L, vy = dy / L, qx = -vy, qy = vx;
+    const E = { x: T.x - vx * stopAt, y: T.y - vy * stopAt };
+    const pts = [[H.x + qx * w0 / 2, H.y + qy * w0 / 2], [E.x + qx * w1 / 2, E.y + qy * w1 / 2], [E.x - qx * w1 / 2, E.y - qy * w1 / 2], [H.x - qx * w0 / 2, H.y - qy * w0 / 2]];
+    return { d: pts.map(p => `${px(p[0])},${px(p[1])}`).join(' '), E, vx, vy, qx, qy };
+  }
+  function compassGeom() {
+    const N = st.N, Pp = PEN(), r = st.r;
+    const ux = Math.cos(st.ang), uy = Math.sin(st.ang);
+    const h = Math.sqrt(Math.max(0.01, LEG * LEG - (r / 2) * (r / 2)));
+    const mx = (N.x + Pp.x) / 2, my = (N.y + Pp.y) / 2;
+    const fits = (sd) => { const kx = mx + uy * sd * (h + 1.6), ky = my - ux * sd * (h + 1.6); return kx > 0.3 && kx < BW - 0.3 && ky > 0.3 && ky < BH - 0.3; };
+    // まわしているときは、たおす向きを変えない（くるっと反転しないように）
+    if (!st.trace && !(st.drag && st.drag.kind === 'knob') && !fits(st.side) && fits(-st.side)) st.side = -st.side;
+    const nx = uy * st.side, ny = -ux * st.side;
+    const H = { x: mx + nx * h, y: my + ny * h }, K = { x: H.x + nx * 1.3, y: H.y + ny * 1.3 };
+    return { N, P: Pp, H, K, nx, ny };
+  }
+  function compassSVG() {
+    const { N, P: Pp, H, K, nx, ny } = compassGeom();
+    const faded = st.an && st.an.ok && !st.drag && !st.busy;
+    let s = `<g opacity="${faded ? 0.35 : 1}">`;
+    s += `<g transform="translate(5,7)" opacity="0.15"><polygon points="${legPoly(H, N, 0.42, 0.26, 0.7).d}" fill="#000"/><polygon points="${legPoly(H, Pp, 0.42, 0.34, 0.6).d}" fill="#000"/></g>`;
+    const a = legPoly(H, N, 0.42, 0.26, 0.7);
+    s += `<polygon points="${a.d}" fill="#b0bec5" stroke="#546e7a" stroke-width="2.5" stroke-linejoin="round"/>`;
+    s += `<line x1="${px(a.E.x)}" y1="${px(a.E.y)}" x2="${px(N.x)}" y2="${px(N.y)}" stroke="#37474f" stroke-width="3.5" stroke-linecap="round"/>`;
+    const b = legPoly(H, Pp, 0.42, 0.36, 2.4);
+    s += `<polygon points="${b.d}" fill="#b0bec5" stroke="#546e7a" stroke-width="2.5" stroke-linejoin="round"/>`;
+    const E1 = b.E, E2 = { x: Pp.x - b.vx * 0.55, y: Pp.y - b.vy * 0.55 }, w = 0.34;
+    s += `<polygon points="${[[E1.x + b.qx * w / 2, E1.y + b.qy * w / 2], [E2.x + b.qx * w / 2, E2.y + b.qy * w / 2], [E2.x - b.qx * w / 2, E2.y - b.qy * w / 2], [E1.x - b.qx * w / 2, E1.y - b.qy * w / 2]].map(p => `${px(p[0])},${px(p[1])}`).join(' ')}" fill="#ffca28" stroke="#f57f17" stroke-width="2"/>`;
+    s += `<polygon points="${px(E2.x + b.qx * w / 2)},${px(E2.y + b.qy * w / 2)} ${px(Pp.x)},${px(Pp.y)} ${px(E2.x - b.qx * w / 2)},${px(E2.y - b.qy * w / 2)}" fill="#ffe0b2" stroke="#a1887f" stroke-width="1.5"/>`;
+    s += `<circle cx="${px(Pp.x)}" cy="${px(Pp.y)}" r="3.5" fill="#37474f"/>`;
+    s += `<line x1="${px(H.x)}" y1="${px(H.y)}" x2="${px(K.x)}" y2="${px(K.y)}" stroke="#78909c" stroke-width="13" stroke-linecap="round"/>`;
+    s += `<circle cx="${px(K.x)}" cy="${px(K.y)}" r="12" fill="#ffb74d" stroke="#e65100" stroke-width="3"/>`;
+    s += `<circle cx="${px(H.x)}" cy="${px(H.y)}" r="15" fill="#90a4ae" stroke="#455a64" stroke-width="3"/><circle cx="${px(H.x)}" cy="${px(H.y)}" r="5" fill="#455a64"/>`;
+    const lab = (T, text, col) => svgText(T.x - nx * 0.9, T.y - ny * 0.9 + 0.2, text, col, 19);
+    s += lab(N, 'はり', '#37474f') + lab(Pp, 'えんぴつ', '#e65100') + svgText(K.x + nx * 0.75, K.y + ny * 0.75 + 0.18, 'つまみ', '#e65100', 17);
+    s += `<circle cx="${px(N.x)}" cy="${px(N.y)}" r="20" fill="none" stroke="#37474f" stroke-width="2.5" stroke-dasharray="5 4"/>`;
+    s += `<circle cx="${px(Pp.x)}" cy="${px(Pp.y)}" r="20" fill="none" stroke="#e65100" stroke-width="2.5" stroke-dasharray="5 4"/>`;
+    s += '</g>';
+    if (!st.busy) {
+      s += `<polygon data-h="move" points="${a.d}" fill="transparent" stroke="transparent" stroke-width="18" style="cursor:move"/>`;
+      s += `<polygon data-h="pencil" points="${b.d}" fill="transparent" stroke="transparent" stroke-width="18" style="cursor:grab"/>`;
+      s += `<circle data-h="move" cx="${px(H.x)}" cy="${px(H.y)}" r="22" fill="transparent" style="cursor:move"/>`;
+      s += `<circle data-h="needle" cx="${px(N.x)}" cy="${px(N.y)}" r="30" fill="transparent" style="cursor:move"/>`;
+      s += `<circle data-h="pencil" cx="${px(Pp.x)}" cy="${px(Pp.y)}" r="30" fill="transparent" style="cursor:grab"/>`;
+      s += `<circle data-h="knob" cx="${px(K.x)}" cy="${px(K.y)}" r="28" fill="transparent" style="cursor:grab"/>`;
+    }
+    return s;
+  }
+  /** 定規の絵（目もりのない定規。p→q の線にそって置く） */
+  function rulerSVG(p, q, col) {
+    const a = angOf(p, q), L = dist(p, q) + 2, n = a - Math.PI / 2;
+    const s0 = add(p, a, -1), c1 = add(s0, n, 0.95), c2 = add(add(s0, a, L), n, 0.95), c3 = add(s0, a, L);
+    return `<polygon points="${[s0, c1, c2, c3].map(v => `${px(v.x)},${px(v.y)}`).join(' ')}" fill="#fff3e0" fill-opacity=".85" stroke="#a1887f" stroke-width="2"/>` +
+      lineSVG(LN(p, q, 'seg'), col, 3.5) + `<circle cx="${px(p.x)}" cy="${px(p.y)}" r="7" fill="none" stroke="${col}" stroke-width="3"/><circle cx="${px(q.x)}" cy="${px(q.y)}" r="7" fill="none" stroke="${col}" stroke-width="3"/>`;
+  }
+  function renderTool() {
+    let s = '';
+    if (st.lineTrace) {
+      const { p, q, e, mode, measure } = st.lineTrace, Q = { x: p.x + (q.x - p.x) * e, y: p.y + (q.y - p.y) * e };
+      if (measure) s += dimSVG(p, Q, '', '#00838f', 1);
+      else { if (mode === 'line' && e >= 1) s += lineSVG(LN(p, q, 'line'), '#e65100', 2, '6 6'); s += rulerSVG(p, Q, '#e65100'); }
+    }
+    if (st.tool === 'compass' && !isReason()) s += compassSVG();
+    $('gTool').innerHTML = s;
+  }
+
+  /* =====================================================================
+     8. アニメ（setInterval で動かす。画面が見えていないと requestAnimationFrame が止まるため）
+     ===================================================================== */
+  let animTok = 0;
+  const CANCEL = Symbol('cancel');
+  function tween(ms, fn) {
+    const tok = animTok;
+    return new Promise((res, rej) => {
+      if (!ms) { fn(1); res(); return; }
+      const t0 = performance.now();
+      const id = setInterval(() => {
+        if (tok !== animTok) { clearInterval(id); rej(CANCEL); return; }
+        const t = Math.min(1, (performance.now() - t0) / ms);
+        fn(t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+        renderTool(); if (st.trace) renderBoard();
+        if (t >= 1) { clearInterval(id); res(); }
+      }, 30);
+    });
+  }
+  async function moveCompass(tg, ms = 700) {
+    const f = { N: { ...st.N }, r: st.r, ang: st.ang }, dA = normA(tg.ang - f.ang);
+    await tween(ms, e => { st.N = { x: f.N.x + (tg.N.x - f.N.x) * e, y: f.N.y + (tg.N.y - f.N.y) * e }; st.r = f.r + (tg.r - f.r) * e; st.ang = f.ang + dA * e; });
+  }
+  async function drawArcAnim(a0, span, ms = 1000) {
+    st.trace = { a0, span: 0 };
+    await tween(ms, e => { st.trace.span = span * e; st.ang = a0 + span * e; });
+    st.trace = null;
+    const fullC = Math.abs(span) >= TAU - 1e-6;
+    addShape(fullC ? { t: 'circle', cx: st.N.x, cy: st.N.y, r: st.r } : { t: 'arc', cx: st.N.x, cy: st.N.y, r: st.r, a0, span }, true);
+  }
+  async function drawLineAnim(p, q, mode, ms = 650) {
+    st.lineTrace = { p, q, e: 0, mode };
+    await tween(ms, e => { st.lineTrace.e = e; });
+    st.lineTrace = null;
+    addShape({ t: mode === 'seg' ? 'seg' : 'line', x1: p.x, y1: p.y, x2: q.x, y2: q.y }, true);
+  }
+  /** 自動の作図（先生モード・お手本）。acts は PROBS の auto が返すもの */
+  async function runActs(acts) {
+    if (st.busy || !acts || !acts.length) return;
+    st.busy = true; render();
+    try {
+      for (const a of acts) {
+        if (a.arc) {
+          st.tool = 'compass'; paintTools();
+          const c = a.arc.c, cov = a.arc.full ? { a0: -Math.PI / 2, span: TAU } : arcCover(c, a.arc.pts);
+          await moveCompass({ N: c, r: a.arc.r, ang: cov.a0 });
+          await drawArcAnim(cov.a0, cov.span);
+        } else if (a.line) {
+          const [p, q, mode] = a.line;
+          if (!p || !q) continue;
+          st.tool = 'ruler'; paintTools(); renderTool();
+          await drawLineAnim(p, q, mode || 'line');
+        }
+      }
+    } catch (e) { if (e !== CANCEL) throw e; }
+    st.busy = false; st.trace = null; st.lineTrace = null;
+    st.tool = 'compass'; paintTools();
+    render();
+  }
+
+  /* =====================================================================
+     9. 線をふやす・消す・もどす
+     ===================================================================== */
+  function snapState() { return clone({ shapes: st.shapes, measures: st.measures, G: st.G, wsT: st.wsT, checks: st.checks }); }
+  function pushHist() { st.hist.push(snapState()); if (st.hist.length > 80) st.hist.shift(); }
+  function addShape(sh, auto) {
+    const prev = st.an;
+    pushHist();
+    st.shapes.push(sh);
+    analyzeNow();
+    if (!auto) checkTrips(sh, prev);
+    render();
+  }
+  function undo() {
+    if (st.busy || !st.hist.length) return;
+    const h = st.hist.pop();
+    Object.assign(st, h);
+    setMsg('↶ ひとつもどした。');
+    render();
+  }
+  /** タップした所にいちばん近い線（測った長さもふくむ）を消す */
+  function eraseAt(p) {
+    let best = null, bd = 0.4;
+    st.shapes.forEach((sh, i) => {
+      let d;
+      if (sh.t === 'circle' || sh.t === 'arc') { d = Math.abs(Math.hypot(p.x - sh.cx, p.y - sh.cy) - sh.r); if (sh.t === 'arc' && !onArc({ cx: sh.cx, cy: sh.cy, r: sh.r, a0: sh.a0, span: sh.span }, p)) d = 9; }
+      else { const l = LN({ x: sh.x1, y: sh.y1 }, { x: sh.x2, y: sh.y2 }, sh.t === 'seg' ? 'seg' : 'line'); d = inL(l, paramL(l, p), 0.3) ? distLine(l, p) : 9; }
+      if (d < bd) { bd = d; best = { k: 's', i }; }
+    });
+    st.measures.forEach((m, i) => { const l = LN(m.p, m.q, 'seg'); const d = inL(l, paramL(l, p), 0.3) ? distLine(l, p) - 0.45 : 9; if (Math.abs(d) < bd) { bd = Math.abs(d); best = { k: 'm', i }; } });
+    if (!best) { setMsg('消したい線の上をタップしよう。'); return; }
+    pushHist();
+    if (best.k === 's') st.shapes.splice(best.i, 1); else st.measures.splice(best.i, 1);
+    beep([[300, 0, 0.08]]);
+    setMsg('🧽 消した。');
+    render();
+  }
+
+  /* =====================================================================
+     10. ゆび・マウスの操作
+     ===================================================================== */
+  const board = $('board');
+  function toCm(e) {
+    const pt = board.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const q = pt.matrixTransform(board.getScreenCTM().inverse());
+    return { x: q.x / U, y: q.y / U };
+  }
+  const snapP = (p, except) => magnetNear(p, except) || { x: clamp(p.x, 0, BW), y: clamp(p.y, 0, BH) };
+  board.addEventListener('pointerdown', (e) => {
+    if (st.drag || st.busy) return;
+    const p = toCm(e);
+    if (isReason()) return;
+    const h = (e.target.closest('[data-h]') || {}).dataset ? e.target.closest('[data-h]').dataset.h : '';
+    let d = null;
+    if (h === 'needle' || h === 'move') d = { kind: 'move', ox: p.x - st.N.x, oy: p.y - st.N.y };
+    else if (h === 'pencil') d = { kind: 'pencil' };
+    else if (h === 'knob') { d = { kind: 'knob', a0: st.ang, prev: Math.atan2(p.y - st.N.y, p.x - st.N.x), span: 0, ticks: 0 }; st.trace = { a0: st.ang, span: 0 }; }
+    else if (h && h.startsWith('g:')) { pushHist(); d = { kind: 'given', key: h.slice(2) }; }
+    else if (h === 'ws') d = { kind: 'ws' };
+    else if (st.tool === 'ruler' || st.tool === 'measure') { const s = snapP(p); d = { kind: st.tool, p: s }; st.lineTrace = { p: s, q: s, e: 1, mode: st.lineMode, measure: st.tool === 'measure' }; }
+    else if (st.tool === 'erase') { eraseAt(p); return; }
+    if (!d) return;
+    d.id = e.pointerId;
+    st.drag = d;
+    try { board.setPointerCapture(e.pointerId); } catch (err) { /* とらえられなくても動く */ }
+    e.preventDefault();
+    renderTool();
+  });
+  board.addEventListener('pointermove', (e) => {
+    const d = st.drag;
+    if (!d || e.pointerId !== d.id) return;
+    const p = toCm(e);
+    if (d.kind === 'move') {
+      // はりを動かす（コンパスごと動く。開きはそのまま）。点・交点の近くでは吸いつく
+      const cand = { x: p.x - d.ox, y: p.y - d.oy }, m = magnetNear(cand);
+      st.N = m ? { x: m.x, y: m.y } : { x: clamp(cand.x, 0, BW), y: clamp(cand.y, 0, BH) };
+      d.moved = true;
+    } else if (d.kind === 'pencil') {
+      // えんぴつを動かす（はりはそのまま。開きが変わる）
+      const m = magnetNear(p, st.N), tg = m || p, L = dist(tg, st.N);
+      if (L > 0.2) st.ang = angOf(st.N, tg);
+      st.r = m ? clamp(L, RMIN, RMAX) : clamp(Math.round(L * 20) / 20, RMIN, RMAX);
+      d.moved = true;
+    } else if (d.kind === 'knob') {
+      // つまみでまわす（まわった分だけ弧がのびる。1周で円）
+      if (d.finished) return;
+      const a = Math.atan2(p.y - st.N.y, p.x - st.N.x);
+      d.span += normA(a - d.prev); d.prev = a;
+      st.ang = d.a0 + d.span; st.trace.span = d.span;
+      const k = Math.floor(Math.abs(d.span) / (Math.PI / 4));
+      if (k > d.ticks) { d.ticks = k; sndTick(); }
+      if (Math.abs(d.span) >= TAU) {
+        d.finished = true; st.ang = d.a0; st.trace = null;
+        addShape({ t: 'circle', cx: st.N.x, cy: st.N.y, r: st.r });
+        return;
+      }
+      renderBoard(); return;
+    } else if (d.kind === 'given') {
+      // はじめの図の点を動かす（問題によっては、直線や円の上だけ）
+      let q = { x: clamp(p.x, 0.5, BW - 0.5), y: clamp(p.y, 0.5, BH - 0.5) };
+      const G = st.G;
+      if (st.prob === 'perpOn' || st.prob === 'deg45') { const l = LN(G.L1, G.L2), t = clamp(paramL(l, q), 0.15, 0.85); q = { x: G.L1.x + (G.L2.x - G.L1.x) * t, y: G.L1.y + (G.L2.y - G.L1.y) * t }; }
+      if (st.prob === 'center' || st.prob === 'hex' || st.prob === 'tangent') { const C = G.Z || G.O; if (d.key !== 'O') q = add(C, angOf(C, q), G.R); else return; }
+      if ((st.prob === 'perpOut') && d.key === 'P' && distLine(LN(G.L1, G.L2), q) < 1.5) return;
+      G[d.key] = q;
+      // ℓ をふくむ問題で、ℓ 上の点がついてくるように
+      analyzeNow(); renderBoard(); renderSide();
+      return;
+    } else if (d.kind === 'ws') {
+      const l = wsLine(); if (!l) return;
+      st.wsT = paramL(l, p); renderBoard(); renderSide(); return;
+    } else if (d.kind === 'ruler' || d.kind === 'measure') {
+      const q = snapP(p, d.p);
+      st.lineTrace.q = q;
+    }
+    renderTool();
+  });
+  function endDrag(e) {
+    const d = st.drag;
+    if (!d || e.pointerId !== d.id) return;
+    st.drag = null;
+    if (d.kind === 'knob' && !d.finished) {
+      st.trace = null;
+      if (Math.abs(d.span) > 0.15) { addShape({ t: 'arc', cx: st.N.x, cy: st.N.y, r: st.r, a0: d.a0, span: d.span }); return; }
+    } else if (d.kind === 'ruler' || d.kind === 'measure') {
+      const { p, q } = st.lineTrace; st.lineTrace = null;
+      if (dist(p, q) > 0.4 && e.type === 'pointerup') {
+        if (d.kind === 'ruler') { addShape({ t: st.lineMode, x1: p.x, y1: p.y, x2: q.x, y2: q.y }); return; }
+        pushHist(); st.measures.push({ p, q });
+        if (!st.an.ok) addTrip('measureUse');
+        setMsg(`📐 ${d1(dist(p, q))} cm。` + (st.an.ok ? '' : '<br><span class="bad">作図のとちゅうでは測らない</span> ― 長さを写すのはコンパスで。測るのは、できたあとの確かめ。'), st.an.ok ? '' : 'ng');
+      }
+    } else if (d.kind === 'pencil' && d.moved) setMsg('開きを決めた。つまみをドラッグしてまわすか、「🔄 まわす」でかこう。');
+    else if (d.kind === 'given') { st.G0 = clone(st.G); }
+    render();
+  }
+  board.addEventListener('pointerup', endDrag);
+  board.addEventListener('pointercancel', endDrag);
+
+  /* =====================================================================
+     11. つまずきを見る（線をかいたとき）
+     ===================================================================== */
+  function checkTrips(sh, prev) {
+    const an = st.an, sc = st.sc;
+    let trip = null;
+    if (sh.t === 'circle' || sh.t === 'arc') {
+      const c = { x: sh.cx, y: sh.cy };
+      // はりが点（はじめの点・作図の点・交点）にささっているか（かく前の点で見る）
+      const before = magnets();
+      if (!before.some(m => dist(m, c) < TOL.c)) trip = 'needleOff';
+      if (!trip && prob().tripCheck) trip = prob().tripCheck(sh, prev, st.G);
+      if (!trip) for (const pr of an.pairs || []) {
+        if (pr.kind === 'half') {
+          const d = dist(pr.X, pr.Y);
+          if ((dist(pr.X, c) < TOL.c || dist(pr.Y, c) < TOL.c)) {
+            if (sh.r <= d / 2 + 0.02) { trip = 'shortR'; break; }
+            const ax = circAt(sc, pr.X).filter(k => k.r > d / 2 + 0.02), by = circAt(sc, pr.Y).filter(k => k.r > d / 2 + 0.02);
+            if (ax.length && by.length && !ax.some(a => by.some(b => Math.abs(a.r - b.r) <= TOL.r))) { trip = 'diffR'; break; }
+          }
+        } else if (pr.kind === 'len' && dist(pr.X, c) < TOL.c && Math.abs(sh.r - pr.L) > TOL.r) { trip = 'triR'; break; }
+      }
+    } else {
+      const l = LN({ x: sh.x1, y: sh.y1 }, { x: sh.x2, y: sh.y2 }, sh.t === 'seg' ? 'seg' : 'line');
+      if (throughCount(l) < 2) trip = 'freeLine';
+    }
+    if (trip) {
+      addTrip(trip); sndNG();
+      setMsg(`<span class="bad">つまずき：${TRIPS[trip].name}</span><br>${TRIPS[trip].exp}<br><span class="small">（↶ ひとつもどす・🧽 消す でやりなおせる）</span>`, 'ng');
+      st.msgLock = true;
+    }
+  }
+
+  /* =====================================================================
+     12. 右の手順・メッセージ
+     ===================================================================== */
+  function setMsg(html, c) { const el = $('msg'); el.innerHTML = html; el.className = 'msg' + (c ? ' ' + c : ''); }
+  function renderSide() {
+    if (isReason()) { renderReasonSide(); return; }
+    const P = prob(), an = st.an;
+    $('goal').innerHTML = (P.part === 4 ? '<span class="small">④ 応用</span><br>' : '') + P.goal;
+    $('steps').innerHTML = an.steps.map((s, i) => `<li data-n="${'①②③④⑤'[i]}" class="${s.done ? 'done' : i === an.cur ? 'cur' : ''}">${s.t}</li>`).join('');
+    let sub = '';
+    if (an.ok && P.checks) {
+      const cs = P.checks(st.G, an);
+      sub += '<div class="small" style="font-weight:bold;margin-bottom:4px">🔍 確かめよう（測る道具を使ってよい）</div><div class="tools">' +
+        cs.map((c, i) => `<button class="op-btn${st.checks.includes(i) ? ' on' : ''}" data-chk="${i}">${c.label}</button>`).join('') + '</div>';
+      st.checks.forEach(i => { if (cs[i]) sub += `<div class="msg ok">${cs[i].msg}</div>`; });
+    }
+    if (st.prob === 'pb' && an.ok) {
+      if (st.wsT == null) sub += '<div class="tools" style="margin-top:8px"><button class="op-btn" id="btnWsP">📍 線の上に点 P を置く（ワークシート）</button></div>';
+      else { const W = wsPoint(); sub += `<div class="ws-line" style="margin-top:8px">P をドラッグして動かそう<br><span class="pa">PA ＝ ${d1(dist(W, st.G.A))} cm</span>　<span class="pb">PB ＝ ${d1(dist(W, st.G.B))} cm</span></div>`; }
+    }
+    $('sideSub').innerHTML = sub;
+    $('sideSub').querySelectorAll('[data-chk]').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.chk; st.checks = st.checks.includes(i) ? st.checks.filter(x => x !== i) : st.checks.concat([i]); render(); }));
+    if ($('btnWsP')) $('btnWsP').addEventListener('click', () => { pushHist(); st.wsT = -3.5; setMsg('点 P をドラッグして、PA と PB をくらべよう。ワークシートの「＋ 記録する」で記録できる。'); render(); });
+  }
+  /** 手順が進んだ・できた ときのメッセージ */
+  function progressMsg() {
+    const an = st.an, P = prob();
+    if (an.ok) {
+      if (!st.okShown) {
+        st.okShown = true; sndDone(); bumpClear(st.prob);
+        setMsg(`🎉 できた！ ${P.name}を作図できたね。${an.alt ? '（教科書とはべつの方法でもできている）' : ''}右の「確かめよう」で、分度器やものさしで確かめよう。`, 'ok');
+      }
+      st.lastStep = an.steps.length; st.msgLock = false;
+      return;
+    }
+    st.okShown = false;
+    const cur = an.cur < 0 ? an.steps.length : an.cur;
+    if (cur > st.lastStep && !st.msgLock) { sndOK(); setMsg(`✓ よし！ つぎは ${'①②③④⑤'[cur] || ''} ${an.steps[cur] ? an.steps[cur].t : ''}`, 'ok'); }
+    st.lastStep = cur;
+    st.msgLock = false;
+  }
+
+  /* =====================================================================
+     13. ワークシートの点 P（垂直二等分線の上）
+     ===================================================================== */
+  function wsLine() { const n = st.an && st.an.named; if (st.prob !== 'pb' || !st.an.ok) return null; const M = mid(st.G.A, st.G.B); return LN(M, add(M, st.an.target.ang, 1)); }
+  function wsPoint() { const l = wsLine(), t = clamp(st.wsT, -7, 7); return { x: l.p.x + (l.q.x - l.p.x) * t, y: l.p.y + (l.q.y - l.p.y) * t }; }
+
+  /* =====================================================================
+     14. ⑤ 作図の理由（ひし形・たこ形のアニメ）
+     ===================================================================== */
+  const REASONS = {
+    rPb: {
+      title: 'なぜ、垂直二等分線になる？',
+      rMin: 4.3, rMax: 8, rDef: 5.5,
+      steps: [
+        'A と B を中心に、<b>同じ半径 r</b> の円をかいた。交点が C と D。',
+        'C・D は、A からも B からも r の距離 → <b>AC ＝ BC ＝ AD ＝ BD ＝ r</b>（4つの辺が等しい）。',
+        '4つの辺が等しい四角形 ACBD は<b>ひし形</b>（小4）。',
+        'ひし形の対角線は、<b>垂直に交わり</b>、<b>たがいに真ん中で交わる</b>。だから CD ⟂ AB、AM ＝ MB。',
+        'CD で折ると、A と B がぴったり重なる（ひし形は CD について<b>線対称</b>）。だから CD は AB の<b>垂直二等分線</b>。',
+      ],
+    },
+    rAb: {
+      title: 'なぜ、角の二等分線になる？',
+      rMin: 3.6, rMax: 9, rDef: 5,
+      steps: [
+        'O を中心に円をかいた → 交点 A、B は O から同じ距離。<b>OA ＝ OB</b>。',
+        'A と B を中心に同じ半径の円をかいた → 交点 P は A、B から同じ距離。<b>AP ＝ BP</b>。',
+        '四角形 OAPB は、となりあう2組の辺が等しい<b>たこ形</b>（r ＝ OA のときは ひし形）。たこ形は直線 OP について<b>線対称</b>。',
+        'OP で折ると、OB は OA に、PB は PA に重なる。だから <b>∠BOP ＝ ∠AOP</b>。OP は角の二等分線。',
+      ],
+    },
+    rPerp: {
+      title: 'なぜ、垂線になる？',
+      rMin: 5.2, rMax: 9, rDef: 6.5,
+      steps: [
+        'P を中心に円をかいた → ℓ との交点 A、B は P から同じ距離。<b>PA ＝ PB</b>。',
+        'A と B を中心に同じ半径の円をかいた → 交点 Q も A、B から同じ距離。<b>QA ＝ QB</b>。',
+        '四角形 PAQB は<b>たこ形</b>で、直線 PQ について<b>線対称</b>。',
+        'PQ で折ると A と B が重なり、ℓ の左右も重なる。2つの角は等しくて、合わせて 180° → それぞれ <b>90°</b>。PQ は ℓ の垂線（PQ は AB の垂直二等分線でもある）。',
+      ],
+    },
+  };
+  function reasonGeom() {
+    const R = st.reason, r = R.r;
+    if (st.prob === 'rPb') {
+      const A = { x: 8, y: 8.5 }, B = { x: 16, y: 8.5 }, h = Math.sqrt(Math.max(0, r * r - 16));
+      return { A, B, C: { x: 12, y: 8.5 - h }, D: { x: 12, y: 8.5 + h }, M: { x: 12, y: 8.5 } };
+    }
+    if (st.prob === 'rAb') {
+      const O = { x: 4, y: 13 }, a1 = -5 * DEG, a2 = -60 * DEG, k = 6;
+      const A = add(O, a1, k), B = add(O, a2, k), ip = interCC(full(A, r), full(B, r)), P = far(ip, O) || A;
+      return { O, A, B, P, a1, a2, k };
+    }
+    const P = { x: 12, y: 3.5 }, y = 9.5, k = 8.2, w = Math.sqrt(k * k - 36), A = { x: 12 - w, y }, B = { x: 12 + w, y };
+    const ip = interCC(full(A, r), full(B, r)), Q = byY(ip)[1] || byY(ip)[0] || { x: 12, y };
+    return { P, A, B, Q, H: { x: 12, y }, k, y };
+  }
+  function tick(p, q, n, col) {
+    // 等しい辺の印（｜ を n 本）
+    const M = mid(p, q), a = angOf(p, q), nn = a + Math.PI / 2;
+    let s = '';
+    for (let i = 0; i < n; i++) { const c = add(M, a, (i - (n - 1) / 2) * 0.22), e1 = add(c, nn, 0.28), e2 = add(c, nn, -0.28); s += `<line x1="${px(e1.x)}" y1="${px(e1.y)}" x2="${px(e2.x)}" y2="${px(e2.y)}" stroke="${col}" stroke-width="3"/>`; }
+    return s;
+  }
+  const seg = (p, q, col, w = 4, dash) => lineSVG(LN(p, q, 'seg'), col, w, dash);
+  function rightMark(V, a1, a2, col) { const p1 = add(V, a1, 0.5), p2 = add(add(V, a1, 0.5), a2, 0.5), p3 = add(V, a2, 0.5); return `<path d="M${px(p1.x)},${px(p1.y)}L${px(p2.x)},${px(p2.y)}L${px(p3.x)},${px(p3.y)}" fill="none" stroke="${col}" stroke-width="3"/>`; }
+  function renderReason() {
+    const R = st.reason, g = reasonGeom(), k = R.step, f = R.fold;
+    let s = '';
+    const OR = '#e65100', BL = '#1565c0', PU = '#6a1b9a', GR = '#2e7d32';
+    if (st.prob === 'rPb') {
+      const { A, B, C, D, M } = g;
+      s += `<circle cx="${px(A.x)}" cy="${px(A.y)}" r="${px(R.r)}" fill="none" stroke="#90a4ae" stroke-width="2"/><circle cx="${px(B.x)}" cy="${px(B.y)}" r="${px(R.r)}" fill="none" stroke="#90a4ae" stroke-width="2"/>`;
+      if (k >= 2) s += `<polygon points="${[A, C, B, D].map(p => `${px(p.x)},${px(p.y)}`).join(' ')}" fill="#fff3e0"/>`;
+      if (k >= 1) s += [[A, C], [C, B], [B, D], [D, A]].map(([p, q]) => seg(p, q, OR, 4) + tick(p, q, 1, OR)).join('') + svgText(mid(A, C).x - 0.5, mid(A, C).y, 'r', OR, 24);
+      s += seg(A, B, '#263238', 4);
+      if (k >= 3) s += seg(C, D, GR, 5) + rightMark(M, 0, -Math.PI / 2, GR) + tick(A, M, 2, BL) + tick(M, B, 2, BL) + ptSVG(M, 'M', PU, { x: 0.3, y: 0.75 });
+      // 折る：CD の左がわを、CD を軸にうら返す
+      if (k >= 4) s += `<g transform="translate(${px(M.x)},0) scale(${1 - 2 * f},1) translate(${-px(M.x)},0)" opacity=".85"><polygon points="${[A, C, M, D].map(p => `${px(p.x)},${px(p.y)}`).join(' ')}" fill="#ffe0b2" stroke="${OR}" stroke-width="3"/>${ptSVG(A, '', OR)}</g>`;
+      s += ptSVG(A, 'A', '#263238', { x: -0.7, y: 0.3 }) + ptSVG(B, 'B', '#263238', { x: 0.3, y: 0.3 }) + ptSVG(C, 'C', PU) + ptSVG(D, 'D', PU, { x: 0.3, y: 0.7 });
+    } else if (st.prob === 'rAb') {
+      const { O, A, B, P, a1, a2, k: K } = g;
+      s += lineSVG(LN(O, add(O, a1, 3), 'ray'), '#263238', 4) + lineSVG(LN(O, add(O, a2, 3), 'ray'), '#263238', 4);
+      s += `<path d="${arcPath(O.x, O.y, K, a2 - 0.15, a1 - a2 + 0.3)}" fill="none" stroke="#90a4ae" stroke-width="2"/>`;
+      s += seg(O, A, OR, 4) + tick(O, A, 1, OR) + seg(O, B, OR, 4) + tick(O, B, 1, OR);
+      if (k >= 1) s += `<circle cx="${px(A.x)}" cy="${px(A.y)}" r="${px(R.r)}" fill="none" stroke="#90a4ae" stroke-width="2"/><circle cx="${px(B.x)}" cy="${px(B.y)}" r="${px(R.r)}" fill="none" stroke="#90a4ae" stroke-width="2"/>` + seg(A, P, BL, 4) + tick(A, P, 2, BL) + seg(B, P, BL, 4) + tick(B, P, 2, BL);
+      if (k >= 2) s += `<polygon points="${[O, A, P, B].map(p => `${px(p.x)},${px(p.y)}`).join(' ')}" fill="#e3f2fd" fill-opacity=".6"/>` + seg(O, P, GR, 5);
+      if (k >= 3) {
+        const th = angOf(O, P) / DEG;
+        s += `<g transform="translate(${px(O.x)},${px(O.y)}) rotate(${th}) scale(1,${1 - 2 * f}) rotate(${-th}) translate(${-px(O.x)},${-px(O.y)})" opacity=".85"><polygon points="${[O, B, P].map(p => `${px(p.x)},${px(p.y)}`).join(' ')}" fill="#bbdefb" stroke="${BL}" stroke-width="3"/></g>`;
+        const am = add(O, (a1 + angOf(O, P)) / 2, 1.6), bm = add(O, (a2 + angOf(O, P)) / 2, 1.6);
+        s += `<path d="${arcPath(O.x, O.y, 1.1, a1, normA(angOf(O, P) - a1))}" fill="none" stroke="${PU}" stroke-width="3"/><path d="${arcPath(O.x, O.y, 1.25, angOf(O, P), normA(a2 - angOf(O, P)))}" fill="none" stroke="${PU}" stroke-width="3"/>`;
+        s += svgText(am.x, am.y, '●', PU, 16) + svgText(bm.x, bm.y, '●', PU, 16);
+      }
+      s += ptSVG(O, 'O', '#263238', { x: -0.7, y: 0.4 }) + ptSVG(A, 'A', PU, { x: 0.2, y: 0.75 }) + ptSVG(B, 'B', PU, { x: -0.8, y: -0.1 }) + (k >= 1 ? ptSVG(P, 'P', PU) : '');
+    } else {
+      const { P, A, B, Q, H, k: K, y } = g;
+      s += lineSVG(LN({ x: 0, y }, { x: BW, y }), '#263238', 4) + svgText(BW - 0.7, y - 0.35, 'ℓ', '#263238', 26);
+      s += `<path d="${arcPath(P.x, P.y, K, Math.PI / 2 - 1.1, 2.2)}" fill="none" stroke="#90a4ae" stroke-width="2"/>`;
+      s += seg(P, A, OR, 4) + tick(P, A, 1, OR) + seg(P, B, OR, 4) + tick(P, B, 1, OR);
+      if (k >= 1) s += `<circle cx="${px(A.x)}" cy="${px(A.y)}" r="${px(R.r)}" fill="none" stroke="#90a4ae" stroke-width="2"/><circle cx="${px(B.x)}" cy="${px(B.y)}" r="${px(R.r)}" fill="none" stroke="#90a4ae" stroke-width="2"/>` + seg(Q, A, BL, 4) + tick(Q, A, 2, BL) + seg(Q, B, BL, 4) + tick(Q, B, 2, BL);
+      if (k >= 2) s += `<polygon points="${[P, A, Q, B].map(p => `${px(p.x)},${px(p.y)}`).join(' ')}" fill="#e3f2fd" fill-opacity=".6"/>` + seg(P, Q, GR, 5);
+      if (k >= 3) s += `<g transform="translate(${px(H.x)},0) scale(${1 - 2 * f},1) translate(${-px(H.x)},0)" opacity=".85"><polygon points="${[P, A, Q].map(p => `${px(p.x)},${px(p.y)}`).join(' ')}" fill="#ffe0b2" stroke="${OR}" stroke-width="3"/>${seg({ x: 0, y }, H, OR, 5)}</g>` + rightMark(H, 0, -Math.PI / 2, GR) + rightMark(H, Math.PI, -Math.PI / 2, GR);
+      s += ptSVG(P, 'P', '#263238') + ptSVG(A, 'A', PU, { x: -0.6, y: 0.75 }) + ptSVG(B, 'B', PU, { x: 0.2, y: 0.75 }) + (k >= 1 ? ptSVG(Q, 'Q', PU, { x: 0.3, y: 0.7 }) : '') + (k >= 3 ? ptSVG(H, 'H', GR, { x: 0.3, y: -0.35 }) : '');
+    }
+    $('gGiven').innerHTML = s;
+    ['gShapes', 'gPts', 'gCheck', 'gHandles', 'gTool'].forEach(id => { $(id).innerHTML = ''; });
+  }
+  function renderReasonSide() {
+    const Rz = REASONS[st.prob], R = st.reason;
+    $('goal').innerHTML = '⑤ ' + Rz.title;
+    $('steps').innerHTML = Rz.steps.map((t, i) => `<li data-n="${'①②③④⑤'[i]}" class="${i < R.step ? 'done' : i === R.step ? 'cur' : ''}" style="${i > R.step ? 'opacity:.45' : ''}">${t}</li>`).join('');
+    const last = R.step === Rz.steps.length - 1;
+    $('sideSub').innerHTML = `<div class="tools"><button class="op-btn" id="rPrev"${R.step ? '' : ' disabled'}>◀ まえ</button><button class="op-btn action" id="rNext"${last ? ' disabled' : ''}>つぎ ▶</button>${last ? '<button class="op-btn" id="rFold">🔁 折ってみる</button>' : ''}</div>` +
+      `<div class="slider-row">半径 r <input type="range" id="rR" min="${Rz.rMin}" max="${Rz.rMax}" step="0.1" value="${R.r}"><input type="number" id="rRn" min="${Rz.rMin}" max="${Rz.rMax}" step="0.1" value="${R.r}"> cm</div>` +
+      '<div class="small">半径を変えても、等しい辺の関係は変わらない。だから、どの半径でも作図できる（交われば）。</div>';
+    $('rPrev').addEventListener('click', () => { st.reason.step--; st.reason.fold = 0; render(); });
+    $('rNext').addEventListener('click', () => { st.reason.step++; st.reason.fold = 0; render(); });
+    if ($('rFold')) $('rFold').addEventListener('click', fold);
+    const setR = (v) => { st.reason.r = clamp(+v || Rz.rDef, Rz.rMin, Rz.rMax); renderReason(); $('rR').value = st.reason.r; $('rRn').value = st.reason.r; };
+    $('rR').addEventListener('input', e => setR(e.target.value));
+    $('rRn').addEventListener('change', e => setR(e.target.value));
+  }
+  async function fold() {
+    animTok++;
+    const back = st.reason.fold > 0.5;
+    try { await tween(1400, e => { st.reason.fold = back ? 1 - e : e; renderReason(); }); } catch (e) { /* とちゅうでやめた */ }
+    if (!back) setMsg('ぴったり重なった！ 折り目の線について<b>線対称</b>。');
+  }
+
+  /* =====================================================================
+     15. パート・問題・ボタン
+     ===================================================================== */
+  function paintTools() {
+    document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === st.tool));
+    document.querySelectorAll('[data-lm]').forEach(b => b.classList.toggle('active', b.dataset.lm === st.lineMode));
+    document.querySelectorAll('[data-snap]').forEach(b => b.classList.toggle('active', (b.dataset.snap === '1') === st.snap));
+    $('btnSpin').disabled = st.tool !== 'compass' || st.busy;
+    $('btnUndo').disabled = !st.hist.length || st.busy;
+  }
+  function render() {
+    $('toolCard').hidden = isReason();
+    if (!isReason()) { analyzeNow(); progressMsg(); }
+    renderBoard(); renderSide(); paintTools(); renderTrips(); renderTeacher();
+  }
+  function newProblem(opt = {}) {
+    animTok++; st.busy = false; st.trace = null; st.lineTrace = null;
+    st.shapes = []; st.measures = []; st.hist = []; st.checks = []; st.wsT = null; st.hintLv = 0; st.okShown = false; st.lastStep = 0;
+    if (isReason()) { const Rz = REASONS[st.prob]; st.reason = { step: 0, r: Rz.rDef, fold: 0 }; setMsg('「つぎ ▶」で1つずつ進もう。半径 r のスライダーも動かしてみよう。'); render(); return; }
+    st.G = opt.G || prob().gen(); st.G0 = clone(st.G);
+    st.N = { x: 2.2, y: 14.5 }; st.r = 3; st.ang = -0.3; st.side = 1; st.tool = 'compass';
+    analyzeNow(); st.lastStep = 0;
+    setMsg(`${prob().goal.replace(/<[^>]+>/g, '')}　まず ① から。はじめの図の点は、かきはじめる前ならドラッグで動かせる。`);
+    render();
+  }
+  function setProb(id, opt = {}) {
+    st.prob = id;
+    document.querySelectorAll('#probRow .chip').forEach(b => b.classList.toggle('active', b.dataset.p === id));
+    newProblem(opt);
+  }
+  function setPart(n, opt = {}) {
+    st.part = n;
+    if (!opt.keepFocus) { st.focus = null; $('focusBar').hidden = true; }
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === n));
+    $('partNote').textContent = PARTS[n].note;
+    const ps = PARTS[n].probs;
+    $('probRow').innerHTML = ps.length > 1 ? ps.map(p => `<button class="chip sm" data-p="${p}">${PROB_NAMES[p]}</button>`).join('') : '';
+    $('probRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setProb(b.dataset.p)));
+    setProb(opt.prob || ps[0], opt);
+  }
+  function resetProblem() {
+    if (isReason()) { newProblem(); return; }
+    animTok++; st.busy = false; st.trace = null; st.lineTrace = null;
+    pushHist();
+    st.shapes = []; st.measures = []; st.checks = []; st.wsT = null; st.okShown = false; st.lastStep = 0; st.hintLv = 0;
+    st.G = clone(st.G0);
+    setMsg('はじめからかこう。');
+    render();
+  }
+  function hint() {
+    if (isReason()) { setMsg('💡 等しい辺に同じ印がついている。印が同じ辺の組を見つけよう。'); return; }
+    const an = st.an;
+    if (an.ok) { setMsg('💡 できている！ 右の「確かめよう」で、本当に垂直・等しいかを測ってみよう。'); return; }
+    st.hintLv = Math.min(3, st.hintLv + 1);
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    const s = an.steps[an.cur];
+    if (st.hintLv === 1) setMsg(`💡 いまの手順：${'①②③④⑤'[an.cur]} ${s.t}`);
+    else if (st.hintLv === 2) setMsg('💡 コンパスは、はりを点にさす → えんぴつで開きを決める → つまみでまわす。定規は、2つの点（交点）の上でドラッグ。点の近くでは吸いつく。');
+    else { setMsg('💡 お手本：この手順を自動でかいてみせるよ。'); runActs(prob().auto(an.cur, st.G, an, st.sc)); st.hintLv = 0; }
+  }
+
+  /* =====================================================================
+     16. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(p) { bumpRec(r => r.clear[p] = (r.clear[p] || 0) + 1); }
+  function addTrip(type) { st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><button class="op-btn" data-prac="${k}">🔁 この型を練習（${PROB_NAMES[TRIPS[k].prob]}）</button></div>`).join('')
+      : '<div class="small">まだ ありません。まちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    const r = getRec(), c = r.clear;
+    const done = Object.keys(c).filter(k => PROB_NAMES[k]).map(k => `${PROB_NAMES[k]} ${c[k]}`).join('　');
+    $('recLine').textContent = `この端末のきろく：できた数 ${done || 'まだなし'}　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    const id = TRIPS[type].prob;
+    setPart(PROBS[id].part, { keepFocus: true, prob: id });
+    setMsg(`🔁 ${TRIPS[type].exp}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     17. 先生モード（手順を1つずつ自動でかく）
+     ===================================================================== */
+  function renderTeacher() {
+    if (!TEACHER) return;
+    if (isReason()) $('tAns').innerHTML = '「つぎ ▶」で進め、最後に「🔁 折ってみる」。半径のスライダーで、形が変わっても等しい辺が変わらないことを見せる。';
+    else $('tAns').innerHTML = st.an.ok ? 'できた！（確かめのボタンで、分度器・ものさしを見せる）' : `いまの手順：${'①②③④⑤'[st.an.cur]} ${st.an.steps[st.an.cur].t}`;
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  async function teacherStep() {
+    if (isReason()) { const n = REASONS[st.prob].steps.length; if (st.reason.step < n - 1) { st.reason.step++; render(); } else fold(); return; }
+    if (st.an.ok || st.busy) return;
+    await runActs(prob().auto(st.an.cur, st.G, st.an, st.sc));
+  }
+  async function teacherAll() {
+    if (isReason()) { st.reason.step = REASONS[st.prob].steps.length - 1; render(); fold(); return; }
+    for (let k = 0; k < 8 && !st.an.ok; k++) {
+      const before = st.an.cur;
+      await runActs(prob().auto(st.an.cur, st.G, st.an, st.sc));
+      if (st.an.cur === before && !st.an.ok) break;
+    }
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tAll').addEventListener('click', teacherAll);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・できた数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     18. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3, 4, 5].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => { if (st.busy) return; st.tool = b.dataset.tool; paintTools(); renderTool();
+    setMsg({ compass: '🧭 はりを点にさし、えんぴつで開きを決めて、つまみでまわそう。', ruler: '📏 2つの点（交点）の上で、点から点へドラッグしよう。', measure: '📐 点から点へドラッグすると長さが出る（できたあとの確かめに使おう）。', erase: '🧽 消したい線をタップしよう。' }[st.tool]); }));
+  document.querySelectorAll('[data-lm]').forEach(b => b.addEventListener('click', () => { st.lineMode = b.dataset.lm; paintTools(); }));
+  document.querySelectorAll('[data-snap]').forEach(b => b.addEventListener('click', () => { st.snap = b.dataset.snap === '1'; paintTools(); }));
+  $('btnSpin').addEventListener('click', () => { if (st.busy || st.tool !== 'compass') return; runActs([{ arc: { c: { ...st.N }, r: st.r, full: true } }]); });
+  $('btnNew').addEventListener('click', () => newProblem());
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetProblem);
+  $('btnHint').addEventListener('click', hint);
+  $('btnWs').addEventListener('click', () => {
+    setPart(1);
+    setMsg('📄 ワークシートの問題：AB の垂直二等分線を作図したら、右の「📍 線の上に点 P を置く」。P を動かして、PA と PB をくらべよう。先に予想を書いてね。');
+  });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '作図ツール',
+    question: '線分 AB の垂直二等分線の上に点 P をとる。P から A までの距離（PA）と、P から B までの距離（PB）は、どうなっているだろうか？',
+    predictions: ['PA の方が長い', 'PB の方が長い', 'いつも等しい', 'P の場所によってちがう', 'わからない'],
+    operationNote: '「📄 ワークシートの問題」で ① の垂直二等分線を作図し、「📍 線の上に点 P を置く」。P をいろいろな所に動かして「＋ 記録する」。',
+    fields: [
+      { key: 'pa', label: 'PA', unit: 'cm' },
+      { key: 'pb', label: 'PB', unit: 'cm' },
+      { key: 'cmp', label: 'くらべると', math: false },
+    ],
+    capture: () => {
+      if (st.prob !== 'pb' || !st.an.ok || st.wsT == null) { setMsg('① で垂直二等分線を作図して、点 P を置いてから記録しよう。'); return null; }
+      const W = wsPoint(), a = dist(W, st.G.A), b = dist(W, st.G.B);
+      return { pa: d1(a), pb: d1(b), cmp: Math.abs(a - b) < 0.05 ? 'PA ＝ PB' : a > b ? 'PA ＞ PB' : 'PA ＜ PB' };
+    },
+    summaryHint: '「垂直二等分線の上の点は、A と B から〜。だから作図では、A と B を中心に〜の円をかいて、その交点を結ぶ」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める。① を作図させ（先生モードの「つぎの手順を自動で」で手順を見せてもよい）、P を3か所以上で記録させる。PA＝PB がいつも成り立つことから、「A と B から等しい距離にある点の集まりが垂直二等分線」→ だから同じ半径の円の交点を結べばよい、とつなげる。⑤ のひし形のアニメで理由を確認する。',
+      answer: 'いつも等しい（PA ＝ PB）。<br>まとめ：垂直二等分線の上の点は、線分の両はし A、B から等しい距離にある。だから作図では、A と B を中心に同じ半径（AB の半分より大きい）の円をかき、その2つの交点を結ぶ。4つの辺が等しい四角形（ひし形）の対角線は垂直に交わり、たがいに二等分するので、この直線は AB の垂直二等分線になる。'
+    }
+  });
+
+  setupTeacher();
+  setPart(1);
+})();
+</script>
+
+</body>
+</html>
