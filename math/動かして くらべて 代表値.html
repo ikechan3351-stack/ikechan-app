@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>動かして くらべて 代表値</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中1の教材とそろえる）：正解＝緑（○）、まちがい・注意＝赤紫（×）。
+     色だけでなく、印の形・線の種類でも区別する。
+     この教材では：平均値＝オレンジの ▲、中央値＝紫の ◆ と点線、最頻値＝緑の ★、範囲＝青の ↔、外れ値＝赤紫のふちと「！」。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --mean: #e65100; --med: #6a1b9a; --mode: #2e7d32; --rng: #1565c0;
+    --dot: #546e7a; --sel: #fbc02d; --ok: #2e7d32; --ng: #ad1457;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 46px; padding: 6px 14px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.on { background: #fff8e1; border-color: #fbc02d; }
+  .op-btn.on::before { content: "✔ "; }
+  .op-btn.sm { min-height: 44px; padding: 4px 10px; font-size: .92rem; }
+  .op-btn.t-mean { color: var(--mean); } .op-btn.t-med { color: var(--med); } .op-btn.t-mode { color: var(--mode); } .op-btn.t-rng { color: var(--rng); }
+  .op-btn.ng { border-color: var(--ng); background: #fce4ec; }
+  .op-btn.ng::before { content: "× "; color: var(--ng); }
+  .op-btn.good { border-color: var(--ok); background: #e8f5e9; }
+  .op-btn.good::before { content: "○ "; color: var(--ok); }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 上＝ドットプロット（横いっぱい）、下の左＝代表値、右＝並べたデータなど ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @container (min-width: 820px) {
+    .board-in { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .board-in > .span { grid-column: 1 / -1; }
+  }
+  .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+  #plot { width: 100%; display: block; touch-action: none; user-select: none; }
+  #plot text { font-family: inherit; font-weight: bold; }
+  #plot .dot { cursor: grab; }
+  .opt-row { display: flex; gap: 6px 10px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+  .opt-check { font-size: 0.95rem; font-weight: bold; color: #37474f; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+  .opt-check input { width: 22px; height: 22px; }
+  .bal-read { text-align: center; font-weight: bold; line-height: 1.7; margin-top: 4px; }
+  .bal-read .l { color: var(--rng); } .bal-read .r { color: var(--mean); }
+
+  /* スライダー＋数の入力 */
+  .slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-weight: bold; flex-wrap: wrap; justify-content: center; }
+  .slider-row input[type=range] { flex: 1; min-width: 140px; max-width: 420px; height: 36px; }
+  .slider-row input[type=number] { width: 96px; font-size: 1.2rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+
+  /* 並べたデータ */
+  .strip { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; padding: 4px; min-height: 52px; }
+  .sv {
+    position: relative; min-width: 50px; padding: 8px 6px 6px; border: 2px solid #cfd8dc; border-radius: 10px; background: #fff;
+    text-align: center; font-size: 20px; font-weight: bold; font-variant-numeric: tabular-nums;
+  }
+  .sv .no { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #78909c; background: #fff; padding: 0 3px; border-radius: 6px; }
+  .sv.mid { border-color: var(--med); border-width: 3px; background: #f3e5f5; color: var(--med); }
+  .sv.mid::after { content: "◆"; position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--med); }
+  .sv.sel { box-shadow: 0 0 0 3px var(--sel); }
+  .sv.out { border-color: var(--ng); border-style: dashed; color: var(--ng); }
+  .strip-note { text-align: center; font-size: .95rem; line-height: 1.7; margin-top: 6px; }
+
+  /* 代表値のカード */
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { border: 3px solid #cfd8dc; border-radius: 14px; padding: 6px 8px; text-align: center; }
+  .stat .h { font-size: .95rem; font-weight: bold; }
+  .stat .v { font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .stat .v small { font-size: 15px; font-weight: bold; color: #546e7a; }
+  .stat .how { font-size: .82rem; color: #546e7a; line-height: 1.45; min-height: 2.6em; }
+  .stat.mean { border-color: #ffb74d; } .stat.mean .h, .stat.mean .v { color: var(--mean); }
+  .stat.med { border-color: #ce93d8; } .stat.med .h, .stat.med .v { color: var(--med); }
+  .stat.mode { border-color: #a5d6a7; } .stat.mode .h, .stat.mode .v { color: var(--mode); }
+  .stat.rng { border-color: #90caf9; } .stat.rng .h, .stat.rng .v { color: var(--rng); }
+  .stat.off .v { color: #b0bec5; }
+  /* くらべる表（② 外れ値・⑤ 2つのクラス） */
+  .cmp { width: 100%; border-collapse: collapse; text-align: center; font-variant-numeric: tabular-nums; }
+  .cmp th { background: #eceff1; font-size: .88rem; padding: 4px; border: 2px solid #b0bec5; }
+  .cmp td { border: 2px solid #cfd8dc; padding: 4px 6px; font-size: 21px; font-weight: bold; height: 48px; }
+  .cmp td.rh { font-size: .95rem; text-align: left; white-space: nowrap; }
+  .cmp .mean { color: var(--mean); } .cmp .med { color: var(--med); } .cmp .mode { color: var(--mode); } .cmp .rng { color: var(--rng); }
+  .cmp td.diff { font-size: 18px; text-align: left; }
+  .dbar { display: inline-block; height: 12px; border-radius: 6px; vertical-align: middle; margin-left: 4px; }
+
+  /* 度数分布表（④） */
+  .ft { width: 100%; border-collapse: collapse; text-align: center; font-variant-numeric: tabular-nums; }
+  .ft th { background: #eceff1; font-size: .88rem; padding: 4px; border: 2px solid #b0bec5; }
+  .ft td { border: 2px solid #cfd8dc; padding: 3px 6px; font-size: 20px; height: 44px; }
+  .ft td small { font-size: .75rem; color: #546e7a; margin: 0 2px; }
+  .ft tr.top td { background: #e8f5e9; font-weight: bold; }
+  .ft tr.top td:first-child::before { content: "★ "; color: var(--mode); }
+  .ft td.hid { color: #90a4ae; }
+  .mode-cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+
+  /* 練習問題・クイズ */
+  .q-card { border: 3px solid var(--accent); }
+  .q-grid { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: center; }
+  @container (min-width: 820px) { .q-grid { grid-template-columns: 1fr 1fr; } }
+  .q-text { text-align: center; font-weight: bold; font-size: 1.1rem; line-height: 1.8; }
+  .q-data { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin: 6px 0; }
+  .q-data span { min-width: 44px; padding: 6px 6px; border: 2px solid #b0bec5; border-radius: 8px; text-align: center; font-size: 22px; font-weight: bold; background: #fafafa; font-variant-numeric: tabular-nums; }
+  .q-choices { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .q-choices .op-btn { text-align: left; font-size: 1.05rem; }
+  .why { background: #f5f5f5; border-radius: 12px; padding: 8px 12px; line-height: 1.7; margin-top: 8px; font-size: .98rem; }
+  #trickSvg { width: 100%; max-width: 420px; display: block; margin: 0 auto; }
+  .ans-line { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 24px; font-weight: bold; margin-top: 6px; }
+  .box { min-width: 130px; min-height: 58px; border: 3px solid #fbc02d; border-radius: 14px; background: #fffde7; font-size: 30px; font-weight: bold; color: var(--ink); padding: 4px 10px; display: inline-flex; align-items: center; justify-content: center; }
+  .keypad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin: 8px auto 0; max-width: 360px; }
+  .key {
+    min-height: 50px; border: 2px solid #b0bec5; background: #fff; border-radius: 12px; font-size: 1.35rem; font-weight: bold;
+    color: var(--ink); cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .key:active { transform: translateY(1px); box-shadow: none; }
+  .key.go { grid-column: span 3; background: var(--ok); border-color: var(--ok); color: #fff; font-size: 1.1rem; }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .mark-ok { color: var(--ok); font-weight: 900; }
+  .mark-ng { color: var(--ng); font-weight: 900; }
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  @media (max-width: 420px) {
+    body { padding: 10px 10px 24px; }
+    .stat .v { font-size: 26px; }
+    .sv { min-width: 42px; font-size: 18px; }
+    .cmp td { font-size: 18px; padding: 2px 3px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>⚖️ 動かして くらべて 代表値</h1>
+<p class="subtitle">点を動かして、平均値・中央値・最頻値・範囲がどう変わるかをくらべよう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- パート：① 点を動かす ② 外れ値 ③ どれを使う？ ④ 度数分布表と最頻値 ⑤ 平均値が同じクラス -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">✏️ 練習問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <div class="board"><div class="board-in">
+
+    <!-- 練習問題・クイズ（出ているときだけ、いちばん上に） -->
+    <div class="card q-card span" id="qCard" hidden>
+      <h2 id="qTitle">✏️ 練習問題</h2>
+      <div class="q-grid">
+        <div><div class="q-text" id="qText"></div><div id="qData"></div></div>
+        <div id="qBody"></div>
+      </div>
+      <div class="msg" id="qMsg"></div>
+    </div>
+
+    <!-- ドットプロット -->
+    <div class="card span" id="plotCard">
+      <h2 id="plotTitle">📍 ドットプロット</h2>
+      <div class="chip-row" id="dsRow"></div>
+      <svg id="plot" viewBox="0 0 640 272" aria-label="ドットプロット"></svg>
+      <div class="bal-read" id="balRead" hidden></div>
+      <!-- ② 外れ値の大きさ -->
+      <div id="outCtrl" hidden>
+        <div class="tools">
+          <button class="op-btn action" id="btnOut">＋ 外れ値を1つ足す</button>
+        </div>
+        <div class="slider-row" id="outSlider">
+          <span>外れ値</span>
+          <input type="range" id="outRange" aria-label="外れ値の大きさ">
+          <input type="number" id="outNum" aria-label="外れ値の大きさ（数）">
+          <span id="outUnit"></span>
+        </div>
+      </div>
+      <div class="opt-row" id="showRow"></div>
+      <div class="opt-row" id="optRow">
+        <button class="op-btn sm" id="btnBal">⚖️ やじろべえで平均値</button>
+        <button class="op-btn sm" id="btnAdd">＋ 点を足す</button>
+        <button class="op-btn sm" id="btnDel">🗑 えらんだ点を消す</button>
+        <label class="opt-check"><input type="checkbox" id="optSnap" checked> <span id="snapLab">整数にすいつく</span></label>
+      </div>
+    </div>
+
+    <div class="col">
+      <!-- 代表値 -->
+      <div class="card">
+        <h2 id="statTitle">📏 代表値と範囲</h2>
+        <div id="stats"></div>
+        <div class="msg" id="msg" style="margin-top:8px"></div>
+      </div>
+      <!-- あなたのつまずき -->
+      <div class="card">
+        <h2>🔎 あなたのつまずき</h2>
+        <div id="tripList"></div>
+        <div class="small" id="recLine" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <!-- ④ 度数分布表 -->
+      <div class="card" id="freqCard" hidden>
+        <h2>📋 度数分布表と最頻値</h2>
+        <div class="slider-row">
+          <span>階級の幅</span>
+          <input type="range" id="wRange" aria-label="階級の幅">
+          <input type="number" id="wNum" aria-label="階級の幅（数）">
+          <span id="wUnit"></span>
+        </div>
+        <table class="ft" id="ft"></table>
+        <div class="mode-cmp" id="modeCmp"></div>
+      </div>
+      <!-- 並べたデータ -->
+      <div class="card" id="stripCard">
+        <h2>🔢 データ（<span id="ordLab">名簿の順</span>）</h2>
+        <div class="strip" id="strip"></div>
+        <div class="tools" style="margin-top:8px">
+          <button class="op-btn action" id="btnSort">▶ 小さい順に並べる</button>
+        </div>
+        <div class="strip-note" id="stripNote"></div>
+      </div>
+      <!-- ⑤ どちらがそろっている？ -->
+      <div class="card" id="twoCard" hidden>
+        <h2>🤔 考えよう</h2>
+        <div class="q-text">点数がそろっているのは、どちらのクラス？</div>
+        <div class="tools" id="twoBtns"></div>
+        <div class="why" id="twoWhy" hidden></div>
+      </div>
+    </div>
+
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 答えを入れて進める</button></div>
+    <div class="small" id="tTalk"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>代表値</b>：データ全体の特ちょうを1つの数で表したもの。<b>平均値</b>（合計 ÷ 個数）・<b>中央値</b>（小さい順に並べたときのまん中の値。メジアン）・<b>最頻値</b>（いちばん多く出てくる値。モード）がある。</li>
+      <li><b>範囲</b>：最大値 − 最小値。データの散らばりの大きさを表す（代表値ではない）。<b>外れ値</b>：ほかの値から大きくはなれた値。</li>
+      <li>① ドットプロットの点をドラッグすると、右の値が同時に変わる。点をタップすると「えらんだ点」になり、消すことができる。「⚖️ やじろべえで平均値」では、下の ▲（支点）をドラッグして、棒がつり合うところ（＝平均値）をさがす。</li>
+      <li>中央値は、データを<b>小さい順に並べてから</b>まん中をさがす。個数が偶数のときは、まん中の2つの値の平均。</li>
+      <li>② 外れ値を1つ足して、平均値と中央値がどれだけ変わるかをくらべる。外れ値の大きさはスライダーか数で変えられる。</li>
+      <li>③ 場面ごとに、どの代表値で説明するのがよいかを考える。数字やグラフにだまされないかもためす。</li>
+      <li>④ 度数分布表では、<b>度数がいちばん多い階級の階級値</b>（階級のまん中の値）を最頻値とする。</li>
+      <li>⑤ 平均値が同じでも、散らばりがちがうことがある。代表値だけでなく、範囲も見よう。</li>
+      <li>「✏️ 練習問題」（① ④）：答えはキーで入れる。小数は「.」を使う。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：データ（通学時間・読書時間・小テスト・給料・家の値段・おこづかいなど）は、この教材のために作った架空のデータです。点は数直線のはんいの外には動かせません。平均値は分数で正確に計算し、わりきれないときは小数第2位までの「約」で表示しています。やじろべえのかたむきは、わかりやすいように大きさを決めています（じっさいの重さのつり合いの角度ではありません）。値の大きいデータ（給料など）は、ドットプロットの点が重ならないように上に積んでいるので、点の位置は少しずれて見えることがあります。<br>
+    つながる教材：<a href="ならべて くらべて データの調べ方.html">小6 ならべて くらべて データの調べ方（ドットプロット・代表値）</a></p>
+  </div>
+
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（答え・答えを入れて進める・発問の例・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+  const sndTick = () => beep([[660, 0, 0.05, 'sine', 0.05]]);
+
+  /* =====================================================================
+     1. データ（架空）
+        vals は「名簿の順」。lo〜hi は数直線のはんい、step はすいつく間かく、tick は目もりの数字の間かく。
+        widths は ④ でえらべる階級の幅、out は ② の外れ値（はじめの値・いちばん大きい値）。
+        データを足すときは、この形で1つ足せばよい（main: true のものが ① のボタンになる）。
+     ===================================================================== */
+  const PRESETS = {
+    commute: { main: true, name: '通学時間（1年1組 15人）', short: '通学時間', unit: '分', lo: 0, hi: 40, step: 1, tick: 5,
+      widths: [2, 20], out: [120, 300],
+      vals: [12, 25, 8, 15, 30, 10, 18, 15, 22, 35, 15, 9, 20, 12, 27] },
+    read: { main: true, name: '1日の読書時間（1年2組 14人）', short: '読書時間', unit: '分', lo: 0, hi: 60, step: 5, tick: 10,
+      widths: [5, 30], out: [240, 300],
+      vals: [30, 0, 35, 15, 60, 10, 25, 0, 30, 45, 20, 5, 30, 40] },
+    test: { main: true, name: '小テスト（10点満点 20人）', short: '小テスト', unit: '点', lo: 0, hi: 10, step: 1, tick: 1,
+      widths: [2, 5],
+      vals: [7, 8, 6, 9, 7, 10, 5, 7, 8, 4, 7, 9, 6, 8, 7, 3, 8, 10, 6, 7] },
+    // ⑤ 平均値が同じ2つのクラス（どちらも 15人・平均 6点）
+    twoA: { name: 'A組（15人）', short: 'A組', unit: '点', lo: 0, hi: 10, step: 1, tick: 1, vals: [6, 5, 7, 6, 6, 5, 7, 6, 6, 7, 5, 6, 6, 7, 5] },
+    twoB: { name: 'B組（15人）', short: 'B組', unit: '点', lo: 0, hi: 10, step: 1, tick: 1, vals: [10, 2, 9, 3, 6, 8, 1, 10, 4, 7, 9, 2, 6, 5, 8] },
+  };
+
+  /* ③ どれを使う？ のクイズ（架空のデータ）
+     kind：pick（どの代表値？）・tf（正しい？）・graph（グラフにだまされない？）
+     ans：正しい答え、ok：答えとしてみとめるもの、trip：まちがえたときのつまずきの型（選んだ答えごと） */
+  const QUIZ = [
+    { id: 'salary', kind: 'pick', unit: '万円', lo: 0, hi: 2500, tick: 500, step: 10,
+      t: 'ある会社の社員10人の、1年の給料（万円）。「この会社の人の、ふつうの給料」を1つの数で説明したい。どの代表値を使うのがよい？',
+      vals: [380, 320, 450, 400, 2400, 430, 350, 500, 420, 480], ans: 'med', trip: { mean: 'outlierMean', mode: 'pickMode' },
+      why: '社長の 2400万円 が外れ値。平均値は 613万円 で、10人中9人がそれより少ない。中央値 425万円 なら、まん中の人の給料を表せる。' },
+    { id: 'house', kind: 'pick', unit: '万円', lo: 0, hi: 16000, tick: 2000, step: 100,
+      t: 'ある町で売られている家9けんの値段（万円）。「この町の家の、ふつうの値段」を説明したい。どの代表値を使うのがよい？',
+      vals: [2500, 1800, 15000, 2300, 3000, 2100, 2800, 3200, 2600], ans: 'med', trip: { mean: 'outlierMean', mode: 'pickMode' },
+      why: '1けんだけの大きなおやしき（15000万円）が外れ値。平均値は 約3922万円 で、9けん中8けんが平均値より安い。中央値 2600万円 がふつうの値段に近い。' },
+    { id: 'bus', kind: 'pick', unit: '分', lo: 0, hi: 100, tick: 10, step: 1,
+      t: 'ある班12人の通学時間（分）。1人だけ、バスで90分かけて通っている。この班の「ふつうの通学時間」を説明したい。どの代表値を使うのがよい？',
+      vals: [15, 8, 22, 10, 90, 12, 5, 25, 15, 10, 20, 18], ans: 'med', trip: { mean: 'outlierMean', mode: 'pickMode' },
+      why: '90分 が外れ値。平均値は 約20.83分 で、12人中9人がそれより短い。中央値は 15分。' },
+    { id: 'pocket', kind: 'pick', unit: '円', lo: 0, hi: 30000, tick: 5000, step: 100,
+      t: '11人の、1か月のおこづかい（円）。1人だけ 30000円 の人がいる。「みんなのふつうのおこづかい」を説明したい。どの代表値を使うのがよい？',
+      vals: [1000, 500, 2000, 30000, 1500, 1000, 2500, 1000, 3000, 2000, 1500], ans: 'med', trip: { mean: 'outlierMean', mode: 'pickMode' },
+      why: '30000円 が外れ値。平均値は 約4181.82円 で、11人中10人がそれより少ない。中央値は 1500円。' },
+    { id: 'shoe', kind: 'pick', unit: 'cm', lo: 22, hi: 28, tick: 1, step: 0.5,
+      t: 'くつ屋さんで、きのう売れたくつ15足のサイズ（cm）。つぎに「いちばんたくさん仕入れるサイズ」を決めたい。どの代表値を使うのがよい？',
+      vals: [25, 23, 24.5, 25, 22.5, 26, 23.5, 25, 24, 27, 23, 25, 25.5, 24, 23.5], ans: 'mode', trip: { mean: 'notMode', med: 'notMode' },
+      why: 'いちばん多く売れたサイズを知りたいので、最頻値（25cm、4足）。平均値 約24.43cm や中央値 24.5cm は、いちばん多いサイズではない。' },
+    { id: 'test', kind: 'pick', unit: '点', lo: 40, hi: 100, tick: 10, step: 1,
+      t: '1組15人のテストの点数。外れ値はなく、山は1つで左右にかたよりも少ない。ほかのクラスと「全体の成績」をくらべたい。どの代表値を使うのがよい？',
+      vals: [70, 52, 85, 63, 73, 66, 88, 58, 75, 61, 82, 68, 71, 65, 78], ans: 'mean', ok: ['mean', 'med'], trip: { mode: 'pickMode' },
+      why: '外れ値やかたよりがないので、全員の点数を使う平均値（約70.33点）でよい。中央値（70点）でもほとんど同じになる。最頻値は、どの点も1人ずつなので使えない。' },
+    { id: 'avg600', kind: 'tf', unit: '万円', lo: 0, hi: 1500, tick: 250, step: 10,
+      t: 'ある会社の社員10人の平均年収は 600万円。「この会社の人の半分以上は、600万円以上もらっている」は正しい？',
+      vals: [420, 380, 900, 460, 400, 1490, 500, 450, 520, 480], ans: 'no', trip: { yes: 'meanHalf' },
+      ch: [['yes', '正しい'], ['no', '正しいとはかぎらない']],
+      why: '平均値は大きな値にひっぱられる。このデータでは 600万円以上 は10人中2人だけ。「半分ずつ」になるのは中央値（470万円）。' },
+    { id: 'avg20', kind: 'tf', unit: '分', lo: 0, hi: 45, tick: 5, step: 1,
+      t: '12人の通学時間の平均値は 20分。「20分の人が、いちばん多い」は正しい？',
+      vals: [10, 30, 5, 10, 25, 40, 10, 20, 35, 10, 15, 30], ans: 'no', trip: { yes: 'meanMode' },
+      ch: [['yes', '正しい'], ['no', '正しいとはかぎらない']],
+      why: 'いちばん多いのは最頻値。このデータでは 10分 が4人でいちばん多く、20分 の人は1人だけ。平均値の人がいちばん多いとはかぎらない。' },
+    { id: 'med15', kind: 'tf', unit: '分', lo: 0, hi: 50, tick: 5, step: 1,
+      t: '11人の通学時間の中央値は 15分。「15分より長い人と短い人は、同じくらいの人数」は正しい？',
+      vals: [12, 30, 6, 15, 20, 8, 45, 13, 24, 10, 18], ans: 'yes', trip: { no: 'medHalf' },
+      ch: [['yes', '正しい'], ['no', '正しくない']],
+      why: '中央値は、小さい順に並べたときのまん中。だから中央値より小さい人と大きい人は同じくらいになる（このデータでは5人ずつ）。' },
+    { id: 'class70', kind: 'tf', unit: '点', lo: 30, hi: 100, tick: 10, step: 1,
+      t: '1組の平均点は 70点、2組の平均点は 65点。「1組の人は、みんな2組の平均点より点が高い」は正しい？（下は1組の15人の点数）',
+      vals: [70, 55, 90, 65, 72, 40, 80, 68, 75, 70, 85, 60, 82, 70, 68], ans: 'no', trip: { yes: 'meanAll' },
+      ch: [['yes', '正しい'], ['no', '正しいとはかぎらない']],
+      why: '平均値が高くても、全員が高いわけではない。1組にも 65点以下の人が4人いる。散らばり（範囲 50点）も見よう。' },
+    { id: 'bar', kind: 'graph', unit: '人',
+      t: 'A店とB店の、1日のお客さんの人数のグラフ。「A店のお客さんは、B店の約3倍」は正しい？',
+      a: 104, b: 98, base: 95, ans: 'no', trip: { yes: 'axisTrick' },
+      ch: [['yes', '正しい'], ['no', '正しくない']],
+      why: 'たて軸が 0 からではなく 95人 から始まっている。じっさいは A店 104人、B店 98人 で、ちがいは 6人（約1.06倍）。「たて軸を 0 から」にするとよくわかる。' },
+  ];
+
+  /* =====================================================================
+     2. 状態（ひとつもどす で、この形をまるごと記録する）
+        値は 10 倍した整数で持つ（すいつかないときの 0.1 きざみや 0.5 cm も、誤差なく計算するため）
+     ===================================================================== */
+  const st = {
+    part: 1, ds: 'commute',
+    v: [],                 // データ（10倍した整数）。名簿の順
+    vA: [], vB: [],        // ⑤ の2つのクラス
+    outOn: false, outV: 1200,   // ② 外れ値があるか・その値（10倍）
+    w4: 50,                // ④ 階級の幅（10倍）
+    sorted: false,         // 並べたデータを小さい順に見せているか
+    show: { mean: true, med: true, mode: true, rng: true },
+    bal: false, fx: 0,     // やじろべえ・支点の位置（10倍した整数）
+    sel: -1, selG: 'main', // えらんだ点（名簿の番号）と、どのデータか
+    snap: true,
+    q: null, inp: '',      // 練習問題（① ④）
+    qz: null, qzList: [], qzFull: false,   // ③ のクイズ
+    two: null,             // ⑤ で「そろっているのは？」に答えたか
+    hist: [], hintLv: 0, sessTrips: {}, focus: null, lastKey: '', drag: null, sliding: false,
+  };
+  const P = () => PRESETS[st.ds];
+
+  /* =====================================================================
+     3. 代表値の計算（10倍した整数のまま。わり算は分子・分母で持つ）
+     ===================================================================== */
+  const sortedOf = (v) => v.slice().sort((a, b) => a - b);
+  function stats(v) {
+    const n = v.length, s = sortedOf(v), sum = v.reduce((a, b) => a + b, 0);
+    // 中央値（20倍した整数。偶数個のときの (a+b)/2 を整数のまま持つ）
+    const med2 = n % 2 ? 2 * s[(n - 1) / 2] : s[n / 2 - 1] + s[n / 2];
+    // 最頻値（いちばん多い値。同じ数ならぜんぶ。どれも1こなら「なし」）
+    const cnt = new Map();
+    v.forEach(x => cnt.set(x, (cnt.get(x) || 0) + 1));
+    const top = Math.max(...cnt.values());
+    const modes = top > 1 ? [...cnt.keys()].filter(k => cnt.get(k) === top).sort((a, b) => a - b) : [];
+    return { n, s, sum, med2, modes, top, min: s[0], max: s[n - 1] };
+  }
+  // 10倍した整数 → 文字（7.0 は 7、7.5 は 7.5）
+  const f10 = (x) => (x % 10 === 0 ? String(x / 10) : (x / 10).toFixed(1));
+  // 分数 a/b（10倍した値）を小数の文字に。わりきれないときは「約」を付けて小数第2位まで
+  function fracText(a, b) {
+    for (const k of [1, 2]) {   // 0.1 の位・0.01 の位でわりきれるか（整数だけで調べる）
+      if ((a * Math.pow(10, k - 1)) % b === 0) { const x = a * Math.pow(10, k - 1) / b; return (x / Math.pow(10, k)).toFixed(k).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1'); }
+    }
+    return '約 ' + (Math.round(a * 10 / b) / 100).toFixed(2);
+  }
+  const meanText = (S) => fracText(S.sum, S.n);
+  const medText = (S) => fracText(S.med2, 2);
+  const modeText = (S) => (S.modes.length ? (S.modes.length > 3 ? S.modes.slice(0, 3).map(f10).join('・') + ' など' : S.modes.map(f10).join('・')) : 'なし');
+  const NICE = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
+  const niceTick = (span) => NICE.find(t => span / t <= 10) || 10000;
+
+  /* =====================================================================
+     4. いま見ているデータと数直線
+     ===================================================================== */
+  // ② では、外れ値を名簿のさいごに足したものを見せる
+  const vals = () => (st.part === 2 && st.outOn ? st.v.concat(st.outV) : st.v);
+  const outIdx = () => (st.part === 2 && st.outOn ? st.v.length : -1);
+  function AX() {
+    const p = P();
+    if (st.part === 2 && st.outOn) {
+      const t = niceTick(Math.max(p.hi, st.outV / 10) - p.lo);
+      return { lo: p.lo, hi: Math.max(p.hi, Math.ceil(st.outV / 10 / t) * t), tick: t, step: p.step };
+    }
+    return { lo: p.lo, hi: p.hi, tick: p.tick, step: p.step };
+  }
+  // 図の行（⑤ は2行）
+  const rows = () => (st.part === 5 ? [{ g: 'A', v: st.vA, lab: 'A組' }, { g: 'B', v: st.vB, lab: 'B組' }] : [{ g: 'main', v: vals(), lab: '' }]);
+  const arrOf = (g) => (g === 'A' ? st.vA : g === 'B' ? st.vB : st.v);
+
+  /* =====================================================================
+     5. ドットプロットをかく
+     ===================================================================== */
+  const PL = { L: 30, R: 610, W: 640, H: 272 };   // 数直線の左はし・右はし・図のはば・高さ（SVG の座標）
+  // せまい画面（スマホ）では、図のはばを小さくして、文字と点が大きく見えるようにする
+  function fitPlot() {
+    const w = $('plot').clientWidth || 640;
+    PL.W = w < 560 ? 420 : 640; PL.R = PL.W - 30;
+    PL.H = st.part === 5 ? 440 : 272;
+    $('plot').setAttribute('viewBox', `0 0 ${PL.W} ${PL.H}`);
+  }
+  const rowAY = (k) => (st.part === 5 ? [165, 385][k] : 150);   // 行ごとの数直線の高さ
+  const X = (v10) => { const a = AX(); return PL.L + (PL.R - PL.L) * (v10 / 10 - a.lo) / (a.hi - a.lo); };
+  const toV10 = (x) => { const a = AX(); return (a.lo + (x - PL.L) / (PL.R - PL.L) * (a.hi - a.lo)) * 10; };
+  const unitPx = () => { const a = AX(); return (PL.R - PL.L) / (a.hi - a.lo); };
+  function el(tag, attr, parent, text) {
+    const e = document.createElementNS(SVGNS, tag);
+    for (const k in attr) e.setAttribute(k, attr[k]);
+    if (text !== undefined) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  // 点の半径と、積み重ねる位置（同じ値は上に積む。はなれていても重なる点は上へ）
+  function layout(v, AY) {
+    let r = Math.max(6.5, Math.min(13, unitPx() * AX().step * 0.46));
+    const place = () => {
+      const idx = v.map((x, i) => i).sort((a, b) => v[a] - v[b] || a - b);
+      const pos = [], placed = [];
+      for (const i of idx) {
+        const x = X(v[i]);
+        let lv = 0;
+        while (placed.some(p => p.lv === lv && Math.abs(p.x - x) < r * 1.9)) lv++;
+        placed.push({ x, lv }); pos[i] = { x, lv };
+      }
+      return { pos, maxLv: Math.max(0, ...placed.map(p => p.lv)) };
+    };
+    let { pos, maxLv } = place();
+    // 高く積みすぎるときは、点を小さくして重ならないようにする
+    const room = (st.part === 5 ? 120 : AY - 50);
+    if ((maxLv + 1) * (2 * r + 2) > room) { r = Math.max(4, room / (maxLv + 1) / 2 - 1); ({ pos, maxLv } = place()); }
+    const dy = Math.min(r * 2 + 2, room / (maxLv + 1));
+    pos.forEach(p => { p.y = AY - r - 2 - p.lv * dy; });
+    return { pos, r };
+  }
+  // 練習問題・クイズに答えるまでは、代表値の印をかくす
+  const hideMarks = () => (st.q && !st.q.done) || (st.part === 3 && st.qz && !st.qz.done);
+  function renderPlot() {
+    fitPlot();
+    const svg = $('plot');
+    svg.innerHTML = '';
+    const defs = el('defs', {}, svg);
+    const mk = el('marker', { id: 'arw', viewBox: '0 0 10 10', refX: 5, refY: 5, markerWidth: 5, markerHeight: 5, orient: 'auto-start-reverse' }, defs);
+    el('path', { d: 'M0,0 L10,5 L0,10 z', fill: 'var(--rng)' }, mk);
+    rows().forEach((R, k) => drawRow(svg, R, rowAY(k)));
+    renderBalRead();
+  }
+  function drawRow(svg, R, AY) {
+    const a = AX(), p = P(), v = R.v, S = stats(v), two = st.part === 5;
+    const { pos, r } = layout(v, AY);
+    const qHide = hideMarks(), mark = !qHide && !st.bal;
+    const xOf = (v10) => PL.L + (PL.R - PL.L) * (v10 / 10 - a.lo) / (a.hi - a.lo);   // 小数の位置（平均値など）
+    if (two) el('text', { x: PL.L, y: AY - 132, 'font-size': 20, fill: 'var(--accent)' }, svg, `${R.lab}（${v.length}人）`);
+    // ④ 階級の帯（うすい色をかわりばんこに。度数がいちばん多い階級は緑）
+    if (st.part === 4 && !(st.q && !st.q.done)) {
+      const F = freq();
+      F.rows.forEach((c, k) => {
+        el('rect', { x: X(c.lo), y: 20, width: X(c.lo + st.w4) - X(c.lo), height: AY - 20, fill: c.top ? '#c8e6c9' : k % 2 ? '#f5f5f5' : '#fff', opacity: 0.9 }, svg);
+      });
+    }
+    // 範囲：点の上に ↔
+    if (st.show.rng && mark) {
+      const top = Math.min(...pos.map(q => q.y)) - r - (st.show.mode && !two ? 34 : 14);
+      const y = Math.max(two ? AY - 120 : 24, top);
+      el('line', { x1: X(S.min), y1: y, x2: X(S.max), y2: y, stroke: 'var(--rng)', 'stroke-width': 3, 'marker-start': 'url(#arw)', 'marker-end': 'url(#arw)' }, svg);
+      el('text', { x: (X(S.min) + X(S.max)) / 2, y: y - 7, 'text-anchor': 'middle', 'font-size': 17, fill: 'var(--rng)' }, svg, `↔ 範囲 ${f10(S.max - S.min)}${p.unit}`);
+    }
+    // やじろべえのときは、数直線と点を支点のまわりにかたむける
+    const g = el('g', {}, svg);
+    let ang = 0;
+    if (st.bal) {
+      const d = S.sum / S.n - st.fx;   // 平均値 − 支点（10倍）。右が重いと右が下がる
+      ang = Math.abs(d) < 1e-9 ? 0 : Math.max(-14, Math.min(14, d / 10 * unitPx() / 7));
+      g.setAttribute('transform', `rotate(${ang.toFixed(2)} ${X(st.fx)} ${AY})`);
+      st.ang = ang;
+    }
+    // 中央値：紫の点線（点のうしろ）
+    const xmed = xOf(S.med2 / 2);
+    if (st.show.med && mark && !two) {
+      el('line', { x1: xmed, y1: 14, x2: xmed, y2: AY + 42, stroke: 'var(--med)', 'stroke-width': 2.5, 'stroke-dasharray': '6 5' }, g);
+      el('path', { d: `M${xmed},${AY + 34} l8,8 l-8,8 l-8,-8 z`, fill: 'var(--med)' }, g);
+      el('text', { x: Math.max(60, Math.min(PL.W - 60, xmed)), y: AY + 96, 'text-anchor': 'middle', 'font-size': 17, fill: 'var(--med)' }, g, `◆ 中央値 ${medText(S)}`);
+    }
+    // 数直線（やじろべえのときは太い棒）
+    el('line', { x1: PL.L - 10, y1: AY, x2: PL.R + 10, y2: AY, stroke: st.bal ? '#8d6e63' : '#263238', 'stroke-width': st.bal ? 7 : 2.5, 'stroke-linecap': 'round' }, g);
+    for (let t = a.lo; t <= a.hi + 1e-9; t += a.tick) {
+      const x = X(t * 10);
+      el('line', { x1: x, y1: AY, x2: x, y2: AY + 8, stroke: '#263238', 'stroke-width': 1.5 }, g);
+      el('text', { x, y: AY + 26, 'text-anchor': 'middle', 'font-size': PL.W < 500 && a.hi >= 1000 ? 13 : 16, fill: '#455a64' }, g, t);
+    }
+    el('text', { x: PL.R + 26, y: AY + 48, 'text-anchor': 'end', 'font-size': 15, fill: '#455a64' }, svg, `（${p.unit}）`);
+    // 最頻値：緑の ★（いちばん高い点の上）
+    if (st.show.mode && mark && !two && S.modes.length && S.modes.length <= 3) {
+      S.modes.forEach(m => {
+        const ys = pos.filter((q, i) => v[i] === m).map(q => q.y);
+        el('text', { x: X(m), y: Math.min(...ys) - r - 4, 'text-anchor': 'middle', 'font-size': 22, fill: 'var(--mode)' }, g, '★');
+      });
+    }
+    // 点
+    const mids = st.show.med && mark && st.sorted && !two ? midIdx(v, S) : [];
+    v.forEach((x, i) => {
+      const q = pos[i], sel = i === st.sel && st.selG === R.g, out = R.g === 'main' && i === outIdx(), mid = mids.includes(i);
+      el('circle', { cx: q.x, cy: q.y, r, fill: sel ? '#fff59d' : out ? '#f8bbd0' : mid ? '#ce93d8' : two && R.g === 'B' ? '#bbdefb' : '#90a4ae',
+        stroke: sel ? 'var(--sel)' : out ? 'var(--ng)' : mid ? 'var(--med)' : 'var(--dot)', 'stroke-width': sel || out ? 4 : 2, class: 'dot', 'data-i': i, 'data-g': R.g }, g);
+      if (out) el('text', { x: q.x, y: q.y - r - 6, 'text-anchor': q.x > PL.W - 90 ? 'end' : 'middle', 'font-size': 16, fill: 'var(--ng)' }, g, `！外れ値 ${f10(x)}`);
+    });
+    // 平均値：オレンジの ▲（数直線の下）。やじろべえのときは、ドラッグできる支点
+    if (st.bal) {
+      const xf = X(st.fx);
+      el('path', { d: `M${xf},${AY + 4} l-20,34 l40,0 z`, fill: '#ffcc80', stroke: 'var(--mean)', 'stroke-width': 3, style: 'cursor:grab' }, svg);
+      el('text', { x: xf, y: AY + 60, 'text-anchor': 'middle', 'font-size': 16, fill: 'var(--mean)' }, svg, `支点 ${f10(st.fx)}`);
+    } else if (st.show.mean && !qHide) {
+      const xm = xOf(S.sum / S.n);
+      el('path', { d: `M${xm},${AY + (two ? 34 : 52)} l-11,19 l22,0 z`, fill: 'var(--mean)' }, g);
+      const low = !two && st.show.med && Math.abs(xm - xmed) < 130;   // 中央値の文字と重なるときは、1段下に書く
+      el('text', { x: Math.max(60, Math.min(PL.W - 60, xm)), y: AY + (two ? 76 : low ? 118 : 96), 'text-anchor': 'middle', 'font-size': 17, fill: 'var(--mean)' }, g, `▲ 平均値 ${meanText(S)}`);
+    }
+  }
+  const midIdx = (v, S) => {
+    // 小さい順に並べたときのまん中の点が、名簿の何番か（同じ値のときは名簿の早いほう）
+    const idx = v.map((x, i) => i).sort((a, b) => v[a] - v[b] || a - b);
+    return S.n % 2 ? [idx[(S.n - 1) / 2]] : [idx[S.n / 2 - 1], idx[S.n / 2]];
+  };
+  function renderBalRead() {
+    $('balRead').hidden = !st.bal;
+    if (!st.bal) return;
+    const v = vals(), S = stats(v);
+    let l = 0, r = 0;
+    v.forEach(x => { if (x < st.fx) l += st.fx - x; else r += x - st.fx; });
+    const ok = l === r;
+    $('balRead').innerHTML = `<span class="l">◀ 左のきょりの合計 ${f10(l)}</span>　<span class="r">右のきょりの合計 ${f10(r)} ▶</span><br>` +
+      (ok ? `<span class="mark-ok">○</span> つり合った！ 支点 ${f10(st.fx)} ＝ 平均値（${f10(S.sum)} ÷ ${S.n}）`
+          : Math.abs(st.ang || 0) < 1 ? 'あと少し！ 左右のきょりの合計が同じになるところをさがそう' : (l > r ? '左が重い → 支点を左へ' : '右が重い → 支点を右へ'));
+  }
+
+  /* =====================================================================
+     6. 代表値のカード・くらべる表・並べたデータ・度数分布表
+     ===================================================================== */
+  function renderStats() {
+    const p = P(), u = p.unit, qHide = hideMarks();
+    if (st.part === 2) { renderOutStats(); return; }
+    if (st.part === 5) { renderTwoStats(); return; }
+    if (st.part === 3 && st.qz && QZ().kind === 'graph') { $('statTitle').textContent = '📏 代表値と範囲'; $('stats').innerHTML = '<div class="small">この問題では使わないよ。グラフの目もりをよく見よう。</div>'; return; }
+    const S = stats(vals());
+    $('statTitle').textContent = '📏 代表値と範囲';
+    const card = (cls, h, val, how) => `<div class="stat ${cls}${qHide ? ' off' : ''}"><div class="h">${h}</div><div class="v">${qHide ? '？' : val}</div><div class="how">${qHide ? '答えると出るよ' : how}</div></div>`;
+    const modeV = S.modes.length ? modeText(S) + `<small>${u}</small>` : '<small>なし</small>';
+    $('stats').innerHTML = '<div class="stats">' +
+      card('mean', '▲ 平均値', `${meanText(S)}<small>${u}</small>`, `合計 ${f10(S.sum)} ÷ 個数 ${S.n}`) +
+      card('med', '◆ 中央値', `${medText(S)}<small>${u}</small>`, S.n % 2 ? `小さい順で ${(S.n + 1) / 2}番目` : `${S.n / 2}番目と${S.n / 2 + 1}番目の平均`) +
+      card('mode', '★ 最頻値', modeV, S.modes.length ? `${S.top}こ ある値${S.modes.length > 1 ? '（同じ数が' + S.modes.length + 'つ）' : ''}` : 'どの値も1こずつ') +
+      card('rng', '↔ 範囲', `${f10(S.max - S.min)}<small>${u}</small>`, `最大値 ${f10(S.max)} − 最小値 ${f10(S.min)}`) + '</div>';
+  }
+  // ② 外れ値なし／あり をくらべる表。かわった量を棒の長さでも見せる
+  function renderOutStats() {
+    const u = P().unit, A = stats(st.v), B = stats(vals()), on = st.outOn;
+    $('statTitle').textContent = '📏 外れ値を足すと？';
+    const rowsT = [
+      ['mean', '▲ 平均値', S => S.sum / S.n / 10, meanText],
+      ['med', '◆ 中央値', S => S.med2 / 20, medText],
+      ['mode', '★ 最頻値', null, modeText],
+      ['rng', '↔ 範囲', S => (S.max - S.min) / 10, S => f10(S.max - S.min)],
+    ];
+    // 棒の長さは、平均値と中央値のかわった量でそろえる（範囲はとても大きく変わるので、長さは 90 まで）
+    const maxD = Math.max(1, ...rowsT.slice(0, 2).map(r => Math.abs(r[2](B) - r[2](A))));
+    $('stats').innerHTML = `<table class="cmp"><tr><th></th><th>外れ値なし</th><th>外れ値あり</th><th>かわった量</th></tr>` +
+      rowsT.map(([c, h, val, txt]) => {
+        let diff = '';
+        if (on && val) {
+          const d = val(B) - val(A);
+          diff = `${d >= 0 ? '＋' : '−'}${(Math.round(Math.abs(d) * 100) / 100)}<span class="dbar" style="width:${Math.min(90, Math.round(Math.abs(d) / maxD * 90))}px;background:var(--${c})"></span>`;
+        } else if (on) diff = txt(A) === txt(B) ? 'かわらない' : 'かわった';
+        return `<tr class="${c}"><td class="rh ${c}">${h}</td><td>${txt(A)}</td><td>${on ? txt(B) : '−'}</td><td class="diff ${c}">${diff}</td></tr>`;
+      }).join('') + `</table><div class="small" style="margin-top:4px">単位：${u}。かわった量は小数第2位まで。</div>`;
+  }
+  // ⑤ 2つのクラスをくらべる表
+  function renderTwoStats() {
+    const A = stats(st.vA), B = stats(st.vB);
+    $('statTitle').textContent = '📏 A組と B組';
+    const r = (c, h, f) => `<tr><td class="rh ${c}">${h}</td><td class="${c}">${f(A)}</td><td class="${c}">${f(B)}</td></tr>`;
+    $('stats').innerHTML = `<table class="cmp"><tr><th></th><th>A組</th><th>B組</th></tr>` +
+      r('mean', '▲ 平均値', meanText) + r('med', '◆ 中央値', medText) + r('mode', '★ 最頻値', modeText) +
+      r('rng', '↔ 範囲', S => f10(S.max - S.min)) + r('', '最小〜最大', S => `${f10(S.min)}〜${f10(S.max)}`) + '</table><div class="small" style="margin-top:4px">単位：点</div>';
+  }
+  function renderStrip() {
+    $('stripCard').hidden = st.part === 5 || (st.part === 3 && st.qz && QZ().kind === 'graph') || (st.part === 4 && st.q && !st.q.done);
+    if ($('stripCard').hidden) return;
+    const p = P(), v = vals(), S = stats(v), qHide = hideMarks();
+    const idx = v.map((x, i) => i);
+    if (st.sorted) idx.sort((a, b) => v[a] - v[b] || a - b);
+    const mids = midIdx(v, S);
+    $('ordLab').textContent = st.sorted ? '小さい順' : '名簿の順';
+    $('strip').innerHTML = idx.map((i, k) => {
+      const mid = st.sorted && st.show.med && !qHide && mids.includes(i);
+      return `<div class="sv${mid ? ' mid' : ''}${i === st.sel && st.selG === 'main' ? ' sel' : ''}${i === outIdx() ? ' out' : ''}" data-i="${i}"><span class="no">${st.sorted ? k + 1 + '番' : ''}</span>${f10(v[i])}</div>`;
+    }).join('');
+    $('btnSort').textContent = st.sorted ? '◀ 名簿の順にもどす' : '▶ 小さい順に並べる';
+    let note;
+    if (!st.sorted) note = 'このままでは、中央値はわからない。<b>小さい順に並べて</b>から、まん中をさがそう。';
+    else if (qHide) note = '';
+    else if (S.n % 2) note = `${S.n}こ（奇数）→ まん中は <b>${(S.n + 1) / 2}番目</b>。中央値は <b style="color:var(--med)">${f10(S.s[(S.n - 1) / 2])}${p.unit}</b>`;
+    else note = `${S.n}こ（偶数）→ まん中は <b>${S.n / 2}番目と${S.n / 2 + 1}番目</b>の2つ。中央値は（${f10(S.s[S.n / 2 - 1])} ＋ ${f10(S.s[S.n / 2])}）÷ 2 ＝ <b style="color:var(--med)">${medText(S)}${p.unit}</b>`;
+    $('stripNote').innerHTML = note;
+  }
+  // ④ 度数分布表（始まりは数直線の左はし。「以上〜未満」。さいごの階級は最大値をふくむまで）
+  function freq() {
+    const p = P(), v = st.v, w = st.w4, lo = p.lo * 10;
+    const n = Math.floor((Math.max(...v) - lo) / w) + 1;
+    const rowsF = Array.from({ length: n }, (_, k) => ({ lo: lo + k * w, f: 0 }));
+    v.forEach(x => rowsF[Math.floor((x - lo) / w)].f++);
+    const mx = Math.max(...rowsF.map(c => c.f));
+    rowsF.forEach(c => { c.top = c.f === mx; c.mid2 = 2 * c.lo + w; });
+    return { rows: rowsF, mx };
+  }
+  function renderFreq() {
+    $('freqCard').hidden = st.part !== 4 || !!(st.q && !st.q.done);
+    if ($('freqCard').hidden) return;
+    const p = P(), u = p.unit, F = freq(), S = stats(st.v);
+    const ws = p.widths, lim = { min: ws[0] * 10, max: ws[1] * 10 };
+    const r = $('wRange'), nm = $('wNum');
+    r.min = lim.min; r.max = lim.max; r.step = p.step * 10; r.value = st.w4;
+    nm.min = ws[0]; nm.max = ws[1]; nm.step = p.step; if (document.activeElement !== nm) nm.value = f10(st.w4);
+    $('wUnit').textContent = u;
+    $('ft').innerHTML = `<tr><th>階級（${u}）</th><th>階級値</th><th>度数</th></tr>` +
+      F.rows.map(c => `<tr class="${c.top ? 'top' : ''}"><td>${f10(c.lo)}<small>以上</small>${f10(c.lo + st.w4)}<small>未満</small></td><td>${fracText(c.mid2, 2)}</td><td>${c.f}</td></tr>`).join('') +
+      `<tr><td>合計</td><td></td><td>${S.n}</td></tr>`;
+    const tops = F.rows.filter(c => c.top);
+    $('modeCmp').innerHTML =
+      `<div class="stat mode"><div class="h">★ 表からの最頻値</div><div class="v">${tops.map(c => fracText(c.mid2, 2)).join('・')}<small>${u}</small></div><div class="how">度数がいちばん多い階級（${F.mx}）の階級値</div></div>` +
+      `<div class="stat mode"><div class="h">★ データの最頻値</div><div class="v">${S.modes.length ? modeText(S) + `<small>${u}</small>` : '<small>なし</small>'}</div><div class="how">${S.modes.length ? `データの中に ${S.top}こ ある値` : 'どの値も1こずつ'}</div></div>`;
+  }
+  function renderCtrl() {
+    const p = P(), qq = st.q && !st.q.done, part = st.part;
+    $('dsRow').innerHTML = (part === 1 || part === 2 || part === 4)
+      ? Object.keys(PRESETS).filter(k => PRESETS[k].main && (part !== 2 || PRESETS[k].out)).map(k => `<button class="chip${k === st.ds ? ' active' : ''}" data-ds="${k}"${qq ? ' disabled' : ''}>${PRESETS[k].short}</button>`).join('') : '';
+    $('dsRow').querySelectorAll('[data-ds]').forEach(b => b.addEventListener('click', () => useDS(b.dataset.ds)));
+    const T = [['mean', '▲ 平均値', 't-mean'], ['med', '◆ 中央値', 't-med'], ['mode', '★ 最頻値', 't-mode'], ['rng', '↔ 範囲', 't-rng']];
+    $('showRow').hidden = part === 3;
+    $('showRow').innerHTML = '<span class="small">図にかく：</span>' + T.filter(t => part !== 5 || t[0] === 'mean' || t[0] === 'rng').map(([k, t, c]) => `<button class="op-btn sm ${c}${st.show[k] ? ' on' : ''}" data-show="${k}"${qq || st.bal ? ' disabled' : ''}>${t}</button>`).join('');
+    $('showRow').querySelectorAll('[data-show]').forEach(b => b.addEventListener('click', () => { pushHist(); st.show[b.dataset.show] = !st.show[b.dataset.show]; render(); }));
+    $('optRow').hidden = part === 3;
+    $('btnBal').hidden = !(part === 1 || part === 2);
+    $('btnBal').classList.toggle('on', st.bal);
+    $('btnBal').disabled = qq;
+    $('btnAdd').hidden = $('btnDel').hidden = part !== 1;
+    $('btnAdd').disabled = qq || st.bal || st.v.length >= 40;
+    $('btnDel').disabled = qq || st.bal || st.sel < 0 || st.selG !== 'main' || st.v.length <= 2 || st.sel === outIdx();
+    $('optSnap').checked = st.snap; $('optSnap').disabled = qq || part === 3;
+    $('snapLab').textContent = p.step === 1 ? '整数にすいつく' : `${p.step}${p.unit}ごとにすいつく`;
+    $('plotTitle').textContent = st.q ? '📍 ドットプロット（練習問題のデータ）' : part === 3 ? '📍 ドットプロット（クイズのデータ）' : part === 5 ? '📍 ドットプロット（A組と B組。どちらも小テスト 10点満点）' : `📍 ドットプロット（${p.name}）`;
+    $('plotCard').hidden = (part === 3 && st.qz && QZ().kind === 'graph') || (part === 4 && st.q && !st.q.done);
+    // ② 外れ値のスライダー
+    $('outCtrl').hidden = part !== 2;
+    if (part === 2) {
+      const o = p.out, r = $('outRange'), nm = $('outNum');
+      $('btnOut').textContent = st.outOn ? '－ 外れ値をとる' : '＋ 外れ値を1つ足す';
+      $('btnOut').classList.toggle('action', !st.outOn);
+      $('outSlider').hidden = !st.outOn;
+      r.min = (p.hi + 5) * 10; r.max = o[1] * 10; r.step = 50; r.value = st.outV;
+      nm.min = p.hi + 5; nm.max = o[1]; nm.step = 5; if (document.activeElement !== nm) nm.value = f10(st.outV);
+      $('outUnit').textContent = p.unit;
+    }
+    $('twoCard').hidden = part !== 5;
+    if (part === 5) renderTwoQ();
+    $('btnNew').hidden = !(part === 1 || part === 4);
+    $('btnWs').hidden = !window.Worksheet;
+  }
+
+  const PARTS = {
+    1: { name: '① 点を動かす', note: '点をドラッグして、平均値・中央値・最頻値・範囲の変わり方を見よう' },
+    2: { name: '② 外れ値', note: '外れ値を1つ足すと、平均値と中央値はどれだけ変わる？' },
+    3: { name: '③ どれを使う？', note: 'その場面では、どの代表値で説明するのがよい？ 数字やグラフにだまされない？' },
+    4: { name: '④ 度数分布表と最頻値', note: '度数分布表では、度数がいちばん多い階級の「階級値」が最頻値' },
+    5: { name: '⑤ 平均値が同じクラス', note: '平均値が同じなら、2つのクラスは同じといえる？' },
+  };
+  function render() {
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === st.part));
+    $('partNote').textContent = PARTS[st.part].note;
+    renderCtrl(); renderQ();
+    if (!$('plotCard').hidden) renderPlot();
+    renderStrip(); renderStats(); renderFreq(); renderTrips(); renderTeacher();
+    $('btnUndo').disabled = !st.hist.length;
+  }
+  // メッセージは「代表値」のカードに出す。練習問題・クイズのときは、問題のカードにも同じものを出す
+  function setMsg(html, c) { ['msg', 'qMsg'].forEach(id => { const e = $(id); e.innerHTML = html; e.className = 'msg' + (c ? ' ' + c : ''); }); }
+
+  /* =====================================================================
+     7. 操作
+     ===================================================================== */
+  const SNAPKEYS = ['part', 'ds', 'v', 'vA', 'vB', 'outOn', 'outV', 'w4', 'sorted', 'show', 'bal', 'fx', 'sel', 'selG', 'snap', 'q', 'inp', 'qz', 'qzList', 'qzFull', 'two'];
+  function snap() { const o = {}; SNAPKEYS.forEach(k => { o[k] = st[k]; }); o.__q = PRESETS.__q || null; return o; }
+  function pushHist() { st.hist.push(clone(snap())); if (st.hist.length > 100) st.hist.shift(); }
+  function undo() {
+    if (!st.hist.length) return;
+    const h = st.hist.pop();
+    if (h.__q) PRESETS.__q = h.__q;
+    delete h.__q;
+    Object.assign(st, h);
+    setMsg('↶ ひとつもどした。');
+    render();
+  }
+  function loadDS(key) {
+    st.ds = key; st.v = PRESETS[key].vals.map(x => Math.round(x * 10));
+    st.sorted = false; st.sel = -1; st.selG = 'main'; st.bal = false; st.q = null;
+    const p = P(); st.fx = Math.round((p.lo + p.hi) / 2) * 10;
+    if (p.out) st.outV = p.out[0] * 10;
+    if (p.widths) st.w4 = (key === 'commute' ? 5 : key === 'read' ? 10 : 2) * 10;
+  }
+  function useDS(key) {
+    if (key === st.ds && !st.q) return;
+    pushHist(); loadDS(key);
+    setMsg(`「${P().name}」にかえた。`);
+    render();
+  }
+  function resetAll() {
+    if (st.q && !st.q.done) { st.q = clone(st.q0); st.v = st.q.vals.map(x => x * 10); st.inp = ''; st.sorted = false; st.hintLv = 0; st.hist = []; setMsg('この問題をはじめからやりなおそう。'); render(); return; }
+    st.hist = [];
+    if (st.part === 3) { startQuiz(); return; }
+    if (st.part === 5) { loadTwo(); setMsg('はじめにもどした。'); render(); return; }
+    loadDS(st.ds); st.outOn = false;
+    setMsg('はじめにもどした。');
+    render();
+  }
+  function addDot() {
+    pushHist();
+    // 足す点は、数直線の右から4分の1のところ（中央値と同じ値にならないように）
+    const p = P();
+    const v = Math.round((p.lo + (p.hi - p.lo) * 0.75) / p.step) * p.step * 10;
+    st.v.push(v); st.sel = st.v.length - 1; st.selG = 'main';
+    setMsg(`点を1つ足した（${st.v.length}こ）。黄色の点をドラッグして動かそう。個数が${st.v.length % 2 ? '奇数' : '偶数'}になると、中央値の求め方は？`);
+    render();
+  }
+  function delDot() {
+    if (st.sel < 0) return;
+    pushHist();
+    const x = st.v[st.sel];
+    st.v.splice(st.sel, 1); st.sel = -1;
+    setMsg(`${f10(x)}${P().unit} の点を消した（${st.v.length}こ）。`);
+    render();
+  }
+
+  // ---- ドラッグ（点・支点） ----
+  function svgPt(e) {
+    const svg = $('plot'), pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  function snapV(v10) {
+    const a = AX(), g = st.snap ? a.step * 10 : 1;
+    return Math.max(a.lo * 10, Math.min(a.hi * 10, Math.round(v10 / g) * g));
+  }
+  $('plot').addEventListener('pointerdown', (e) => {
+    if (hideMarks() || st.part === 3) return;
+    const pt = svgPt(e);
+    if (st.bal) {
+      // やじろべえ：どこを押しても支点が動く
+      pushHist();
+      st.drag = { kind: 'f' };
+      $('plot').setPointerCapture(e.pointerId);
+      moveF(pt.x);
+      return;
+    }
+    // いちばん近い点（指で押しやすいように、少しはなれていてもよい）
+    let best = 24, hit = null;
+    rows().forEach((R, k) => {
+      const { pos } = layout(R.v, rowAY(k));
+      pos.forEach((q, i) => { const d = Math.hypot(q.x - pt.x, q.y - pt.y); if (d < best) { best = d; hit = { g: R.g, i }; } });
+    });
+    if (!hit) return;
+    pushHist();
+    st.drag = { kind: 'dot', g: hit.g, i: hit.i, moved: false, x0: pt.x };
+    st.sel = hit.i; st.selG = hit.g;
+    $('plot').setPointerCapture(e.pointerId);
+    render();
+  });
+  $('plot').addEventListener('pointermove', (e) => {
+    const d = st.drag;
+    if (!d) return;
+    const pt = svgPt(e);
+    if (d.kind === 'f') { moveF(pt.x); return; }
+    if (!d.moved && Math.abs(pt.x - d.x0) < 4) return;
+    d.moved = true;
+    let nv = snapV(toV10(pt.x));
+    const isOut = d.g === 'main' && d.i === outIdx();
+    if (isOut) {   // 外れ値は、もとのはんいより外だけ
+      const p = P(); nv = Math.max((p.hi + 5) * 10, Math.min(p.out[1] * 10, Math.round(nv / 50) * 50));
+      if (nv !== st.outV) { st.outV = nv; sndTick(); outMsg(); render(); }
+      return;
+    }
+    const arr = arrOf(d.g);
+    if (st.part === 2) nv = Math.min(nv, P().hi * 10);   // ② では、外れ値いがいの点は もとのはんいの中だけ
+    if (nv !== arr[d.i]) { arr[d.i] = nv; sndTick(); dragMsg(); render(); }
+  });
+  const endDrag = () => {
+    const d = st.drag;
+    if (!d) return;
+    st.drag = null;
+    if (d.kind === 'dot' && !d.moved) { st.hist.pop(); setMsg(`${f10(arrOf(d.g)[d.i] !== undefined && !(d.g === 'main' && d.i === outIdx()) ? arrOf(d.g)[d.i] : st.outV)}${P().unit} の点をえらんだ。${st.part === 1 ? 'ドラッグで動かす・「🗑」で消す。' : 'ドラッグで動かそう。'}`); render(); }
+  };
+  $('plot').addEventListener('pointerup', endDrag);
+  $('plot').addEventListener('pointercancel', endDrag);
+  function moveF(x) {
+    const a = AX();
+    let f = Math.max(a.lo * 10, Math.min(a.hi * 10, Math.round(toV10(x))));
+    // 平均値の近く（0.3 以内）では、平均値にすいつく（平均値が 0.1 きざみでわりきれるとき）
+    const S = stats(vals());
+    if (S.sum % S.n === 0 && Math.abs(f - S.sum / S.n) <= 3) f = S.sum / S.n;
+    if (f !== st.fx) { st.fx = f; render(); }
+  }
+  function dragMsg() {
+    const u = P().unit;
+    if (st.part === 5) {
+      const A = stats(st.vA), B = stats(st.vB);
+      setMsg(A.sum * B.n === B.sum * A.n ? `平均値は同じ（${meanText(A)}点）。範囲は A組 ${f10(A.max - A.min)}点・B組 ${f10(B.max - B.min)}点。` : `平均値 A組 ${meanText(A)}点・B組 ${meanText(B)}点。平均値を同じにしたまま、範囲を変えられるかな？`);
+      return;
+    }
+    const S = stats(vals());
+    setMsg(`平均値 ${meanText(S)}${u}　中央値 ${medText(S)}${u}　最頻値 ${S.modes.length ? modeText(S) + u : 'なし'}　範囲 ${f10(S.max - S.min)}${u}`);
+  }
+
+  function toggleBal() {
+    pushHist();
+    st.bal = !st.bal; st.sel = -1;
+    if (st.bal) {
+      const a = AX(); st.fx = Math.round((a.lo + a.hi) / 2) * 10;
+      setMsg('数直線を棒、点をおもりと考えよう。下の ▲ をドラッグして、棒がつり合うところをさがそう。');
+    } else setMsg('やじろべえをおわった。');
+    render();
+  }
+  function toggleSort() {
+    pushHist();
+    // FLIP：並べかえる前の位置をおぼえて、あとの位置から動かして見せる
+    const before = {};
+    $('strip').querySelectorAll('.sv').forEach(e => { before[e.dataset.i] = e.getBoundingClientRect(); });
+    st.sorted = !st.sorted;
+    render();
+    $('strip').querySelectorAll('.sv').forEach(e => {
+      const b = before[e.dataset.i]; if (!b || !e.animate) return;
+      const a = e.getBoundingClientRect();
+      e.animate([{ transform: `translate(${b.left - a.left}px, ${b.top - a.top}px)` }, { transform: 'none' }], { duration: 650, easing: 'ease-in-out' });
+    });
+    if (st.sorted && !hideMarks()) {
+      const S = stats(vals());
+      setMsg(S.n % 2 ? `${S.n}こは奇数。まん中の ${(S.n + 1) / 2}番目が中央値。` : `${S.n}こは偶数。まん中の2つ（${S.n / 2}番目と${S.n / 2 + 1}番目）の平均が中央値。`);
+    }
+  }
+
+  /* ----- ② 外れ値 ----- */
+  function toggleOut() {
+    pushHist();
+    st.outOn = !st.outOn; st.sel = -1; st.bal = false;
+    if (st.outOn) outMsg(); else setMsg('外れ値をとった。');
+    render();
+  }
+  function outMsg() {
+    const A = stats(st.v), B = stats(vals()), u = P().unit;
+    const dm = Math.round((B.sum / B.n - A.sum / A.n) / 10 * 100) / 100, dd = (B.med2 - A.med2) / 20;
+    setMsg(`外れ値 <b style="color:var(--ng)">${f10(st.outV)}${u}</b> を足すと、平均値は <b style="color:var(--mean)">${dm}${u}</b> ふえたが、中央値は <b style="color:var(--med)">${dd}${u}</b> しか変わらない。`);
+  }
+  function setOutV(x, fromNum) {
+    const p = P();
+    x = Math.max((p.hi + 5) * 10, Math.min(p.out[1] * 10, Math.round(x / 50) * 50));
+    if (x === st.outV) { render(); return; }
+    if (!st.sliding || fromNum) pushHist();
+    st.outV = x; outMsg(); render();
+  }
+  // スライダーは、動かしはじめに1回だけ「ひとつもどす」用に記録する
+  function bindSlider(r, nm, fn) {
+    r.addEventListener('input', () => { if (!st.sliding) { pushHist(); st.sliding = true; } fn(+r.value, false); });
+    r.addEventListener('change', () => { st.sliding = false; });
+    nm.addEventListener('change', () => { const x = parseFloat(nm.value); if (isFinite(x)) fn(Math.round(x * 10), true); else render(); });
+  }
+
+  /* ----- ④ 階級の幅 ----- */
+  function setW4(x, fromNum) {
+    const p = P(), g = p.step * 10;
+    x = Math.max(p.widths[0] * 10, Math.min(p.widths[1] * 10, Math.round(x / g) * g));
+    if (x === st.w4) { render(); return; }
+    if (!st.sliding || fromNum) pushHist();
+    st.w4 = x;
+    const F = freq(), S = stats(st.v), tops = F.rows.filter(c => c.top);
+    setMsg(`階級の幅 ${f10(x)}${p.unit}：表からの最頻値は ${tops.map(c => fracText(c.mid2, 2)).join('・')}${p.unit}、データの最頻値は ${S.modes.length ? modeText(S) + p.unit : 'なし'}。` +
+      (tops.length > 1 ? '（度数がいちばん多い階級が2つ以上ある）' : ''));
+    render();
+  }
+
+  /* ----- ⑤ 2つのクラス ----- */
+  function loadTwo() {
+    st.vA = PRESETS.twoA.vals.map(x => x * 10); st.vB = PRESETS.twoB.vals.map(x => x * 10);
+    st.ds = 'twoA'; st.sel = -1; st.two = null; st.bal = false;
+  }
+  function renderTwoQ() {
+    $('twoBtns').innerHTML = [['A', 'A組'], ['B', 'B組'], ['same', '同じ']].map(([k, t]) =>
+      `<button class="op-btn${st.two === k ? (k === 'A' ? ' good' : ' ng') : ''}" data-two="${k}">${t}</button>`).join('');
+    $('twoBtns').querySelectorAll('[data-two]').forEach(b => b.addEventListener('click', () => {
+      pushHist(); st.two = b.dataset.two;
+      if (st.two === 'A') sndOK(); else sndNG();
+      render();
+    }));
+    $('twoWhy').hidden = !st.two;
+    const A = stats(st.vA), B = stats(st.vB);
+    $('twoWhy').innerHTML = (st.two === 'A' ? '<span class="mark-ok">○</span> そのとおり。' : st.two ? '<span class="mark-ng">×</span> もう一度ドットプロットを見よう。' : '') +
+      ` A組の点は ${f10(A.min)}〜${f10(A.max)}点（範囲 ${f10(A.max - A.min)}点）に集まっている。B組は ${f10(B.min)}〜${f10(B.max)}点（範囲 ${f10(B.max - B.min)}点）に散らばっている。` +
+      '<br>平均値（や中央値）が同じでも、<b>散らばり</b>はちがうことがある。代表値だけでなく、範囲やドットプロットの形も見てくらべよう。';
+  }
+
+  /* =====================================================================
+     8. 練習問題（① ④）とつまずき検知
+        type：medOdd（中央値・奇数個）・medEven（中央値・偶数個）・mean（平均値）・mode（最頻値）・range（範囲）・tbl（表からの最頻値）
+     ===================================================================== */
+  const TRIPS = {
+    medUnsorted: { name: '並べかえずに中央値を求めた', exp: '中央値は、データを小さい順に並べたときのまん中。書いてある順のまん中ではない。', q: 'medOdd' },
+    medEvenOne:  { name: '偶数個なのに、まん中の1つだけを答えた', exp: '個数が偶数のときは、まん中に2つある。その2つの値の平均（たして 2 でわる）が中央値。', q: 'medEven' },
+    medPos:      { name: '何番目か（順番）を答えた', exp: '「まん中は何番目か」を見つけたら、その番目の値を答える。中央値は順番ではなく値。', q: 'medOdd' },
+    meanDiv:     { name: '平均値で、わる数をまちがえた', exp: '平均値 ＝ 合計 ÷ データの個数。個数を数えなおそう（0 のデータも1こと数える）。', q: 'mean' },
+    meanSum:     { name: '合計のまま答えた', exp: '合計を出したら、データの個数でわる。', q: 'mean' },
+    modeCount:   { name: '最頻値で、個数（何人か）を答えた', exp: '最頻値は「いちばん多く出てくる値」。何こあるかではなく、その値を答える。', q: 'mode' },
+    rangeMax:    { name: '範囲で、最大値だけを答えた', exp: '範囲 ＝ 最大値 − 最小値。散らばりの大きさなので、ひき算をする。', q: 'range' },
+    modeEdge:    { name: '表からの最頻値で、階級のはしの値を答えた', exp: '度数分布表の最頻値は、度数がいちばん多い階級の「階級値」（階級のまん中の値）。', q: 'tbl' },
+    modeFreqTbl: { name: '表からの最頻値で、度数を答えた', exp: '答えるのは、いちばん多い度数ではなく、その階級の階級値。', q: 'tbl' },
+    outlierMean: { name: '外れ値があるのに平均値で説明した', exp: '外れ値があると、平均値は大きくひっぱられる。ふつうの値（まん中）を表すには中央値がよい。', q: 'quiz' },
+    pickMode:    { name: '最頻値を使えない場面で最頻値をえらんだ', exp: '値がばらばらで同じ値が少ないときや、全体のまん中を知りたいときは、最頻値は向かない。', q: 'quiz' },
+    notMode:     { name: '「いちばん多いもの」を知りたいのに、最頻値を使わなかった', exp: '「何をいちばん多く用意するか」を決めるときは、いちばん多く出てくる値（最頻値）を使う。', q: 'quiz' },
+    meanHalf:    { name: '平均値より上の人が半分いると考えた', exp: '平均値は大きな値にひっぱられる。半分ずつに分かれるのは中央値。', q: 'quiz' },
+    meanMode:    { name: '平均値の人がいちばん多いと考えた', exp: 'いちばん多い値は最頻値。平均値とはかぎらない。', q: 'quiz' },
+    medHalf:     { name: '中央値の意味（半分ずつ）を使えなかった', exp: '中央値は並べたときのまん中なので、中央値より小さい人と大きい人は同じくらい。', q: 'quiz' },
+    meanAll:     { name: '平均値だけで、全員をくらべた', exp: '平均値が高くても、全員が高いわけではない。散らばり（範囲）やドットプロットも見る。', q: 'quiz' },
+    axisTrick:   { name: 'たて軸が 0 から始まらないグラフにだまされた', exp: 'グラフのたて軸がどこから始まっているかを、まず見る。とちゅうから始まると、ちがいが大きく見える。', q: 'quiz' },
+  };
+  const QTYPES = ['medOdd', 'medEven', 'mean', 'mode', 'range'];
+  const QNAME = { medOdd: '中央値（奇数個）', medEven: '中央値（偶数個）', mean: '平均値', mode: '最頻値', range: '範囲', tbl: '表からの最頻値', quiz: 'どれを使う？' };
+  const SCENES = [   // 問題の場面（架空）。lo・hi は値のはんい
+    { t: '1年生 ${n}人の、けんすいの回数', u: '回', lo: 0, hi: 20 },
+    { t: '${n}人の、1週間に図書室に行った回数', u: '回', lo: 0, hi: 12 },
+    { t: '${n}人の、通学時間', u: '分', lo: 3, hi: 40 },
+    { t: '${n}人の、ハンドボール投げの記録', u: 'm', lo: 8, hi: 30 },
+    { t: '${n}人の、小テストの点数（20点満点）', u: '点', lo: 4, hi: 20 },
+  ];
+
+  // 答えを先に決めてから、データを作る
+  function makeQ(type) {
+    if (type === 'tbl') return makeTblQ();
+    const sc = pick(SCENES);
+    const R = () => rint(sc.lo, sc.hi);
+    let vals, ans, n;
+    for (let tries = 0; tries < 300; tries++) {
+      if (type === 'medOdd' || type === 'medEven') {
+        n = type === 'medOdd' ? pick([7, 9, 11]) : pick([6, 8, 10]);
+        vals = Array.from({ length: n }, R);
+        const s = sortedOf(vals), m = Math.floor(n / 2);
+        if (type === 'medOdd') {
+          ans = s[m];
+          if (vals[m] === ans || ans === m + 1 || vals[m] === m + 1) continue;   // 並べずに答えても正解にならないように
+        } else {
+          if (s[m - 1] === s[m] || (s[m - 1] + s[m]) % 2 && Math.random() < 0.5) continue;  // まん中の2つはちがう値。.5 は半分くらい
+          ans = (s[m - 1] + s[m]) / 2;
+          // 並べずに答えた値・まん中の1つだけの値・答えが、ぜんぶちがう数になるように（まちがいの型を見分けるため）
+          const un = [(vals[m - 1] + vals[m]) / 2, vals[m - 1], vals[m]], one = [s[m - 1], s[m]];
+          if (un.includes(ans) || un.some(x => one.includes(x)) || [m, m + 1, m + 0.5].some(x => x === ans || one.includes(x))) continue;
+        }
+      } else if (type === 'mean') {
+        n = rint(5, 8);
+        const m = rint(sc.lo + 3, sc.hi - 3);
+        vals = Array.from({ length: n - 1 }, () => Math.max(sc.lo, Math.min(sc.hi, m + rint(-6, 6))));
+        const last = n * m - vals.reduce((a, b) => a + b, 0);
+        if (last < sc.lo || last > sc.hi) continue;
+        vals.push(last); vals = shuffle(vals); ans = m;
+        if (vals.reduce((a, b) => a + b, 0) === m) continue;
+      } else if (type === 'mode') {
+        n = rint(9, 12);
+        const m = R(), others = [];
+        while (others.length < n - 3) { const x = R(); if (x !== m && others.filter(y => y === x).length < 2) others.push(x); }
+        vals = shuffle([m, m, m].concat(others)); ans = m;
+        if (m === 3 || m === Math.max(...vals)) continue;                    // 「3（こ）」と答えたときに見分けられるように
+      } else {
+        n = rint(7, 10);
+        vals = Array.from({ length: n }, R);
+        ans = Math.max(...vals) - Math.min(...vals);
+        if (Math.min(...vals) === 0 || ans === 0) continue;
+      }
+      break;
+    }
+    return { type, vals, ans, n: vals.length, sc: { t: sc.t.replace('${n}', vals.length), u: sc.u }, key: [type, vals.join(',')] };
+  }
+  // ④ 度数分布表から最頻値（答え＝度数がいちばん多い階級の階級値）
+  function makeTblQ() {
+    const S = pick([{ t: '通学時間', u: '分', w: [5, 10] }, { t: 'ハンドボール投げの記録', u: 'm', w: [2, 4, 5] }, { t: '50点満点のテストの点数', u: '点', w: [10, 5] }, { t: '身長', u: 'cm', w: [5, 10] }]);
+    for (let tries = 0; tries < 300; tries++) {
+      const w = pick(S.w), k0 = S.t === '身長' ? rint(28, 30) : rint(0, 3), n = rint(5, 7);
+      const f = Array.from({ length: n }, () => rint(1, 7));
+      const top = rint(1, n - 2);
+      f[top] = Math.max(...f) + rint(1, 3);
+      const lo = (k0 + top) * w, ans = lo + w / 2;
+      // 度数・はしの値・答えがかぶらないように（まちがいの型を見分けるため）
+      if ([lo, lo + w, ans].includes(f[top])) continue;
+      const rowsT = f.map((x, i) => ({ lo: (k0 + i) * w, f: x }));
+      return { type: 'tbl', rowsT, w, ans, top, sc: { t: S.t, u: S.u }, key: ['tbl', w, k0, f.join(',')] };
+    }
+  }
+  function newQ(forceType) {
+    pushHist();
+    const type = forceType || (st.focus && TRIPS[st.focus].q !== 'quiz' ? TRIPS[st.focus].q : st.part === 4 ? 'tbl' : pick(QTYPES));
+    let q, tries = 0;
+    do { q = makeQ(type); } while (JSON.stringify(q.key) === st.lastKey && ++tries < 20);   // 同じ問題が続けて出ないように
+    st.lastKey = JSON.stringify(q.key);
+    st.q = q; st.q0 = clone(q); st.inp = ''; st.hintLv = 0;
+    if (type === 'tbl') { st.part = 4; setMsg(''); render(); return; }
+    st.part = 1;
+    // ドットプロットのはんいを問題に合わせる
+    const mx = Math.max(...q.vals);
+    PRESETS.__q = { name: q.sc.t, short: '練習', unit: q.sc.u, lo: 0, hi: Math.ceil((mx + 1) / 5) * 5, step: 1, tick: mx > 20 ? 5 : mx > 10 ? 2 : 1, vals: q.vals };
+    st.ds = '__q'; st.v = q.vals.map(x => x * 10); st.sorted = false; st.sel = -1; st.bal = false;
+    setMsg('');
+    render();
+  }
+  function renderQ() {
+    const q = st.q;
+    if (st.part === 3) { renderQuiz(); return; }
+    $('qCard').hidden = !q;
+    if (!q) return;
+    $('qTitle').textContent = '✏️ 練習問題';
+    const keypad = `<div class="ans-line"><span class="box" id="qBox">${st.inp || '　'}</span><span>${q.sc.u}</span></div>` +
+      `<div class="keypad">${['7', '8', '9', '⌫', '4', '5', '6', 'C', '1', '2', '3', '.', '0'].map(k => `<button class="key" data-key="${k}">${k}</button>`).join('')}<button class="key go" data-key="go">こたえる</button></div>`;
+    const done = `<div class="tools" style="margin-top:6px"><button class="op-btn action" id="qNext">▶ つぎの問題</button><button class="op-btn" id="qEnd">おわる</button></div>`;
+    if (q.type === 'tbl') {
+      $('qText').innerHTML = `${q.sc.t}の度数分布表。<br><b>最頻値</b>を求めよう。`;
+      $('qData').innerHTML = `<table class="ft"><tr><th>階級（${q.sc.u}）</th>${q.done ? '<th>階級値</th>' : ''}<th>度数</th></tr>` +
+        q.rowsT.map((c, i) => `<tr class="${q.done && i === q.top ? 'top' : ''}"><td>${c.lo}<small>以上</small>${c.lo + q.w}<small>未満</small></td>${q.done ? `<td>${c.lo + q.w / 2}</td>` : ''}<td>${c.f}</td></tr>`).join('') + '</table>';
+    } else {
+      const ask = { medOdd: '中央値', medEven: '中央値', mean: '平均値', mode: '最頻値', range: '範囲' }[q.type];
+      $('qText').innerHTML = `${q.sc.t}（${q.sc.u}）。<br><b>${ask}</b>を求めよう。`;
+      $('qData').innerHTML = `<div class="q-data">${q.vals.map(x => `<span>${x}</span>`).join('')}</div>`;
+    }
+    $('qBody').innerHTML = q.done ? done : keypad;
+    $('qBody').querySelectorAll('[data-key]').forEach(b => b.addEventListener('click', () => key(b.dataset.key)));
+    if ($('qNext')) { $('qNext').addEventListener('click', () => newQ(st.part === 4 ? 'tbl' : undefined)); $('qEnd').addEventListener('click', endQ); }
+  }
+  function endQ() {
+    pushHist(); st.focus = null; $('focusBar').hidden = true;
+    const back = st.part === 4 ? 4 : 1;
+    st.q = null; loadDS('commute'); st.part = back;
+    setMsg('練習問題をおわった。'); render();
+  }
+  function key(k) {
+    const q = st.q;
+    if (!q || q.done) return;
+    if (k === 'go') { check(); return; }
+    if (k === 'C') st.inp = '';
+    else if (k === '⌫') st.inp = st.inp.slice(0, -1);
+    else if (st.inp.length < 7 && !(k === '.' && st.inp.includes('.'))) st.inp += (k === '.' && !st.inp ? '0.' : k);
+    $('qBox').textContent = st.inp || '　';
+  }
+  const near = (x, y) => Math.abs(x - y) < 0.051;   // まちがいの型を見分けるとき（わりきれない数は小数第1位まで見る）
+  function tripMsg(t) { setMsg(`<span class="mark-ng">×</span> おしい！ <b>${TRIPS[t].name}</b>かも。<br><span class="small">${TRIPS[t].exp}</span>`, 'ng'); }
+  function check() {
+    const q = st.q;
+    if (!/^\d+(\.\d+)?$/.test(st.inp)) { setMsg('数を入れてから「こたえる」を押そう。'); return; }
+    const x = parseFloat(st.inp);
+    if (Math.abs(x - q.ans) < 1e-9) {
+      pushHist();
+      q.done = true; sndOK(); bumpClear(q.type);
+      let how;
+      if (q.type === 'tbl') {
+        const c = q.rowsT[q.top];
+        how = `度数がいちばん多いのは ${c.lo}以上${c.lo + q.w}未満（${c.f}）。その階級値（${c.lo} ＋ ${c.lo + q.w}）÷ 2 ＝ ${q.ans}`;
+      } else {
+        st.sorted = true;   // 並べたデータで答えをたしかめる
+        const v = q.vals, n = v.length, s = sortedOf(v), m = Math.floor(n / 2), sum = v.reduce((a, b) => a + b, 0);
+        how = {
+          medOdd: `${n}こを小さい順に並べると、まん中は ${m + 1}番目の ${q.ans}。`,
+          medEven: `${n}こ（偶数）を小さい順に並べると、まん中は ${m}番目の ${s[m - 1]} と ${m + 1}番目の ${s[m]}。（${s[m - 1]} ＋ ${s[m]}）÷ 2 ＝ ${q.ans}`,
+          mean: `合計 ${sum} ÷ ${n} ＝ ${q.ans}`,
+          mode: `${q.ans} が ${v.filter(y => y === q.ans).length}こで、いちばん多い。`,
+          range: `${Math.max(...v)} − ${Math.min(...v)} ＝ ${q.ans}`,
+        }[q.type];
+      }
+      setMsg(`<span class="mark-ok">○</span> せいかい！ ${how}`, 'ok');
+      render();
+      return;
+    }
+    sndNG();
+    let t = null;
+    if (q.type === 'tbl') {
+      const c = q.rowsT[q.top];
+      if (x === c.lo || x === c.lo + q.w) t = 'modeEdge';
+      else if (x === c.f) t = 'modeFreqTbl';
+    } else {
+      const v = q.vals, n = v.length, s = sortedOf(v), m = Math.floor(n / 2), sum = v.reduce((a, b) => a + b, 0);
+      if (q.type === 'medOdd') {
+        if (x === v[m]) t = 'medUnsorted';
+        else if (x === m + 1) t = 'medPos';
+      } else if (q.type === 'medEven') {
+        if (near(x, (v[m - 1] + v[m]) / 2) || x === v[m - 1] || x === v[m]) t = 'medUnsorted';
+        else if (x === s[m - 1] || x === s[m]) t = 'medEvenOne';
+        else if (x === m || x === m + 1 || x === m + 0.5) t = 'medPos';
+      } else if (q.type === 'mean') {
+        if (x === sum) t = 'meanSum';
+        else if (near(x, sum / (n - 1)) || near(x, sum / (n + 1))) t = 'meanDiv';
+      } else if (q.type === 'mode') {
+        if (x === v.filter(y => y === q.ans).length) t = 'modeCount';
+      } else if (q.type === 'range') {
+        if (x === Math.max(...v)) t = 'rangeMax';
+      }
+    }
+    if (t) { addTrip(t); tripMsg(t); }
+    else setMsg('<span class="mark-ng">×</span> ちがうみたい。「💡 ヒント」も使ってみよう。', 'ng');
+    st.inp = ''; renderQ(); renderTrips(); renderTeacher();
+  }
+
+  /* =====================================================================
+     9. ③ どれを使う？（クイズ）
+     ===================================================================== */
+  const QZ = () => QUIZ.find(z => z.id === st.qz.id);
+  function startQuiz(onlyTrip) {
+    st.part = 3; st.q = null;
+    // まちがえた型の練習のときは、その型が出る問題だけ
+    let list = QUIZ.filter(z => !onlyTrip || Object.values(z.trip).includes(onlyTrip)).map(z => z.id);
+    st.qzList = shuffle(list);
+    st.qzFull = false;
+    loadQuiz(st.qzList.shift());
+  }
+  function loadQuiz(id) {
+    st.qz = { id, done: false, wrong: [], pick: null };
+    const z = QZ();
+    if (z.vals) {
+      PRESETS.__s = { name: '', short: '', unit: z.unit, lo: z.lo, hi: z.hi, step: z.step, tick: z.tick, vals: z.vals };
+      st.ds = '__s'; st.v = z.vals.map(x => Math.round(x * 10));
+    }
+    st.sorted = false; st.sel = -1; st.bal = false;
+    setMsg('');
+    render();
+  }
+  const CH3 = [['mean', '▲ 平均値'], ['med', '◆ 中央値'], ['mode', '★ 最頻値']];
+  function renderQuiz() {
+    const z = st.qz && QZ();
+    $('qCard').hidden = !z;
+    if (!z) return;
+    $('qTitle').textContent = z.kind === 'pick' ? '🤔 どの代表値を使う？' : z.kind === 'graph' ? '📊 グラフにだまされない？' : '🔍 数字にだまされない？';
+    $('qText').innerHTML = z.t;
+    $('qData').innerHTML = z.kind === 'graph' ? '<svg id="trickSvg" viewBox="0 0 400 300" aria-label="2つの店のグラフ"></svg>' +
+      `<div class="tools"><label class="opt-check"><input type="checkbox" id="optZero"${st.qzFull ? ' checked' : ''}> たて軸を 0 から</label></div>`
+      : `<div class="q-data">${z.vals.map(x => `<span>${x}</span>`).join('')}</div>`;
+    const ch = z.kind === 'pick' ? CH3 : z.ch;
+    const okList = z.ok || [z.ans];
+    $('qBody').innerHTML = '<div class="q-choices">' + ch.map(([k, t]) => {
+      const cls = st.qz.done && okList.includes(k) ? ' good' : st.qz.wrong.includes(k) ? ' ng' : '';
+      return `<button class="op-btn${cls}" data-qz="${k}"${st.qz.done || st.qz.wrong.includes(k) ? ' disabled' : ''}>${t}</button>`;
+    }).join('') + '</div>' +
+      (st.qz.done ? `<div class="why">${z.why}</div><div class="tools" style="margin-top:8px"><button class="op-btn action" id="qzNext">▶ つぎの問題（のこり ${st.qzList.length}）</button></div>` : '');
+    $('qBody').querySelectorAll('[data-qz]').forEach(b => b.addEventListener('click', () => answerQuiz(b.dataset.qz)));
+    if ($('qzNext')) $('qzNext').addEventListener('click', nextQuiz);
+    if (z.kind === 'graph') {
+      drawTrick(z);
+      $('optZero').addEventListener('change', () => { pushHist(); st.qzFull = $('optZero').checked; render(); });
+    }
+  }
+  // だまされるグラフ：たて軸が base から始まる棒グラフ（「0 から」にすると正しい見え方）
+  function drawTrick(z) {
+    const svg = $('trickSvg');
+    svg.innerHTML = '';
+    const base = st.qzFull ? 0 : z.base, top = 105, B = 250, T = 30, Y = (v) => B - (B - T) * (v - base) / (top - base);
+    const tk = st.qzFull ? 20 : 1;
+    for (let v = base; v <= top + 1e-9; v += tk) {
+      el('line', { x1: 70, y1: Y(v), x2: 370, y2: Y(v), stroke: v === base ? '#263238' : '#e0e0e0', 'stroke-width': v === base ? 2 : 1 }, svg);
+      el('text', { x: 62, y: Y(v) + 5, 'text-anchor': 'end', 'font-size': 15, fill: '#455a64' }, svg, v);
+    }
+    el('line', { x1: 70, y1: T - 10, x2: 70, y2: B, stroke: '#263238', 'stroke-width': 2 }, svg);
+    el('text', { x: 10, y: 18, 'font-size': 15, fill: '#455a64', 'font-weight': 'bold' }, svg, '（人）');
+    [['A店', z.a, '#ffb74d', '#e65100', 120], ['B店', z.b, '#90caf9', '#1565c0', 250]].forEach(([n, v, f, s, x]) => {
+      el('rect', { x, y: Y(v), width: 70, height: B - Y(v), fill: f, stroke: s, 'stroke-width': 2 }, svg);
+      el('text', { x: x + 35, y: B + 24, 'text-anchor': 'middle', 'font-size': 18, 'font-weight': 'bold', fill: '#263238' }, svg, n);
+      if (st.qz.done || st.qzFull) el('text', { x: x + 35, y: Y(v) - 6, 'text-anchor': 'middle', 'font-size': 17, 'font-weight': 'bold', fill: s }, svg, v + '人');
+    });
+    if (!st.qzFull && st.qz.done) el('text', { x: 75, y: B - 4, 'font-size': 13, fill: 'var(--ng)', 'font-weight': 'bold' }, svg, `！たて軸は ${z.base} から`);
+  }
+  function answerQuiz(k) {
+    const z = QZ();
+    if (st.qz.done) return;
+    pushHist();
+    const okList = z.ok || [z.ans];
+    if (okList.includes(k)) {
+      st.qz.done = true; st.qz.pick = k; sndOK(); bumpClear('quiz');
+      setMsg('<span class="mark-ok">○</span> せいかい！ 下の説明と、ドットプロットの ▲ ◆ ★ を見てたしかめよう。', 'ok');
+      if (z.kind === 'graph') st.qzFull = true;
+    } else {
+      sndNG();
+      st.qz.wrong.push(k);
+      const t = z.trip && z.trip[k];
+      if (t) { addTrip(t); tripMsg(t); }
+      else setMsg('<span class="mark-ng">×</span> ちがうみたい。データのようすをもう一度見よう。', 'ng');
+    }
+    render();
+  }
+  function nextQuiz() {
+    pushHist();
+    if (!st.qzList.length) { st.qzList = shuffle(QUIZ.map(z => z.id).filter(id => id !== st.qz.id)); setMsg('ぜんぶの問題をやったよ！ もう一度、順番をかえて出すね。'); }
+    st.qzFull = false;
+    loadQuiz(st.qzList.shift());
+  }
+
+  /* ----- ヒント ----- */
+  function hint() {
+    const q = st.q;
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    if (st.part === 3 && st.qz && !st.qz.done) {
+      const z = QZ();
+      setMsg('💡 ' + (z.kind === 'graph' ? 'たて軸の目もりは、いくつから始まっている？' : z.kind === 'tf' ? 'ドットプロットに、平均値・中央値・最頻値をかいたらどこになるかな？ データを小さい順に並べてみよう。' :
+        'とびぬけて大きい値（外れ値）はある？ 「ふつう」を知りたいのか、「いちばん多いもの」を知りたいのか？'));
+      return;
+    }
+    if (!q || q.done) {
+      setMsg('💡 ' + {
+        1: st.bal ? '左のきょりの合計と右のきょりの合計が同じになるところが平均値。' : 'いちばん右の点を右へ遠くまで動かしてみよう。平均値と中央値、どちらが大きく動く？',
+        2: '外れ値をスライダーで大きくしていこう。平均値と中央値の「かわった量」の棒は、どちらが長くなる？',
+        3: '「▶ つぎの問題」で進もう。',
+        4: '階級の幅をかえると、度数がいちばん多い階級もかわることがある。表からの最頻値とデータの最頻値をくらべよう。',
+        5: 'ドットプロットで、点がどれくらい広がっているかを見よう。範囲はどちらが大きい？',
+      }[st.part]);
+      return;
+    }
+    st.hintLv = Math.min(3, st.hintLv + 1);
+    const lv = st.hintLv;
+    let H;
+    if (q.type === 'tbl') {
+      const c = q.rowsT[q.top];
+      H = ['', '度数がいちばん多い階級をさがそう。', `いちばん多いのは ${c.lo}以上${c.lo + q.w}未満。`, `その階級のまん中の値（${c.lo} ＋ ${c.lo + q.w}）÷ 2 を計算しよう。`];
+    } else {
+      const v = q.vals, n = v.length, m = Math.floor(n / 2);
+      H = {
+        medOdd: ['', 'まず、データを小さい順に並べよう（下の「▶ 小さい順に並べる」も使える）。', `${n}こは奇数。まん中は ${m + 1}番目。`, `小さい順に並べて、${m + 1}番目の値を答えよう。`],
+        medEven: ['', 'まず、データを小さい順に並べよう（下の「▶ 小さい順に並べる」も使える）。', `${n}こは偶数。まん中は ${m}番目と${m + 1}番目の2つ。`, `${m}番目と${m + 1}番目をたして、2 でわろう。`],
+        mean: ['', '平均値 ＝ 合計 ÷ 個数。', `データは ${n}こ。まず合計を出そう。`, `合計 ${v.reduce((a, b) => a + b, 0)} を ${n} でわろう。`],
+        mode: ['', '最頻値は、いちばん多く出てくる値。', 'ドットプロットで、いちばん高く積まれているところは？', '答えるのは、何こあるかではなく、その値。'],
+        range: ['', '範囲 ＝ 最大値 − 最小値。', `最大値は ${Math.max(...v)}、最小値は？`, `${Math.max(...v)} − ${Math.min(...v)} を計算しよう。`],
+      }[q.type];
+    }
+    setMsg('💡 ' + H[lv]);
+  }
+
+  /* ----- つまずきの記録（Worksheet.appData('rec') に入れる） ----- */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(t) { bumpRec(r => r.clear[t] = (r.clear[t] || 0) + 1); }
+  function addTrip(type) { st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div>` +
+          `<div class="tools" style="justify-content:flex-start"><button class="op-btn sm" data-prac="${k}">🔁 この型を練習（${QNAME[TRIPS[k].q]}）</button></div></div>`).join('')
+      : '<div class="small">まだ ありません。練習問題やクイズでまちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = 'この端末のきろく：正解 ' + QTYPES.concat('tbl', 'quiz').map(t => `${QNAME[t]} ${c[t] || 0}`).join('・') + `　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    if (TRIPS[type].q === 'quiz') { pushHist(); startQuiz(type); }
+    else newQ(TRIPS[type].q);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* ----- パートをかえる ----- */
+  function setPart(n) {
+    if (n === st.part && !st.q) return;
+    pushHist();
+    st.focus = null; $('focusBar').hidden = true;
+    st.part = n; st.q = null; st.bal = false; st.sel = -1; st.hintLv = 0;
+    if (n === 3) { startQuiz(); return; }
+    if (n === 5) { loadTwo(); setMsg('A組と B組は、平均値が同じ。でも、ドットプロットを見るとどう？ 点をドラッグしてもよい。'); render(); return; }
+    if (!PRESETS[st.ds] || !PRESETS[st.ds].main || (n === 2 && !PRESETS[st.ds].out)) loadDS('commute');
+    else loadDS(st.ds);
+    st.outOn = false;
+    setMsg({
+      1: '点をドラッグして動かしてみよう。平均値（▲）・中央値（◆）・最頻値（★）・範囲（↔）はどう変わる？',
+      2: '「＋ 外れ値を1つ足す」を押してみよう。平均値と中央値、どちらが大きく変わる？',
+      4: '階級の幅をかえて、表からの最頻値（階級値）とデータの最頻値をくらべよう。「✏️ 練習問題」もあるよ。',
+    }[n]);
+    render();
+  }
+
+  /* =====================================================================
+     10. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const q = st.q;
+    if (q && !q.done) return '答え：' + q.ans + q.sc.u;
+    if (st.part === 3 && st.qz) { const z = QZ(); return st.qz.done ? '（▶ つぎの問題へ）' : '答え：' + ((z.kind === 'pick' ? CH3 : z.ch).filter(c => (z.ok || [z.ans]).includes(c[0])).map(c => c[1]).join(' または ')); }
+    return {
+      1: '（⏭ で練習問題を出します）', 2: '（⏭ で外れ値を足す → 大きくする → とる）', 3: '', 4: '（⏭ で表からの最頻値の練習問題を出します）',
+      5: '答え：A組（範囲 2点。B組は 9点）',
+    }[st.part];
+  }
+  const TALK = {
+    1: '発問の例：「いちばん右の点を遠くへ動かすと、平均値と中央値はどうなる？」「データの個数を偶数にすると、中央値はどう求める？」「やじろべえがつり合う点は？」',
+    2: '発問の例：「外れ値を 120 → 300 にすると、平均値はどれだけ変わった？ 中央値は？」「外れ値があるとき、ふつうの値を表すのはどの代表値？」',
+    3: '発問の例：「ニュースで『平均年収』を聞いたら、何に気をつける？」「最頻値が役に立つのはどんなとき？」「グラフを見るときに、まずどこを見る？」',
+    4: '発問の例：「表からの最頻値とデータの最頻値がちがうのはなぜ？」「階級の幅をかえると、表からの最頻値は？」',
+    5: '発問の例：「平均値が同じなら、2つのクラスは同じといえる？」「点がそろっているのはどちら？ 何でわかる？」',
+  };
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText();
+    $('tTalk').innerHTML = TALK[st.part];
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function teacherStep() {
+    const q = st.q;
+    if (q && !q.done) { st.inp = String(q.ans); check(); return; }
+    if (q && q.done) { newQ(st.part === 4 ? 'tbl' : undefined); return; }
+    if (st.part === 1) { newQ(); return; }
+    if (st.part === 4) { newQ('tbl'); return; }
+    if (st.part === 2) {
+      if (!st.outOn) toggleOut();
+      else if (st.outV < P().out[1] * 10) { pushHist(); st.outV = Math.min(P().out[1] * 10, st.outV + 600); outMsg(); render(); }
+      else toggleOut();
+      return;
+    }
+    if (st.part === 3) { const z = QZ(); if (st.qz.done) nextQuiz(); else answerQuiz((z.ok || [z.ans])[0]); return; }
+    if (st.part === 5) { pushHist(); st.two = 'A'; render(); }
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     11. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = Object.keys(PARTS).map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnNew').addEventListener('click', () => newQ(st.part === 4 ? 'tbl' : undefined));
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetAll);
+  $('btnHint').addEventListener('click', hint);
+  $('btnBal').addEventListener('click', toggleBal);
+  $('btnAdd').addEventListener('click', addDot);
+  $('btnDel').addEventListener('click', delDot);
+  $('btnSort').addEventListener('click', toggleSort);
+  $('btnOut').addEventListener('click', toggleOut);
+  bindSlider($('outRange'), $('outNum'), setOutV);
+  bindSlider($('wRange'), $('wNum'), setW4);
+  $('optSnap').addEventListener('change', () => { pushHist(); st.snap = $('optSnap').checked; render(); });
+  $('btnWs').addEventListener('click', () => {
+    setPart(2);
+    pushHist(); loadDS('commute'); st.outOn = false; render();
+    if (window.Worksheet) Worksheet.open();
+    setMsg('📄 ワークシートの問題：通学時間。まず外れ値なしで「＋ 記録する」。つぎに外れ値 <b>120分</b>、さらに <b>300分</b> にして、そのたびに記録しよう。');
+  });
+  window.addEventListener('resize', () => { if (!$('plotCard').hidden) renderPlot(); });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '動かして くらべて 代表値',
+    question: '外れ値を1つ足すと、平均値と中央値はどうなるだろうか？　どの代表値を使えばよいだろうか？',
+    predictions: ['平均値も中央値も大きく変わる', '平均値は大きく変わるが、中央値はあまり変わらない', '中央値は大きく変わるが、平均値はあまり変わらない', 'どちらも変わらない'],
+    operationNote: '「📄 ワークシートの問題」で ② を開く。外れ値なし → 120分 → 300分 のたびに「＋ 記録する」。',
+    open: false,
+    fields: [
+      { key: 'data', label: 'データ', math: false },
+      { key: 'out', label: '外れ値', math: false },
+      { key: 'mean', label: '平均値', math: false },
+      { key: 'med', label: '中央値', math: false },
+      { key: 'rng', label: '範囲', math: false }
+    ],
+    capture: () => {
+      if (st.part !== 2 && st.part !== 1) { setMsg('① か ② で記録しよう。'); return null; }
+      if (st.q && !st.q.done) { setMsg('練習問題に答えてから記録しよう。'); return null; }
+      const S = stats(vals()), u = P().unit;
+      return { data: P().short + `（${S.n}人）`, out: st.part === 2 && st.outOn ? f10(st.outV) + u : 'なし', mean: meanText(S) + u, med: medText(S) + u, rng: f10(S.max - S.min) + u };
+    },
+    summaryHint: '「外れ値があると、平均値は〜、中央値は〜。だから、〜のときは中央値、〜のときは最頻値、〜のときは平均値を使う」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める。外れ値なしでは平均値 18.2分・中央値 15分。外れ値 120分 で平均値は 約24.56分（＋約6.36分）になるが、中央値は 16.5分（＋1.5分）。300分 にすると平均値は 約35.81分 になるのに、中央値は 16.5分 のまま。③ の場面クイズにつなげて、使い分けをまとめる。',
+      answer: '外れ値なし：平均値 18.2分・中央値 15分。外れ値 120分：平均値 約24.56分・中央値 16.5分。外れ値 300分：平均値 約35.81分・中央値 16.5分。<br>まとめ：外れ値があると、平均値は大きくひっぱられるが、中央値はほとんど変わらない。外れ値があるときやかたよりが大きいときは中央値、いちばん多いものを知りたいときは最頻値、外れ値がなく全体を使いたいときは平均値を使うとよい。'
+    }
+  });
+
+  setupTeacher();
+  loadDS('commute');
+  setMsg('点をドラッグして動かしてみよう。平均値（▲）・中央値（◆）・最頻値（★）・範囲（↔）はどう変わる？');
+  render();
+})();
+</script>
+
+</body>
+</html>
