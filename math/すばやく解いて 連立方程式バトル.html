@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>すばやく解いて 連立方程式バトル</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり：ひだりの人＝オレンジ（●）、みぎの人＝青（■）。正解＝緑（○）、まちがい＝赤紫（×）。
+     色だけでなく、記号・文字でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --pl: #e65100; --pr: #1565c0; --ok: #2e7d32; --ng: #ad1457;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input, select { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1000px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.05rem; color: var(--accent); }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip { border: 2px solid var(--soft); background: #fff; border-radius: 999px; min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333; cursor: pointer; touch-action: manipulation; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip:disabled { opacity: .4; cursor: default; }
+  .op-btn { border: 2px solid var(--soft); background: #fff; border-radius: 12px; min-height: 48px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238; cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12); }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+
+  /* ===== はじめの画面 ===== */
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+  .mode { border: 3px solid #b0bec5; background: #fafafa; border-radius: 16px; padding: 12px; text-align: left; cursor: pointer; touch-action: manipulation; color: var(--ink); min-height: 120px; }
+  .mode b { display: block; font-size: 1.25rem; margin-bottom: 4px; }
+  .mode span { font-size: .9rem; color: #546e7a; line-height: 1.5; }
+  .mode:hover { border-color: var(--accent); }
+  .best { font-size: .92rem; line-height: 1.7; }
+
+  /* ===== 問題の式 ===== */
+  .qbox { text-align: center; overflow-x: auto; }
+  .qsys { font-size: clamp(30px, 6vw, 52px); font-weight: bold; display: inline-block; padding: 4px 8px; }
+  body.big .qsys { font-size: clamp(40px, 8vw, 84px); }
+  .status { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; font-weight: bold; }
+  .status .big { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  body.big .status .big { font-size: 2.2rem; }
+  .bar { height: 12px; border-radius: 6px; background: #eceff1; overflow: hidden; }
+  .bar > div { height: 100%; background: linear-gradient(90deg, #66bb6a, #2e7d32); transition: width .3s; }
+
+  /* ===== 入力（x・y と数字キー） ===== */
+  .pad { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .ins { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .fld { display: flex; align-items: center; gap: 6px; font-size: 28px; font-weight: bold; }
+  .fld i { font-family: "Times New Roman", serif; }
+  .val { min-width: 4.2em; min-height: 56px; border: 3px solid var(--soft); border-radius: 12px; background: #fff; font-size: 30px; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; touch-action: manipulation; font-variant-numeric: tabular-nums; padding: 0 8px; }
+  .val.on { border-color: #fbc02d; box-shadow: 0 0 0 4px #fff59d; }
+  .val.empty::after { content: "？"; color: #b0bec5; }
+  .keys { display: grid; grid-template-columns: repeat(4, 64px); gap: 6px; }
+  .key { min-height: 56px; border: 2px solid var(--soft); background: #fafafa; border-radius: 12px; font-size: 1.5rem; font-weight: bold; cursor: pointer; touch-action: manipulation; color: var(--ink); }
+  .key:active { transform: translateY(1px); background: #eceff1; }
+  .key[data-k="xy"] { font-size: 1rem; padding: 0; }
+  .key.go { grid-column: span 2; background: var(--ok); border-color: var(--ok); color: #fff; font-size: 1.25rem; }
+  .key.go:disabled { background: #b0bec5; border-color: #b0bec5; }
+  .msg { text-align: center; font-size: 1.05rem; line-height: 1.7; min-height: 1.8rem; padding: 4px 6px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; border-radius: 12px; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; border-radius: 12px; }
+  .flash-ok { animation: fok .6s ease-out; }
+  @keyframes fok { 0% { background: #c8e6c9; } 100% { background: #fff; } }
+  .shake { animation: shake .4s; }
+  @keyframes shake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+
+  /* 横に広い画面：ひとりのときは 式（左）と 数字キー（右）を ならべる */
+  #solo:not([hidden]) { display: flex; flex-direction: column; gap: 10px; }
+  @media (min-width: 900px) {
+    #solo:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); align-items: start; }
+    #solo > .card:first-child, #hwBox { grid-column: 1 / -1; }
+  }
+
+  /* ===== 2人でバトル ===== */
+  .duel { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .side { border: 4px solid; border-radius: 16px; padding: 8px; background: #fff; display: flex; flex-direction: column; gap: 6px; align-items: center; min-width: 0; }
+  .side.L { border-color: var(--pl); }
+  .side.R { border-color: var(--pr); border-style: dashed; }
+  .side .who { font-size: 1.2rem; font-weight: 900; }
+  .side.L .who { color: var(--pl); } .side.R .who { color: var(--pr); }
+  .score { font-size: 2.2rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .side .keys { grid-template-columns: repeat(4, minmax(44px, 56px)); }
+  .side .val { min-width: 3.4em; font-size: 26px; }
+  .side .fld { font-size: 22px; }
+  .side.win { background: #e8f5e9; }
+  .side.lock { opacity: .55; }
+
+  /* ===== 宿題を減らせ ===== */
+  .pile { display: flex; align-items: flex-end; justify-content: center; gap: 14px; }
+  .stack { width: 90px; border: 3px solid #8d6e63; border-bottom-width: 6px; border-radius: 6px 6px 2px 2px; background: repeating-linear-gradient(0deg, #fffde7 0 6px, #d7ccc8 6px 8px); transition: height .4s; }
+  .pages { font-size: 2rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .diffs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .diff { border: 3px solid #b0bec5; background: #fafafa; border-radius: 14px; padding: 8px; cursor: pointer; touch-action: manipulation; font-weight: bold; min-height: 70px; }
+  .diff b { display: block; font-size: 1.3rem; color: var(--ok); }
+
+  /* ===== 結果・ふくしゅう ===== */
+  .rank { text-align: center; font-size: clamp(2.4rem, 8vw, 4rem); font-weight: 900; color: #6a1b9a; }
+  .resline { text-align: center; font-size: 1.2rem; font-weight: bold; line-height: 1.8; }
+  .rv { border-top: 2px dashed #cfd8dc; padding: 8px 0; }
+  .rv .rsys { font-size: 26px; }
+  .rv details { margin-top: 4px; }
+  .rv summary { cursor: pointer; font-weight: bold; min-height: 40px; display: flex; align-items: center; }
+  .steps { display: grid; grid-template-columns: minmax(0, auto) 1fr; gap: 4px 12px; align-items: center; font-size: 22px; margin-top: 4px; }
+  .steps .why { font-size: .85rem; color: #546e7a; border-left: 3px solid #cfd8dc; padding-left: 8px; }
+  .trip { color: var(--ng); font-weight: bold; }
+
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .tset { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .tset label { font-weight: bold; display: flex; align-items: center; gap: 6px; min-height: 44px; }
+  .tset select, .tset input[type=number] { font-size: 1.05rem; padding: 6px; border-radius: 8px; border: 2px solid var(--soft); min-height: 44px; }
+  .tset input[type=range] { width: 160px; }
+
+  @media (max-width: 600px) {
+    .duel { gap: 4px; }
+    .side { padding: 4px; }
+    .side .keys { grid-template-columns: repeat(4, minmax(34px, 44px)); gap: 4px; }
+    .side .key { min-height: 46px; font-size: 1.2rem; }
+    .side .val { min-width: 2.6em; font-size: 22px; min-height: 48px; }
+    .keys { grid-template-columns: repeat(4, 60px); }
+  }
+  body.big .panel { max-width: 1400px; }
+  body.big .val { font-size: 40px; min-height: 70px; }
+  body.big .key { min-height: 70px; font-size: 1.9rem; }
+  body.big .keys { grid-template-columns: repeat(4, 84px); }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>⚔️ すばやく解いて 連立方程式バトル</h1>
+<p class="subtitle">連立方程式を、すばやく・正確に解こう。ひとりでも、2人でも</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- ===== はじめの画面 ===== -->
+  <section id="home">
+    <div class="card">
+      <h2>レベル</h2>
+      <div class="chip-row" id="levelRow"></div>
+      <div class="small" id="levelNote" style="text-align:center;margin-top:6px"></div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <h2>モードをえらぼう</h2>
+      <div class="modes">
+        <button class="mode" data-mode="ta"><b>⏱ タイムアタック</b><span>ひとりで10問。タイムとミスの数で、名人・1級〜10級のランクがつく。</span></button>
+        <button class="mode" data-mode="duel"><b>⚔️ 2人でバトル</b><span>1台の画面を左右に分けて、同じ問題を同時に解く。先に正解したら1点、5点先取。</span></button>
+        <button class="mode" data-mode="hw"><b>📚 宿題を減らせ</b><span>宿題の山 100ページ。むずかしい問題ほどたくさん減る。ミスすると ふえる。</span></button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <h2>🏆 この端末のベスト記録</h2>
+      <div class="best" id="bestBox"></div>
+    </div>
+    <div class="card" id="teacherCard" hidden style="margin-top:10px; border:3px solid #ffb74d">
+      <h2>👩‍🏫 先生モードの設定</h2>
+      <div class="tset">
+        <label>レベル固定 <select id="tLevel"><option value="">固定しない</option></select></label>
+        <label>宿題を減らせの時間 <input type="range" id="tHwR" min="60" max="600" step="30"><input type="number" id="tHw" min="60" max="600" step="30" style="width:5em">秒</label>
+        <label>バトルの1問の時間 <select id="tDuel"><option value="0">なし</option><option value="30">30秒</option><option value="60">60秒</option><option value="90">90秒</option><option value="120">120秒</option></select></label>
+        <label><input type="checkbox" id="tBig" style="width:22px;height:22px"> クラス用の大画面表示</label>
+      </div>
+      <div class="small" id="tTotal" style="margin-top:6px"></div>
+      <div class="tools" style="margin-top:6px"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <h2>🔎 あなたのつまずき（この端末）</h2>
+      <div id="tripList"></div>
+    </div>
+  </section>
+
+  <!-- ===== ひとりで解く画面（タイムアタック・宿題を減らせ） ===== -->
+  <section id="solo" hidden>
+    <div class="card">
+      <div class="status"><span id="sLeft"></span><span class="big" id="sTime">0.0 秒</span><span id="sRight"></span></div>
+      <div class="bar" style="margin-top:6px"><div id="sBar" style="width:0%"></div></div>
+    </div>
+    <!-- 宿題の山と、むずかしさえらび -->
+    <div class="card" id="hwBox" hidden>
+      <div class="pile"><div class="stack" id="hwStack"></div><div><div class="pages" id="hwPages">100</div><div class="small">ページのこっている</div></div></div>
+      <div id="hwPick" style="margin-top:8px">
+        <div style="text-align:center;font-weight:bold;margin-bottom:6px">つぎの問題のむずかしさをえらぼう</div>
+        <div class="diffs" id="hwDiffs"></div>
+      </div>
+    </div>
+    <div class="card qbox" id="sQ"><div class="qsys" id="sSys"></div></div>
+    <div class="card" id="sPadCard">
+      <div class="pad" id="sPad"></div>
+      <div class="msg" id="sMsg"></div>
+      <div class="tools"><button class="op-btn" id="sPass">⏭ パス（ミス1回）</button><button class="op-btn" id="sQuit">⏹ やめる</button></div>
+    </div>
+  </section>
+
+  <!-- ===== 2人でバトル ===== -->
+  <section id="duelSec" hidden>
+    <div class="card">
+      <div class="status"><span id="dRound"></span><span class="big" id="dTime"></span><span class="small">5点先取</span></div>
+    </div>
+    <div class="card qbox"><div class="qsys" id="dSys"></div></div>
+    <div class="duel">
+      <div class="side L" id="sideL"></div>
+      <div class="side R" id="sideR"></div>
+    </div>
+    <div class="msg" id="dMsg"></div>
+    <div class="tools"><button class="op-btn" id="dSkip">⏭ 2人ともパス（つぎの問題）</button><button class="op-btn" id="dQuit">⏹ やめる</button></div>
+  </section>
+
+  <!-- ===== 結果とふくしゅう ===== -->
+  <section id="result" hidden>
+    <div class="card">
+      <div class="rank" id="rRank"></div>
+      <div class="resline" id="rLine"></div>
+      <div class="tools" style="margin-top:8px"><button class="op-btn action" id="rAgain">▶ もういちど</button><button class="op-btn" id="rHome">🏠 はじめの画面</button></div>
+    </div>
+    <div class="card">
+      <h2>🔁 ふくしゅう（まちがえた・パスした問題）</h2>
+      <div id="rReview"></div>
+    </div>
+  </section>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li>x・y のらんをタップしてえらび、数字キーで入力（キーボードの数字・−・Enter も使える）。<b>決定</b>を押すと判定。</li>
+      <li>まちがえると、決定ボタンが少しのあいだ押せなくなる（ひとりは 1.5 秒、バトルは 3 秒）。あわてず<b>検算</b>してから決定しよう。</li>
+      <li>レベル：① そのまま消える　② 一方を何倍か　③ 両方を何倍か　④ 代入法向き（y＝… の形）　⑤ まぜる。</li>
+      <li>終わったら、まちがえた問題の<b>解き方のステップ</b>が見られる。「どっちで解く？」で1ステップずつ解きなおすこともできる。</li>
+      <li><b>タイムアタックのランク</b>：タイム ＋ ミス×10 秒 を、レベルごとの目安の時間とくらべて決める。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：問題は、答えが整数になるように、答えを先に決めて作っています。2人でバトルは1台の画面で遊ぶ形で、通信はしません。<br>
+    つながる教材：<a href="九九で あそぼう.html">小学校 九九で あそぼう（計算をすばやく）</a>／<a href="どっちで解く？ 連立方程式.html">中2 どっちで解く？ 連立方程式</a>／<a href="表にして 式にする 連立方程式.html">中2 表にして 式にする 連立方程式</a></p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const F = (v) => Fraction.from(v);
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const mr = (src) => MathRender.html(src, { size: 'inherit' });
+  const vI = (v) => '<i style="font-family:\'Times New Roman\',serif">' + v + '</i>';
+  const now = () => performance.now();
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK   = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG   = () => beep([[170, 0, 0.18, 'square']]);
+  const sndKey  = () => beep([[600, 0, 0.03, 'triangle', 0.05]]);
+  const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+  /* =====================================================================
+     1. 式のしくみ（「どっちで解く？ 連立方程式」と同じ）
+     式 e = { a, b, c, form }：a x ＋ b y ＝ c。form は見せ方（'std'／'y'＝y＝px＋q／'x'＝x＝py＋q）
+     ===================================================================== */
+  const E = (a, b, c, o) => ({ a: F(a), b: F(b), c: F(c), form: (o && o.form) || 'std' });
+  const co = (e, v) => v === 'x' ? e.a : e.b;
+  const oth = (v) => v === 'x' ? 'y' : 'x';
+  const scaleE = (e, k) => ({ a: e.a.mul(k), b: e.b.mul(k), c: e.c.mul(k), form: 'std' });
+  const addE = (e1, e2, s) => ({ a: e1.a.add(e2.a.mul(s)), b: e1.b.add(e2.b.mul(s)), c: e1.c.add(e2.c.mul(s)), form: 'std' });
+  const singleE = (u, k, m) => u === 'x' ? E(k, 0, m) : E(0, k, m);
+  function termS(c, v, first) {
+    c = F(c);
+    const sign = c.sign() < 0 ? '-' : (first ? '' : '+'), m = c.abs();
+    if (!v) return sign + m;
+    if (m.equals(1)) return sign + v;
+    if (m.isInteger()) return sign + m + v;
+    return sign + '{' + (m.n === 1 ? '' : m.n) + v + '}/' + m.d;
+  }
+  function sideS(list) { let s = ''; list.forEach(([c, v]) => { if (F(c).isZero()) return; s += termS(c, v, !s); }); return s || '0'; }
+  function sidesOf(e) {
+    if (e.form === 'y') return { L: [[1, 'y']], R: [[e.a.neg().div(e.b), 'x'], [e.c.div(e.b), '']] };
+    if (e.form === 'x') return { L: [[1, 'x']], R: [[e.b.neg().div(e.a), 'y'], [e.c.div(e.a), '']] };
+    return { L: [[e.a, 'x'], [e.b, 'y']], R: [[e.c, '']] };
+  }
+  const eqS = (e) => { const s = sidesOf(e); return sideS(s.L) + '=' + sideS(s.R); };
+  // 式が入れ物の横はばに入らないときは、文字を小さくする
+  function fitBox(el) {
+    const box = el.parentElement;
+    el.style.fontSize = '';
+    let fs = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth + 40 > box.clientWidth && fs > 18) { fs -= 2; el.style.fontSize = fs + 'px'; }
+  }
+  const sysH = (es) => MathRender.system(es.map((e, i) => eqS(e) + ' ' + '①②'[i]), { size: 'inherit' });
+  // 文字に数を入れた辺（2x → 2×3）。vals にない文字はそのまま
+  function substSide(list, vals) {
+    let s = '';
+    list.forEach(([c, v]) => {
+      c = F(c);
+      if (c.isZero()) return;
+      const first = !s, sign = c.sign() < 0 ? '-' : (first ? '' : '+'), m = c.abs();
+      if (!v) { s += sign + m; return; }
+      if (vals[v] === undefined) { s += termS(c, v, first); return; }
+      const val = F(vals[v]), P = val.sign() < 0 ? '(' + val + ')' : val.toString();
+      s += sign + (m.equals(1) ? P : m + '*' + P);
+    });
+    return s || '0';
+  }
+
+  /* =====================================================================
+     2. 問題を作る（答え x, y を先に決めてから式を作る。「どっちで解く？」のレベル①②③⑤と同じ）
+     ===================================================================== */
+  const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const nz = (a, b) => { let v; do v = ri(a, b); while (v === 0); return v; };
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const shuffle = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const LEVELS = {
+    1: { name: '① そのまま消える', note: '係数の絶対値が同じ文字がある。たすか ひくだけで消える', base: 25, pages: 5 },
+    2: { name: '② 一方を何倍か', note: '片方の式を何倍かすると、係数がそろう', base: 35, pages: 10 },
+    3: { name: '③ 両方を何倍か', note: '両方の式を何倍かして、係数をそろえる', base: 50, pages: 15 },
+    4: { name: '④ 代入法向き', note: 'y＝… や x＝… の形の式がある。代入するときはかっこ', base: 35, pages: 10 },
+    5: { name: '⑤ まぜる', note: '①〜④がまざって出る', base: 40, pages: 10 }
+  };
+  function build(c1, c2, x, y, max) {
+    const [a1, b1, a2, b2] = [...c1, ...c2];
+    if (a1 * b2 - a2 * b1 === 0) return null;
+    const r1 = a1 * x + b1 * y, r2 = a2 * x + b2 * y;
+    if (Math.abs(r1) > (max || 30) || Math.abs(r2) > (max || 30)) return null;
+    return [E(a1, b1, r1), E(a2, b2, r2)];
+  }
+  function gen1() {
+    for (let t = 0; t < 2000; t++) {
+      const x = nz(-4, 6), y = nz(-4, 6), k = ri(1, 3), s = pick([1, -1]), same = Math.random() < 0.5;
+      const u1 = nz(-5, 5), u2 = nz(-5, 5);
+      if (Math.abs(u1) === Math.abs(u2)) continue;
+      let c1 = [u1, s * k], c2 = [u2, same ? s * k : -s * k];
+      if (Math.random() < 0.5) { c1 = [c1[1], c1[0]]; c2 = [c2[1], c2[0]]; }
+      const e = build(c1, c2, x, y);
+      if (e) return e;
+    }
+    return [E(2, 1, 7), E(1, -1, 2)];
+  }
+  function gen2() {
+    for (let t = 0; t < 2000; t++) {
+      const x = nz(-4, 6), y = nz(-4, 6), k1 = ri(1, 2), m = ri(2, 3), u1 = nz(-5, 5), u2 = nz(-5, 5);
+      if (Math.abs(u1) === Math.abs(u2) || Math.abs(u1) % Math.abs(u2) === 0 || Math.abs(u2) % Math.abs(u1) === 0) continue;
+      let c1 = [u1, k1 * pick([1, -1])], c2 = [u2, k1 * m * pick([1, -1])];
+      if (Math.random() < 0.5) { const tmp = c1; c1 = c2; c2 = tmp; }
+      if (Math.random() < 0.5) { c1 = [c1[1], c1[0]]; c2 = [c2[1], c2[0]]; }
+      const e = build(c1, c2, x, y, 40);
+      if (e) return e;
+    }
+    return [E(3, 2, 8), E(1, 1, 3)];
+  }
+  function gen3() {
+    const ok = (p, q) => p !== q && MathRender.gcd(p, q) === 1;
+    for (let t = 0; t < 3000; t++) {
+      const x = nz(-4, 5), y = nz(-4, 5), A = [ri(2, 5), ri(2, 5)], B = [ri(2, 5), ri(2, 5)];
+      if (!ok(A[0], A[1]) || !ok(B[0], B[1])) continue;
+      const sg = () => pick([1, 1, -1]);
+      const e = build([A[0] * sg(), B[0] * sg()], [A[1] * sg(), B[1] * sg()], x, y, 40);
+      if (e) return e;
+    }
+    return [E(3, 2, 12), E(2, -3, -5)];
+  }
+  function gen4() {
+    for (let t = 0; t < 3000; t++) {
+      const v = Math.random() < 0.7 ? 'y' : 'x', u = oth(v);
+      const p = nz(-3, 3), q = nz(-6, 6), uu = nz(-4, 5), vv = p * uu + q;
+      if (vv === 0 || Math.abs(vv) > 12) continue;
+      const bv = pick([2, 3, -2, -3, -1, 4]), au = nz(-5, 5), vals = { [u]: uu, [v]: vv };
+      const eF = v === 'y' ? E(-p, 1, q, { form: 'y' }) : E(1, -p, q, { form: 'x' });
+      const oA = u === 'x' ? au : bv, oB = u === 'x' ? bv : au, c = oA * vals.x + oB * vals.y;
+      if (Math.abs(c) > 40) continue;
+      const eO = E(oA, oB, c);
+      if (eF.a.mul(eO.b).sub(eO.a.mul(eF.b)).isZero()) continue;
+      return Math.random() < 0.7 ? [eF, eO] : [eO, eF];
+    }
+    return [E(-2, 1, -1, { form: 'y' }), E(3, 2, 12)];
+  }
+  const GEN = { 1: gen1, 2: gen2, 3: gen3, 4: gen4 };
+  // 答え（クラメルの公式）
+  function answerOf(es) {
+    const [p, q] = es;
+    const D = p.a.mul(q.b).sub(q.a.mul(p.b));
+    return { x: p.c.mul(q.b).sub(q.c.mul(p.b)).div(D), y: p.a.mul(q.c).sub(q.a.mul(p.c)).div(D) };
+  }
+  // 問題を1つ（同じ問題が続かないように、最近の問題とくらべる）
+  const recent = [];
+  function makeQ(lv) {
+    const L = lv === 5 ? ri(1, 4) : lv;
+    let es, key, t = 0;
+    do { es = GEN[L](); key = es.map(eqS).join(';'); t++; } while (recent.includes(key) && t < 40);
+    recent.push(key); if (recent.length > 30) recent.shift();
+    return { lv: L, es, ans: answerOf(es), key, tries: [] };
+  }
+
+  /* =====================================================================
+     3. 解き方のステップ（ふくしゅう用。楽な方法で）
+     ===================================================================== */
+  function elimPlan(es, v) {
+    const c1 = co(es[0], v).abs(), c2 = co(es[1], v).abs(), L = Fraction.lcm(c1.n, c2.n);
+    return { k1: L / c1.n, k2: L / c2.n };
+  }
+  const costE = (es, v) => { const p = elimPlan(es, v); return (p.k1 > 1) + (p.k2 > 1) + (p.k1 > 1 && p.k2 > 1 ? 0.5 : 0) + Math.max(p.k1, p.k2) / 100; };
+  function stepsOf(Q) {
+    const es = Q.es, A = Q.ans, out = [];
+    const fi = es.findIndex(e => e.form !== 'std');
+    let u, v, uval;
+    if (fi >= 0) {
+      // 代入法：v＝… の右辺を、もう一方の式に かっこをつけて代入
+      const fe = es[fi], oe = es[1 - fi];
+      v = fe.form; u = oth(v);
+      const R = sidesOf(fe).R, b = co(oe, v);
+      const p = F(R.find(([, w]) => w === u)[0]), q = F(R.find(([, w]) => !w)[0]);
+      let s = '';
+      ['x', 'y'].forEach(w => { const c = co(oe, w); if (c.isZero()) return; const first = !s;
+        if (w !== v) s += termS(c, w, first);
+        else s += (c.sign() < 0 ? '-' : first ? '' : '+') + (c.abs().equals(1) ? '' : c.abs()) + '(' + sideS(R) + ')'; });
+      out.push({ src: s + '=' + oe.c, why: '①②'[fi] + ' を ' + '①②'[1 - fi] + ' に代入（かっこをつける）' });
+      const terms = [];
+      ['x', 'y'].forEach(w => { if (w === u) terms.push([co(oe, u), u]); else { terms.push([b.mul(p), u]); terms.push([b.mul(q), '']); } });
+      out.push({ src: sideS(terms) + '=' + oe.c, why: 'かっこをはずす' });
+      const k = co(oe, u).add(b.mul(p)), m = oe.c.sub(b.mul(q));
+      out.push({ src: eqS(singleE(u, k, m)), why: '移項して まとめる（' + v + ' が消えた）' });
+      uval = m.div(k);
+      if (!k.equals(1)) out.push({ src: u + '=' + uval, why: '両辺を ' + k + ' でわる' });
+      const S = sidesOf(fe);
+      out.push({ src: substSide(S.L, { [u]: uval }) + '=' + substSide(S.R, { [u]: uval }), why: u + '＝' + uval + ' を ' + '①②'[fi] + ' に代入' });
+    } else {
+      // 加減法：何倍かする式が少ないほうの文字を消す
+      v = costE(es, 'x') <= costE(es, 'y') ? 'x' : 'y'; u = oth(v);
+      const p = elimPlan(es, v);
+      let e1 = es[0], e2 = es[1], n1 = '①', n2 = '②';
+      if (p.k1 > 1) { e1 = scaleE(e1, p.k1); n1 = '①×' + p.k1; out.push({ src: eqS(e1), why: n1 + '（' + v + ' の係数をそろえる）' }); }
+      if (p.k2 > 1) { e2 = scaleE(e2, p.k2); n2 = '②×' + p.k2; out.push({ src: eqS(e2), why: n2 + '（' + v + ' の係数をそろえる）' }); }
+      const s = co(e1, v).sign() === co(e2, v).sign() ? -1 : 1, r = addE(e1, e2, s);
+      out.push({ src: eqS(r), why: n1 + (s > 0 ? '＋' : '−') + n2 + '（' + v + ' が消える）' });
+      const k = co(r, u);
+      uval = r.c.div(k);
+      if (!k.equals(1)) out.push({ src: u + '=' + uval, why: '両辺を ' + k + ' でわる' });
+      // 代入するのは、v の係数が小さいほうの式
+      const i = co(es[0], v).abs().cmp(co(es[1], v).abs()) <= 0 ? 0 : 1, S = sidesOf(es[i]);
+      out.push({ src: substSide(S.L, { [u]: uval }) + '=' + substSide(S.R, { [u]: uval }), why: u + '＝' + uval + ' を ' + '①②'[i] + ' に代入' });
+    }
+    out.push({ src: v + '=' + A[v], why: '計算する' });
+    out.push({ src: 'x=' + A.x + ',  y=' + A.y, why: '答え（両方の式に代入して検算しよう）' });
+    return out;
+  }
+  // 「どっちで解く？」をこの問題で開くアドレス
+  const qURL = (Q) => 'どっちで解く？ 連立方程式.html?q=' + encodeURIComponent(Q.es.map(e => [e.a, e.b, e.c].join(',') + (e.form !== 'std' ? ',' + e.form : '')).join(';'));
+
+  /* =====================================================================
+     4. つまずきの型（まちがえた答えから見分ける）
+     ===================================================================== */
+  const TRIPS = {
+    swap:    { name: 'x と y を逆に入れた', desc: '求めた値が x のものか y のものか、もう一度たしかめよう。' },
+    sign:    { name: '符号のまちがい', desc: '移項やひき算で、符号が変わるところをたしかめよう。−(−3) は ＋3。' },
+    oneEq:   { name: '片方の式にしか合っていない', desc: '求めた x・y を、<b>両方の式</b>に代入して検算しよう。片方だけ成り立つのは、もう一方の文字を求める計算のまちがい。' },
+    backSub: { name: 'もう一方の文字を求めるところのまちがい', desc: '1つめの文字は合っている。それを代入して、もう一方の文字を求める計算を見なおそう。' },
+    calc:    { name: '計算のまちがい', desc: '係数をそろえるとき、両辺の<b>ぜんぶの項</b>にかけたか、たす・ひくをまちがえていないか見なおそう。' }
+  };
+  function tripOf(Q, x, y) {
+    const A = Q.ans, sat = (e) => e.a.mul(x).add(e.b.mul(y)).equals(e.c);
+    if (x.equals(A.y) && y.equals(A.x) && !A.x.equals(A.y)) return 'swap';
+    if ((x.equals(A.x.neg()) && y.equals(A.y) && !A.x.isZero()) || (y.equals(A.y.neg()) && x.equals(A.x) && !A.y.isZero())) return 'sign';
+    const s = Q.es.map(sat);
+    if (s[0] !== s[1]) return 'oneEq';
+    if (x.equals(A.x) || y.equals(A.y)) return 'backSub';
+    return 'calc';
+  }
+
+  /* =====================================================================
+     5. きろく（この端末の localStorage。保存キーはワークシートと同じ）
+     ===================================================================== */
+  let memRec = {};
+  function getRec() {
+    const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {};
+    r.best = r.best || {}; r.trips = r.trips || {}; r.teacher = r.teacher || {};
+    return r;
+  }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function addTrip(t) { const r = getRec(); r.trips[t] = (r.trips[t] || 0) + 1; setRec(r); }
+
+  /* =====================================================================
+     6. 入力パッド（x・y のらん＋数字キー＋決定）。ひとり用と、バトルの左右で同じ部品を使う
+     ===================================================================== */
+  function makePad(root, opt) {
+    const P = { vals: { x: '', y: '' }, on: 'x', locked: false, onGo: opt.onGo };
+    root.innerHTML = `<div class="ins">
+        <div class="fld">${vI('x')} ＝<div class="val empty" data-f="x" role="button" tabindex="0" aria-label="x の値"></div></div>
+        <div class="fld">${vI('y')} ＝<div class="val empty" data-f="y" role="button" tabindex="0" aria-label="y の値"></div></div></div>
+      <div class="keys">${['7', '8', '9', '⌫', '4', '5', '6', '−', '1', '2', '3', '0'].map(k => `<button class="key" data-k="${k}">${k}</button>`).join('')}
+        <button class="key" data-k="xy">${vI('x')}↔${vI('y')}</button><button class="key" data-k="clr">C</button><button class="key go" data-k="go">決定</button></div>`;
+    const go = root.querySelector('[data-k="go"]');
+    P.render = () => {
+      root.querySelectorAll('.val').forEach(el => {
+        const f = el.dataset.f, v = P.vals[f];
+        el.textContent = v.replace('-', '−');
+        el.classList.toggle('empty', !v);
+        el.classList.toggle('on', P.on === f);
+      });
+      go.disabled = P.locked;
+    };
+    P.key = (k) => {
+      if (k === 'go') { if (!P.locked) P.onGo(P); return; }
+      sndKey();
+      const v = P.vals[P.on];
+      if (k === '⌫') P.vals[P.on] = v.slice(0, -1);
+      else if (k === 'clr') P.vals[P.on] = '';
+      else if (k === '−') P.vals[P.on] = v.startsWith('-') ? v.slice(1) : '-' + v;
+      else if (k === 'xy') P.on = P.on === 'x' ? 'y' : 'x';
+      else if (v.replace('-', '').length < 3) P.vals[P.on] = (v === '0' ? '' : v === '-0' ? '-' : v) + k;
+      P.render();
+    };
+    P.clear = () => { P.vals = { x: '', y: '' }; P.on = 'x'; P.render(); };
+    // 決定したとき：数を読む（読めなければ null）
+    P.read = () => {
+      const ok = (s) => /^-?\d+$/.test(s);
+      if (!ok(P.vals.x) || !ok(P.vals.y)) return null;
+      return { x: F(P.vals.x), y: F(P.vals.y) };
+    };
+    P.lock = (ms, onEnd) => {
+      P.locked = true; P.render();
+      const t0 = now();
+      const tick = () => {
+        const left = ms - (now() - t0);
+        if (left <= 0) { P.locked = false; go.textContent = '決定'; P.render(); if (onEnd) onEnd(); return; }
+        go.textContent = (left / 1000).toFixed(1) + ' 秒';
+        P.timer = setTimeout(tick, 100);
+      };
+      tick();
+    };
+    root.addEventListener('click', (e) => {
+      const f = e.target.closest('.val'); if (f) { P.on = f.dataset.f; P.render(); return; }
+      const b = e.target.closest('.key'); if (b) P.key(b.dataset.k);
+    });
+    root.addEventListener('pointerdown', (e) => { if (e.target.closest('.key')) e.preventDefault(); });   // 連打でダブルタップ拡大しない
+    P.render();
+    return P;
+  }
+
+  /* =====================================================================
+     7. 画面の切りかえ・はじめの画面
+     ===================================================================== */
+  const st = { level: 1, mode: null, run: null, review: [], last: null };
+  const T = { level: '', hw: 180, duel: 0, big: false };    // 先生モードの設定
+  function show(id) {
+    ['home', 'solo', 'duelSec', 'result'].forEach(s => { $(s).hidden = s !== id; });
+    // 解いているあいだは、説明を かくして画面を広く使う
+    const playing = id === 'solo' || id === 'duelSec';
+    document.querySelector('.help').hidden = playing;
+    document.querySelector('.subtitle').hidden = playing;
+    window.scrollTo({ top: 0 });
+  }
+  function renderHome() {
+    const fixed = TEACHER && T.level;
+    if (fixed) st.level = +T.level;
+    $('levelRow').innerHTML = Object.keys(LEVELS).map(k => `<button class="chip${+k === st.level ? ' active' : ''}" data-lv="${k}" ${fixed && +k !== st.level ? 'disabled' : ''}>${LEVELS[k].name}</button>`).join('');
+    $('levelNote').textContent = LEVELS[st.level].note + (fixed ? '（先生がレベルを固定しています）' : '');
+    const r = getRec();
+    const rows = [];
+    Object.keys(LEVELS).forEach(k => {
+      const b = r.best['ta' + k]; if (b) rows.push(`⏱ タイムアタック ${LEVELS[k].name}：<b>${b.rank}</b>（${b.time.toFixed(1)}秒・ミス${b.miss}）`);
+    });
+    Object.keys(LEVELS).forEach(k => {
+      const b = r.best['hw' + k]; if (b) rows.push(`📚 宿題を減らせ ${LEVELS[k].name}：<b>${b.clear ? b.time.toFixed(1) + '秒でゼロ！' : (100 - b.left) + 'ページ減らした'}</b>`);
+    });
+    $('bestBox').innerHTML = rows.length ? rows.join('<br>') : '<span class="small">まだ記録がないよ。</span>';
+    const ent = Object.entries(r.trips).filter(([k]) => TRIPS[k]).sort((a, b) => b[1] - a[1]);
+    $('tripList').innerHTML = ent.length ? ent.map(([k, n]) => `<div style="padding:4px 0;border-bottom:1px dashed #cfd8dc"><span class="bad">× ${TRIPS[k].name}</span>　${n}回<div class="small">${TRIPS[k].desc}</div></div>`).join('')
+      : '<div class="small">まだ つまずきはないよ。まちがえると、ここに型の名前が出るよ。</div>';
+    if (TEACHER) $('tTotal').textContent = 'この端末のつまずきの合計：' + (ent.map(([k, n]) => TRIPS[k].name + ' ' + n + '回').join('、') || 'なし');
+  }
+
+  /* =====================================================================
+     8. ひとりで：⏱ タイムアタック・📚 宿題を減らせ
+     ===================================================================== */
+  const N_TA = 10;
+  let soloPad = null, tickTimer = null;
+  function stopTick() { clearInterval(tickTimer); tickTimer = null; }
+  function startSolo(mode) {
+    st.mode = mode; st.review = [];
+    const R = st.run = { mode, lv: st.level, n: 0, miss: 0, t0: now(), q: null, qT0: 0, done: false,
+      pages: 100, limit: (TEACHER ? T.hw : 180) * 1000, solved: 0, log: [] };
+    show('solo');
+    $('hwBox').hidden = mode !== 'hw';
+    $('sPass').textContent = mode === 'hw' ? '⏭ パス（むずかしさをえらびなおす）' : '⏭ パス（ミス1回）';
+    if (!soloPad) soloPad = makePad($('sPad'), { onGo: soloGo });
+    soloPad.clear();
+    setSMsg('');
+    stopTick();
+    tickTimer = setInterval(soloTick, 100);
+    if (mode === 'ta') nextSolo(); else hwPickShow();
+    soloTick();
+  }
+  function soloTick() {
+    const R = st.run; if (!R || R.done) return;
+    const el = (now() - R.t0) / 1000;
+    if (R.mode === 'ta') {
+      $('sTime').textContent = el.toFixed(1) + ' 秒';
+      $('sLeft').textContent = `${Math.min(R.n + 1, N_TA)} / ${N_TA} 問`;
+      $('sRight').textContent = `ミス ${R.miss}`;
+      $('sBar').style.width = (R.n / N_TA * 100) + '%';
+    } else {
+      const left = Math.max(0, R.limit / 1000 - el);
+      $('sTime').textContent = 'のこり ' + left.toFixed(1) + ' 秒';
+      $('sLeft').textContent = `正解 ${R.solved}`;
+      $('sRight').textContent = `ミス ${R.miss}`;
+      $('sBar').style.width = ((100 - R.pages) / 100 * 100) + '%';
+      if (left <= 0) finishSolo();
+    }
+  }
+  function nextSolo(lv) {
+    const R = st.run;
+    R.q = makeQ(lv || R.lv); R.qT0 = now();
+    $('sSys').innerHTML = sysH(R.q.es);
+    fitBox($('sSys'));
+    $('sQ').hidden = false; $('sPadCard').hidden = false;
+    $('sQ').classList.remove('flash-ok'); void $('sQ').offsetWidth;
+    soloPad.clear();
+  }
+  function setSMsg(h, cls) { const m = $('sMsg'); m.innerHTML = h || ''; m.className = 'msg' + (cls ? ' ' + cls : ''); }
+  function addReview(Q, ans, trip) {
+    if (!st.review.includes(Q)) st.review.push(Q);
+    if (ans) Q.tries.push({ x: ans.x, y: ans.y, trip });
+  }
+  function soloGo(P) {
+    const R = st.run; if (!R || R.done || !R.q) return;
+    const a = P.read();
+    if (!a) { setSMsg('x と y の両方に、整数を入れてから決定しよう', 'ng'); return; }
+    const Q = R.q;
+    if (a.x.equals(Q.ans.x) && a.y.equals(Q.ans.y)) {
+      sndOK();
+      const sec = (now() - R.qT0) / 1000;
+      R.log.push({ q: Q, sec });
+      if (R.mode === 'ta') {
+        R.n++;
+        setSMsg(`<span style="font-weight:900">○</span> 正解！（${sec.toFixed(1)} 秒）`, 'ok');
+        $('sQ').classList.add('flash-ok');
+        if (R.n >= N_TA) finishSolo(); else nextSolo();
+      } else {
+        const L = LEVELS[Q.lv], bonus = Math.max(0, Math.round((30 - sec) / 10));
+        R.pages = Math.max(0, R.pages - L.pages - bonus); R.solved++;
+        setSMsg(`<span style="font-weight:900">○</span> 正解！ 宿題が ${L.pages + bonus} ページ減った` + (bonus ? `（はやいボーナス ${bonus}）` : ''), 'ok');
+        hwRender();
+        if (R.pages <= 0) finishSolo(); else hwPickShow();
+      }
+      return;
+    }
+    // まちがい：ミスを数えて、決定を少しのあいだ止める（連打・でたらめ入力の防止）
+    sndNG();
+    const t = tripOf(Q, a.x, a.y);
+    addTrip(t); addReview(Q, a, t);
+    R.miss++;
+    if (R.mode === 'hw') { R.pages = Math.min(150, R.pages + 5); hwRender(); }
+    setSMsg(`<span style="font-weight:900">×</span> ざんねん。${TRIPS[t].name}？ 検算してみよう` + (R.mode === 'hw' ? '（宿題が 5 ページふえた）' : ''), 'ng');
+    $('sPadCard').classList.remove('shake'); void $('sPadCard').offsetWidth; $('sPadCard').classList.add('shake');
+    P.lock(1500);
+  }
+  function soloPass() {
+    const R = st.run; if (!R || R.done || !R.q) return;
+    addReview(R.q, null, null);
+    if (R.mode === 'ta') {
+      R.miss++; R.n++;
+      setSMsg('パスした問題は、終わったあとで ふくしゅうしよう', 'ng');
+      if (R.n >= N_TA) finishSolo(); else nextSolo();
+    } else hwPickShow();
+  }
+  // 宿題を減らせ：むずかしさのカード
+  function hwPickShow() {
+    const R = st.run;
+    R.q = null;
+    $('sQ').hidden = true; $('sPadCard').hidden = true;
+    $('hwPick').hidden = false;
+    const lvs = R.lv === 5 ? [1, 2, 3, 4] : [R.lv];
+    $('hwDiffs').innerHTML = lvs.map(l => `<button class="diff" data-l="${l}">${LEVELS[l].name}<b>−${LEVELS[l].pages} ページ</b></button>`).join('');
+    hwRender();
+  }
+  function hwRender() {
+    const R = st.run;
+    $('hwPages').textContent = R.pages;
+    $('hwStack').style.height = Math.max(6, R.pages * 1.6) + 'px';
+  }
+  $('hwDiffs').addEventListener('click', (e) => {
+    const b = e.target.closest('.diff'); if (!b) return;
+    $('hwPick').hidden = true; setSMsg('');
+    nextSolo(+b.dataset.l);
+  });
+  // ランク：タイム＋ミス×10秒 を、目安（1問の目安×10）とくらべる
+  function rankOf(lv, time, miss) {
+    const ratio = (time + miss * 10) / (LEVELS[lv].base * N_TA);
+    if (ratio <= 0.4 && miss === 0) return '名人';
+    const th = [0.45, 0.55, 0.7, 0.85, 1.0, 1.2, 1.4, 1.7, 2.0];
+    const i = th.findIndex(t => ratio <= t);
+    return (i < 0 ? 10 : i + 1) + '級';
+  }
+  function finishSolo() {
+    const R = st.run; if (R.done) return;
+    R.done = true; stopTick();
+    const time = (now() - R.t0) / 1000, r = getRec();
+    let rank, line;
+    if (R.mode === 'ta') {
+      rank = rankOf(R.lv, time, R.miss);
+      line = `${LEVELS[R.lv].name}　タイム ${time.toFixed(1)} 秒・ミス ${R.miss}<br><span class="small">（タイム＋ミス×10秒 ＝ ${(time + R.miss * 10).toFixed(1)} 秒）</span>`;
+      const k = 'ta' + R.lv, b = r.best[k];
+      const better = !b || (time + R.miss * 10) < (b.time + b.miss * 10);
+      if (better) { r.best[k] = { rank, time, miss: R.miss }; line += '<br>🎉 ベスト記録！'; }
+      st.last = { mode: 'タイムアタック', level: LEVELS[R.lv].name, time: time.toFixed(1) + '秒', miss: String(R.miss), rank };
+    } else {
+      const clear = R.pages <= 0;
+      rank = clear ? '宿題ゼロ！' : 'のこり ' + R.pages + ' ページ';
+      line = `${LEVELS[R.lv].name}　正解 ${R.solved}・ミス ${R.miss}` + (clear ? `<br>${time.toFixed(1)} 秒で宿題がなくなった！` : `<br>${100 - R.pages} ページ減らした`);
+      const k = 'hw' + R.lv, b = r.best[k];
+      const better = !b || (clear && (!b.clear || time < b.time)) || (!clear && !b.clear && R.pages < b.left);
+      if (better) { r.best[k] = { clear, time, left: R.pages }; line += '<br>🎉 ベスト記録！'; }
+      st.last = { mode: '宿題を減らせ', level: LEVELS[R.lv].name, time: clear ? time.toFixed(1) + '秒' : '時間切れ', miss: String(R.miss), rank };
+    }
+    setRec(r);
+    sndDone();
+    showResult(rank, line);
+  }
+
+  /* =====================================================================
+     9. ⚔️ 2人でバトル（1台の画面を左右に分ける）
+     ===================================================================== */
+  let pads = null;
+  function startDuel() {
+    st.mode = 'duel'; st.review = [];
+    const D = st.run = { mode: 'duel', lv: st.level, score: { L: 0, R: 0 }, round: 0, q: null, qT0: 0, done: false, busy: false,
+      per: TEACHER ? T.duel : 0, t0: now() };
+    show('duelSec');
+    ['L', 'R'].forEach(s => {
+      $('side' + s).innerHTML = `<div class="who">${s === 'L' ? '● ひだり' : '■ みぎ'}</div><div class="score" id="sc${s}">0</div><div class="pad" id="pad${s}"></div>`;
+    });
+    pads = { L: makePad($('padL'), { onGo: (P) => duelGo('L', P) }), R: makePad($('padR'), { onGo: (P) => duelGo('R', P) }) };
+    stopTick();
+    tickTimer = setInterval(duelTick, 100);
+    nextDuel();
+  }
+  function nextDuel() {
+    const D = st.run;
+    D.round++; D.busy = false;
+    D.q = makeQ(D.lv); D.qT0 = now();
+    $('dSys').innerHTML = sysH(D.q.es);
+    fitBox($('dSys'));
+    $('dRound').textContent = `第 ${D.round} 問`;
+    ['L', 'R'].forEach(s => { $('side' + s).classList.remove('win', 'lock'); pads[s].clear(); });
+    setDMsg('');
+    duelTick();
+  }
+  function duelTick() {
+    const D = st.run; if (!D || D.done || D.mode !== 'duel') return;
+    if (!D.per) { $('dTime').textContent = ((now() - D.qT0) / 1000).toFixed(0) + ' 秒'; return; }
+    const left = D.per - (now() - D.qT0) / 1000;
+    $('dTime').textContent = 'のこり ' + Math.max(0, left).toFixed(0) + ' 秒';
+    if (left <= 0 && !D.busy) { D.busy = true; addReview(D.q, null, null); setDMsg('時間切れ！ つぎの問題へ', 'ng'); setTimeout(() => { if (!D.done) nextDuel(); }, 1400); }
+  }
+  function setDMsg(h, cls) { const m = $('dMsg'); m.innerHTML = h || ''; m.className = 'msg' + (cls ? ' ' + cls : ''); }
+  function duelGo(side, P) {
+    const D = st.run; if (!D || D.done || D.busy) return;
+    const a = P.read(), who = side === 'L' ? '● ひだり' : '■ みぎ';
+    if (!a) { setDMsg(who + '：x と y の両方に、整数を入れてから決定しよう', 'ng'); return; }
+    const Q = D.q;
+    if (a.x.equals(Q.ans.x) && a.y.equals(Q.ans.y)) {
+      D.busy = true; sndOK();
+      D.score[side]++;
+      $('sc' + side).textContent = D.score[side];
+      $('side' + side).classList.add('win');
+      setDMsg(`${who} の勝ち！ 答えは ${mr('x=' + Q.ans.x)}、${mr('y=' + Q.ans.y)}`, 'ok');
+      if (D.score[side] >= 5) { setTimeout(() => finishDuel(side), 1400); return; }
+      setTimeout(() => { if (!D.done) nextDuel(); }, 1600);
+      return;
+    }
+    sndNG();
+    const t = tripOf(Q, a.x, a.y);
+    addTrip(t); addReview(Q, a, t);
+    setDMsg(`${who}：ざんねん。3 秒まってね`, 'ng');
+    $('side' + side).classList.add('lock');
+    P.lock(3000, () => $('side' + side).classList.remove('lock'));
+  }
+  function finishDuel(side) {
+    const D = st.run; D.done = true; stopTick();
+    sndDone();
+    const who = side === 'L' ? '● ひだり' : '■ みぎ';
+    st.last = { mode: '2人でバトル', level: LEVELS[D.lv].name, time: D.round + '問', miss: '−', rank: who + ' の勝ち（' + D.score.L + '対' + D.score.R + '）' };
+    showResult(who + ' の勝ち！', `${LEVELS[D.lv].name}　${D.score.L} 対 ${D.score.R}（${D.round} 問）`);
+  }
+
+  /* =====================================================================
+     10. 結果とふくしゅう
+     ===================================================================== */
+  function showResult(rank, line) {
+    show('result');
+    $('rRank').textContent = rank;
+    $('rLine').innerHTML = line;
+    $('rReview').innerHTML = st.review.length ? st.review.map(Q => {
+      const tries = Q.tries.length ? Q.tries.map(t => `${mr('x=' + t.x)}、${mr('y=' + t.y)} と答えた → <span class="trip">${TRIPS[t.trip].name}</span>`).join('<br>') : 'パス（または時間切れ）';
+      const tripDesc = [...new Set(Q.tries.map(t => t.trip))].map(t => `<div class="small">💡 ${TRIPS[t].desc}</div>`).join('');
+      return `<div class="rv"><div class="rsys">${sysH(Q.es)}</div><div>${tries}</div>${tripDesc}
+        <details><summary>📝 解き方のステップを見る（答え ${mr('x=' + Q.ans.x)}、${mr('y=' + Q.ans.y)}）</summary>
+        <div class="steps">${stepsOf(Q).map(s => `<div>${mr(s.src)}</div><div class="why">${esc(s.why)}</div>`).join('')}</div></details>
+        <div class="tools" style="justify-content:flex-start;margin-top:4px"><a class="op-btn" href="${qURL(Q)}" style="text-decoration:none">🪜 「どっちで解く？」で1ステップずつ解く</a></div></div>`;
+    }).join('') : '<div class="small">まちがえた問題はなかったよ。すばらしい！</div>';
+  }
+
+  /* =====================================================================
+     11. 先生モード
+     ===================================================================== */
+  function loadTeacher() {
+    const r = getRec();
+    Object.assign(T, r.teacher || {});
+    document.body.classList.toggle('big', TEACHER && !!T.big);
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tLevel').innerHTML = '<option value="">固定しない</option>' + Object.keys(LEVELS).map(k => `<option value="${k}">${LEVELS[k].name}</option>`).join('');
+    $('tLevel').value = T.level || ''; $('tHw').value = $('tHwR').value = T.hw; $('tDuel').value = String(T.duel); $('tBig').checked = !!T.big;
+  }
+  function saveTeacher() {
+    T.level = $('tLevel').value; T.hw = Math.max(60, Math.min(600, +$('tHw').value || 180)); T.duel = +$('tDuel').value; T.big = $('tBig').checked;
+    const r = getRec(); r.teacher = Object.assign({}, T); setRec(r);
+    document.body.classList.toggle('big', !!T.big);
+    renderHome();
+  }
+
+  /* =====================================================================
+     12. ボタン・キーボード
+     ===================================================================== */
+  $('levelRow').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (b && !b.disabled) { st.level = +b.dataset.lv; renderHome(); } });
+  document.querySelector('.modes').addEventListener('click', (e) => {
+    const b = e.target.closest('.mode'); if (!b) return;
+    if (b.dataset.mode === 'duel') startDuel(); else startSolo(b.dataset.mode);
+  });
+  window.addEventListener('resize', () => { if (!$('solo').hidden) fitBox($('sSys')); if (!$('duelSec').hidden) fitBox($('dSys')); });
+  $('sPass').onclick = soloPass;
+  $('sQuit').onclick = () => { if (st.run) st.run.done = true; stopTick(); renderHome(); show('home'); };
+  $('dSkip').onclick = () => { const D = st.run; if (!D || D.busy || D.done) return; D.busy = true; addReview(D.q, null, null); setDMsg(`答えは ${mr('x=' + D.q.ans.x)}、${mr('y=' + D.q.ans.y)}。つぎの問題へ`); setTimeout(() => { if (!D.done) nextDuel(); }, 1600); };
+  $('dQuit').onclick = () => { if (st.run) st.run.done = true; stopTick(); renderHome(); show('home'); };
+  $('rAgain').onclick = () => { if (st.mode === 'duel') startDuel(); else startSolo(st.mode); };
+  $('rHome').onclick = () => { renderHome(); show('home'); };
+  ['tLevel', 'tDuel', 'tBig'].forEach(id => $(id).addEventListener('change', saveTeacher));
+  $('tHwR').addEventListener('input', () => { $('tHw').value = $('tHwR').value; saveTeacher(); });
+  $('tHw').addEventListener('change', () => { $('tHwR').value = $('tHw').value; saveTeacher(); });
+  $('tClear').onclick = () => { if (confirm('この端末のベスト記録・つまずきのきろくを消しますか？')) { const r = getRec(); r.best = {}; r.trips = {}; setRec(r); renderHome(); } };
+  // キーボード（ひとりのとき）：数字・−・Backspace・Tab（x と y の切りかえ）・Enter（決定）
+  document.addEventListener('keydown', (e) => {
+    if ($('solo').hidden || !soloPad || $('sPadCard').hidden) return;
+    if (e.target.matches('input, textarea, select')) return;
+    const map = { Backspace: '⌫', '-': '−', Enter: 'go', Tab: 'xy', Escape: 'clr' };
+    const k = /^[0-9]$/.test(e.key) ? e.key : map[e.key];
+    if (!k) return;
+    e.preventDefault();
+    soloPad.key(k);
+  });
+
+  if (window.Worksheet) Worksheet.init({
+    title: 'すばやく解いて 連立方程式バトル',
+    question: '連立方程式を すばやく・正確に解くには、どうするとよいだろうか？',
+    predictions: ['決定する前に、両方の式で検算する', 'とにかく速く入力する', '楽な方法（加減法・代入法）をえらぶ', 'わからない'],
+    operationNote: 'タイムアタックや宿題を減らせ、2人でバトルをしたら「＋ 記録する」。モード・レベル・タイム・ミス・ランクが表に入るよ。作戦を変えて、記録をくらべてみよう。',
+    fields: [
+      { key: 'mode', label: 'モード', math: false },
+      { key: 'level', label: 'レベル', math: false },
+      { key: 'time', label: 'タイム', math: false },
+      { key: 'miss', label: 'ミス', math: false },
+      { key: 'rank', label: '結果', math: false }
+    ],
+    open: false,
+    capture: () => {
+      if (!st.last) { alert('ゲームを1回終えてから記録しよう'); return null; }
+      return Object.assign({}, st.last);
+    },
+    summaryHint: '「速く正確に解くには、はじめに〜をえらび、決定する前に〜する。まちがえやすいのは〜」の形で書こう。',
+    teacher: {
+      hint: 'まず予想をとってからタイムアタック（レベル①）を1回。ミスが多い生徒には、決定前に両方の式へ代入する検算をすすめ、2回目と比べさせる。ふくしゅうの「どっちで解く？」で、まちがえた問題を1ステップずつ解きなおさせる。',
+      answer: '例：はじめに、どの文字を消すと楽か（係数がそろう・y＝… の形がある）を見て方法をえらぶ。決定する前に、求めた x・y を両方の式に代入して検算する。ミス1回は10秒分なので、検算に数秒かけても、まちがえないほうがよい結果になる。'
+    }
+  });
+
+  // 動作確認用（?debug=1 のときだけ、中身を外から見られるようにする）
+  if (new URLSearchParams(location.search).get('debug') === '1') window.__dbg = { st, GEN, makeQ, stepsOf, tripOf, rankOf, answerOf, eqS, qURL };
+  loadTeacher();
+  renderHome();
+  show('home');
+})();
+</script>
+
+</body>
+</html>

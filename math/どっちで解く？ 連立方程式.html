@@ -1219,9 +1219,30 @@
 
   // 動作確認用（?debug=1 のときだけ、中身を外から見られるようにする）
   if (new URLSearchParams(location.search).get('debug') === '1') window.__dbg = { st, cardsFor, GEN, load, answerOf, eqS, costOf, bestV, bestM };
+  // ?q=a,b,c;a,b,c で、ほかの教材（連立方程式バトルのふくしゅう）から問題を受け取る。
+  //   1つの式は「x の係数, y の係数, 右辺」。4つめに y（または x）を書くと y＝… の形で見せる。例 ?q=-2,1,-1,y;3,2,12
+  function fromQuery() {
+    const q = new URLSearchParams(location.search).get('q');
+    if (!q) return null;
+    try {
+      const es = q.split(';').map(t => { const f = t.split(','); const e = E(f[0], f[1], f[2], { form: f[3] === 'x' || f[3] === 'y' ? f[3] : 'std' }); return e; });
+      if (es.length !== 2 || es.some(e => e.a.isZero() && e.b.isZero())) return null;
+      if (es[0].a.mul(es[1].b).sub(es[1].a.mul(es[0].b)).isZero()) return null;     // 平行・重なる式はあつかわない
+      if (es.some(e => (e.form === 'y' && !e.b.equals(1)) || (e.form === 'x' && !e.a.equals(1)))) es.forEach(e => { e.form = 'std'; });
+      return es;
+    } catch (e) { return null; }
+  }
   buildLevels();
   setupTeacher();
-  setLevel(1);
+  const qes = fromQuery();
+  if (qes) {
+    const lv = qes.some(e => e.form !== 'std') ? 5 : 1;
+    st.level = lv;
+    document.querySelectorAll('#levelRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.lv === lv));
+    $('levelNote').textContent = LEVELS[lv].note;
+    load(qes);
+    setMsg('🔁 ふくしゅうの問題。まず方針をきめよう。どの文字を消すと楽かな？');
+  } else setLevel(1);
   renderTrips();
 })();
 </script>
