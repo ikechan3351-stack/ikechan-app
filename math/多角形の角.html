@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多角形の角</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中学の教材とそろえる）：正解＝緑（○）、まちがい・注意＝赤紫（×）。
+     この教材では：頂点ごとに色を変え、さらに 角の印（弧の本数）・文字（A, B, C…）でも区別する。
+     色は色覚のちがいがあっても見分けやすい組み合わせ（オレンジ・青・緑・赤むらさき…）にしている。 */
+  :root {
+    --ink: #263238; --accent: #37474f; --soft: #90a4ae;
+    --ok: #2e7d32; --ng: #ad1457; --ext: #6a1b9a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eceff1 0%, #cfd8dc 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #37474f; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #263238; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .chip.small-chip { min-height: 44px; padding: 4px 12px; font-size: .95rem; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #37474f; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.on { background: #fff8e1; border-color: #fbc02d; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 図・式（広い画面は 左＝図・右＝式の2列） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @container (min-width: 760px) {
+    .board-in { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  }
+  .fig-card { padding: 8px; }
+  #fig { width: 100%; max-width: 560px; display: block; margin: 0 auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #fig text { font-family: inherit; font-weight: bold; }
+  #fig .vtx { cursor: grab; }
+  .opt-row { display: flex; gap: 6px 14px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+  .opt-check { font-size: 0.95rem; font-weight: bold; color: #37474f; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+  .opt-check input { width: 22px; height: 22px; }
+  .fig-note { text-align: center; font-size: .9rem; color: #546e7a; margin-top: 2px; }
+
+  /* スライダー＋数の入力 */
+  .slider-row { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0; font-weight: bold; flex-wrap: wrap; }
+  .slider-row .lab { white-space: nowrap; }
+  .slider-row input[type=range] { flex: 1; min-width: 120px; height: 36px; }
+  .slider-row input[type=number] { width: 80px; font-size: 1.25rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .slider-row input:disabled { opacity: .5; }
+  .poly-name { font-size: 1.5rem; font-weight: bold; text-align: center; margin: 2px 0 4px; }
+
+  /* 角の表 */
+  .ang-tbl { width: 100%; border-collapse: collapse; text-align: center; margin: 6px 0; }
+  .ang-tbl th { background: #eceff1; font-size: .92rem; padding: 4px; border: 2px solid #b0bec5; }
+  .ang-tbl td { border: 2px solid #cfd8dc; padding: 3px 4px; font-size: 24px; font-weight: bold; height: 48px; }
+  .ang-tbl td.sum { background: #fffde7; }
+  .ang-tbl td.hide { color: #90a4ae; font-size: 20px; }
+  .sw { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 3px; border: 2px solid #fff; box-shadow: 0 0 0 1px #90a4ae; }
+  .big-eq { text-align: center; font-size: 26px; font-weight: bold; line-height: 1.6; margin: 6px 0; }
+  .big-eq .ok { color: var(--ok); }
+  .big-eq .ext { color: var(--ext); }
+  .eq-note { text-align: center; font-size: .95rem; line-height: 1.7; color: #37474f; margin: 2px 0 6px; }
+  .angs { display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: center; font-size: 20px; font-weight: bold; margin: 4px 0; }
+  .angs span { white-space: nowrap; }
+
+  /* パート② の表（n角形のきまり） */
+  .rule-tbl { width: 100%; border-collapse: collapse; text-align: center; font-size: 20px; margin: 6px 0; }
+  .rule-tbl th { background: #eceff1; font-size: .88rem; padding: 4px; border: 2px solid #b0bec5; }
+  .rule-tbl td { border: 2px solid #cfd8dc; padding: 2px 4px; height: 40px; font-weight: bold; }
+  .rule-tbl td.q { color: #b0bec5; }
+  .rule-tbl tr.cur td { background: #fffde7; }
+  .rule-tbl td:first-child { white-space: nowrap; font-size: 17px; }
+  .rule-tbl tr.nrow td { background: #e8f5e9; }
+
+  /* パート③ の 回った角のメーター */
+  #dial { width: 100%; max-width: 230px; display: block; margin: 0 auto; }
+  #dial text { font-family: inherit; font-weight: bold; }
+
+  /* 答える欄とキーパッド */
+  .ask { border-top: 2px dashed #cfd8dc; padding-top: 8px; margin-top: 6px; }
+  .ask-q { text-align: center; font-weight: bold; margin-bottom: 6px; line-height: 1.7; font-size: 1.08rem; }
+  .ans-line { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; font-size: 28px; font-weight: bold; }
+  .box {
+    min-width: 110px; min-height: 58px; border: 3px solid var(--soft); border-radius: 14px; background: #fafafa;
+    font-size: 30px; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation; padding: 0 8px;
+  }
+  .box.active { border-color: #fbc02d; background: #fffde7; box-shadow: 0 0 0 4px rgba(251,192,45,.35); }
+  .keypad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
+  .key {
+    min-height: 48px; border: 2px solid #b0bec5; background: #fff; border-radius: 12px; font-size: 1.35rem; font-weight: bold;
+    color: var(--ink); cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+  }
+  .key:active { transform: translateY(1px); box-shadow: none; }
+  .key small { font-size: .7rem; }
+  .go {
+    width: 100%; margin-top: 8px; min-height: 54px; border: none; border-radius: 14px; background: var(--ok); color: #fff;
+    font-size: 1.2rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go.next { background: var(--accent); }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .mark-ok { color: var(--ok); font-weight: 900; }
+  .mark-ng { color: var(--ng); font-weight: 900; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .trip-row .op-btn { align-self: flex-start; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  @media (max-width: 420px) {
+    .box { min-width: 86px; font-size: 26px; }
+    .ang-tbl td { font-size: 19px; padding: 2px; }
+    .big-eq { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🔷 多角形の角</h1>
+<p class="subtitle">頂点を動かして、内角の和・外角の和のきまりを見つけよう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- パート：① 三角形 ② 多角形の内角の和 ③ 外角の和 ④ 正多角形 -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">✏️ 練習問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <div class="board"><div class="board-in">
+    <div class="card fig-card">
+      <!-- 三角形のぬり分けに使う模様（色だけでなく模様でも区別する） -->
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <pattern id="pt0" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="12" height="12" fill="#ffe0b2"/><line x1="0" y1="0" x2="0" y2="12" stroke="#ffb74d" stroke-width="3"/></pattern>
+        <pattern id="pt1" width="12" height="12" patternUnits="userSpaceOnUse">
+          <rect width="12" height="12" fill="#bbdefb"/><circle cx="6" cy="6" r="2.2" fill="#64b5f6"/></pattern>
+        <pattern id="pt2" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+          <rect width="12" height="12" fill="#c8e6c9"/><line x1="0" y1="0" x2="0" y2="12" stroke="#81c784" stroke-width="3"/></pattern>
+        <pattern id="pt3" width="12" height="12" patternUnits="userSpaceOnUse">
+          <rect width="12" height="12" fill="#f8bbd0"/><line x1="0" y1="6" x2="12" y2="6" stroke="#f48fb1" stroke-width="3"/></pattern>
+      </defs></svg>
+      <svg id="fig" viewBox="0 0 480 420" aria-label="多角形の図"></svg>
+      <div class="opt-row" id="figOpts">
+        <label class="opt-check"><input type="checkbox" id="optSnap" checked> 方眼にすいつく</label>
+        <label class="opt-check" id="lblConcave" hidden><input type="checkbox" id="optConcave"> へこんだ形もためす（発展）</label>
+        <label class="opt-check" id="lblAllExt" hidden><input type="checkbox" id="optAllExt"> 外角をぜんぶ見せる</label>
+      </div>
+      <div class="fig-note" id="figNote"></div>
+    </div>
+    <div class="card">
+      <h2 id="rTitle"></h2>
+      <div id="ctrl"></div>
+      <div class="ask" id="ask" hidden></div>
+      <div class="msg" id="msg"></div>
+      <div id="side"></div>
+    </div>
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 自動で1ステップ進める</button></div>
+    <div class="small" id="tTalk"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li>図の <b>●（頂点）</b>をドラッグすると形が変わり、角の大きさ（測定値）が自動で出る。「方眼にすいつく」を外すと自由に動かせる。</li>
+      <li><b>内角</b>：多角形の内側の角。<b>外角</b>：1つの辺をのばした線と、となりの辺がつくる角。1つの頂点で <b>内角 ＋ 外角 ＝ 180°</b>。</li>
+      <li><b>対角線</b>：となり合わない2つの頂点を結んだ線分。</li>
+      <li>① <b>三角形</b>：「✂ 切りとって ならべる」で 3つの角が一直線（180°）にならぶ。「↗ 外角にうつす」で、外角 ＝ となりにない2つの内角の和 が見える。</li>
+      <li>② <b>内角の和</b>：n のスライダーで四角形〜十角形。1つの頂点から対角線を引くと、三角形が <b>n − 2</b> こ → 内角の和は <b>180° × (n − 2)</b>。</li>
+      <li>③ <b>外角の和</b>：カメが多角形のまわりを歩き、頂点ごとに外角の分だけ向きを変える。1周するとちょうど 1回転（<b>360°</b>）。何角形でも同じ。</li>
+      <li>④ <b>正多角形</b>：辺の長さも角の大きさもすべて等しい多角形。1つの内角 ＝ 180° × (n − 2) ÷ n、1つの外角 ＝ 360° ÷ n。星形多角形は<b>発展</b>。</li>
+      <li>「✏️ 練習問題」：□ に数を入れて「こたえる」。まちがえ方から「あなたのつまずき」がわかる。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：角の大きさは画面の上で測った値で、1° より小さいところは四捨五入しています。四捨五入で合計が 1° ずれないよう、いちばん端数の大きい角で調整して表示しています（本当の角は小数をふくみます）。① ② ③ の頂点は「方眼にすいつく」とき 方眼の点にすいつきます。三角形がつぶれる形・辺が交わる形にはなりません（③ はへこまない形だけ）。④ の正多角形の角は分数で正確に計算し、わりきれないときは「約」をつけた小数も出しています。③ のカメは、頂点でその場で向きを変えるとしています。<br>
+    つながる教材：<a href="角の大きさと 分度器.html">小4 角の大きさと分度器</a>（小5 で三角形・四角形の角の和を学習します）</p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード（答え・自動で進める・発問の例・この端末のきろく）
+  const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+  const F = (v, d) => (d === undefined ? Fraction.from(v) : new Fraction(v, d));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const rint = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const mrs = (s, size) => MathRender.html(s, { size: size || 'inherit' });
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const LET = 'ABCDEFGHIJKLMNOPQRST';
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+
+  /* =====================================================================
+     1. 図形の計算（角度は「算数の向き」：右が 0°、反時計回りが ＋。SVG は y が下向きなので反転する）
+     ===================================================================== */
+  const W = 480, H = 420, G = 20;           // 図の大きさと方眼の1目もり（px）
+  const D2R = Math.PI / 180;
+  const md = (a) => ((a % 360) + 360) % 360;                          // 0〜360 にそろえる
+  const nd = (a) => { a = md(a); return a > 180 ? a - 360 : a; };     // −180〜180 にそろえる
+  const dirDeg = (P, Q) => Math.atan2(-(Q[1] - P[1]), Q[0] - P[0]) / D2R; // P から Q への向き
+  const polar = (V, r, deg) => [V[0] + r * Math.cos(deg * D2R), V[1] - r * Math.sin(deg * D2R)];
+  const dist = (P, Q) => Math.hypot(P[0] - Q[0], P[1] - Q[1]);
+  const lerp = (P, Q, t) => [P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t];
+  const f1 = (v) => Math.round(v * 10) / 10;
+  const pstr = (P) => f1(P[0]) + ',' + f1(P[1]);
+  // 頂点の並びが反時計回り（算数の向き）なら true
+  function isCCW(pts) {
+    let s = 0;
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; s += a[0] * b[1] - b[0] * a[1]; }
+    return s < 0; // SVG は y が下向きなので、符号が反対になる
+  }
+  // 内角（へこんだ形の 180° より大きい角もOK）と、角をかくときの「はじめの向き」
+  function anglesOf(pts) {
+    const n = pts.length, ccw = isCCW(pts), ang = [], start = [];
+    for (let i = 0; i < n; i++) {
+      const V = pts[i], dn = dirDeg(V, pts[(i + 1) % n]), dp = dirDeg(V, pts[(i + n - 1) % n]);
+      ang.push(ccw ? md(dp - dn) : md(dn - dp));
+      start.push(ccw ? dn : dp);
+    }
+    return { ccw, ang, start };
+  }
+  // 外角：辺 V(i−1)→V(i) をのばした向き d から、となりの辺 V(i)→V(i+1) まで
+  function extOf(pts, i, A) {
+    const n = pts.length, V = pts[i];
+    const d = dirDeg(pts[(i + n - 1) % n], V), dn = dirDeg(V, pts[(i + 1) % n]);
+    return { d, start: A.ccw ? d : dn, sweep: 180 - A.ang[i] };
+  }
+  // 小数の角を整数にする。合計が total になるよう、端数の大きい順に 1 ずつ足す（※じっさいとのちがい に書いた）
+  function roundTo(vals, total) {
+    const fl = vals.map(Math.floor);
+    const rest = Math.round(total - fl.reduce((a, b) => a + b, 0));
+    const idx = vals.map((v, i) => i).sort((i, j) => (vals[j] - fl[j]) - (vals[i] - fl[i]));
+    for (let k = 0; k < rest && k < idx.length; k++) fl[idx[k]]++;
+    return fl;
+  }
+  // 線分が交わるか（はしが重なるのもふくむ）
+  function segHit(p1, p2, p3, p4) {
+    const c = (a, b, q) => (b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0]);
+    const d1 = c(p3, p4, p1), d2 = c(p3, p4, p2), d3 = c(p1, p2, p3), d4 = c(p1, p2, p4);
+    return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
+  }
+  function segDist(P, A, B) {
+    const vx = B[0] - A[0], vy = B[1] - A[1], L = vx * vx + vy * vy;
+    let t = L ? ((P[0] - A[0]) * vx + (P[1] - A[1]) * vy) / L : 0; t = Math.max(0, Math.min(1, t));
+    return dist(P, [A[0] + vx * t, A[1] + vy * t]);
+  }
+  function inside(P, pts) {
+    let c = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j];
+      if ((a[1] > P[1]) !== (b[1] > P[1]) && P[0] < (b[0] - a[0]) * (P[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+    }
+    return c;
+  }
+  // 形として使えるか：画面の中・辺が短すぎない・辺が交わらない・つぶれない（convex なら へこまない）
+  function valid(pts, convex) {
+    const n = pts.length, M = 16;
+    for (const P of pts) if (P[0] < M || P[0] > W - M || P[1] < M || P[1] > H - M) return false;
+    for (let i = 0; i < n; i++) if (dist(pts[i], pts[(i + 1) % n]) < 24) return false;
+    for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      if (segHit(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return false;
+    }
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      if (j === i || (j + 1) % n === i) continue;
+      if (segDist(pts[i], pts[j], pts[(j + 1) % n]) < 10) return false;
+    }
+    const A = anglesOf(pts);
+    for (const a of A.ang) { if (a < 4 || a > 356) return false; if (convex && a > 176) return false; }
+    return true;
+  }
+  // 正 n 角形（A をいちばん上にして、反時計回りに B, C, …）
+  function regularPts(n, R, cx, cy, rot) {
+    cx = cx || 240; cy = cy || 215; rot = rot === undefined ? 90 : rot;
+    return Array.from({ length: n }, (_, i) => polar([cx, cy], R, rot + 360 * i / n));
+  }
+  // でこぼこの n 角形（へこまない形）
+  function randomPts(n, R) {
+    for (let tr = 0; tr < 300; tr++) {
+      const step = 360 / n, rot = 90 + rint(-15, 15);
+      const pts = Array.from({ length: n }, (_, i) => polar([240, 215], R * (0.72 + Math.random() * 0.28), rot + step * i + (Math.random() - 0.5) * step * 0.7).map(Math.round));
+      if (valid(pts, true)) return pts;
+    }
+    return regularPts(n, R);
+  }
+  // 漢数字で「○角形」
+  function kan(n) {
+    const o = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+    if (n >= 100) return (n === 100 ? '百' : String(n));
+    if (n < 10) return o[n];
+    return (n >= 20 ? o[Math.floor(n / 10)] : '') + '十' + o[n % 10];
+  }
+  const polyName = (n) => kan(n) + '角形';
+
+  /* =====================================================================
+     2. 頂点の色（色だけで区別しない：文字 A, B, C… と 角の印もつける）
+     ===================================================================== */
+  const VC = ['#e69f00', '#0072b2', '#009e73', '#cc79a7', '#d55e00', '#56b4e9', '#8d6e00', '#6a1b9a', '#2e7d32', '#ad1457', '#5d4037', '#00838f'];
+  const vc = (i) => VC[i % VC.length];
+
+  /* =====================================================================
+     3. パートとつまずきの型
+     ===================================================================== */
+  const PARTS = [null,
+    { name: '① 三角形', title: '🔺 三角形の角', note: '頂点を動かしても、3つの内角の和はいつも 180°。外角は、となりにない2つの内角の和。' },
+    { name: '② 内角の和', title: '🔷 多角形の内角の和', note: '1つの頂点から対角線を引いて三角形に分けよう。三角形はいくつ？ 内角の和は？' },
+    { name: '③ 外角の和', title: '🐢 多角形の外角の和', note: 'カメが多角形のまわりを1周。頂点ごとに外角の分だけ向きを変える。全部で何度回る？' },
+    { name: '④ 正多角形', title: '⭐ 正多角形と星形', note: '正 n 角形の1つの内角・外角を求めよう。星形多角形の角は発展。' },
+  ];
+  // つまずきの型（名前・説明・練習するパート）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    n2:       { name: 'n と n − 2 の取りちがえ', part: 2,
+                exp: '1つの頂点から対角線を引くと、三角形は <b>n − 2</b> こ（n こではない）。だから内角の和は 180° × <b>(n − 2)</b>。四角形なら三角形 2こで 360°。' },
+    diag:     { name: '対角線の本数と三角形の数の取りちがえ', part: 2,
+                exp: '1つの頂点から引ける対角線は n − 3 本。それで分けた三角形は 1つ多い <b>n − 2</b> こ。180° をかけるのは<b>三角形の数</b>。' },
+    extDep:   { name: '外角の和が n によって変わると考えた', part: 3,
+                exp: '外角の和は、何角形でも <b>360°</b>。まわりを1周すると、ちょうど1回転するから。角の数がふえると、1つ1つの外角が小さくなる。' },
+    extInt:   { name: '内角と外角のとりちがえ', part: 1,
+                exp: '<b>外角</b>は、辺をのばした線ととなりの辺の角。1つの頂点で <b>内角 ＋ 外角 ＝ 180°</b>。三角形の外角は、となりにない2つの内角の<b>和</b>。' },
+    tri180:   { name: '三角形の内角の和（180°）の使いまちがい', part: 1,
+                exp: '三角形の内角の和は <b>180°</b>（360° ではない）。のこりの角は 180° − （わかっている2つの角の和）。' },
+    forgotDiv:{ name: '和のまま答えた（÷ n をわすれた）', part: 4,
+                exp: '正 n 角形の角はすべて等しいので、<b>1つ分</b>は 和 ÷ n。1つの内角 ＝ 180° × (n − 2) ÷ n、1つの外角 ＝ 360° ÷ n。' },
+    starMix:  { name: '星形の角と多角形の内角の和をまぜた', part: 4,
+                exp: '星形の先の角は、多角形の内角ではない。三角形の外角のきまりを使うと、5つの先の角は1つの三角形に集まって <b>180°</b>（発展）。' },
+    calc:     { name: '計算まちがい', part: 0,
+                exp: '式は合っているかもしれない。かけ算・ひき算・わり算をもう一度ていねいに。' },
+  };
+
+  /* =====================================================================
+     4. 状態（パートごとに持つ。ひとつもどす で写しやすいよう、数と文字だけで持つ）
+     ===================================================================== */
+  const st = { part: 1, Ps: {}, hists: { 1: [], 2: [], 3: [], 4: [] }, inp: { v: '' }, act: false, sessTrips: {}, focus: null, hintLv: 0, timer: null, drag: null, last: {} };
+  const P = () => st.Ps[st.part];
+  function defaults(part) {
+    if (part === 1) return { pts: [[240, 60], [100, 300], [400, 280]], v: 2, mode: 'none', t: 0, q: null };
+    if (part === 2) return { n: 5, pts: regularPts(5, 165).map(p => p.map(Math.round)), diag: 0, q: null, flow: null, table: {}, concave: $('optConcave').checked };
+    if (part === 3) return { n: 5, pts: regularPts(5, 140).map(p => p.map(Math.round)), w: 0, playing: false, q: null };
+    return { n: 6, mode: 'reg', k: 2, star: regularPts(5, 170, 240, 225).map(p => p.map(Math.round)), q: null };
+  }
+  function pushHist() { const h = st.hists[st.part]; h.push(clone(P())); if (h.length > 60) h.shift(); }
+  function undo() {
+    const h = st.hists[st.part];
+    if (!h.length) { setMsg('もどせる操作は ありません。'); return; }
+    stopTimer(); st.Ps[st.part] = h.pop(); st.act = !!(P().q && !P().q.done); st.inp.v = '';
+    setMsg('↶ ひとつもどしました。'); buildCtrl(); render();
+  }
+  function resetPart() {
+    stopTimer(); pushHist();
+    const keep = st.part === 2 ? P().table : null;
+    st.Ps[st.part] = defaults(st.part);
+    if (keep) P().table = keep; // ② の表（見つけたきまり）は残す
+    st.act = false; st.inp.v = ''; st.hintLv = 0;
+    setMsg('⟲ はじめの形にもどしました。'); buildCtrl(); render();
+  }
+
+  /* =====================================================================
+     5. 入力（キーパッド）
+     ===================================================================== */
+  const KEYS = ['7', '8', '9', '⌫', '4', '5', '6', 'C', '1', '2', '3', '0'];
+  function keypadHTML() {
+    return '<div class="keypad">' + KEYS.map(k => {
+      const lab = k === 'C' ? '<small>ぜんぶ消す</small>' : k;
+      return `<button class="key" data-k="${k}" aria-label="${k}">${lab}</button>`;
+    }).join('') + '</div>';
+  }
+  function press(k) {
+    if (!st.act) return;
+    let v = st.inp.v;
+    if (k === '⌫') v = v.slice(0, -1);
+    else if (k === 'C') v = '';
+    else if (v.length < 5) v = (v === '0' ? '' : v) + k;
+    st.inp.v = v; paintBox();
+  }
+  function paintBox() {
+    const b = document.querySelector('#ask .box');
+    if (b) { b.querySelector('.bv').textContent = st.inp.v === '' ? '　' : st.inp.v; b.classList.toggle('active', st.act); }
+  }
+  document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('.ws-panel, input, textarea')) return;
+    if (e.target.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+    if (e.key === 'Enter') { const go = document.querySelector('#ask .go'); if (go && !$('ask').hidden) { go.click(); e.preventDefault(); } return; }
+    if (!st.act) return;
+    if (/^[0-9]$/.test(e.key)) { press(e.key); e.preventDefault(); }
+    else if (e.key === 'Backspace') { press('⌫'); e.preventDefault(); }
+  });
+
+  /* =====================================================================
+     6. SVG をかく道具
+     ===================================================================== */
+  function el(tag, attrs, text) {
+    const e = document.createElementNS(SVGNS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  // おうぎ形（角のぬり）。s から反時計回りに sw 度
+  function wedgeD(V, r, s, sw) {
+    if (sw >= 359.9) return `M${pstr([V[0] + r, V[1]])} A${r} ${r} 0 1 0 ${pstr([V[0] - r, V[1]])} A${r} ${r} 0 1 0 ${pstr([V[0] + r, V[1]])} Z`;
+    const p1 = polar(V, r, s), p2 = polar(V, r, s + sw);
+    return `M${pstr(V)} L${pstr(p1)} A${r} ${r} 0 ${sw > 180 ? 1 : 0} 0 ${pstr(p2)} Z`;
+  }
+  function arcD(V, r, s, sw) {
+    const p1 = polar(V, r, s), p2 = polar(V, r, s + Math.min(sw, 359.9));
+    return `M${pstr(p1)} A${r} ${r} 0 ${sw > 180 ? 1 : 0} 0 ${pstr(p2)}`;
+  }
+  // 角の印：ぬり＋弧（marks 本）。色だけでなく弧の本数でも区別する
+  function angleMark(g, V, r, s, sw, color, marks, opt) {
+    opt = opt || {};
+    g.appendChild(el('path', { d: wedgeD(V, r, s, sw), fill: color, 'fill-opacity': opt.op || 0.35, stroke: opt.dash ? color : 'none', 'stroke-dasharray': opt.dash ? '5 4' : '', 'stroke-width': 2 }));
+    for (let m = 0; m < (marks || 1); m++) g.appendChild(el('path', { d: arcD(V, r - m * 5, s, sw), fill: 'none', stroke: color, 'stroke-width': 3 }));
+  }
+  // 角の数（ラベル）を角の外側に
+  function angLabel(g, V, r, s, sw, text, color, size) {
+    const p = polar(V, r, s + sw / 2);
+    const t = el('text', { x: f1(p[0]), y: f1(p[1] + 7), 'text-anchor': 'middle', 'font-size': size || 20, fill: color || '#263238', stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke' }, text);
+    g.appendChild(t);
+  }
+  // 頂点の名前（重心の反対側に）
+  function vLabel(g, pts, i, color) {
+    const n = pts.length, c = [pts.reduce((a, p) => a + p[0], 0) / n, pts.reduce((a, p) => a + p[1], 0) / n];
+    const V = pts[i], dx = V[0] - c[0], dy = V[1] - c[1], L = Math.hypot(dx, dy) || 1;
+    g.appendChild(el('text', { x: f1(V[0] + dx / L * 22), y: f1(V[1] + dy / L * 22 + 8), 'text-anchor': 'middle', 'font-size': 24, fill: color || '#263238', stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke' }, LET[i]));
+  }
+  function gridLayer(g) {
+    for (let x = G; x < W; x += G) for (let y = G; y < H; y += G) g.appendChild(el('circle', { cx: x, cy: y, r: 1.4, fill: '#cfd8dc' }));
+  }
+  // ドラッグできる頂点（タッチしやすいよう、見えない大きな円をかさねる）
+  function handle(g, V, i, color) {
+    g.appendChild(el('circle', { cx: f1(V[0]), cy: f1(V[1]), r: 9, fill: color || '#37474f', stroke: '#fff', 'stroke-width': 3, class: 'vtx' }));
+    g.appendChild(el('circle', { cx: f1(V[0]), cy: f1(V[1]), r: 24, fill: 'transparent', class: 'vtx', 'data-i': i }));
+  }
+  const svg = $('fig');
+  function clearFig() { while (svg.firstChild) svg.removeChild(svg.firstChild); const g = el('g', {}); svg.appendChild(g); return g; }
+
+  /* =====================================================================
+     7. ドラッグ（pointer events。マウスでもタッチでも動く）
+     ===================================================================== */
+  function svgPoint(e) {
+    const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+    const m = svg.getScreenCTM(); if (!m) return [0, 0];
+    const q = p.matrixTransform(m.inverse()); return [q.x, q.y];
+  }
+  // いまのパートで動かせる点の配列と、動かしてよいかのきまり
+  function dragTarget() {
+    const p = P();
+    if (p.q && !(p.q.flow && p.q.done)) return null;   // 問題のあいだは動かさない
+    if (st.part === 1) return { pts: p.pts, ok: (pts) => valid(pts, true) };
+    if (st.part === 2) return { pts: p.pts, ok: (pts) => valid(pts, !p.concave) };
+    if (st.part === 3) return { pts: p.pts, ok: (pts) => valid(pts, true) };
+    if (st.part === 4 && p.mode === 'star' && p.n === 5 && p.k === 2) return { pts: p.star, ok: (pts) => valid(pts, true) && pts.every((q, i) => dist(q, pts[(i + 1) % 5]) > 40) };
+    return null;
+  }
+  svg.addEventListener('pointerdown', e => {
+    const tg = dragTarget(); if (!tg) return;
+    const m = svgPoint(e);
+    let best = -1, bd = 30;
+    tg.pts.forEach((q, i) => { const d = dist(q, m); if (d < bd) { bd = d; best = i; } });
+    if (best < 0) return;
+    e.preventDefault();
+    pushHist();
+    stopTimer();
+    st.drag = { i: best, id: e.pointerId };
+    try { svg.setPointerCapture(e.pointerId); } catch (err) { /* なくても動く */ }
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!st.drag || e.pointerId !== st.drag.id) return;
+    const tg = dragTarget(); if (!tg) return;
+    let m = svgPoint(e);
+    if ($('optSnap').checked && st.part !== 4) m = [Math.round(m[0] / G) * G, Math.round(m[1] / G) * G];
+    else m = [Math.round(m[0]), Math.round(m[1])];
+    const cand = tg.pts.map((q, i) => (i === st.drag.i ? m : q.slice()));
+    if (!tg.ok(cand)) return;             // つぶれる・交わる形にはしない（前の形のまま）
+    tg.pts[st.drag.i] = m;
+    if (st.part === 2) P().diag = Math.min(P().diag, maxDiag());
+    render();
+  });
+  const endDrag = (e) => { if (st.drag && e.pointerId === st.drag.id) { st.drag = null; render(); } };
+  svg.addEventListener('pointerup', endDrag);
+  svg.addEventListener('pointercancel', endDrag);
+
+  /* =====================================================================
+     8. アニメ（setInterval）
+     ===================================================================== */
+  function stopTimer() { if (st.timer) { clearInterval(st.timer); st.timer = null; } if (st.Ps[3]) st.Ps[3].playing = false; }
+  // obj[key] を to まで ms ミリ秒で動かす
+  function animate(obj, key, to, ms, done) {
+    stopTimer();
+    const from = obj[key], t0 = Date.now();
+    st.timer = setInterval(() => {
+      const u = Math.min(1, (Date.now() - t0) / ms), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+      obj[key] = from + (to - from) * e;
+      render();
+      if (u >= 1) { stopTimer(); if (done) done(); }
+    }, 30);
+  }
+
+  /* =====================================================================
+     9. パート① 三角形
+     ===================================================================== */
+  // 切りとった角をどこへうつすか（mode: 'line'＝頂点 v に集めて一直線、'ext'＝頂点 v の外角へ）
+  function wedgeTargets(pts, A, mode, v) {
+    const T = [0, 1, 2].map(i => ({ V: pts[i], s: A.start[i] }));
+    const nx = (v + 1) % 3, pv = (v + 2) % 3;
+    if (mode === 'line') {
+      // 頂点 v の内角の両がわに、のこり2つの角をならべる（v を通り、向かいの辺に平行な直線ができる）
+      const before = A.ccw ? nx : pv, after = A.ccw ? pv : nx, s = A.start[v];
+      T[before] = { V: pts[v], s: s - A.ang[before] };
+      T[after] = { V: pts[v], s: s + A.ang[v] };
+    } else if (mode === 'ext') {
+      const E = extOf(pts, v, A);
+      const first = A.ccw ? pv : nx, second = A.ccw ? nx : pv;
+      T[first] = { V: pts[v], s: E.start };
+      T[second] = { V: pts[v], s: E.start + A.ang[first] };
+    }
+    return T;
+  }
+  function render1(g) {
+    const p = P(), q = p.q, pts = p.pts, A = anglesOf(pts);
+    // 答えたあとは ？ に答えを入れて見せる
+    const qs = (s) => (q && q.done && s === '？' ? q.ans + '°' : s);
+    if (!q) gridLayer(g);
+    const minE = Math.min(dist(pts[0], pts[1]), dist(pts[1], pts[2]), dist(pts[2], pts[0]));
+    const r = Math.max(22, Math.min(48, minE * 0.33));
+    const v = q ? 2 : p.v, mode = q ? (q.kind === 'miss' ? 'none' : 'ext') : p.mode;
+    const showExt = mode === 'ext' || (q && q.kind !== 'miss');
+    const disp = roundTo(A.ang, 180);
+    // 三角形
+    g.appendChild(el('polygon', { points: pts.map(pstr).join(' '), fill: '#eceff1', stroke: '#37474f', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+    // 頂点 v の外角：辺をのばした線（点線）と点 D
+    let Dp = null;
+    if (showExt) {
+      const E = extOf(pts, v, A);
+      let len = Math.max(90, r * 2.8);   // 図からはみ出さない長さにする
+      while (len > 50) { Dp = polar(pts[v], len, E.d); if (Dp[0] > 14 && Dp[0] < W - 24 && Dp[1] > 28 && Dp[1] < H - 10) break; len -= 4; }
+      Dp = polar(pts[v], len, E.d);
+      g.appendChild(el('line', { x1: f1(pts[v][0]), y1: f1(pts[v][1]), x2: f1(Dp[0]), y2: f1(Dp[1]), stroke: '#37474f', 'stroke-width': 3, 'stroke-dasharray': '8 6' }));
+      g.appendChild(el('circle', { cx: f1(Dp[0]), cy: f1(Dp[1]), r: 4, fill: '#37474f' }));
+      g.appendChild(el('text', { x: f1(Dp[0] + 6), y: f1(Dp[1] - 8), 'font-size': 22, fill: '#37474f', stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke' }, 'D'));
+      g.appendChild(el('path', { d: arcD(pts[v], r + 14, E.start, E.sweep), fill: 'none', stroke: 'var(--ext)', 'stroke-width': 3, 'stroke-dasharray': '3 4' }));
+      const lab = q ? qs(q.ext) : (Math.round(180 - disp[v]) + '°');
+      angLabel(g, pts[v], r + 50, E.start, E.sweep, lab, '#6a1b9a', 22);
+    }
+    // 頂点 v を通り、向かいの辺に平行な直線（一直線にならべたとき）
+    if (!q && mode === 'line' && p.t > 0.98) {
+      const o1 = pts[(v + 1) % 3], o2 = pts[(v + 2) % 3], d = dirDeg(o1, o2);
+      const a = polar(pts[v], 150, d), b = polar(pts[v], 150, d + 180);
+      g.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: '#2e7d32', 'stroke-width': 3, 'stroke-dasharray': '10 6' }));
+    }
+    // 角：もとの場所（切りとったあとは うすい点線）と、うごく角
+    const T = (!q && mode !== 'none') ? wedgeTargets(pts, A, mode, p.v) : null;
+    for (let i = 0; i < 3; i++) {
+      const moving = T && (T[i].V !== pts[i] || Math.abs(nd(T[i].s - A.start[i])) > 0.01);
+      if (moving && p.t > 0) angleMark(g, pts[i], r, A.start[i], A.ang[i], vc(i), 0, { op: 0.08, dash: true });
+    }
+    for (let i = 0; i < 3; i++) {
+      let V = pts[i], s = A.start[i];
+      if (T) { V = lerp(pts[i], T[i].V, p.t); s = A.start[i] + nd(T[i].s - A.start[i]) * p.t; }
+      angleMark(g, V, r, s, A.ang[i], vc(i), i + 1, { op: 0.45 });
+      const moved = T && (T[i].V !== pts[i] || Math.abs(nd(T[i].s - A.start[i])) > 0.01);
+      if (!moved || p.t < 0.02 || p.t > 0.98) {
+        const lab = q ? qs(q.show[i]) : disp[i] + '°';
+        if (lab) angLabel(g, V, r + 20, s, A.ang[i], lab, vc(i) === '#e69f00' ? '#a15c00' : vc(i), 20);
+      }
+    }
+    for (let i = 0; i < 3; i++) { vLabel(g, pts, i); if (!q) handle(g, pts[i], i, vc(i)); }
+  }
+  function side1() {
+    const p = P(), A = anglesOf(p.pts), d = roundTo(A.ang, 180), v = p.v;
+    const o = [(v + 1) % 3, (v + 2) % 3].sort();
+    const L = (i) => `<span class="sw" style="background:${vc(i)}"></span>∠${LET[i]}`;
+    let h = `<table class="ang-tbl"><tr><th>${L(0)}</th><th>${L(1)}</th><th>${L(2)}</th><th>合計</th></tr>
+      <tr><td>${d[0]}°</td><td>${d[1]}°</td><td>${d[2]}°</td><td class="sum">${d[0] + d[1] + d[2]}°</td></tr></table>`;
+    h += `<div class="big-eq">∠A ＋ ∠B ＋ ∠C ＝ <span class="ok">180°</span></div>`;
+    const ext = 180 - d[v];
+    h += `<div class="big-eq"><span class="ext">外角 ∠${LET[(v + 1) % 3]}${LET[v]}D</span> ＝ ${ext}°<br>
+      <span style="font-size:22px">∠${LET[o[0]]} ＋ ∠${LET[o[1]]} ＝ ${d[o[0]]}° ＋ ${d[o[1]]}° ＝ ${d[o[0]] + d[o[1]]}°</span></div>`;
+    h += `<div class="eq-note">外角は、<b>となりにない2つの内角の和</b>に等しい。<br>（内角 ∠${LET[v]} ＋ 外角 ＝ 180°、∠A ＋ ∠B ＋ ∠C ＝ 180° だから）</div>`;
+    return h;
+  }
+  function ctrl1() {
+    return `<div class="chip-row" style="margin-bottom:6px"><span style="font-weight:bold">注目する頂点：</span>${[0, 1, 2].map(i => `<button class="chip small-chip" data-v="${i}">${LET[i]}</button>`).join('')}</div>
+      <div class="tools">
+        <button class="op-btn action" id="b1Line">✂ 切りとって ならべる</button>
+        <button class="op-btn action" id="b1Ext">↗ 外角にうつす</button>
+        <button class="op-btn" id="b1Back">◀ もとにもどす</button>
+      </div>`;
+  }
+  function wire1() {
+    document.querySelectorAll('#ctrl [data-v]').forEach(b => b.addEventListener('click', () => {
+      pushHist(); stopTimer(); P().v = +b.dataset.v; render();
+    }));
+    $('b1Line').addEventListener('click', () => moveWedges('line'));
+    $('b1Ext').addEventListener('click', () => moveWedges('ext'));
+    $('b1Back').addEventListener('click', () => { const p = P(); if (p.mode === 'none' || p.t === 0) return; pushHist(); animate(p, 't', 0, 900, () => { p.mode = 'none'; render(); }); });
+  }
+  function moveWedges(mode, done) {
+    const p = P(); if (p.q && !p.q.done) return;
+    pushHist();
+    const go = () => { p.mode = mode; p.t = 0; animate(p, 't', 1, 1600, () => { afterMove(mode); if (done) done(); }); };
+    if (p.mode !== 'none' && p.mode !== mode && p.t > 0) animate(p, 't', 0, 600, go); else go();
+  }
+  function afterMove(mode) {
+    const p = P(), v = p.v, o = [(v + 1) % 3, (v + 2) % 3].sort();
+    if (mode === 'line') setMsg(`3つの角が<b>一直線</b>にならんだ！ → 一直線は <b>180°</b>。緑の点線は、${LET[v]} を通って 辺 ${LET[o[0]]}${LET[o[1]]} に平行な直線（平行線の錯角）。頂点を動かしてもくずれないよ。`, 'ok');
+    else setMsg(`∠${LET[o[0]]} と ∠${LET[o[1]]} が、外角にぴったり入った！ → <b>外角 ＝ となりにない2つの内角の和</b>（平行線の同位角・錯角）。`, 'ok');
+  }
+
+  /* =====================================================================
+     10. パート② 多角形の内角の和
+     ===================================================================== */
+  // 頂点 A から引ける対角線（へこんだ形では、外に出る対角線があると引けない）
+  function maxDiag() { const p = P(); return Math.max(0, p.pts.length - 3); }
+  function diagOK(pts) {
+    const n = pts.length;
+    for (let j = 2; j <= n - 2; j++) {
+      const a = pts[0], b = pts[j];
+      for (let i = 0; i < n; i++) {
+        const c = pts[i], d = pts[(i + 1) % n];
+        if (i === 0 || (i + 1) % n === 0 || i === j || (i + 1) % n === j) continue;
+        if (segHit(a, b, c, d)) return false;
+      }
+      if (!inside(lerp(a, b, 0.5), pts)) return false;
+    }
+    return true;
+  }
+  function render2(g) {
+    const p = P(), q = p.q && p.q.fig ? p.q : null;
+    if (q) return renderQFig(g, q);
+    gridLayer(g);
+    const pts = p.pts, n = pts.length, A = anglesOf(pts), disp = roundTo(A.ang, 180 * (n - 2));
+    const ok = diagOK(pts);
+    g.appendChild(el('polygon', { points: pts.map(pstr).join(' '), fill: '#eceff1', stroke: 'none' }));
+    // 対角線で分けた三角形（模様と番号）
+    if (ok) for (let k = 0; k < p.diag + (p.diag === n - 3 ? 1 : 0); k++) {
+      const t = [pts[0], pts[k + 1], pts[k + 2]];
+      g.appendChild(el('polygon', { points: t.map(pstr).join(' '), fill: `url(#pt${k % 4})`, stroke: 'none' }));
+    }
+    g.appendChild(el('polygon', { points: pts.map(pstr).join(' '), fill: 'none', stroke: '#37474f', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+    if (ok) for (let k = 0; k < p.diag; k++) {
+      const b = pts[k + 2];
+      g.appendChild(el('line', { x1: pts[0][0], y1: pts[0][1], x2: b[0], y2: b[1], stroke: '#d55e00', 'stroke-width': 4, 'stroke-dasharray': '12 6' }));
+    }
+    // 角の印（頂点ごとの色）
+    const minE = Math.min(...pts.map((q2, i) => dist(q2, pts[(i + 1) % n])));
+    const r = Math.max(16, Math.min(34, minE * 0.28));
+    for (let i = 0; i < n; i++) angleMark(g, pts[i], r, A.start[i], A.ang[i], vc(i), 1, { op: 0.4 });
+    // 三角形の番号（角の数より先にかいて、数がかくれないようにする）
+    if (ok) for (let k = 0; k < p.diag + (p.diag === n - 3 ? 1 : 0); k++) {
+      const t = [pts[0], pts[k + 1], pts[k + 2]], c = [(t[0][0] + t[1][0] + t[2][0]) / 3, (t[0][1] + t[1][1] + t[2][1]) / 3];
+      g.appendChild(el('circle', { cx: f1(c[0]), cy: f1(c[1]), r: 13, fill: '#fff', stroke: '#37474f', 'stroke-width': 2 }));
+      g.appendChild(el('text', { x: f1(c[0]), y: f1(c[1] + 6), 'text-anchor': 'middle', 'font-size': 16, fill: '#263238' }, String(k + 1)));
+    }
+    for (let i = 0; i < n; i++) angLabel(g, pts[i], r + 18, A.start[i], A.ang[i], disp[i] + '°', '#263238', 17);
+    for (let i = 0; i < n; i++) { vLabel(g, pts, i); handle(g, pts[i], i, vc(i)); }
+    if (!ok) g.appendChild(el('text', { x: 240, y: 410, 'text-anchor': 'middle', 'font-size': 17, fill: '#ad1457' }, '× A から引くと、外に出る対角線がある'));
+  }
+  function side2() {
+    const p = P(), n = p.pts.length, A = anglesOf(p.pts), disp = roundTo(A.ang, 180 * (n - 2));
+    const full = p.diag === n - 3 && diagOK(p.pts);
+    let h = `<div class="angs">${disp.map((a, i) => `<span><span class="sw" style="background:${vc(i)}"></span>∠${LET[i]} ${a}°</span>`).join('')}</div>`;
+    h += `<div class="big-eq">測定した内角の合計：${p.table[n] ? `<span class="ok">${180 * (n - 2)}°</span>` : '<span style="color:#90a4ae">？</span>'}</div>`;
+    if (!p.table[n]) h += `<div class="eq-note">対角線を引いて、三角形の数と内角の和を答えると、合計が出るよ。</div>`;
+    h += `<div class="eq-note">A から引いた対角線：<b>${p.diag}</b> 本 → 分かれた形：<b>${p.diag + 1}</b> こ${full ? `（ぜんぶ三角形！）` : ''}</div>`;
+    // きまりの表
+    const rows = [3, 4, 5, 6, 7, 8, 9, 10];
+    h += `<table class="rule-tbl"><tr><th>多角形</th><th>対角線<br>（1つの頂点から）</th><th>三角形の数</th><th>内角の和</th></tr>`;
+    for (const k of rows) {
+      const d = p.table[k];
+      h += `<tr class="${k === n ? 'cur' : ''}"><td>${polyName(k)}</td><td class="${d ? '' : 'q'}">${d ? k - 3 + ' 本' : '？'}</td><td class="${d ? '' : 'q'}">${d ? k - 2 + ' こ' : '？'}</td><td class="${d ? '' : 'q'}">${d ? 180 * (k - 2) + '°' : '？'}</td></tr>`;
+    }
+    const cnt = rows.filter(k => p.table[k]).length;
+    h += `<tr class="nrow"><td>n 角形</td>${cnt >= 3 ? '<td>n − 3 本</td><td>n − 2 こ</td><td>180° × (n − 2)</td>' : '<td class="q" colspan="3">3つ以上うめると出る（先に自分で考えよう）</td>'}</tr></table>`;
+    return h;
+  }
+  function ctrl2() {
+    return `<div class="poly-name" id="pName"></div>
+      <div class="slider-row"><span class="lab">頂点の数 n</span><input type="range" id="nRange" min="3" max="10" step="1"><input type="number" id="nNum" min="3" max="10" step="1"></div>
+      <div class="tools">
+        <button class="op-btn action" id="b2Diag">／ 対角線を1本ひく</button>
+        <button class="op-btn" id="b2All">ぜんぶひく</button>
+        <button class="op-btn" id="b2Clear">消す</button>
+        <button class="op-btn" id="bRand">🎲 形をかえる</button>
+      </div>`;
+  }
+  function setN(n) {
+    const p = P(); n = Math.max(3, Math.min(10, Math.round(n) || 3));
+    if (n === p.pts.length && !(p.q && p.q.fig)) { render(); return; }
+    stopTimer(); pushHist();
+    p.n = n; p.pts = regularPts(n, st.part === 2 ? 165 : 140).map(q => q.map(Math.round));
+    p.q = null; st.act = false;
+    if (st.part === 2) { p.diag = 0; p.flow = null; }
+    if (st.part === 3) p.w = 0;
+    render();
+  }
+  function wire2() {
+    wireN();
+    $('b2Diag').addEventListener('click', () => addDiag(1));
+    $('b2All').addEventListener('click', () => addDiag(99));
+    $('b2Clear').addEventListener('click', () => { const p = P(); if (!p.diag) return; pushHist(); p.diag = 0; render(); });
+  }
+  function wireN() {
+    $('nRange').addEventListener('input', e => setN(+e.target.value));
+    $('nNum').addEventListener('change', e => setN(+e.target.value));
+    $('bRand').addEventListener('click', randShape);
+  }
+  function randShape() {
+    const p = P(); stopTimer(); pushHist();
+    if (p.q && p.q.fig) { p.q = null; st.act = false; }
+    p.pts = randomPts(p.pts.length, st.part === 2 ? 170 : 145);
+    if (st.part === 3) p.w = 0;
+    render();
+  }
+  function addDiag(k) {
+    const p = P();
+    if (p.q && p.q.fig) { p.q = null; st.act = false; }
+    if (!diagOK(p.pts)) { setMsg('へこんだところがあって、A からの対角線が外に出てしまう。頂点を動かしてから引こう。', 'ng'); return; }
+    const n = p.pts.length;
+    if (n === 3) { setMsg('三角形には対角線がない（となり合わない頂点がない）。三角形 1 こ → 180°。', 'ok'); p.table[3] = true; render(); return; }
+    if (p.diag >= n - 3) { setMsg(`もう引けない。A ととなりの2つ（${LET[1]}・${LET[n - 1]}）には引けないから、${n} − 3 ＝ ${n - 3} 本。`); return; }
+    pushHist();
+    p.diag = Math.min(n - 3, p.diag + k);
+    if (p.diag === n - 3) {
+      if (!p.table[n]) { startFlow(); return; }
+      setMsg(`${polyName(n)}は 三角形 ${n - 2} こ → 180° × ${n - 2} ＝ ${180 * (n - 2)}°`, 'ok');
+    } else setMsg(`対角線 ${p.diag} 本。まだ引けるかな？`);
+    render();
+  }
+  // 対角線をぜんぶ引いたら、三角形の数 → 内角の和 を答える
+  function startFlow() {
+    const p = P(), n = p.pts.length;
+    p.flow = 'tri';
+    p.q = { kind: 'tri', n, ans: n - 2, flow: true, text: `${polyName(n)}を、A から引いた対角線で分けると、<b>三角形はいくつ</b>？`, unit: 'こ',
+            wrong: [[n, 'n2'], [n - 3, 'diag'], [n - 1, 'n2']] };
+    st.act = true; st.inp.v = '';
+    setMsg('対角線をぜんぶ引いた！ 三角形はいくつかな？');
+    render();
+  }
+
+  /* =====================================================================
+     11. パート③ 外角の和（多角形のまわりを歩くカメ）
+     ===================================================================== */
+  // w は 0〜2n：偶数の区間＝辺を歩く、奇数の区間＝頂点で向きを変える
+  function walkState(pts, w) {
+    const n = pts.length, A = anglesOf(pts), sg = A.ccw ? 1 : -1;
+    const ext = A.ang.map(a => 180 - a);
+    w = Math.max(0, Math.min(2 * n, w));
+    let k = Math.floor(w), f = w - k; if (k >= 2 * n) { k = 2 * n - 1; f = 1; }
+    let pos, head, turned = 0, done = [];
+    for (let m = 1; m < k; m += 2) { const j = ((m + 1) / 2) % n; turned += ext[j]; done.push(j); }
+    if (k % 2 === 0) { const e = k / 2; pos = lerp(pts[e], pts[(e + 1) % n], f); head = dirDeg(pts[e], pts[(e + 1) % n]); }
+    else {
+      const j = ((k + 1) / 2) % n; pos = pts[j];
+      head = dirDeg(pts[(j + n - 1) % n], pts[j]) + sg * ext[j] * f; turned += ext[j] * f;
+      if (f >= 1) done.push(j);
+      return { pos, head, turned, done, cur: f < 1 ? j : -1, curF: f, ext, A, sg };
+    }
+    return { pos, head, turned, done, cur: -1, curF: 0, ext, A, sg };
+  }
+  function drawTurtle(g, pos, head) {
+    const t = el('g', { transform: `translate(${f1(pos[0])},${f1(pos[1])}) rotate(${f1(-head)})` });
+    t.appendChild(el('ellipse', { cx: -2, cy: -10, rx: 4, ry: 3, fill: '#558b2f' }));
+    t.appendChild(el('ellipse', { cx: -2, cy: 10, rx: 4, ry: 3, fill: '#558b2f' }));
+    t.appendChild(el('ellipse', { cx: -14, cy: -8, rx: 4, ry: 3, fill: '#558b2f' }));
+    t.appendChild(el('ellipse', { cx: -14, cy: 8, rx: 4, ry: 3, fill: '#558b2f' }));
+    t.appendChild(el('circle', { cx: 9, cy: 0, r: 6, fill: '#7cb342', stroke: '#33691e', 'stroke-width': 2 }));
+    t.appendChild(el('circle', { cx: 11, cy: -2.5, r: 1.6, fill: '#000' }));
+    t.appendChild(el('circle', { cx: 11, cy: 2.5, r: 1.6, fill: '#000' }));
+    t.appendChild(el('ellipse', { cx: -8, cy: 0, rx: 12, ry: 10, fill: '#8bc34a', stroke: '#33691e', 'stroke-width': 2 }));
+    t.appendChild(el('path', { d: 'M-14,-5 L-2,-5 M-14,5 L-2,5 M-8,-9 L-8,9', stroke: '#33691e', 'stroke-width': 1.5 }));
+    g.appendChild(t);
+    // 向きの矢印（前を見る向き）
+    const a = polar(pos, 30, head), b = polar(pos, 52, head);
+    g.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: '#33691e', 'stroke-width': 3, 'marker-end': 'url(#arr)' }));
+  }
+  function arrowDef(g) {
+    const d = el('defs', {});
+    const m = el('marker', { id: 'arr', viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' });
+    m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: '#33691e' }));
+    d.appendChild(m); g.appendChild(d);
+  }
+  // 外角をかく（labels を書けば、その文字。なければ測定値）
+  function drawExts(g, pts, which, labels, curJ, curF) {
+    const n = pts.length, A = anglesOf(pts), disp = roundTo(A.ang.map(a => 180 - a), 360);
+    for (const j of which) {
+      const E = extOf(pts, j, A), V = pts[j], D = polar(V, 56, E.d);
+      g.appendChild(el('line', { x1: f1(V[0]), y1: f1(V[1]), x2: f1(D[0]), y2: f1(D[1]), stroke: '#78909c', 'stroke-width': 2.5, 'stroke-dasharray': '6 5' }));
+      const sw = j === curJ ? E.sweep * curF : E.sweep;
+      const s = A.ccw ? E.start : E.start + E.sweep - sw;
+      angleMark(g, V, 30, s, sw, vc(j), 1, { op: 0.5 });
+      if (j !== curJ) angLabel(g, V, 48, E.start, E.sweep, labels ? labels[j] : disp[j] + '°', '#263238', 18);
+    }
+  }
+  function render3(g) {
+    const p = P(), q = p.q && p.q.fig ? p.q : null;
+    if (q) return renderQFig(g, q);
+    arrowDef(g); gridLayer(g);
+    const pts = p.pts, n = pts.length, ws = walkState(pts, p.w);
+    g.appendChild(el('polygon', { points: pts.map(pstr).join(' '), fill: '#eceff1', stroke: '#37474f', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+    // 歩いた道（太い線）
+    const k = Math.min(2 * n, p.w);
+    for (let e = 0; e < n; e++) {
+      const s0 = 2 * e; if (k <= s0) break;
+      const f = Math.min(1, k - s0), a = pts[e], b = lerp(pts[e], pts[(e + 1) % n], f);
+      g.appendChild(el('line', { x1: f1(a[0]), y1: f1(a[1]), x2: f1(b[0]), y2: f1(b[1]), stroke: '#7cb342', 'stroke-width': 7, 'stroke-linecap': 'round', opacity: 0.6 }));
+    }
+    const all = $('optAllExt').checked;
+    const which = all ? pts.map((_, i) => i) : ws.done.concat(ws.cur >= 0 ? [ws.cur] : []);
+    drawExts(g, pts, which, null, ws.cur, ws.curF);
+    for (let i = 0; i < n; i++) { vLabel(g, pts, i); handle(g, pts[i], i, vc(i)); }
+    { // 「スタート」の文字は、A の名前より外がわに
+      const c = [pts.reduce((a, q2) => a + q2[0], 0) / n, pts.reduce((a, q2) => a + q2[1], 0) / n];
+      const dx = pts[0][0] - c[0], dy = pts[0][1] - c[1], L = Math.hypot(dx, dy) || 1;
+      g.appendChild(el('text', { x: f1(pts[0][0] + dx / L * 50), y: f1(pts[0][1] + dy / L * 50 + 6), 'text-anchor': 'middle', 'font-size': 16, fill: '#33691e', stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke' }, 'スタート'));
+    }
+    drawTurtle(g, ws.pos, ws.head);
+  }
+  // 回った角のメーター：外角を順に集めると、ちょうど1回転
+  function dialSVG() {
+    const p = P(), pts = p.pts, n = pts.length, ws = walkState(pts, p.w), C = [115, 115], R = 85;
+    const disp = roundTo(ws.ext, 360);
+    let h = `<svg id="dial" viewBox="0 0 230 230" aria-label="回った角のメーター">`;
+    h += `<circle cx="115" cy="115" r="${R}" fill="#fafafa" stroke="#b0bec5" stroke-width="2"/>`;
+    for (let a = 0; a < 360; a += 30) { const o = polar(C, R, 90 + a), i2 = polar(C, R - 8, 90 + a); h += `<line x1="${f1(o[0])}" y1="${f1(o[1])}" x2="${f1(i2[0])}" y2="${f1(i2[1])}" stroke="#b0bec5" stroke-width="2"/>`; }
+    let cum = 0;
+    const order = []; for (let m = 1; m <= n; m++) order.push(m % n);
+    for (const j of order) {
+      let sw = 0;
+      if (ws.done.includes(j)) sw = ws.ext[j]; else if (ws.cur === j) sw = ws.ext[j] * ws.curF;
+      if (sw <= 0) { if (!ws.done.includes(j)) break; continue; }
+      const s = ws.sg > 0 ? 90 + cum : 90 - cum - sw;
+      h += `<path d="${wedgeD(C, R - 2, s, sw)}" fill="${vc(j)}" fill-opacity="0.55" stroke="#fff" stroke-width="2"/>`;
+      if (sw > 14 && ws.done.includes(j)) { const lp = polar(C, R * 0.68, s + sw / 2); h += `<text x="${f1(lp[0])}" y="${f1(lp[1] + 5)}" text-anchor="middle" font-size="14" fill="#263238">${LET[j]}</text>`; }
+      cum += sw;
+    }
+    const nd2 = polar(C, R - 4, 90 + ws.sg * ws.turned);
+    h += `<line x1="115" y1="115" x2="${f1(nd2[0])}" y2="${f1(nd2[1])}" stroke="#33691e" stroke-width="4" stroke-linecap="round"/>`;
+    h += `<line x1="115" y1="115" x2="115" y2="${115 - R}" stroke="#37474f" stroke-width="2" stroke-dasharray="4 4"/>`;
+    const tot = ws.done.length === n ? 360 : ws.done.reduce((a, j) => a + disp[j], 0) + Math.round(ws.cur >= 0 ? ws.ext[ws.cur] * ws.curF : 0);
+    h += `<circle cx="115" cy="115" r="34" fill="#fff" stroke="#b0bec5"/><text x="115" y="124" text-anchor="middle" font-size="26" fill="#263238">${tot}°</text>`;
+    h += `</svg>`;
+    return { svg: h, tot, ws, disp };
+  }
+  function side3() {
+    const p = P(), n = p.pts.length, d = dialSVG(), A = anglesOf(p.pts), di = roundTo(A.ang, 180 * (n - 2));
+    let h = `<div style="text-align:center;font-weight:bold">🐢 カメが回った角（スタートの向きから）</div>` + d.svg;
+    h += `<div class="angs">${d.disp.map((a, i) => `<span style="opacity:${d.ws.done.includes(i) ? 1 : 0.35}"><span class="sw" style="background:${vc(i)}"></span>${LET[i]} ${a}°</span>`).join('')}</div>`;
+    if (d.ws.done.length === n) h += `<div class="big-eq"><span class="ok">1周で ちょうど 1回転 ＝ 360°</span></div><div class="eq-note">${polyName(n)}の外角の和 ＝ ${d.disp.join(' ＋ ')} ＝ <b>360°</b></div>`;
+    h += `<div class="eq-note" style="margin-top:6px">式でも：1つの頂点で 内角 ＋ 外角 ＝ 180° が ${n} こ → 180° × ${n} ＝ ${180 * n}°<br>そこから内角の和 180° × (${n} − 2) ＝ ${180 * (n - 2)}° をひくと → <b>${180 * n} − ${180 * (n - 2)} ＝ 360°</b></div>`;
+    h += `<div class="small" style="text-align:center">内角：${di.map((a, i) => LET[i] + ' ' + a + '°').join('、')}</div>`;
+    return h;
+  }
+  function ctrl3() {
+    return `<div class="poly-name" id="pName"></div>
+      <div class="slider-row"><span class="lab">頂点の数 n</span><input type="range" id="nRange" min="3" max="10" step="1"><input type="number" id="nNum" min="3" max="10" step="1"></div>
+      <div class="tools">
+        <button class="op-btn action" id="b3Play">▶ 歩く</button>
+        <button class="op-btn" id="b3Step">⏭ 1つ進む</button>
+        <button class="op-btn" id="b3Top">⏮ はじめから</button>
+        <button class="op-btn" id="bRand">🎲 形をかえる</button>
+      </div>`;
+  }
+  function wire3() {
+    wireN();
+    $('b3Play').addEventListener('click', () => { const p = P(); if (p.playing) { stopTimer(); render(); } else play3(); });
+    $('b3Step').addEventListener('click', () => {
+      const p = P(), n = p.pts.length; if (p.q && p.q.fig) { p.q = null; st.act = false; }
+      stopTimer(); pushHist(); if (p.w >= 2 * n) p.w = 0;
+      animate(p, 'w', Math.min(2 * n, Math.floor(p.w + 1e-6) + 1), 700, after3);
+    });
+    $('b3Top').addEventListener('click', () => { const p = P(); stopTimer(); pushHist(); p.w = 0; render(); });
+  }
+  function play3() {
+    const p = P(), n = p.pts.length; if (p.q && p.q.fig) { p.q = null; st.act = false; }
+    stopTimer(); pushHist();
+    if (p.w >= 2 * n) p.w = 0;
+    p.playing = true;
+    let last = Date.now();
+    st.timer = setInterval(() => {
+      const now = Date.now(); p.w = Math.min(2 * n, p.w + (now - last) / 650); last = now;
+      if (p.w >= 2 * n) { stopTimer(); after3(); }
+      render();
+    }, 30);
+    render();
+  }
+  function after3() {
+    const p = P(), n = p.pts.length;
+    if (p.w >= 2 * n - 1e-6) setMsg(`1周してスタートの向きにもどった！ 回った角の合計は <b>360°</b>。n を変えたり、頂点を動かしたりしても、やっぱり 360° かな？`, 'ok');
+    render();
+  }
+
+  /* =====================================================================
+     12. パート④ 正多角形・星形（発展）
+     ===================================================================== */
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const fracHTML = (f, size) => (f.isInteger() ? f.toString() : mrs(f.toString(), size || 'inherit'));
+  const approx = (f) => (f.isInteger() ? '' : `（約 ${Math.round(f.valueOf() * 10) / 10}°）`);
+  function render4(g) {
+    const p = P(), q = p.q && p.q.fig ? p.q : null;
+    if (q) return renderQFig(g, q);
+    if (p.mode === 'reg') {
+      const n = p.n, pts = regularPts(n, 165, 240, 215), A = anglesOf(pts);
+      const intA = F(180 * (n - 2), n), extA = F(360, n);
+      g.appendChild(el('polygon', { points: pts.map(pstr).join(' '), fill: '#e3f2fd', stroke: '#37474f', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+      const r = Math.max(14, Math.min(34, dist(pts[0], pts[1]) * 0.3));
+      for (let i = 0; i < n; i++) angleMark(g, pts[i], r, A.start[i], A.ang[i], '#0072b2', 1, { op: i === 0 ? 0.5 : 0.18 });
+      // 頂点 A の外角
+      const E = extOf(pts, 0, A), D = polar(pts[0], 70, E.d);
+      g.appendChild(el('line', { x1: f1(pts[0][0]), y1: f1(pts[0][1]), x2: f1(D[0]), y2: f1(D[1]), stroke: '#78909c', 'stroke-width': 2.5, 'stroke-dasharray': '6 5' }));
+      angleMark(g, pts[0], r + 6, E.start, E.sweep, '#6a1b9a', 2, { op: 0.4 });
+      angLabel(g, pts[0], r + 26, E.start, E.sweep, '外角', '#6a1b9a', 17);
+      const c = polar([240, 215], 0, 0);
+      g.appendChild(el('text', { x: c[0], y: c[1] + 8, 'text-anchor': 'middle', 'font-size': 26, fill: '#0d47a1' }, '正' + polyName(n)));
+      g.appendChild(el('text', { x: 240, y: 410, 'text-anchor': 'middle', 'font-size': 18, fill: '#263238' }, `1つの内角 ${intA.isInteger() ? intA + '°' : '約 ' + Math.round(intA.valueOf() * 10) / 10 + '°'}　1つの外角 ${extA.isInteger() ? extA + '°' : '約 ' + Math.round(extA.valueOf() * 10) / 10 + '°'}`));
+      return;
+    }
+    // 星形：n この点を k こおきに結ぶ
+    const n = p.n, k = p.k, drag5 = n === 5 && k === 2;
+    const pts = drag5 ? p.star : regularPts(n, 175, 240, 215);
+    let path = '', j = 0;
+    for (let m = 0; m <= n; m++) { path += (m ? ' L' : 'M') + pstr(pts[j]); j = (j + k) % n; }
+    g.appendChild(el('path', { d: path + ' Z', fill: '#fff3e0', 'fill-rule': 'nonzero', stroke: '#e65100', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+    const tips = starTips(pts, k), disp = roundTo(tips.map(t => t.ang), 180 * (n - 2 * k));
+    tips.forEach((t, i) => {
+      angleMark(g, pts[i], 26, t.s, t.ang, vc(i), 1, { op: 0.5 });
+      angLabel(g, pts[i], 44, t.s, t.ang, disp[i] + '°', '#263238', 16);
+    });
+    for (let i = 0; i < n; i++) { vLabel(g, pts, i); if (drag5) handle(g, pts[i], i, vc(i)); }
+  }
+  // 星の先の角：点 i から、k こ先の点と k こ前の点を見た角
+  function starTips(pts, k) {
+    const n = pts.length;
+    return pts.map((V, i) => {
+      const a = dirDeg(V, pts[(i + k) % n]), b = dirDeg(V, pts[(i - k + n) % n]);
+      const d = md(b - a);
+      return d <= 180 ? { s: a, ang: d } : { s: b, ang: 360 - d };
+    });
+  }
+  function side4() {
+    const p = P(), n = p.n;
+    if (p.mode === 'reg') {
+      const sum = 180 * (n - 2), intA = F(sum, n), extA = F(360, n);
+      return `<div class="big-eq">内角の和 ＝ 180° × (${n} − 2) ＝ ${sum}°</div>
+        <div class="big-eq">1つの内角 ＝ ${sum}° ÷ ${n} ＝ ${fracHTML(intA)}°<span style="font-size:18px">${approx(intA)}</span></div>
+        <div class="big-eq"><span class="ext">1つの外角</span> ＝ 360° ÷ ${n} ＝ ${fracHTML(extA)}°<span style="font-size:18px">${approx(extA)}</span></div>
+        <div class="eq-note">たしかめ：1つの内角 ＋ 1つの外角 ＝ ${fracHTML(intA)}° ＋ ${fracHTML(extA)}° ＝ <b>180°</b><br>だから 1つの内角 ＝ 180° − 360° ÷ n でも求められる。</div>
+        <div class="eq-note">正多角形は、すべての角が等しいので「<b>和 ÷ n</b>」で1つ分。</div>`;
+    }
+    const k = p.k, pts = p.n === 5 && k === 2 ? p.star : regularPts(n, 175), tips = starTips(pts, k), disp = roundTo(tips.map(t => t.ang), 180 * (n - 2 * k));
+    let h = `<div class="eq-note"><b>【発展】星形多角形</b>：${n} この点を ${k} こおきに結んだ星。</div>`;
+    h += `<div class="angs">${disp.map((a, i) => `<span><span class="sw" style="background:${vc(i)}"></span>${LET[i]} ${a}°</span>`).join('')}</div>`;
+    h += `<div class="big-eq">先の角の和 ＝ <span class="ok">${180 * (n - 2 * k)}°</span></div>`;
+    if (n === 5 && k === 2) h += `<div class="eq-note">5つの点をドラッグしてゆがめても、<b>180°</b> のまま！<br>わけ：三角形の外角 ＝ となりにない2つの内角の和 を2回使うと、5つの角が1つの三角形の3つの角に集まる。</div>`;
+    else h += `<div class="eq-note">正しい星形なら、1つの先の角 ＝ 180° × (${n} − 2 × ${k}) ÷ ${n} ＝ ${fracHTML(F(180 * (n - 2 * k), n))}°。和は 180° × (n − 2k)。</div>`;
+    return h;
+  }
+  function ctrl4() {
+    return `<div class="chip-row" style="margin-bottom:4px"><button class="chip small-chip" data-m="reg">正多角形</button><button class="chip small-chip" data-m="star">星形（発展）</button></div>
+      <div class="slider-row"><span class="lab">頂点の数 n</span><input type="range" id="nRange" min="3" max="20" step="1"><input type="number" id="nNum" min="3" max="20" step="1"></div>
+      <div class="chip-row" id="kRow"></div>`;
+  }
+  function wire4() {
+    document.querySelectorAll('#ctrl [data-m]').forEach(b => b.addEventListener('click', () => {
+      const p = P(); pushHist(); p.mode = b.dataset.m; if (p.q && p.q.fig) { p.q = null; st.act = false; }
+      if (p.mode === 'star') { p.n = 5; p.k = 2; }
+      buildCtrl(); render();
+    }));
+    const setN4 = (v) => {
+      const p = P(), lo = p.mode === 'star' ? 5 : 3, hi = p.mode === 'star' ? 12 : 20;
+      v = Math.max(lo, Math.min(hi, Math.round(v) || lo));
+      // 星形にならない n（6 など）はとばす
+      if (p.mode === 'star' && !validKs(v).length) { v += v > p.n ? 1 : -1; if (v < lo || v > hi || !validKs(v).length) v = p.n; }
+      if (v === p.n && !(p.q && p.q.fig)) { render(); return; }
+      pushHist(); p.n = v; if (p.q && p.q.fig) { p.q = null; st.act = false; } fixK(); buildK(); render();
+    };
+    $('nRange').addEventListener('input', e => setN4(+e.target.value));
+    $('nNum').addEventListener('change', e => setN4(+e.target.value));
+    buildK();
+  }
+  function fixK() { const p = P(); if (p.mode !== 'star') return; const ks = validKs(p.n); if (!ks.includes(p.k)) p.k = ks[0]; }
+  const validKs = (n) => { const r = []; for (let k = 2; k < n / 2; k++) if (gcd(n, k) === 1) r.push(k); return r; };
+  function buildK() {
+    const p = P(), row = $('kRow'); if (!row) return;
+    if (p.mode !== 'star') { row.innerHTML = ''; return; }
+    row.innerHTML = '<span style="font-weight:bold">何こおきに結ぶ：</span>' + validKs(p.n).map(k => `<button class="chip small-chip${k === p.k ? ' active' : ''}" data-k2="${k}">${k} こ</button>`).join('');
+    row.querySelectorAll('[data-k2]').forEach(b => b.addEventListener('click', () => { pushHist(); P().k = +b.dataset.k2; buildK(); render(); }));
+  }
+
+  /* =====================================================================
+     13. 練習問題（答えを先に決めて作る。同じ問題が続かないようにする）
+     q = { kind, text, ans, unit, wrong:[[値, つまずきの型]], fig?:{…}, done, tries }
+     ===================================================================== */
+  function genQ(part, focus) {
+    const avoid = st.last[part];
+    for (let tr = 0; tr < 40; tr++) {
+      const q = makeQ(part, focus);
+      const key = q.kind + ':' + q.text;
+      if (key !== avoid) { st.last[part] = key; return q; }
+    }
+    return makeQ(part, focus);
+  }
+  function makeQ(part, focus) {
+    if (part === 1) {
+      // 三角形：角を先に決めてから図をつくる
+      let a, b, c;
+      // 直角（∠C ＝ 90°）は内角と外角が同じになって見分けにくいので出さない
+      do { a = rint(4, 20) * 5; b = rint(4, 20) * 5; c = 180 - a - b; } while (c < 25 || c === 90 || a === b || b === c || a === c);
+      const kinds = focus === 'tri180' ? ['miss'] : focus === 'extInt' ? ['ext', 'extRev'] : ['miss', 'ext', 'extRev'];
+      const kind = pick(kinds), pts = triFromAngles(a, b, c);
+      if (kind === 'miss') return { kind, pts, ans: c, unit: '°', show: [a + '°', b + '°', '？'], text: `∠A ＝ ${a}°、∠B ＝ ${b}° のとき、<b>∠C</b> は何度？`,
+        wrong: [[360 - a - b, 'tri180'], [a + b, 'extInt'], [180 - a, 'tri180'], [180 - b, 'tri180']] };
+      if (kind === 'ext') return { kind, pts, ans: a + b, unit: '°', show: [a + '°', b + '°', ''], ext: '？', text: `∠A ＝ ${a}°、∠B ＝ ${b}° のとき、<b>外角 ∠ACD</b> は何度？`,
+        wrong: [[c, 'extInt'], [360 - a - b, 'tri180']] };
+      return { kind, pts, ans: b, unit: '°', show: [a + '°', '？', ''], ext: (a + b) + '°', text: `∠A ＝ ${a}°、外角 ∠ACD ＝ ${a + b}° のとき、<b>∠B</b> は何度？`,
+        wrong: [[180 - (a + b) - a, 'extInt'], [c, 'extInt'], [2 * a + b, 'calc'], [180 - a - (a + b) + 180, 'calc']] };
+    }
+    if (part === 2) {
+      const kinds = focus === 'diag' ? ['tri', 'sum'] : ['sum', 'sum', 'rev', 'tri'];
+      const kind = pick(kinds), n = rint(5, 12);
+      const fig = { type: 'poly', n };
+      if (kind === 'sum') return { kind, n, fig, ans: 180 * (n - 2), unit: '°', text: `<b>${polyName(n)}</b>の内角の和は何度？`,
+        wrong: [[180 * n, 'n2'], [180 * (n - 1), 'n2'], [180 * (n - 3), 'diag'], [360, 'extDep'], [360 * (n - 2), 'calc']] };
+      if (kind === 'tri') return { kind, n, fig: { type: 'poly', n, diag: true }, ans: n - 2, unit: 'こ', text: `<b>${polyName(n)}</b>を、1つの頂点から引いた対角線で分けると、三角形はいくつ？`,
+        wrong: [[n, 'n2'], [n - 3, 'diag'], [n - 1, 'n2']] };
+      const s = 180 * (n - 2);
+      return { kind, n, fig: { type: 'mystery' }, ans: n, unit: '角形', text: `内角の和が <b>${s}°</b> の多角形は、何角形？`,
+        wrong: [[n - 2, 'n2'], [n + 2, 'n2'], [n - 1, 'diag'], [n + 1, 'diag']] };
+    }
+    if (part === 3) {
+      const kinds = focus === 'extDep' ? ['sum', 'miss'] : ['sum', 'miss', 'miss', 'all'];
+      const kind = pick(kinds);
+      if (kind === 'sum') {
+        const n = pick([5, 6, 7, 8, 9, 10, 12, 15, 20, 100]);
+        return { kind, n, fig: { type: 'poly', n: Math.min(n, 20), ext: true }, ans: 360, unit: '°', text: `<b>${polyName(n)}</b>の外角の和は何度？`,
+          wrong: [[180 * (n - 2), 'extDep'], [180 * n, 'extDep'], [360 * n, 'extDep'], [180, 'extDep'], [360 * (n - 2), 'extDep']], anyWrong: 'extDep' };
+      }
+      if (kind === 'all') {
+        const n = rint(5, 10);
+        return { kind, n, fig: { type: 'poly', n, ext: true }, ans: 180 * n, unit: '°', text: `${polyName(n)}の<b>内角の和と外角の和</b>を合わせると何度？`,
+          wrong: [[180 * (n - 2) + 180 * (n - 2), 'extDep'], [180 * (n - 2), 'extInt'], [360, 'extInt']] };
+      }
+      // 外角が1つだけわからない多角形（外角を先に決めて、図をつくる）
+      // ※ 四角形は内角の和も 360° で「外角の和が変わる」つまずきが見分けられないので、五・六角形にする
+      const n = rint(5, 6);
+      let e;
+      for (let tr = 0; tr < 500; tr++) {
+        e = Array.from({ length: n - 1 }, () => rint(7, 22) * 5);
+        const last = 360 - e.reduce((a, b) => a + b, 0);
+        if (last >= 35 && last <= 120) { e.push(last); break; }
+        e = null;
+      }
+      if (!e) e = Array(n).fill(360 / n);
+      const unk = rint(0, n - 1);
+      const pts = polyFromExts(e);
+      const known = e.filter((_, i) => i !== unk).reduce((a, b) => a + b, 0);
+      const labels = e.map((x, i) => (i === unk ? '？' : x + '°'));
+      return { kind, n, fig: { type: 'exts', pts, labels }, ans: e[unk], unit: '°', text: `${polyName(n)}の外角のうち ${n - 1} つが図のとき、<b>のこりの外角 ？</b> は何度？`,
+        wrong: [[180 * (n - 2) - known, 'extDep'], [180 - e[unk], 'extInt'], [180 * n - known, 'extDep'], [180 - known, 'calc']] };
+    }
+    // パート④
+    const kinds = focus === 'starMix' ? ['star'] : focus === 'forgotDiv' ? ['int', 'ext'] : ['int', 'ext', 'revExt', 'revInt', 'int', 'ext', 'star'];
+    const kind = pick(kinds);
+    if (kind === 'star') return { kind, fig: { type: 'star' }, ans: 180, unit: '°', text: '5つの点を結んだ星形の、<b>5つの先の角の和</b>は何度？（発展）',
+      wrong: [[540, 'starMix'], [360, 'starMix'], [900, 'starMix'], [720, 'starMix']], anyWrong: 'starMix' };
+    if (kind === 'int' || kind === 'ext') {
+      const n = pick([3, 4, 5, 6, 8, 9, 10, 12]), I = 180 * (n - 2) / n, E = 360 / n;
+      if (kind === 'int') return { kind, n, fig: { type: 'reg', n }, ans: I, unit: '°', text: `<b>正${polyName(n)}</b>の1つの内角は何度？`,
+        wrong: [[180 * (n - 2), 'forgotDiv'], [E, 'extInt'], [180, 'n2'], [360 - E, 'calc']].filter(w => w[0] !== I) };
+      return { kind, n, fig: { type: 'reg', n }, ans: E, unit: '°', text: `<b>正${polyName(n)}</b>の1つの外角は何度？`,
+        wrong: [[360, 'forgotDiv'], [I, 'extInt'], [180 * (n - 2), 'forgotDiv']].filter(w => w[0] !== E) };
+    }
+    const n = pick([5, 6, 8, 9, 10, 12, 15, 18, 20]), E = 360 / n, I = 180 - E;
+    if (kind === 'revExt') return { kind, n, fig: { type: 'mystery' }, ans: n, unit: '角形', pre: '正', text: `1つの外角が <b>${E}°</b> の正多角形は、正何角形？`,
+      wrong: [[n - 2, 'n2'], [n + 2, 'n2']] };
+    return { kind, n, fig: { type: 'mystery' }, ans: n, unit: '角形', pre: '正', text: `1つの内角が <b>${I}°</b> の正多角形は、正何角形？`,
+      wrong: [[E, 'extInt'], [n - 2, 'n2'], [n + 2, 'n2']] };
+  }
+  // 3つの角から三角形の頂点（B を左下、C を右下、A を上に）
+  function triFromAngles(a, b, c) {
+    const L = 1, AB = L * Math.sin(c * D2R) / Math.sin(a * D2R);
+    const m = [[AB * Math.cos(b * D2R), AB * Math.sin(b * D2R)], [0, 0], [L, 0]];
+    return fitPts(m, 70, 50, 340, 330);
+  }
+  // 外角の列から多角形をつくる（辺の長さは、閉じるように決める）
+  function polyFromExts(e) {
+    const n = e.length, h = []; let cur = 0;
+    for (let i = 0; i < n; i++) { h.push(cur); cur += e[(i + 1) % n]; }
+    const u = h.map(a => [Math.cos(a * D2R), Math.sin(a * D2R)]);
+    // 辺の長さを 1〜2 でてきとうに決め、閉じないぶん（ずれ S）を、−S をはさむ となり合う2つの向きの辺をのばしてうめる
+    // （外角はどれも 180° より小さいので、−S はかならず どこか2つの向きのあいだにある）
+    const L = Array.from({ length: n }, () => 1 + Math.random());
+    let sx = 0, sy = 0; for (let i = 0; i < n; i++) { sx += L[i] * u[i][0]; sy += L[i] * u[i][1]; }
+    const th = md(Math.atan2(-sy, -sx) / D2R);
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n, a0 = md(h[i]), span = md(h[j] - h[i]);
+      if (md(th - a0) > span) continue;
+      const a = u[i], b = u[j], det = a[0] * b[1] - a[1] * b[0];
+      const al = (-sx * b[1] + sy * b[0]) / det, be = (-a[0] * sy + a[1] * sx) / det;
+      L[i] += Math.max(0, al); L[j] += Math.max(0, be);
+      break;
+    }
+    // 頂点 i の外角が e[i] になる（辺 i は 頂点 i → i+1）
+    const m = [[0, 0]]; for (let i = 0; i < n - 1; i++) m.push([m[i][0] + L[i] * u[i][0], m[i][1] + L[i] * u[i][1]]);
+    return fitPts(m, 80, 75, 320, 270);
+  }
+  // 算数の座標（y が上）の点を、図のわくに入るよう縮めて SVG の座標に
+  function fitPts(m, x0, y0, w, h) {
+    const xs = m.map(p => p[0]), ys = m.map(p => p[1]);
+    const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
+    const s = Math.min(w / (maxx - minx || 1), h / (maxy - miny || 1));
+    const ox = x0 + (w - (maxx - minx) * s) / 2, oy = y0 + (h - (maxy - miny) * s) / 2;
+    return m.map(p => [ox + (p[0] - minx) * s, oy + (maxy - p[1]) * s]);
+  }
+  // 練習問題の図
+  function renderQFig(g, q) {
+    const f = q.fig;
+    if (f.type === 'poly' || f.type === 'reg') {
+      const n = f.n, pts = regularPts(n, 160, 240, 210, f.type === 'reg' ? 90 : 90 + 7);
+      g.appendChild(el('polygon', { points: pts.map(pstr).join(' '), fill: f.type === 'reg' ? '#e3f2fd' : '#eceff1', stroke: '#37474f', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+      if (f.diag && q.done) for (let j = 2; j <= n - 2; j++) g.appendChild(el('line', { x1: f1(pts[0][0]), y1: f1(pts[0][1]), x2: f1(pts[j][0]), y2: f1(pts[j][1]), stroke: '#d55e00', 'stroke-width': 3, 'stroke-dasharray': '10 6' }));
+      if (f.ext && n <= 12) drawExts(g, pts, pts.map((_, i) => i), pts.map(() => ''), -1, 0);
+      g.appendChild(el('text', { x: 240, y: 218, 'text-anchor': 'middle', 'font-size': 26, fill: '#263238' }, (f.type === 'reg' ? '正' : '') + polyName(q.n)));
+      if (q.n > 20) g.appendChild(el('text', { x: 240, y: 410, 'text-anchor': 'middle', 'font-size': 16, fill: '#546e7a' }, '（図は二十角形でかいています）'));
+    } else if (f.type === 'exts') {
+      arrowDef(g);
+      g.appendChild(el('polygon', { points: f.pts.map(pstr).join(' '), fill: '#eceff1', stroke: '#37474f', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+      drawExts(g, f.pts, f.pts.map((_, i) => i), q.done ? f.labels.map(l => (l === '？' ? q.ans + '°' : l)) : f.labels, -1, 0);
+      f.pts.forEach((_, i) => vLabel(g, f.pts, i));
+    } else if (f.type === 'star') {
+      const pts = regularPts(5, 170, 240, 225);
+      let d = ''; [0, 2, 4, 1, 3, 0].forEach((j, m) => { d += (m ? ' L' : 'M') + pstr(pts[j]); });
+      g.appendChild(el('path', { d, fill: '#fff3e0', stroke: '#e65100', 'stroke-width': 3 }));
+      starTips(pts, 2).forEach((t, i) => angleMark(g, pts[i], 26, t.s, t.ang, vc(i), 1, { op: 0.5 }));
+    } else {
+      g.appendChild(el('text', { x: 240, y: 230, 'text-anchor': 'middle', 'font-size': 64, fill: '#90a4ae' }, q.done ? (q.pre || '') + polyName(q.ans) : '？角形'));
+    }
+  }
+
+  // 問題を出す
+  function newQ(focus) {
+    stopTimer(); pushHist();
+    const p = P(); focus = focus || st.focus;
+    const q = genQ(st.part, focus);
+    q.done = false; q.tries = 0;
+    q.wrong = q.wrong.filter(w => w[0] !== q.ans);   // 答えと同じ数は、まちがいの候補からはずす
+    if (st.part === 1) { p.pts = q.pts; p.mode = 'none'; p.t = 0; delete q.pts; }
+    if (st.part === 2) p.flow = null;
+    p.q = q; st.act = true; st.inp.v = ''; st.hintLv = 0;
+    setMsg('□ に数を入れて「こたえる」。');
+    render();
+  }
+  function askHTML() {
+    const q = P().q; if (!q) return '';
+    const unitPre = q.pre ? `<span>${q.pre}</span>` : '';
+    let h = `<div class="ask-q">${q.flow ? '' : '✏️ '}${q.text}</div>
+      <div class="ans-line">${unitPre}<button class="box" id="ansBox"><span class="bv">${st.inp.v || '　'}</span></button><span>${q.unit}</span></div>`;
+    if (!q.done) h += keypadHTML() + `<button class="go" id="goBtn">こたえる</button>`;
+    else h += `<button class="go next" id="nextBtn">${q.flow ? (q.kind === 'tri' ? 'つぎへ（内角の和）' : 'OK') : '✏️ つぎの問題'}</button>`;
+    if (!q.flow) h += `<div class="tools" style="margin-top:6px"><button class="op-btn" id="quitBtn">✖ 問題をおわる（図にもどる）</button></div>`;
+    return h;
+  }
+  function wireAsk() {
+    document.querySelectorAll('#ask .key').forEach(b => b.addEventListener('click', () => press(b.dataset.k)));
+    const go = $('goBtn'); if (go) go.addEventListener('click', checkQ);
+    const nx = $('nextBtn'); if (nx) nx.addEventListener('click', nextAfter);
+    const qb = $('quitBtn'); if (qb) qb.addEventListener('click', () => { pushHist(); P().q = null; st.act = false; setMsg(''); render(); });
+  }
+  function nextAfter() {
+    const p = P(), q = p.q;
+    if (q && q.flow) {
+      if (q.kind === 'tri') {
+        const n = q.n;
+        pushHist();
+        p.q = { kind: 'fsum', n, ans: 180 * (n - 2), flow: true, unit: '°', done: false, tries: 0, text: `三角形が ${n - 2} こ。では、${polyName(n)}の<b>内角の和</b>は何度？`,
+                wrong: [[180 * n, 'n2'], [180 * (n - 3), 'diag'], [180 * (n - 1), 'n2'], [360, 'extDep']] };
+        st.act = true; st.inp.v = ''; render(); return;
+      }
+      pushHist(); p.q = null; p.flow = null; st.act = false; render(); return;
+    }
+    newQ();
+  }
+  function checkQ() {
+    const p = P(), q = p.q; if (!q || q.done) return;
+    if (st.inp.v === '') { setMsg('□ に数を入れてね。'); return; }
+    const v = +st.inp.v;
+    if (v === q.ans) {
+      q.done = true; st.act = false; sndOK(); bumpClear(st.part);
+      let m = `<span class="mark-ok">○</span> 正解！ ${q.pre || ''}${q.ans}${q.unit}`;
+      if (q.kind === 'tri' || q.kind === 'fsum') m += q.kind === 'tri' ? `（${q.n} − 2 ＝ ${q.n - 2}）` : `（180° × (${q.n} − 2) ＝ 180° × ${q.n - 2}）`;
+      if (q.kind === 'sum' && st.part === 2) m += `（180° × (${q.n} − 2)）`;
+      if (q.kind === 'rev') m += `（${180 * (q.n - 2)} ÷ 180 ＝ ${q.n - 2} ＝ n − 2 → n ＝ ${q.n}）`;
+      if (st.part === 3 && q.kind === 'sum') m += `　何角形でも外角の和は 360°！`;
+      if (q.kind === 'int') m += `（${180 * (q.n - 2)}° ÷ ${q.n}）`;
+      if (q.kind === 'ext') m += `（360° ÷ ${q.n}）`;
+      if (q.kind === 'revExt') m += `（360 ÷ ${360 / q.n} ＝ ${q.n}）`;
+      if (q.kind === 'revInt') m += `（外角 ＝ 180 − ${180 - 360 / q.n} ＝ ${360 / q.n}° → 360 ÷ ${360 / q.n} ＝ ${q.n}）`;
+      if (q.kind === 'fsum') { p.table[q.n] = true; m += `<br>表にきろくしたよ。ほかの n でもやってみよう。`; }
+      setMsg(m, 'ok');
+    } else {
+      q.tries++; sndNG();
+      const w = q.wrong.find(x => x[0] === v);
+      const type = w ? w[1] : (q.anyWrong || 'calc');
+      addTrip(type);
+      let m = `<span class="mark-ng">×</span> ちがうよ。<b>${TRIPS[type].name}</b>かも？<br><span class="small" style="color:inherit">${TRIPS[type].exp}</span>`;
+      if (q.tries >= 2) m += `<br>答え：${q.pre || ''}${q.ans}${q.unit}（もう一度入れてみよう）`;
+      setMsg(m, 'ng');
+      st.inp.v = '';
+    }
+    render();
+  }
+
+  /* =====================================================================
+     14. 画面をかく
+     ===================================================================== */
+  function setMsg(html, kind) { const m = $('msg'); m.innerHTML = html || ''; m.className = 'msg' + (kind ? ' ' + kind : ''); }
+  function buildCtrl() {
+    const c = $('ctrl');
+    c.innerHTML = [null, ctrl1, ctrl2, ctrl3, ctrl4][st.part]();
+    [null, wire1, wire2, wire3, wire4][st.part]();
+  }
+  function render() {
+    const p = P(), g = clearFig();
+    [null, render1, render2, render3, render4][st.part](g);
+    // 右がわ
+    $('rTitle').textContent = PARTS[st.part].title;
+    const showSide = !(p.q && !p.q.flow);   // 練習問題のあいだは測定値をかくす
+    $('side').innerHTML = showSide ? [null, side1, side2, side3, side4][st.part]() : '<div class="eq-note">（練習問題のあいだは、測定値をかくしています）</div>';
+    $('ask').hidden = !p.q;
+    if (p.q) { $('ask').innerHTML = askHTML(); wireAsk(); }
+    // コントロールの値
+    if (st.part === 1) {
+      document.querySelectorAll('#ctrl [data-v]').forEach(b => { b.classList.toggle('active', +b.dataset.v === p.v); b.disabled = !!p.q; });
+      ['b1Line', 'b1Ext', 'b1Back'].forEach(id => { $(id).disabled = !!p.q; });
+    }
+    if (st.part === 2 || st.part === 3) {
+      const n = p.pts.length; $('nRange').value = n; $('nNum').value = n; $('pName').textContent = polyName(n);
+    }
+    if (st.part === 2) { const full = p.diag >= p.pts.length - 3; $('b2Diag').disabled = full && p.pts.length > 3; }
+    if (st.part === 3) $('b3Play').textContent = p.playing ? '⏸ とめる' : '▶ 歩く';
+    if (st.part === 4) {
+      $('nRange').min = p.mode === 'star' ? 5 : 3; $('nRange').max = p.mode === 'star' ? 12 : 20;
+      $('nNum').min = $('nRange').min; $('nNum').max = $('nRange').max;
+      $('nRange').value = p.n; $('nNum').value = p.n;
+      document.querySelectorAll('#ctrl [data-m]').forEach(b => b.classList.toggle('active', b.dataset.m === p.mode));
+    }
+    // 図の下の注意
+    $('lblConcave').hidden = st.part !== 2;
+    $('lblAllExt').hidden = st.part !== 3;
+    $('optSnap').parentElement.hidden = st.part === 4;
+    $('figNote').textContent = [null,
+      p.q && !p.q.done ? '' : '● をドラッグして形を変えよう。弧の本数（1本・2本・3本）で角を区別しているよ。',
+      p.q && p.q.fig ? '' : '● をドラッグ。数は内角の測定値。オレンジの点線が A から引いた対角線。',
+      p.q && p.q.fig ? '' : '● をドラッグ（へこまない形だけ）。紫の点線は辺をのばした線、色のついた角が外角。',
+      p.mode === 'star' ? (p.n === 5 && p.k === 2 ? '5つの ● をドラッグして星をゆがめてみよう。' : '') : '青い角が内角、紫の角が外角（頂点 A）。'][st.part];
+    renderTrips(); renderTeacher();
+  }
+  function setPart(n, opt) {
+    stopTimer();
+    st.part = n;
+    if (!st.Ps[n]) st.Ps[n] = defaults(n);
+    if (!(opt && opt.keepFocus)) { st.focus = null; $('focusBar').hidden = true; }
+    const p = P(); st.act = !!(p.q && !p.q.done); st.inp.v = ''; st.hintLv = 0;
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === n));
+    $('partNote').textContent = PARTS[n].note;
+    setMsg('');
+    buildCtrl(); render();
+  }
+
+  /* =====================================================================
+     15. ヒント
+     ===================================================================== */
+  function hint() {
+    const p = P(), q = p.q && !p.q.done ? p.q : null;
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    st.hintLv++;
+    let t;
+    if (q) {
+      const H = {
+        miss: ['三角形の3つの内角の和は？', `180° − (わかっている2つの角の和)`],
+        ext: ['外角 ∠ACD と ∠C の和は 180°。', '外角 ＝ となりにない2つの内角（∠A と ∠B）の和。'],
+        extRev: ['外角 ∠ACD ＝ ∠A ＋ ∠B。', '∠B ＝ 外角 − ∠A。'],
+        sum: st.part === 3 ? ['カメが1周すると、何回転する？', '外角の和は、何角形でも同じ。'] : ['1つの頂点から対角線を引くと、三角形はいくつ？', '三角形は n − 2 こ。180° × (n − 2)。'],
+        tri: ['四角形なら 2こ、五角形なら 3こ…', '三角形の数 ＝ n − 2。'],
+        fsum: ['三角形 1 この内角の和は 180°。', `180° × 三角形の数`],
+        rev: ['内角の和 ÷ 180° で、三角形の数がわかる。', '三角形の数 ＝ n − 2 だから、n ＝ 三角形の数 ＋ 2。'],
+        miss3: ['外角の和は 360°。', '360° − （わかっている外角の和）'],
+        all: ['1つの頂点で 内角 ＋ 外角 ＝ 180°。', '180° × n'],
+        int: ['まず内角の和 180° × (n − 2) を求める。', 'すべての角が等しいので、÷ n。'],
+        ext4: ['外角の和は 360°。', 'すべて等しいので 360° ÷ n。'],
+        revExt: ['外角の和は 360°。', 'n ＝ 360 ÷ 1つの外角。'],
+        revInt: ['まず 1つの外角 ＝ 180° − 1つの内角。', 'n ＝ 360 ÷ 1つの外角。'],
+        star: ['三角形の外角 ＝ となりにない2つの内角の和。', '5つの先の角が、1つの三角形の3つの角に集まる。'],
+      };
+      const key = q.kind === 'miss' && st.part === 3 ? 'miss3' : q.kind === 'ext' && st.part === 4 ? 'ext4' : q.kind;
+      const arr = H[key] || ['図をよく見よう。'];
+      t = arr[Math.min(st.hintLv, arr.length) - 1];
+    } else {
+      t = [null,
+        ['「✂ 切りとって ならべる」を押してみよう。3つの角はどんな線になる？', '頂点を動かしても一直線のまま？ → 内角の和はいつも 180°。', '「↗ 外角にうつす」で、外角にどの角が入るか見よう。'],
+        ['「／ 対角線を1本ひく」をくり返そう。三角形はいくつできる？', 'A ととなりの2つの頂点には対角線が引けない。だから n − 3 本。', '三角形は対角線より1つ多い → n − 2 こ。'],
+        ['「▶ 歩く」でカメを1周させよう。回った角の合計は？', 'n を変えたり、頂点を動かしたりしても合計は変わる？', '1周すると、もとの向きにもどる → ちょうど1回転。'],
+        ['正多角形は、すべての角が等しい。', '1つの内角 ＝ 内角の和 ÷ n、1つの外角 ＝ 360° ÷ n。', '外角が小さいほど、角の数は多い。'],
+      ][st.part];
+      t = t[(st.hintLv - 1) % t.length];
+    }
+    setMsg('💡 ' + t);
+    renderTrips();
+  }
+
+  /* =====================================================================
+     16. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(p) { bumpRec(r => r.clear[p] = (r.clear[p] || 0) + 1); }
+  function addTrip(type) { st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => { const pt = TRIPS[k].part || st.part; return `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><div class="tools" style="justify-content:flex-start"><button class="op-btn" data-prac="${k}">🔁 この型を練習（${PARTS[pt].name}）</button><button class="op-btn" data-fig="${k}">👀 元の図で確かめる</button></div></div>`; }).join('')
+      : '<div class="small">まだ ありません。練習問題でまちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    $('tripList').querySelectorAll('[data-fig]').forEach(b => b.addEventListener('click', () => showFig(b.dataset.fig)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = `この端末のきろく：正解 ① ${c[1] || 0}　② ${c[2] || 0}　③ ${c[3] || 0}　④ ${c[4] || 0}　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    const pt = TRIPS[type].part || st.part;
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    setPart(pt, { keepFocus: true });
+    newQ(type);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  // 元の図にもどす：その型が見える場面を出す
+  function showFig(type) {
+    const pt = TRIPS[type].part || st.part;
+    setPart(pt);
+    const p = P();
+    if (p.q && !p.q.flow) { pushHist(); p.q = null; st.act = false; }
+    if (type === 'n2' || type === 'diag') { setN(6); P().diag = 0; render(); addDiag(99); setMsg('六角形：A から対角線は 3 本（n − 3）、三角形は 4 こ（n − 2）。三角形の数 × 180° が内角の和。'); }
+    else if (type === 'extDep') { play3(); setMsg('n を変えても、カメが1周で回る角はいつも 360°。'); }
+    else if (pt === 1) { moveWedges(type === 'extInt' ? 'ext' : 'line'); }
+    else if (type === 'starMix') { pushHist(); p.mode = 'star'; p.n = 5; p.k = 2; buildCtrl(); render(); setMsg('星形の先の角の和は 180°。頂点を動かして確かめよう。'); }
+    else { pushHist(); p.mode = 'reg'; buildCtrl(); render(); setMsg('正多角形の1つ分 ＝ 和 ÷ n。'); }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     17. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const p = P(), q = p.q;
+    if (q && !q.done) return `答え：${q.pre || ''}${q.ans}${q.unit}`;
+    return ['', '（▶ 自動：切りとって並べる → 外角にうつす → 練習問題）', '（▶ 自動：対角線を1本ずつ → 答え）', '（▶ 自動：カメを1周 → 練習問題）', '（▶ 自動：練習問題の答え）'][st.part];
+  }
+  const TALK = [null,
+    '発問の例：「3つの角を集めるとどんな線になる？」「頂点を動かしても変わらない？」「外角はどの2つの角と同じ大きさ？ なぜ？（平行線の錯角・同位角）」',
+    '発問の例：「三角形はいくつできた？ n とどんな関係？」「なぜ n − 3 本しか引けない？」「内角の和を n を使った式で表すと？」「四角形で 180° × 4 にならないのはなぜ？」',
+    '発問の例：「カメは1周で全部で何度回った？」「十角形なら？ 百角形なら？」「角の数がふえると、1つの外角はどうなる？」',
+    '発問の例：「正六角形の1つの内角は？ 外角から求めるとどう？」「1つの外角が 24° の正多角形は？」「（発展）星の先の角の和は、なぜ 180°？」',
+  ];
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText();
+    $('tTalk').innerHTML = TALK[st.part];
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function teacherStep() {
+    const p = P(), q = p.q;
+    if (q && !q.done) { st.inp.v = String(q.ans); checkQ(); return; }
+    if (q && q.done) { nextAfter(); return; }
+    if (st.part === 1) {
+      if (p.mode === 'none' || p.t < 1) { moveWedges('line'); return; }
+      if (p.mode === 'line') { moveWedges('ext'); return; }
+      newQ(); return;
+    }
+    if (st.part === 2) { if (p.diag >= p.pts.length - 3 && p.table[p.pts.length]) { newQ(); return; } addDiag(1); return; }
+    if (st.part === 3) { if (p.w < 2 * p.pts.length) { play3(); return; } newQ(); return; }
+    newQ();
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     18. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3, 4].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnNew').addEventListener('click', () => newQ());
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetPart);
+  $('btnHint').addEventListener('click', hint);
+  $('optAllExt').addEventListener('change', () => render());
+  $('optConcave').addEventListener('change', e => {
+    const p = st.Ps[2]; p.concave = e.target.checked;
+    if (!p.concave && !valid(p.pts, true)) { pushHist(); p.pts = regularPts(p.pts.length, 165).map(q => q.map(Math.round)); p.diag = 0; }
+    setMsg(p.concave ? '【発展】へこんだ形にもできる。内角の和は変わる？ A からの対角線は引ける？' : '');
+    render();
+  });
+  $('btnWs').addEventListener('click', () => {
+    setPart(2);
+    const p = P(); pushHist();
+    p.q = null; st.act = false; p.n = 8; p.pts = regularPts(8, 165).map(q => q.map(Math.round)); p.diag = 0; p.flow = null;
+    render();
+    setMsg('📄 ワークシートの問題：まず ① に「八角形の内角の和」を予想しよう。そのあと対角線を引いて確かめ、「＋ 記録する」。五角形・六角形… でも記録して、<b>n角形の式</b>を自分で書こう。');
+  });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '多角形の角',
+    question: '八角形の内角の和は何度だろうか？',
+    predictions: ['720°', '1080°', '1440°', '360°', 'わからない'],
+    operationNote: '② で n を変えて、対角線を引き、三角形の数と内角の和を確かめたら「＋ 記録する」。③ でカメを1周させたときも記録できる。',
+    fields: [
+      { key: 'shape', label: '多角形', math: false },
+      { key: 'n', label: 'n' },
+      { key: 'tri', label: '三角形の数' },
+      { key: 'sum', label: '内角の和', unit: '°' },
+      { key: 'ext', label: '外角の和', unit: '°' }
+    ],
+    capture: () => {
+      const p = P();
+      let n;
+      if (st.part === 1) n = 3;
+      else if (st.part === 2) {
+        if (p.q && p.q.fig) { setMsg('練習問題に答えてから記録しよう。'); return null; }
+        n = p.pts.length;
+        if (n > 3 && !(p.diag === n - 3 && p.table[n])) { setMsg('対角線をぜんぶ引いて、三角形の数と内角の和に答えてから記録しよう。'); return null; }
+      } else if (st.part === 3) {
+        if (p.q && p.q.fig) { setMsg('練習問題に答えてから記録しよう。'); return null; }
+        n = p.pts.length;
+        if (p.w < 2 * n) { setMsg('カメを1周させてから記録しよう。'); return null; }
+      } else n = p.n;
+      return { shape: (st.part === 4 ? '正' : '') + polyName(n), n: String(n), tri: String(n - 2), sum: String(180 * (n - 2)), ext: '360' };
+    },
+    summaryHint: '「n角形は、1つの頂点から対角線を引くと三角形が〜こできるので、内角の和は 180° × 〜。外角の和は〜」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める（180° × 8 ＝ 1440° とする生徒がいる）。八角形で対角線を引き、三角形が 6 こ（8 − 2）になることを確かめさせる。五角形・六角形… の記録から、三角形の数が n − 2 になることを自分のことばで説明させる。③ で外角の和が n によらないことも確かめるとよい。',
+      answer: '1080°。<br>八角形は、1つの頂点から対角線を 5 本引くと三角形が 6 こ。180° × 6 ＝ 1080°。<br>まとめ：n角形の内角の和は 180° × (n − 2)。外角の和は、何角形でも 360°。'
+    }
+  });
+
+  setupTeacher();
+  setPart(1);
+})();
+</script>
+
+</body>
+</html>
