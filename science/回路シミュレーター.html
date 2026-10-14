@@ -200,6 +200,7 @@
 
 </div>
 
+<script src="circuit-engine.js"></script>
 <script>
 (() => {
   // ===== 盤面の設定 =====
@@ -213,14 +214,6 @@
   const statusEl   = document.getElementById('status');
   const chkFlow = document.getElementById('chkFlow');
   const chkAmp  = document.getElementById('chkAmp');
-
-  // ===== 電気の計算に使う数値 =====
-  const R_WIRE = 0.005;   // どう線のてい抗(Ω)
-  const R_BULB = 1.0;     // 豆電球のてい抗(Ω)
-  const R_BATT = 0.02;    // かん電池の内部てい抗(Ω)
-  const EMF    = 1.5;     // かん電池の電圧(V)
-  const P_NOM  = 1.9;     // 「ふつうの明るさ」の電力(W)
-  const SHORT_I = 10;     // これをこえる電流はショートと判定(A)
 
   // 部品データ: key "x,y,H" (右どなりの点へ) / "x,y,V" (下の点へ)
   // 値: {type:'wire'|'battery'|'bulb'|'switch', pol:1|-1, on:true|false}
@@ -251,97 +244,30 @@
     }
   }
 
-  // ===== 回路の計算(オームの法則で電圧・電流をとく) =====
+  // ===== 回路の計算(共通ファイル circuit-engine.js を使う) =====
+  // 盤面の部品を circuit-engine.js の形 { id, type, a, b } になおして計算する。
+  // たんしの名前は点の場所 "x,y"。同じ点にふれている部品どうしがつながる。
   function simulate() {
-    const cond = [];  // 電気が通る部品だけ
+    const elements = [];
     for (const [key, e] of edges) {
-      if (e.type === 'switch' && !e.on) continue;
-      cond.push([key, e]);
-    }
-    // 点に番号をつける
-    const nodeId = new Map();
-    const nodeOf = (x, y) => {
-      const k = x + ',' + y;
-      if (!nodeId.has(k)) nodeId.set(k, nodeId.size);
-      return nodeId.get(k);
-    };
-    const list = cond.map(([key, e]) => {
       const p = edgeEnds(key);
-      return { key, e, a: nodeOf(p.x1, p.y1), b: nodeOf(p.x2, p.y2) };
-    });
-    const n = nodeId.size;
-    if (n === 0) return { cur: new Map(), bulbB: new Map(), short: false, lit: false };
-
-    // つながっているまとまり(連結成分)を調べる
-    const parent = Array.from({ length: n }, (_, i) => i);
-    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
-    for (const it of list) { const ra = find(it.a), rb = find(it.b); if (ra !== rb) parent[ra] = rb; }
-
-    // 行列をつくる
-    const G = Array.from({ length: n }, () => new Array(n).fill(0));
-    const rhs = new Array(n).fill(0);
-    for (const it of list) {
-      const R = it.e.type === 'bulb' ? R_BULB : it.e.type === 'battery' ? R_BATT : R_WIRE;
-      const g = 1 / R;
-      it.g = g;
-      G[it.a][it.a] += g; G[it.b][it.b] += g;
-      G[it.a][it.b] -= g; G[it.b][it.a] -= g;
-      if (it.e.type === 'battery') {
-        const J = EMF * g;
-        const plus  = it.e.pol === 1 ? it.b : it.a;
-        const minus = it.e.pol === 1 ? it.a : it.b;
-        rhs[plus] += J; rhs[minus] -= J;
-        it.J = it.e.pol === 1 ? J : -J;  // a→b 方向の電流源ぶん
+      const p1 = p.x1 + ',' + p.y1, p2 = p.x2 + ',' + p.y2;
+      if (e.type === 'battery') {
+        // かん電池は a＝−極、b＝＋極。pol が 1 なら＋極が右(下)がわ
+        elements.push(e.pol === 1 ? { id: key, type: 'battery', a: p1, b: p2 }
+                                  : { id: key, type: 'battery', a: p2, b: p1 });
       } else {
-        it.J = 0;
+        elements.push({ id: key, type: e.type, a: p1, b: p2, on: e.on });
       }
     }
-    // まとまりごとに1点を電位0(基準)にする
-    const grounded = new Set();
-    for (let i = 0; i < n; i++) {
-      const r = find(i);
-      if (!grounded.has(r)) {
-        grounded.add(r);
-        for (let c = 0; c < n; c++) G[i][c] = 0;
-        G[i][i] = 1; rhs[i] = 0;
-      }
+    const res = CircuitEngine.solve({ elements });
+    // 電流は「左(上)の点 → 右(下)の点」の向きをプラスにそろえる
+    const cur = new Map();
+    for (const [key, e] of edges) {
+      const I = res.current.get(key) || 0;
+      cur.set(key, e.type === 'battery' && e.pol !== 1 ? -I : I);
     }
-    // 連立方程式をとく(ガウスの消去法)
-    for (let i = 0; i < n; i++) {
-      let p = i;
-      for (let r = i + 1; r < n; r++) if (Math.abs(G[r][i]) > Math.abs(G[p][i])) p = r;
-      if (Math.abs(G[p][i]) < 1e-12) continue;
-      [G[i], G[p]] = [G[p], G[i]];
-      [rhs[i], rhs[p]] = [rhs[p], rhs[i]];
-      for (let r = i + 1; r < n; r++) {
-        const f = G[r][i] / G[i][i];
-        if (f === 0) continue;
-        for (let c = i; c < n; c++) G[r][c] -= f * G[i][c];
-        rhs[r] -= f * rhs[i];
-      }
-    }
-    const V = new Array(n).fill(0);
-    for (let i = n - 1; i >= 0; i--) {
-      if (Math.abs(G[i][i]) < 1e-12) continue;
-      let s = rhs[i];
-      for (let c = i + 1; c < n; c++) s -= G[i][c] * V[c];
-      V[i] = s / G[i][i];
-    }
-
-    // 各部品の電流と、豆電球の明るさを計算
-    const cur = new Map(), bulbB = new Map();
-    let short = false, lit = false;
-    for (const it of list) {
-      const I = (V[it.a] - V[it.b]) * it.g + it.J;  // a→b 方向がプラス
-      cur.set(it.key, I);
-      if (it.e.type === 'bulb') {
-        const b = I * I * R_BULB / P_NOM;
-        bulbB.set(it.key, b);
-        if (b > 0.03) lit = true;
-      }
-      if (it.e.type === 'battery' && Math.abs(I) > SHORT_I) short = true;
-    }
-    return { cur, bulbB, short, lit };
+    return { cur, bulbB: res.brightness, short: res.short, lit: res.lit };
   }
 
   // ===== 部品を描く =====
@@ -370,7 +296,7 @@
 
       // 電流アニメーション(黄色いつぶが流れる)
       if (Math.abs(I) > 0.02 && !sim.short) {
-        const v = Math.sign(I) * (25 + 45 * Math.min(Math.abs(I) / 1.5, 2));
+        const v = Math.sign(I) * (25 + 45 * Math.min(Math.abs(I) / 0.3, 2));
         const addFlow = (t1, t2) => {
           const line = el('line', {
             x1: x1 + (x2 - x1) * t1, y1: y1 + (y2 - y1) * t1,
@@ -436,7 +362,7 @@
           x: lx, y: ly, 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 'bold',
           fill: '#1565c0', stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke'
         }, labelLayer);
-        t.textContent = Math.abs(I).toFixed(1) + 'A';
+        t.textContent = Math.abs(I).toFixed(2) + 'A';
       }
     }
 
