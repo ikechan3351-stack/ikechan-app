@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>データを比べて説明しよう</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中学の教材とそろえる）：正解＝緑（○）、まちがい・注意＝赤紫（×）。
+     「箱ひげ図とヒストグラム」と同じ青の配色にしている。
+     グループの区別は 色だけでなく 記号（● ▲ ■）と 箱の模様（ぬり・しま・点）でも見分けられるようにする。 */
+  :root { --ink: #263238; --accent: #1565c0; --soft: #90caf9; --ok: #2e7d32; --ng: #ad1457; --head: #0d47a1; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #e3f2fd 0%, #f1f8e9 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: var(--accent); text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--head); text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: var(--accent); text-align: center; line-height: 1.7; }
+  .panel { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.1rem; color: var(--head); }
+  .chip-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: var(--head);
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.done::after { content: ' ✓'; }
+  .tabs .chip { min-width: 0; }
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: var(--head);
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12); text-decoration: none;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.4; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .tools.left { justify-content: flex-start; }
+  .small { font-size: 0.88rem; color: #546e7a; line-height: 1.6; }
+  .note { font-size: 0.88rem; color: #607d8b; line-height: 1.6; }
+  .scene { font-size: 1.05rem; font-weight: bold; margin: 4px 0; }
+  .ask { font-size: 1.25rem; font-weight: bold; line-height: 1.7; margin: 8px 0 4px; }
+  .step-box { background: #e3f2fd; border-left: 6px solid var(--accent); border-radius: 10px; padding: 8px 12px; font-size: 1.12rem; line-height: 1.75; margin-top: 8px; }
+  .msg { text-align: center; font-size: 1.05rem; line-height: 1.75; padding: 8px 10px; border-radius: 12px; margin-top: 10px; }
+  .msg:empty { display: none; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .msg.info { color: #37474f; background: #fffde7; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .good { color: var(--ok); font-weight: bold; }
+  .go {
+    min-width: 160px; min-height: 52px; border: none; border-radius: 14px; background: var(--ok); color: #fff;
+    font-size: 1.2rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .go.next { background: #ef6c00; }
+  .ans-line { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; font-size: 1.4rem; font-weight: bold; margin-top: 8px; }
+  input.num {
+    width: 120px; height: 56px; font-size: 28px; text-align: center; border-radius: 12px; border: 3px solid #b0bec5; font-weight: bold; color: var(--ink);
+  }
+  input.num:focus { outline: none; border-color: #fbc02d; box-shadow: 0 0 0 4px rgba(251,192,45,.35); }
+
+  /* ---- パート① データのカード ---- */
+  .row-label { font-weight: bold; margin: 10px 0 4px; font-size: 1rem; }
+  .cards { display: flex; flex-wrap: wrap; gap: 6px; min-height: 64px; align-items: flex-start; }
+  .dcard {
+    position: relative; width: 56px; min-height: 60px; border: 3px solid #b0bec5; border-radius: 12px; background: #fff;
+    font-size: 26px; font-weight: bold; color: var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; touch-action: manipulation; padding: 2px 0; transition: transform .15s;
+  }
+  .dcard .pos { font-size: 12px; color: #78909c; font-weight: bold; line-height: 1; }
+  .dcard.lo { background: #e3f2fd; border-color: #1565c0; }
+  .dcard.hi { background: #fff3e0; border-color: #e65100; background-image: repeating-linear-gradient(45deg, transparent 0 6px, rgba(230,81,0,.10) 6px 9px); }
+  .dcard.mid { background: #eceff1; border-color: #263238; border-style: dashed; }
+  .dcard.tap { border-color: #fbc02d; background: #fffde7; box-shadow: 0 0 0 4px rgba(251,192,45,.45); }
+  .dcard.focus { transform: translateY(-6px); box-shadow: 0 0 0 4px rgba(251,192,45,.6); }
+  .dcard.shake { animation: shake .3s; }
+  @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+  .split-bar { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .seg { border-radius: 8px; padding: 2px 8px; font-size: .9rem; font-weight: bold; text-align: center; }
+  .seg.lo { background: #e3f2fd; color: #0d47a1; border: 2px solid #1565c0; }
+  .seg.hi { background: #fff3e0; color: #bf360c; border: 2px solid #e65100; }
+  .seg.mid { background: #eceff1; border: 2px dashed #263238; }
+  table.five { border-collapse: collapse; margin: 8px auto 0; font-size: 1.05rem; }
+  table.five th, table.five td { border: 2px solid #e0e0e0; padding: 6px 10px; text-align: center; }
+  table.five th { background: #e3f2fd; font-size: .9rem; }
+  table.five td { font-size: 1.5rem; font-weight: bold; }
+  .parity { background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 8px 12px; margin-top: 8px; line-height: 1.7; }
+
+  /* ---- グラフ（SVG） ---- */
+  svg.chart { width: 100%; height: auto; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .handle { cursor: grab; }
+  .handle:active { cursor: grabbing; }
+
+  /* ---- えらぶ ---- */
+  .opt-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .opt {
+    text-align: left; border: 2px solid var(--soft); background: #fff; border-radius: 12px; min-height: 48px; padding: 8px 12px;
+    font-size: 1.02rem; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation; line-height: 1.5;
+  }
+  .opt.active { background: #e3f2fd; border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+  .opt.active::before { content: '☑ '; color: var(--accent); }
+  .opt.okmark { border-color: var(--ok); background: #e8f5e9; }
+  .opt.ngmark { border-color: var(--ng); background: #fce4ec; }
+  .opt.ngmark::after { content: ' ×'; color: var(--ng); }
+  .opt.okmark::after { content: ' ○'; color: var(--ok); }
+  .q-label { font-weight: bold; margin-top: 10px; color: var(--head); }
+  .sentence { background: #f1f8e9; border: 2px solid #aed581; border-radius: 12px; padding: 8px 12px; font-size: 1.12rem; line-height: 1.8; margin-top: 8px; }
+  .sentence:empty { display: none; }
+  .kcard { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .kcard .kname { flex: 1 1 220px; font-weight: bold; }
+  .kcard .chip { min-height: 44px; padding: 4px 12px; font-size: .95rem; }
+  .kcard.okk .kname::after { content: '　○'; color: var(--ok); }
+  .kcard.ngk .kname::after { content: '　×'; color: var(--ng); }
+  .hist-panel { border: 2px solid #e0e0e0; border-radius: 12px; padding: 4px 6px; margin-top: 8px; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .note-item { padding: 6px 8px; border-bottom: 1px dashed #cfd8dc; line-height: 1.7; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.98rem; color: #444; line-height: 1.75; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.05rem; margin: 0 0 6px; color: var(--head); }
+  .help ul { margin: 0; padding-left: 20px; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px 10px; line-height: 1.7; }
+  .term { font-size: .85rem; color: #546e7a; background: #f5f5f5; border-radius: 10px; padding: 6px 10px; margin-top: 8px; line-height: 1.6; }
+  @media (max-width: 480px) {
+    body { padding: 10px 8px 24px; }
+    .dcard { width: 46px; min-height: 52px; font-size: 22px; }
+    .ask { font-size: 1.1rem; }
+    .chip { padding: 6px 12px; }
+    table.five th, table.five td { padding: 4px 4px; }
+    table.five td { font-size: 1.15rem; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>📦 データを比べて説明しよう</h1>
+<p class="subtitle">四分位数を求めて箱ひげ図をつくり、2つ以上のデータを比べて、根拠をもって説明する。</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+  <!-- パートの切りかえ -->
+  <div class="card">
+    <div class="chip-row tabs" id="tabs"></div>
+    <div class="tools left">
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+    </div>
+  </div>
+
+  <!-- ① 求める -->
+  <div class="card" id="part1" hidden>
+    <h2>① 四分位数を求める</h2>
+    <div class="chip-row">
+      <span class="small">データの数：</span>
+      <button class="chip" data-par="odd">奇数個</button>
+      <button class="chip" data-par="even">偶数個</button>
+      <button class="chip" data-par="any">おまかせ</button>
+      <button class="op-btn" id="p1New">🎲 新しいデータ</button>
+    </div>
+    <div class="scene" id="p1Scene"></div>
+    <div id="p1Rest"></div>
+    <div id="p1Sorted"></div>
+    <div class="step-box" id="p1Step"></div>
+    <div id="p1Input"></div>
+    <div class="msg" id="p1Msg"></div>
+    <div id="p1Done"></div>
+    <div class="term">ことば：<b>四分位数</b>…データを小さい順に並べて、4等分する位置の値。小さい方から 第1四分位数・第2四分位数（＝中央値）・第3四分位数。<b>四分位範囲</b>＝第3四分位数 − 第1四分位数。</div>
+  </div>
+
+  <!-- ② 箱ひげ図を作る -->
+  <div class="card" id="part2" hidden>
+    <h2>② 箱ひげ図を作る</h2>
+    <div class="chip-row">
+      <button class="op-btn" id="p2From1">⬅ ①のデータを使う</button>
+      <button class="op-btn" id="p2New">🎲 新しいデータ</button>
+      <label class="chip" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="p2Show" checked style="width:22px;height:22px"> 5つの値を見せる</label>
+    </div>
+    <div class="scene" id="p2Scene"></div>
+    <div class="cards" id="p2Cards"></div>
+    <div id="p2Five"></div>
+    <div class="step-box">下の 5つの札を、数直線の正しい位置まで <b>ドラッグ</b> しよう。5つそろうと箱ひげ図ができる。左のはしにもどすと、置く前にもどる。</div>
+    <svg class="chart" id="p2Svg" viewBox="0 0 900 380" role="img" aria-label="箱ひげ図をつくる数直線"></svg>
+    <div class="chip-row">
+      <span class="small">すいつく：</span>
+      <button class="chip" data-snap="0.5">0.5 きざみ</button>
+      <button class="chip" data-snap="1">1 きざみ</button>
+      <button class="chip" data-snap="0">すいつかない</button>
+    </div>
+    <div class="tools"><button class="go" id="p2Check">できた！</button></div>
+    <div class="msg" id="p2Msg"></div>
+  </div>
+
+  <!-- ③ 比べる -->
+  <div class="card" id="part3" hidden>
+    <h2>③ 2つのデータを比べる</h2>
+    <div class="chip-row" id="p3Scenes"></div>
+    <div class="scene" id="p3Scene"></div>
+    <svg class="chart" id="p3Svg" viewBox="0 0 900 260" role="img" aria-label="2つの箱ひげ図"></svg>
+    <div class="chip-row" id="p3View"></div>
+    <div class="chip-row" id="p3Qs" style="margin-top:8px"></div>
+    <div class="ask" id="p3Ask"></div>
+    <div class="q-label">1. 結論をえらぶ</div>
+    <div class="chip-row" id="p3Concl"></div>
+    <div class="q-label">2. 根拠をえらぶ（1つか2つ）</div>
+    <div class="chip-row" id="p3Ev"></div>
+    <div class="q-label">3. できた説明文</div>
+    <div class="sentence" id="p3Sent"></div>
+    <div class="tools"><button class="go" id="p3Check">この説明でOK？</button></div>
+    <div class="msg" id="p3Msg"></div>
+  </div>
+
+  <!-- ④ ヒストグラムと対応 -->
+  <div class="card" id="part4" hidden>
+    <h2>④ 箱ひげ図とヒストグラム</h2>
+    <div class="scene">ある中学校の3つのクラスの、20問テスト（40点満点）の点数。どのクラスも20人。</div>
+    <div id="p4Panels"></div>
+    <div id="p4Stage"></div>
+    <div class="msg" id="p4Msg"></div>
+  </div>
+
+  <!-- ⑤ 判断 -->
+  <div class="card" id="part5" hidden>
+    <h2>⑤ グラフから判断する</h2>
+    <div class="chip-row" id="p5Qs"></div>
+    <div class="scene" id="p5Scene"></div>
+    <svg class="chart" id="p5Svg" viewBox="0 0 900 260" role="img" aria-label="箱ひげ図"></svg>
+    <div class="chip-row" id="p5View"></div>
+    <div class="ask" id="p5Ask"></div>
+    <div id="p5Body"></div>
+    <div class="sentence" id="p5Sent"></div>
+    <div class="tools"><button class="go" id="p5Check">こたえる</button></div>
+    <div class="msg" id="p5Msg"></div>
+  </div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 自動で1ステップ進める</button></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+  </div>
+
+  <!-- 説明文ノート -->
+  <div class="card">
+    <h2>📝 わたしの説明文</h2>
+    <div id="noteList"></div>
+    <div class="tools left">
+      <button class="op-btn" id="noteCopy">📋 コピー</button>
+      <button class="op-btn" id="noteClear">🗑 ぜんぶ消す</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🔗 つながる教材</h2>
+    <div class="tools left">
+      <a class="op-btn" href="箱ひげ図とヒストグラム.html">📦 箱ひげ図とヒストグラム（点を動かす）</a>
+      <a class="op-btn" href="動かして くらべて 代表値.html">⚖️ 中1 代表値</a>
+      <a class="op-btn" href="区切って数えて ヒストグラム.html">📊 中1 ヒストグラム</a>
+      <a class="op-btn" href="ならべて くらべて データの調べ方.html">⬅ 小6 データの調べ方</a>
+    </div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li>上のボタンでパートをえらぶ。①→②→③→④→⑤ の順がおすすめ。</li>
+      <li>① データを小さい順に並べ、中央値 → 前半・後半に分ける → 第1・第3四分位数 → 範囲・四分位範囲 の順に求める。奇数個と偶数個の両方をためそう。</li>
+      <li>② 5つの値の札を数直線にドラッグして、箱ひげ図をつくる。</li>
+      <li>③⑤ 結論と根拠をえらぶと、説明文ができる。正しい説明文は「📝 わたしの説明文」にたまる。</li>
+      <li>📏 線を引く：グラフをタップすると縦の線が引ける（「10時間以上は何人？」を考えるときに使う）。🔢 値：5つの値の数を出す。</li>
+      <li>「↶ ひとつもどす」：1つ前の操作にもどす。「⟲ もういちど」：今のパートをはじめから。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：データはすべて架空のものです。四分位数は、教科書と同じく「データの数が奇数のときは、中央値を前半にも後半にも入れない」方法で求めています（ほかの求め方をするソフトもあります）。③⑤の人数は、箱ひげ図から読める「約4分の1」「約半分」で考えています。本当の薬の効果は、もっと多くの人で、くらべ方をきちんと決めて調べます。</p>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const Q = new URLSearchParams(location.search);
+  const TEACHER = Q.get('teacher') === '1';
+  const NS = 'http://www.w3.org/2000/svg';
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const rint = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+  // 数を見せる形にする（12.5 → "12.5"、12 → "12"）。dec＝小数のけた
+  function fmt(v, dec) {
+    if (v == null || isNaN(v)) return '？';
+    const d = dec || 0, p = Math.pow(10, Math.max(d, 1));
+    const r = Math.round(v * p) / p;
+    return d ? r.toFixed(d) : String(r);
+  }
+  // 入力された文字を数にする（全角の数字・点もOK）
+  function parseNum(s) {
+    const t = String(s).replace(/[０-９．－]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[ 　点mｍ秒分時間]/g, '').replace('ー', '-');
+    if (!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
+    return parseFloat(t);
+  }
+  // 数が同じか（0.5きざみ の値を 2倍して整数でくらべる＝小数の誤差を出さない）
+  const same = (a, b) => Math.abs(a - b) < 1e-6;
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+  const sndTap = () => beep([[660, 0, 0.06, 'sine', 0.06]]);
+
+  /* =====================================================================
+     1. 四分位数の計算（教科書の方法）
+     - 小さい順に並べ、中央値で前半・後半に分ける。
+     - データの数が奇数のときは、中央値（まん中の1こ）を前半にも後半にも入れない。
+     - 中央値は「2倍した整数」で持つと、x.5 も誤差なく扱える。
+     ===================================================================== */
+  const median = (a) => { const n = a.length, m = n >> 1; return n % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+  function quart(sorted) {
+    const n = sorted.length, h = n >> 1;
+    const lo = sorted.slice(0, h), hi = sorted.slice(n % 2 ? h + 1 : h);
+    const r = {
+      n, min: sorted[0], max: sorted[n - 1], med: median(sorted), q1: median(lo), q3: median(hi),
+      loIdx: [0, h - 1], hiIdx: [n % 2 ? h + 1 : h, n - 1],
+      // つまずき検知用：中央値をふくめて分けたときの値（奇数個のとき）
+      q1inc: n % 2 ? median(sorted.slice(0, h + 1)) : null,
+      q3inc: n % 2 ? median(sorted.slice(h)) : null,
+      // つまずき検知用：まん中の2つの平均をとらなかったとき
+      medPair: n % 2 ? null : [sorted[h - 1], sorted[h]],
+      q1Pair: lo.length % 2 ? null : [lo[lo.length / 2 - 1], lo[lo.length / 2]],
+      q3Pair: hi.length % 2 ? null : [hi[hi.length / 2 - 1], hi[hi.length / 2]],
+    };
+    r.rng = r.max - r.min; r.iqr = r.q3 - r.q1;
+    r.five = [r.min, r.q1, r.med, r.q3, r.max];
+    return r;
+  }
+  const FIVE = ['最小値', '第1四分位数', '中央値', '第3四分位数', '最大値'];
+  const FIVE_S = ['最小', '第1', '中央', '第3', '最大'];
+
+  // 小テスト（20点満点）のデータを作る。つまずきが見分けられるデータだけにする
+  let lastKey = '';
+  function makeData(n) {
+    for (let t = 0; t < 500; t++) {
+      const d = Array.from({ length: n }, () => rint(3, 20));
+      const s = [...d].sort((a, b) => a - b), c = quart(s);
+      if (c.q1 === c.q3 || c.rng === c.iqr) continue;
+      if (n % 2 && (same(c.q1inc, c.q1) || same(c.q3inc, c.q3))) continue;              // 中央値を入れても同じ値になるのはさける
+      if (c.medPair && c.medPair[0] === c.medPair[1]) continue;                          // 平均しなくても同じになるのはさける
+      if (c.q1Pair && c.q1Pair[0] === c.q1Pair[1]) continue;
+      if (c.q3Pair && c.q3Pair[0] === c.q3Pair[1]) continue;
+      if (same(c.q1, c.min) || same(c.q3, c.max)) continue;
+      const key = d.join(',');
+      if (key === lastKey) continue;
+      lastKey = key;
+      return d;
+    }
+    return [12, 5, 17, 9, 14, 20, 7, 11, 16];
+  }
+
+  /* =====================================================================
+     2. つまずきの型
+     part：練習するパート、prac：練習の始め方
+     ===================================================================== */
+  const TRIPS = {
+    incMed: { name: '四分位数で、中央値を前半・後半にふくめた', part: 1,
+      exp: 'データが奇数個のとき、まん中の1こ（中央値）は前半にも後半にも入れない。のこりを半分ずつに分けて、それぞれの中央値を求める。' },
+    noAvg: { name: 'まん中が2つあるのに、平均をとらなかった', part: 1,
+      exp: '前半・後半（または全体）のデータが偶数個のときは、まん中の2つの値をたして2でわる。' },
+    swapQ: { name: '第1四分位数と第3四分位数の取りちがえ', part: 1,
+      exp: '小さい方（前半）の中央値が第1四分位数、大きい方（後半）の中央値が第3四分位数。' },
+    rangeIqr: { name: '範囲と四分位範囲の取りちがえ', part: 3,
+      exp: '範囲＝最大値−最小値（全体の広がり。とびぬけた1人の値で大きく変わる）。四分位範囲＝第3四分位数−第1四分位数（まん中の約半分のデータの広がり＝箱の長さ）。' },
+    orderBox: { name: '箱ひげ図の5つの値の位置の取りちがえ', part: 2,
+      exp: '左から 最小値・第1四分位数・中央値・第3四分位数・最大値 の順。箱は第1〜第3四分位数、箱の中の線が中央値。' },
+    centerSpread: { name: '「高い・低い」と「ばらつき」の根拠をまぜた', part: 3,
+      exp: '全体として高い・低いは 中央値や箱の位置で、ばらつきは 四分位範囲（箱の長さ）や範囲でくらべる。' },
+    oneValue: { name: '1人の値（最大値・最小値）だけで全体を判断した', part: 3,
+      exp: '最大値・最小値は1人だけの値。全体の傾向は、中央値や箱（まん中の約半分）を見て判断する。' },
+    boxKnows: { name: '箱ひげ図だけで分布の形まで分かると考えた', part: 4,
+      exp: '箱ひげ図から分かるのは5つの値と、それで区切られた約4分の1ずつの区間だけ。山の数・平均値・いちばん多い階級は、ヒストグラムなどを見ないと分からない。' },
+    boxShape: { name: '箱やひげが長いほど人数が多いと考えた', part: 4,
+      exp: '箱ひげ図の4つの区間（ひげ・箱の左・箱の右・ひげ）には、それぞれ約4分の1ずつの人数が入っている。長い区間は、データがまばらに散らばっているということ。' },
+    pct: { name: '「約半分」「約4分の1」の読みまちがい', part: 5,
+      exp: '中央値より上（下）に約半分、第1四分位数より下に約4分の1、第3四分位数より上に約4分の1。何%かは、どの区切りの値を見るかで決まる。' },
+    direction: { name: '小さい方がよいデータの読みまちがい', part: 5,
+      exp: '時間やタイムは、値が小さいほど「早い・速い」。数の大きい・小さいと、よい・わるいを分けて考える。' },
+    overClaim: { name: '言いすぎ（全員・必ず）', part: 5,
+      exp: 'グラフから言えるのは「〜の傾向がある」「〜の人が多い」まで。箱やひげが重なっていれば、全員がそうとは言えない。' },
+    calc: { name: '計算・読みとりのまちがい', part: 1, exp: '並べた順やひき算を、もう一度ていねいに確かめよう。' },
+  };
+
+  /* =====================================================================
+     3. 場面のデータ（先生が直しやすいように、ここにまとめた）
+     f：［最小値, 第1四分位数, 中央値, 第3四分位数, 最大値］  n：人数
+     ax：数直線（min〜max、major＝数を書くきざみ、minor＝目もり、snap＝線のすいつき、dec＝小数のけた）
+     ===================================================================== */
+  const P3 = [
+    { id: 'quiz', title: '数学の小テスト（20点満点）　各30人', unit: '点',
+      ax: { min: 0, max: 20, major: 2, minor: 1, snap: 1 },
+      groups: [{ name: 'A組', n: 30, f: [4, 10, 14, 16, 19] }, { name: 'B組', n: 30, f: [2, 7, 11, 15, 20] }],
+      qs: [{ kind: 'high', text: '全体として、点数が高いといえるのはどちら？', ans: 'A組' },
+           { kind: 'spread', text: '点数のばらつきが大きいのはどちら？', ans: 'B組' }] },
+    { id: 'ball', title: 'ハンドボール投げの記録（m）　各30人', unit: 'm',
+      ax: { min: 5, max: 35, major: 5, minor: 1, snap: 1 },
+      groups: [{ name: '1組', n: 30, f: [8, 15, 19, 21, 34] }, { name: '2組', n: 30, f: [9, 12, 16, 24, 27] }],
+      qs: [{ kind: 'high', text: '全体として、遠くまで投げているといえるのはどちら？', ans: '1組' },
+           { kind: 'spread', text: '記録のばらつきが大きいのはどちら？（まん中の約半分で考えよう）', ans: '2組' }] },
+    { id: 'read', title: '1週間の読書時間（分）　各30人', unit: '分', ws: true,
+      ax: { min: 0, max: 120, major: 20, minor: 10, snap: 5 },
+      groups: [{ name: 'C組', n: 30, f: [20, 50, 60, 70, 110] }, { name: 'D組', n: 30, f: [0, 30, 60, 100, 120] }],
+      qs: [{ kind: 'high', text: '中央値が同じ。全体として、読書時間が長いといえるのはどちら？', ans: 'どちらともいえない' },
+           { kind: 'spread', text: '読書時間のばらつきが大きいのはどちら？', ans: 'D組' }] },
+  ];
+  // 根拠のカード
+  const EV = [
+    { k: 'med', t: '中央値' }, { k: 'box', t: '箱の位置（第1・第3四分位数）' }, { k: 'iqr', t: '四分位範囲（箱の長さ）' },
+    { k: 'range', t: '範囲' }, { k: 'max', t: '最大値' }, { k: 'min', t: '最小値' },
+  ];
+
+  // ⑤ 判断の問題。type 'one'＝結論を1つ＋理由をえらぶ、'multi'＝あてはまるグループをすべてえらぶ
+  const P5 = [
+    { id: 'drug', label: '問1 薬', title: '熱が下がるまでの時間（時間）　各40人（架空の薬・架空のデータ）', unit: '時間',
+      ax: { min: 0, max: 50, major: 5, minor: 1, snap: 1 },
+      groups: [{ name: '新しい薬', n: 40, f: [10, 18, 22, 26, 40] }, { name: '今までの薬', n: 40, f: [12, 22, 28, 34, 44] }],
+      type: 'one', q: '新しい薬は、今までの薬より効果がある（熱が早く下がる）といえる？',
+      opts: [
+        { t: '効果がありそう。新しい薬の方が、早く熱が下がる人が多い', ok: true },
+        { t: '効果があるとはいえない。今までの薬の方が、時間の値が大きいから', trip: 'direction' },
+        { t: '新しい薬なら、全員が必ず今までより早く熱が下がる', trip: 'overClaim' },
+        { t: '効果があるとはいえない。新しい薬でも 40時間かかった人がいるから', trip: 'oneValue' }],
+      reasons: [
+        { t: '新しい薬の中央値は 22時間で、今までの薬の 28時間より短い', ok: true },
+        { t: '新しい薬では約半分の人が22時間以内に下がった。今までの薬で22時間以内（第1四分位数）は約4分の1だけ', ok: true },
+        { t: '新しい薬の最大値は 40時間もある', trip: 'oneValue' },
+        { t: '今までの薬の方が、範囲が大きい', trip: 'centerSpread' }],
+      explain: '時間は小さいほど早く治る。中央値も箱も新しい薬の方が左（短い方）にあるので、効果がありそうといえる。ただし、ひげが重なっているので「全員が必ず」とはいえない。' },
+    { id: 'team', label: '問2 チーム', title: '50m走のタイム（秒）　各20人（架空のデータ）', unit: '秒',
+      ax: { min: 6.5, max: 9.5, major: 0.5, minor: 0.1, snap: 0.1, dec: 1 },
+      groups: [{ name: 'Xチーム', n: 20, f: [7.2, 7.6, 7.9, 8.1, 9.4] }, { name: 'Yチーム', n: 20, f: [6.9, 7.4, 8.0, 8.8, 9.0] }],
+      type: 'one', q: 'リレーの練習相手に、記録が安定している（ばらつきが小さい）チームを選びたい。どちらを選ぶ？',
+      opts: [{ t: 'Xチーム', ok: true }, { t: 'Yチーム', trip: 'rangeIqr' }],
+      reasons: [
+        { t: '四分位範囲は Xチーム 0.5秒、Yチーム 1.4秒で、Xチームの方が小さい', ok: true },
+        { t: '範囲は Xチーム 2.2秒、Yチーム 2.1秒で、Yチームの方が小さい', trip: 'rangeIqr' },
+        { t: 'Yチームには 6.9秒の速い人がいる', trip: 'oneValue' },
+        { t: '中央値は Xチームの方が小さい（速い）', trip: 'centerSpread' }],
+      explain: 'Xチームは 9.4秒の人が1人いるので範囲は大きいが、まん中の約半分（箱）は 7.6〜8.1秒にまとまっている。安定しているのは、四分位範囲が小さい Xチーム。' },
+    { id: 'team2', label: '問3 4分の1', title: '50m走のタイム（秒）　各20人（架空のデータ）', unit: '秒',
+      ax: { min: 6.5, max: 9.5, major: 0.5, minor: 0.1, snap: 0.1, dec: 1 }, ruler: 7.5,
+      groups: [{ name: 'Xチーム', n: 20, f: [7.2, 7.6, 7.9, 8.1, 9.4] }, { name: 'Yチーム', n: 20, f: [6.9, 7.4, 8.0, 8.8, 9.0] }],
+      type: 'multi', q: '7.5秒より速い人が、4分の1（5人）以上いるといえるのは？（あてはまるものをすべて）',
+      opts: [{ t: 'Xチーム' }, { t: 'Yチーム' }, { t: 'どちらもいえない' }], ans: ['Yチーム'],
+      explain: 'Yチームの第1四分位数は 7.4秒。速い方から約4分の1（5人）は 7.4秒以内なので、7.5秒より速い人は5人以上いる。Xチームの第1四分位数は 7.6秒で、7.5秒より遅いので、5人以上とはいえない。' },
+    { id: 'read', label: '問4 半分', title: '1か月の読書時間（時間）　各32人（架空のデータ）', unit: '時間',
+      ax: { min: 0, max: 24, major: 2, minor: 1, snap: 1 }, ruler: 10,
+      groups: [{ name: '1組', n: 32, f: [3, 6, 9, 12, 20] }, { name: '2組', n: 32, f: [2, 7, 10, 14, 18] }, { name: '3組', n: 32, f: [5, 10, 12, 15, 19] }],
+      type: 'multi', q: '10時間以上読んだ人が、半分（16人）以上いるといえるクラスは？（あてはまるものをすべて）',
+      opts: [{ t: '1組' }, { t: '2組' }, { t: '3組' }], ans: ['2組', '3組'],
+      explain: '中央値より上に約半分の人がいる。中央値が10時間以上の 2組（10時間）と 3組（12時間）は、半分以上が10時間以上読んだといえる。1組は中央値が9時間なので いえない（第3四分位数や最大値が大きくても関係ない）。' },
+    { id: 'read2', label: '問5 4分の3', title: '1か月の読書時間（時間）　各32人（架空のデータ）', unit: '時間',
+      ax: { min: 0, max: 24, major: 2, minor: 1, snap: 1 }, ruler: 10,
+      groups: [{ name: '1組', n: 32, f: [3, 6, 9, 12, 20] }, { name: '2組', n: 32, f: [2, 7, 10, 14, 18] }, { name: '3組', n: 32, f: [5, 10, 12, 15, 19] }],
+      type: 'multi', q: '10時間以上読んだ人が、4分の3（24人）以上いるといえるクラスは？（あてはまるものをすべて）',
+      opts: [{ t: '1組' }, { t: '2組' }, { t: '3組' }], ans: ['3組'],
+      explain: '第1四分位数より上に約4分の3の人がいる。第1四分位数が10時間以上なのは 3組だけ。2組は中央値が10時間なので「半分以上」まではいえるが、4分の3以上とはいえない。' },
+  ];
+
+  // ④ 5つの値が同じ3つのデータ（20人・40点満点）。山の形だけがちがう
+  const P4 = [
+    { name: 'ア組', shape: '山が1つ', data: [4, 9, 10, 11, 12, 12, 17, 18, 19, 20, 20, 21, 22, 23, 28, 28, 29, 29, 30, 36] },
+    { name: 'イ組', shape: '山が2つ', data: [4, 10, 11, 11, 12, 12, 13, 13, 14, 15, 25, 26, 27, 27, 28, 28, 31, 32, 33, 36] },
+    { name: 'ウ組', shape: '平ら', data: [4, 5, 6, 8, 12, 12, 14, 16, 17, 19, 21, 23, 24, 26, 28, 28, 30, 32, 34, 36] },
+  ];
+  const P4AX = { min: 0, max: 40, major: 5, minor: 1, snap: 1 };
+  // 箱ひげ図だけで分かる？
+  const KNOW = [
+    { t: '中央値', ok: true }, { t: '四分位範囲', ok: true }, { t: 'データの約半分が入っている区間', ok: true },
+    { t: '範囲（最大値−最小値）', ok: true },
+    { t: '山がいくつあるか（分布の形）', ok: false }, { t: '平均値', ok: false }, { t: 'いちばん人数が多い階級', ok: false },
+  ];
+
+  /* =====================================================================
+     4. グラフをかく（SVG）
+     ===================================================================== */
+  const GS = [   // グループの見た目：色・記号・模様（色だけで区別しない）
+    { c: '#1565c0', fill: '#bbdefb', sym: '●', pat: 'solid' },
+    { c: '#e65100', fill: '#ffe0b2', sym: '▲', pat: 'hatch' },
+    { c: '#00838f', fill: '#b2ebf2', sym: '■', pat: 'dots' },
+  ];
+  function el(tag, attrs, text) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function defsFor(svg) {
+    const id = svg.id, d = el('defs', {});
+    GS.forEach((g, i) => {
+      const p = el('pattern', { id: `${id}-pat${i}`, width: 10, height: 10, patternUnits: 'userSpaceOnUse' });
+      p.appendChild(el('rect', { width: 10, height: 10, fill: g.fill }));
+      if (g.pat === 'hatch') p.appendChild(el('path', { d: 'M-2,12 L12,-2 M-2,2 L2,-2 M8,12 L12,8', stroke: g.c, 'stroke-width': 1.6, opacity: .55 }));
+      if (g.pat === 'dots') p.appendChild(el('circle', { cx: 5, cy: 5, r: 1.8, fill: g.c, opacity: .6 }));
+      d.appendChild(p);
+    });
+    svg.appendChild(d);
+  }
+  // グラフの横はば W と、数直線の左はし AXL・右はし AXR（SVG の座標）。
+  // スマホのようにせまい画面では W を小さくして、文字が小さくなりすぎないようにする
+  let W = 900, AXL = 160, AXR = 870, NARROW = false;
+  function setGeom() { NARROW = window.innerWidth < 620; W = NARROW ? 480 : 900; AXL = NARROW ? 92 : 160; AXR = W - 30; }
+  const xOf = (ax, v) => AXL + (v - ax.min) / (ax.max - ax.min) * (AXR - AXL);
+  const vOf = (ax, x) => ax.min + (x - AXL) / (AXR - AXL) * (ax.max - ax.min);
+  // 画面の座標 → SVG の座標
+  function svgX(svg, e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+  function snapV(v, s, ax) { if (s > 0) v = Math.round(v / s) * s; v = Math.max(ax.min, Math.min(ax.max, v)); return Math.round(v * 100) / 100; }
+
+  // 数直線（目もりと数）
+  function drawAxis(svg, ax, y, unit) {
+    svg.appendChild(el('line', { x1: AXL - 6, y1: y, x2: AXR + 6, y2: y, stroke: '#455a64', 'stroke-width': 2 }));
+    const k = Math.round((ax.max - ax.min) / ax.minor);
+    for (let i = 0; i <= k; i++) {
+      const v = ax.min + i * ax.minor, x = xOf(ax, v);
+      const major = Math.abs(v / ax.major - Math.round(v / ax.major)) < 1e-6;
+      svg.appendChild(el('line', { x1: x, y1: y - (major ? 8 : 4), x2: x, y2: y + (major ? 8 : 4), stroke: '#455a64', 'stroke-width': major ? 2 : 1 }));
+      if (major) svg.appendChild(el('text', { x, y: y + 28, 'font-size': 18, 'text-anchor': 'middle', fill: '#37474f', 'font-weight': 'bold' }, fmt(v, ax.dec)));
+    }
+    if (unit) svg.appendChild(el('text', { x: AXR + 4, y: y + 50, 'font-size': 16, 'text-anchor': 'end', fill: '#546e7a' }, `（${unit}）`));
+  }
+  // 箱ひげ図を1つかく
+  function drawBox(svg, ax, f, cy, gi, opt) {
+    const g = GS[gi % GS.length], X = (v) => xOf(ax, v), hh = opt.hh || 20, gr = el('g', {});
+    gr.appendChild(el('line', { x1: X(f[0]), y1: cy, x2: X(f[1]), y2: cy, stroke: g.c, 'stroke-width': 3 }));
+    gr.appendChild(el('line', { x1: X(f[3]), y1: cy, x2: X(f[4]), y2: cy, stroke: g.c, 'stroke-width': 3 }));
+    [0, 4].forEach(i => gr.appendChild(el('line', { x1: X(f[i]), y1: cy - 12, x2: X(f[i]), y2: cy + 12, stroke: g.c, 'stroke-width': 3 })));
+    gr.appendChild(el('rect', { x: X(f[1]), y: cy - hh, width: Math.max(0, X(f[3]) - X(f[1])), height: hh * 2, fill: `url(#${svg.id}-pat${gi % GS.length})`, stroke: g.c, 'stroke-width': 3 }));
+    gr.appendChild(el('line', { x1: X(f[2]), y1: cy - hh, x2: X(f[2]), y2: cy + hh, stroke: '#263238', 'stroke-width': 5 }));
+    if (opt.vals) {
+      [0, 1, 3, 4].forEach(i => gr.appendChild(el('text', { x: X(f[i]), y: cy - hh - 6, 'font-size': 15, 'text-anchor': 'middle', fill: '#37474f', 'font-weight': 'bold' }, fmt(f[i], ax.dec))));
+      gr.appendChild(el('text', { x: X(f[2]), y: cy + hh + 18, 'font-size': 15, 'text-anchor': 'middle', fill: '#263238', 'font-weight': 'bold' }, fmt(f[2], ax.dec)));
+    }
+    svg.appendChild(gr);
+  }
+  // 箱ひげ図をならべたグラフ（③⑤）。view＝{vals, rulerOn, ruler}
+  const ROW = 84;
+  function drawCompare(svg, sc, view) {
+    const n = sc.groups.length, H = 24 + n * ROW + 60, axY = 24 + n * ROW + 4;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.innerHTML = ''; defsFor(svg);
+    const ax = sc.ax;
+    // 縦の補助線
+    for (let v = ax.min; v <= ax.max + 1e-9; v += ax.major) svg.appendChild(el('line', { x1: xOf(ax, v), y1: 14, x2: xOf(ax, v), y2: axY, stroke: '#eceff1', 'stroke-width': 1.5 }));
+    sc.groups.forEach((g, i) => {
+      const cy = 24 + i * ROW + ROW / 2;
+      svg.appendChild(el('text', { x: 8, y: cy + 7, 'font-size': NARROW ? 19 : 21, fill: GS[i].c, 'font-weight': 'bold' }, `${GS[i].sym} ${g.name}`));
+      drawBox(svg, ax, g.f, cy, i, { vals: view.vals });
+    });
+    drawAxis(svg, ax, axY, sc.unit);
+    if (view.rulerOn && view.ruler != null) {
+      const x = xOf(ax, view.ruler);
+      svg.appendChild(el('line', { x1: x, y1: 6, x2: x, y2: axY, stroke: '#6a1b9a', 'stroke-width': 3, 'stroke-dasharray': '8 5' }));
+      svg.appendChild(el('rect', { x: x - 46, y: 0, width: 92, height: 22, rx: 8, fill: '#6a1b9a' }));
+      svg.appendChild(el('text', { x, y: 17, 'font-size': 16, 'text-anchor': 'middle', fill: '#fff', 'font-weight': 'bold' }, `${fmt(view.ruler, ax.dec)} ${sc.unit}`));
+    }
+    svg.style.cursor = view.rulerOn ? 'crosshair' : '';
+  }
+  // 📏 線を引く：グラフをタップ・ドラッグで縦の線を動かす
+  function attachRuler(svg, getSc, getView, after) {
+    let drag = false;
+    const move = (e) => {
+      const view = getView(), sc = getSc(); if (!view.rulerOn) return;
+      const p = svgX(svg, e);
+      view.ruler = snapV(vOf(sc.ax, p.x), sc.ax.snap, sc.ax);
+      after();
+    };
+    svg.addEventListener('pointerdown', e => { if (!getView().rulerOn) return; drag = true; svg.setPointerCapture(e.pointerId); move(e); });
+    svg.addEventListener('pointermove', e => { if (drag) move(e); });
+    ['pointerup', 'pointercancel'].forEach(t => svg.addEventListener(t, () => { drag = false; }));
+  }
+  // 「🔢 値」「📏 線を引く」のボタン
+  function viewChips(box, view, redraw) {
+    box.innerHTML = `<button class="chip ${view.vals ? 'active' : ''}" data-v="vals">🔢 値</button><button class="chip ${view.rulerOn ? 'active' : ''}" data-v="ruler">📏 線を引く</button>`;
+    box.onclick = (e) => {
+      const b = e.target.closest('[data-v]'); if (!b) return;
+      push();
+      if (b.dataset.v === 'vals') view.vals = !view.vals; else view.rulerOn = !view.rulerOn;
+      redraw();
+    };
+  }
+
+  /* =====================================================================
+     5. パートの切りかえ・ひとつもどす・もういちど
+     ===================================================================== */
+  const PARTS = ['① 求める', '② 箱ひげ図を作る', '③ 比べる', '④ ヒストグラム', '⑤ 判断'];
+  let cur = 1;
+  const S = {};              // 各パートの状態（JSON にできる形だけ入れる → ひとつもどすで使う）
+  const HIST = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+  const done = {};           // パートを1回やりきったか
+  function push() { HIST[cur].push(JSON.stringify(S[cur])); if (HIST[cur].length > 80) HIST[cur].shift(); }
+  function undo() {
+    const h = HIST[cur]; if (!h.length) return;
+    S[cur] = JSON.parse(h.pop());
+    render();
+  }
+  function renderTabs() {
+    $('tabs').innerHTML = PARTS.map((t, i) => `<button class="chip ${cur === i + 1 ? 'active' : ''} ${done[i + 1] ? 'done' : ''}" data-part="${i + 1}">${t}</button>`).join('');
+  }
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-part]'); if (b) goPart(+b.dataset.part); });
+  function goPart(p) {
+    cur = p;
+    for (let i = 1; i <= 5; i++) $('part' + i).hidden = i !== p;
+    render();
+  }
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', () => {
+    if (cur === 1) { push(); S[1] = initP1(S[1].data); }
+    if (cur === 2) { push(); S[2].pos = [null, null, null, null, null]; S[2].msg = null; S[2].ok = false; }
+    if (cur === 3) { push(); Object.assign(S[3], { concl: null, ev: [], msg: null, solved: {} }); }
+    if (cur === 4) { push(); S[4] = initP4(); }
+    if (cur === 5) { push(); Object.assign(S[5], { sel: [], reasons: [], msg: null, solved: {}, miss: 0 }); }
+    render();
+  });
+  function render() {
+    setGeom();
+    renderTabs();
+    ({ 1: renderP1, 2: renderP2, 3: renderP3, 4: renderP4, 5: renderP5 })[cur]();
+    renderTeacher();
+  }
+  function setMsg(id, m) { const e = $(id); e.className = 'msg' + (m ? ' ' + m.cls : ''); e.innerHTML = m ? m.html : ''; }
+
+  /* =====================================================================
+     6. パート① 求める
+     step：0 並べる → 1 まん中をタップ → 2 中央値 → 3 分ける → 4 第1四分位数 → 5 第3四分位数 → 6 範囲・四分位範囲 → 7 できた
+     ===================================================================== */
+  let parity = 'any';
+  function initP1(data) {
+    if (!data) {
+      const n = parity === 'odd' ? pick([9, 11]) : parity === 'even' ? pick([10, 12]) : pick([9, 10, 11, 12]);
+      data = makeData(n);
+    }
+    return { data, order: [], step: 0, tapped: [], miss: 0, msg: null, ans: {}, split: null };
+  }
+  const p1Calc = () => quart([...S[1].data].sort((a, b) => a - b));
+  const p1Sorted = () => S[1].order.map(i => S[1].data[i]);
+  const ord = (k) => `${k}番目`;
+
+  function renderP1() {
+    const s = S[1], n = s.data.length, c = p1Calc();
+    document.querySelectorAll('[data-par]').forEach(b => b.classList.toggle('active', b.dataset.par === parity));
+    $('p1Scene').textContent = `小テスト（20点満点）の点数　${n}人（${n % 2 ? '奇数' : '偶数'}個のデータ）`;
+    // はじめのデータ（まだ並べていないカード）
+    if (s.step === 0) {
+      const rest = s.data.map((v, i) => s.order.includes(i) ? '' : `<button class="dcard" data-i="${i}">${v}</button>`).join('');
+      $('p1Rest').innerHTML = `<div class="row-label">はじめのデータ（小さい数から順にタップ）</div><div class="cards" id="p1RestCards">${rest}</div>`;
+    } else $('p1Rest').innerHTML = '';
+    // 小さい順
+    const sorted = p1Sorted(), h = n >> 1;
+    const cls = (k) => {
+      const a = [];
+      if (s.step >= 3) a.push(k >= c.loIdx[0] && k <= c.loIdx[1] ? 'lo' : k >= c.hiIdx[0] && k <= c.hiIdx[1] ? 'hi' : 'mid');
+      else if (s.step >= 2 && (n % 2 ? k === h : k === h - 1 || k === h)) a.push('tap');
+      if (s.step === 1 && s.tapped.includes(k)) a.push('tap');
+      return a.join(' ');
+    };
+    $('p1Sorted').innerHTML = `<div class="row-label">小さい順</div><div class="cards" id="p1SortCards">${sorted.map((v, k) => `<button class="dcard ${cls(k)}" data-k="${k}">${v}<span class="pos">${k + 1}</span></button>`).join('') || '<span class="small">（ここに並ぶ）</span>'}</div>` +
+      (s.step >= 3 ? `<div class="split-bar"><span class="seg lo">前半 ${h}こ（第1四分位数は この中央値）</span>${n % 2 ? `<span class="seg mid">中央値 ${c.med}（どちらにも入れない）</span>` : ''}<span class="seg hi">後半 ${h}こ（第3四分位数は この中央値）</span></div>` : '');
+    // 手順の説明と入力
+    const inp = (id, label, unit) => `<span>${label} ＝</span><input class="num" id="${id}" inputmode="decimal" autocomplete="off" aria-label="${label}"><span>${unit}</span>`;
+    let step = '', input = '';
+    switch (s.step) {
+      case 0: step = 'ステップ1　データを <b>小さい順</b> に並べよう。いちばん小さい数のカードから順にタップ。'; input = `<div class="tools"><button class="op-btn" id="p1AutoSort">⚡ まとめて並べる</button></div>`; break;
+      case 1: step = `ステップ2　データは ${n}こ。<b>まん中</b>のカードはどれ？ タップしよう。${n % 2 ? '' : '（偶数個なので、まん中は2つ）'}`; break;
+      case 2: step = `ステップ3　<b>中央値</b>を求めよう。${n % 2 ? `まん中の1つ（${ord(h + 1)}）の値。` : `まん中の2つ（${ord(h)}と${ord(h + 1)}）の平均。`}`;
+        input = `<div class="ans-line">${inp('p1In', '中央値', '点')}<button class="go" id="p1Go">こたえる</button></div>`; break;
+      case 3:
+        if (n % 2) {
+          step = `ステップ4　第1・第3四分位数を求めるために、データを <b>前半と後半</b> に分ける。まん中のカード（${ord(h + 1)}・中央値 ${c.med}点）はどうする？`;
+          input = `<div class="opt-list"><button class="opt" data-sp="out">前半にも後半にも 入れない（前半 ${h}こ・後半 ${h}こ）</button><button class="opt" data-sp="in">前半にも後半にも 入れる（前半 ${h + 1}こ・後半 ${h + 1}こ）</button></div>`;
+        } else {
+          step = `ステップ4　データを <b>前半と後半</b> に分ける。偶数個なので、ちょうど半分ずつ（${h}こ と ${h}こ）に分けられる。`;
+          input = `<div class="tools"><button class="go next" id="p1Next">次へ</button></div>`;
+        }
+        break;
+      case 4: step = `ステップ5　<b>前半（${h}こ）の中央値</b>が 第1四分位数。${h % 2 ? '前半は奇数個なので、まん中の1つ。' : '前半は偶数個なので、まん中の2つの平均。'}`;
+        input = `<div class="ans-line">${inp('p1In', '第1四分位数', '点')}<button class="go" id="p1Go">こたえる</button></div>`; break;
+      case 5: step = `ステップ6　<b>後半（${h}こ）の中央値</b>が 第3四分位数。`;
+        input = `<div class="ans-line">${inp('p1In', '第3四分位数', '点')}<button class="go" id="p1Go">こたえる</button></div>`; break;
+      case 6: step = 'ステップ7　<b>範囲</b>と<b>四分位範囲</b>を求めよう。';
+        input = `<div class="ans-line">${inp('p1InR', '範囲', '点')}</div><div class="ans-line">${inp('p1InI', '四分位範囲', '点')}</div><div class="tools"><button class="go" id="p1Go">こたえる</button></div>`; break;
+      default: step = '🎉 できた！ 5つの値がそろった。下の表と箱ひげ図を見よう。';
+    }
+    $('p1Step').innerHTML = step; $('p1Input').innerHTML = input;
+    setMsg('p1Msg', s.msg);
+    // できたとき：5つの値・範囲・四分位範囲・小さな箱ひげ図・奇数個と偶数個のちがい
+    if (s.step >= 7) {
+      $('p1Done').innerHTML = `<table class="five"><tr>${FIVE.map(t => `<th>${t}</th>`).join('')}</tr><tr>${c.five.map(v => `<td>${v}</td>`).join('')}</tr></table>
+        <div class="ans-line" style="font-size:1.15rem">範囲 ${c.max}−${c.min}＝${c.rng}点　／　四分位範囲 ${c.q3}−${c.q1}＝${c.iqr}点</div>
+        <svg class="chart" id="p1Svg" viewBox="0 0 ${W} 160"></svg>
+        <div class="parity">${n % 2
+          ? `<b>奇数個（${n}こ）</b>：まん中の1つ（${ord(h + 1)}）が中央値。中央値は前半にも後半にも入れないので、前半・後半は ${h}こずつ。`
+          : `<b>偶数個（${n}こ）</b>：まん中の2つ（${ord(h)}・${ord(h + 1)}）の平均が中央値。前半・後半は ${h}こずつに ちょうど分かれる。`}
+          <br>👉「➕ 1こ足す」で${n % 2 ? '偶数' : '奇数'}個にすると、分け方がどう変わるか くらべよう。</div>
+        <div class="tools"><button class="op-btn action" id="p1Add">➕ 1こ足す（${n + 1}こ）</button><button class="op-btn" id="p1To2">② この5つの値で箱ひげ図を作る →</button></div>`;
+      const svg = $('p1Svg'); svg.innerHTML = ''; defsFor(svg);
+      const ax = { min: 0, max: 20, major: 2, minor: 1 };
+      drawBox(svg, ax, c.five, 50, 0, { vals: true });
+      drawAxis(svg, ax, 100, '点');
+    } else $('p1Done').innerHTML = '';
+    const f = $('p1In') || $('p1InR'); if (f && !TEACHER_BUSY) f.focus({ preventScroll: true });
+  }
+  let TEACHER_BUSY = false;
+
+  // カードをタップ
+  $('part1').addEventListener('click', e => {
+    const s = S[1], n = s.data.length, h = n >> 1;
+    const par = e.target.closest('[data-par]');
+    if (par) { parity = par.dataset.par; push(); S[1] = initP1(); render(); return; }
+    const rc = e.target.closest('#p1RestCards .dcard');
+    if (rc && s.step === 0) {
+      const i = +rc.dataset.i, restV = s.data.filter((_, j) => !s.order.includes(j));
+      if (s.data[i] === Math.min(...restV)) {
+        push(); s.order.push(i); sndTap(); s.msg = null;
+        if (s.order.length === n) { s.step = 1; s.msg = { cls: 'ok', html: '✅ 小さい順に並んだ！' }; }
+        render();
+      } else { rc.classList.add('shake'); setTimeout(() => rc.classList.remove('shake'), 320); s.msg = { cls: 'info', html: `${s.data[i]} より小さい数が、まだのこっているよ。` }; setMsg('p1Msg', s.msg); }
+      return;
+    }
+    const sc = e.target.closest('#p1SortCards .dcard');
+    if (sc && s.step === 1) {
+      const k = +sc.dataset.k, mids = n % 2 ? [h] : [h - 1, h];
+      if (mids.includes(k)) {
+        if (s.tapped.includes(k)) return;
+        push(); s.tapped.push(k); sndTap();
+        if (mids.every(m => s.tapped.includes(m))) { s.step = 2; s.miss = 0; s.msg = { cls: 'ok', html: n % 2 ? `✅ ${n}こ の まん中は ${ord(h + 1)}（前に${h}こ・後ろに${h}こ）。` : `✅ ${n}こ の まん中は ${ord(h)}と${ord(h + 1)}の2つ（前に${h - 1}こ・後ろに${h - 1}こ）。` }; }
+        else s.msg = { cls: 'info', html: 'もう1つ、まん中のカードがあるよ。' };
+      } else s.msg = { cls: 'ng', html: `${ord(k + 1)}だと、前に${k}こ・後ろに${n - 1 - k}こ で、数がそろわない。前と後ろが同じ数になるカードをさがそう。` };
+      render(); return;
+    }
+    const sp = e.target.closest('[data-sp]');
+    if (sp && s.step === 3) {
+      if (sp.dataset.sp === 'out') { push(); s.step = 4; s.miss = 0; s.msg = { cls: 'ok', html: `✅ そのとおり。中央値は前半にも後半にも入れない。前半 ${h}こ・後半 ${h}こ。` }; sndOK(); }
+      else { s.msg = { cls: 'ng', html: `❌ <span class="bad">つまずき：${TRIPS.incMed.name}</span><br>${TRIPS.incMed.exp}` }; addTrip('incMed'); sndNG(); }
+      render(); return;
+    }
+    if (e.target.id === 'p1Next') { push(); s.step = 4; s.miss = 0; s.msg = null; render(); return; }
+    if (e.target.id === 'p1AutoSort') { push(); s.order = s.data.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[1]); s.step = 1; s.msg = null; render(); return; }
+    if (e.target.id === 'p1Go') { p1Answer(); return; }
+    if (e.target.id === 'p1Reveal') { p1Reveal(); return; }
+    if (e.target.id === 'p1Add') { push(); const d = [...s.data, rint(3, 20)]; S[1] = initP1(d); S[1].msg = { cls: 'info', html: `${n}こ → ${n + 1}こ になった。もう一度 並べて、分け方のちがいを見よう。` }; render(); return; }
+    if (e.target.id === 'p1To2') { push2From1(); goPart(2); return; }
+  });
+  $('part1').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList.contains('num')) p1Answer(); });
+  $('p1New').addEventListener('click', () => { push(); S[1] = initP1(); render(); });
+
+  // 答えを調べる（まちがえ方から つまずきの型を見つける）
+  function p1Answer() {
+    const s = S[1], c = p1Calc();
+    const show = (cls, html) => { s.msg = { cls, html }; };
+    const wrong = (type, extra) => {
+      s.miss++; sndNG(); if (type) addTrip(type);
+      show('ng', `❌ ${type ? `<span class="bad">つまずき：${TRIPS[type].name}</span><br>${TRIPS[type].exp}` : extra}` + (s.miss >= 2 ? '<div class="tools"><button class="op-btn" id="p1Reveal">👀 答えを見て次へ</button></div>' : ''));
+      render();
+    };
+    const right = (text) => { push(); s.step++; s.miss = 0; sndOK(); show('ok', '✅ ' + text); if (s.step >= 7) markDone(1); render(); };
+    if (s.step === 6) {
+      const r = parseNum($('p1InR').value), q = parseNum($('p1InI').value);
+      if (isNaN(r) || isNaN(q)) { show('info', '2つとも 数を入れよう。'); render(); return; }
+      const okR = same(r, c.rng), okQ = same(q, c.iqr);
+      if (okR && okQ) return right(`範囲＝最大値−最小値＝${c.max}−${c.min}＝${c.rng}点、四分位範囲＝第3四分位数−第1四分位数＝${c.q3}−${c.q1}＝${c.iqr}点。`);
+      if (same(r, c.iqr) || same(q, c.rng)) return wrong('rangeIqr');
+      return wrong('calc');
+    }
+    const v = parseNum($('p1In').value);
+    if (isNaN(v)) { show('info', '数を入れよう（例：12 や 12.5）。'); render(); return; }
+    if (s.step === 2) {
+      if (same(v, c.med)) return right(c.n % 2 ? `中央値は ${c.med}点。` : `中央値は (${c.medPair[0]}＋${c.medPair[1]})÷2＝${c.med}点。`);
+      if (c.medPair && c.medPair.some(p => same(p, v))) return wrong('noAvg');
+      return wrong('calc');
+    }
+    if (s.step === 4 || s.step === 5) {
+      const isQ1 = s.step === 4, ans = isQ1 ? c.q1 : c.q3, inc = isQ1 ? c.q1inc : c.q3inc, pair = isQ1 ? c.q1Pair : c.q3Pair, other = isQ1 ? c.q3 : c.q1;
+      if (same(v, ans)) return right(`${isQ1 ? '第1' : '第3'}四分位数は ${ans}点。${pair ? `（(${pair[0]}＋${pair[1]})÷2）` : ''}`);
+      if (inc != null && same(v, inc)) return wrong('incMed');
+      if (pair && pair.some(p => same(p, v))) return wrong('noAvg');
+      if (same(v, other)) return wrong('swapQ');
+      return wrong('calc');
+    }
+  }
+  function p1Reveal() {
+    const s = S[1], c = p1Calc();
+    push();
+    const a = { 2: `中央値＝${c.med}`, 4: `第1四分位数＝${c.q1}`, 5: `第3四分位数＝${c.q3}`, 6: `範囲＝${c.rng}、四分位範囲＝${c.iqr}` }[s.step];
+    s.step++; s.miss = 0; s.msg = { cls: 'info', html: `答え：${a}（点）` };
+    if (s.step >= 7) markDone(1);
+    render();
+  }
+
+  /* =====================================================================
+     7. パート② 箱ひげ図を作る（5つの札をドラッグ）
+     ===================================================================== */
+  const P2AX = { min: 0, max: 20, major: 1, minor: 1 };
+  const P2Y = { box: 62, axis: 130, row0: 190, rowH: 38 };
+  let snapStep = 0.5;
+  function initP2(data) { const d = data || makeData(pick([9, 10, 11, 12])); return { data: [...d].sort((a, b) => a - b), pos: [null, null, null, null, null], show: true, msg: null, ok: false, bad: [] }; }
+  function push2From1() { push(); S[2] = initP2(S[1].data); }
+  function renderP2() {
+    const s = S[2], c = quart(s.data);
+    $('p2Show').checked = s.show;
+    document.querySelectorAll('[data-snap]').forEach(b => b.classList.toggle('active', +b.dataset.snap === snapStep));
+    $('p2Scene').textContent = `小テスト（20点満点）の点数　${s.data.length}人（小さい順）`;
+    $('p2Cards').innerHTML = s.data.map((v, k) => `<span class="dcard" style="cursor:default">${v}<span class="pos">${k + 1}</span></span>`).join('');
+    $('p2Five').innerHTML = `<table class="five"><tr>${FIVE.map(t => `<th>${t}</th>`).join('')}</tr><tr>${c.five.map(v => `<td>${s.show ? v : '？'}</td>`).join('')}</tr></table>` +
+      (s.show ? '' : '<div class="small" style="text-align:center">5つの値をかくしている。データから自分で求めて置こう。</div>');
+    drawP2();
+    setMsg('p2Msg', s.msg);
+  }
+  function drawP2() {
+    const s = S[2], svg = $('p2Svg'), ax = NARROW ? Object.assign({}, P2AX, { major: 2 }) : P2AX;
+    svg.setAttribute('viewBox', `0 0 ${W} 380`);
+    svg.innerHTML = ''; defsFor(svg);
+    // 5つそろって順番が正しければ、箱ひげ図をかく
+    const all = s.pos.every(v => v != null);
+    const inOrder = all && s.pos.every((v, i) => i === 0 || v >= s.pos[i - 1]);
+    if (all && inOrder) drawBox(svg, ax, s.pos, P2Y.box, s.ok ? 2 : 0, { hh: 26 });
+    else svg.appendChild(el('text', { x: (AXL + AXR) / 2, y: P2Y.box + 6, 'font-size': 18, 'text-anchor': 'middle', fill: all ? '#ad1457' : '#90a4ae', 'font-weight': 'bold' },
+      all ? '⚠ 左から 最小値・第1・中央値・第3・最大値 の順になっていない' : 'ここに箱ひげ図ができる'));
+    drawAxis(svg, ax, P2Y.axis, '点');
+    svg.appendChild(el('text', { x: NARROW ? 50 : 75, y: P2Y.row0 - 24, 'font-size': 14, 'text-anchor': 'middle', fill: '#78909c' }, '置く前の札'));
+    FIVE.forEach((name, i) => {
+      const y = P2Y.row0 + i * P2Y.rowH, v = s.pos[i], placed = v != null;
+      const gx = NARROW ? 50 : 75, x = placed ? xOf(ax, v) : gx;
+      const g = el('g', { class: 'handle', 'data-h': i });
+      const bad = s.bad.includes(i);
+      if (placed) g.appendChild(el('line', { x1: x, y1: y - 14, x2: x, y2: 24, stroke: bad ? '#ad1457' : '#546e7a', 'stroke-width': 2, 'stroke-dasharray': '5 4' }));
+      const w = NARROW ? 92 : 128, px = Math.max(w / 2 + 2, Math.min(W - 2 - w / 2, x)), col = i === 2 ? '#263238' : (i === 1 || i === 3) ? '#1565c0' : '#546e7a';
+      g.appendChild(el('rect', { x: px - w / 2, y: y - 15, width: w, height: 32, rx: 16, fill: bad ? '#fce4ec' : placed ? '#fff' : '#eceff1', stroke: bad ? '#ad1457' : col, 'stroke-width': 3 }));
+      g.appendChild(el('text', { x: px, y: y + 7, 'font-size': 16, 'text-anchor': 'middle', fill: bad ? '#ad1457' : col, 'font-weight': 'bold' }, `${bad ? '× ' : ''}${FIVE_S[i]} ${placed ? (Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : fmt(v, 1)) : ''}`));
+      // 大きめの見えない当たり判定（タッチしやすく）
+      g.appendChild(el('rect', { x: px - w / 2 - 6, y: y - 19, width: w + 12, height: 38, fill: 'transparent' }));
+      svg.appendChild(g);
+    });
+  }
+  // ドラッグ
+  (() => {
+    const svg = $('p2Svg'); let dragI = -1, moved = false;
+    svg.addEventListener('pointerdown', e => {
+      const g = e.target.closest('[data-h]'); if (!g) return;
+      dragI = +g.dataset.h; moved = false; push(); svg.setPointerCapture(e.pointerId); e.preventDefault();
+    });
+    svg.addEventListener('pointermove', e => {
+      if (dragI < 0) return;
+      const p = svgX(svg, e), s = S[2];
+      moved = true;
+      if (p.x < AXL - 30) s.pos[dragI] = null;    // 左のはしにもどすと、置く前にもどる
+      else s.pos[dragI] = snapV(vOf(P2AX, p.x), snapStep, P2AX);
+      s.ok = false; s.bad = s.bad.filter(b => b !== dragI);
+      drawP2();
+    });
+    const up = () => { if (dragI < 0) return; if (!moved) HIST[2].pop(); dragI = -1; renderTeacher(); };
+    svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+  })();
+  document.querySelectorAll('[data-snap]').forEach(b => b.addEventListener('click', () => { snapStep = +b.dataset.snap; renderP2(); }));
+  $('p2Show').addEventListener('change', () => { push(); S[2].show = $('p2Show').checked; renderP2(); });
+  $('p2From1').addEventListener('click', () => { push2From1(); render(); });
+  $('p2New').addEventListener('click', () => { push(); S[2] = initP2(); render(); });
+  $('p2Check').addEventListener('click', p2Check);
+  function p2Check() {
+    const s = S[2], c = quart(s.data), f = c.five;
+    if (s.pos.some(v => v == null)) { s.msg = { cls: 'info', html: 'まだ置いていない札がある。5つとも数直線に置こう。' }; renderP2(); return; }
+    const near = (a, b) => Math.abs(a - b) < 0.05;
+    s.bad = s.pos.map((v, i) => near(v, f[i]) ? -1 : i).filter(i => i >= 0);
+    if (!s.bad.length) {
+      push(); s.ok = true; sndOK(); markDone(2);
+      s.msg = { cls: 'ok', html: `✅ 箱ひげ図ができた！ 箱の長さが四分位範囲（${c.iqr}点）、両はしのひげまでの長さが範囲（${c.rng}点）。<br>4つの区間（ひげ・箱の左・箱の右・ひげ）には、それぞれ約4分の1ずつのデータが入っている。` };
+      renderP2(); return;
+    }
+    sndNG();
+    let type = null;
+    if (near(s.pos[1], f[3]) && near(s.pos[3], f[1])) type = 'swapQ';
+    else if (c.q1inc != null && (near(s.pos[1], c.q1inc) || near(s.pos[3], c.q3inc))) type = 'incMed';
+    else if (s.bad.some(i => f.some((w, j) => j !== i && near(s.pos[i], w)))) type = 'orderBox';
+    if (type) addTrip(type);
+    s.msg = { cls: 'ng', html: type ? `❌ <span class="bad">つまずき：${TRIPS[type].name}</span><br>${TRIPS[type].exp}` : '❌ × がついた札の位置がずれている。数直線の目もりを数えなおそう。' };
+    renderP2();
+  }
+
+  /* =====================================================================
+     8. パート③ 比べる（結論と根拠をえらんで説明文をつくる）
+     ===================================================================== */
+  function initP3() { return { sc: 0, qi: 0, concl: null, ev: [], msg: null, solved: {}, view: { vals: false, rulerOn: false, ruler: null } }; }
+  const p3Sc = () => P3[S[3].sc];
+  const st = (g) => { const f = g.f; return { min: f[0], q1: f[1], med: f[2], q3: f[3], max: f[4], iqr: f[3] - f[1], rng: f[4] - f[0] }; };
+  // 根拠の事実の文（グラフから読める本当のこと）
+  function evSentence(sc, k) {
+    const [A, B] = sc.groups, a = st(A), b = st(B), u = sc.unit, d = sc.ax.dec;
+    const v = (x) => fmt(x, d) + u;
+    const cmp = (x, y, word) => same(x, y) ? '同じ' : `${x > y ? A.name : B.name}の方が${word}`;
+    switch (k) {
+      case 'med': return `中央値は ${A.name} ${v(a.med)}、${B.name} ${v(b.med)}で、${cmp(a.med, b.med, '大きい')}。`;
+      case 'box': return `箱（第1〜第3四分位数）は、${A.name} ${v(a.q1)}〜${v(a.q3)}、${B.name} ${v(b.q1)}〜${v(b.q3)}。`;
+      case 'iqr': return `四分位範囲は ${A.name} ${v(a.iqr)}、${B.name} ${v(b.iqr)}で、${cmp(a.iqr, b.iqr, '大きい')}。`;
+      case 'range': return `範囲は ${A.name} ${v(a.rng)}、${B.name} ${v(b.rng)}で、${cmp(a.rng, b.rng, '大きい')}。`;
+      case 'max': return `最大値は ${A.name} ${v(a.max)}、${B.name} ${v(b.max)}。`;
+      case 'min': return `最小値は ${A.name} ${v(a.min)}、${B.name} ${v(b.min)}。`;
+    }
+  }
+  function conclSentence(sc, q, c) {
+    if (c === 'どちらともいえない') return q.kind === 'high' ? 'だから、どちらが全体として高い（長い）とはいえない。' : 'だから、どちらのばらつきが大きいとはいえない。';
+    return q.kind === 'high' ? `だから、全体として ${c} の方が高い（大きい）といえる。` : `だから、${c} の方がばらつきが大きいといえる。`;
+  }
+  function renderP3() {
+    const s = S[3], sc = p3Sc(), q = sc.qs[s.qi];
+    $('p3Scenes').innerHTML = P3.map((x, i) => `<button class="chip ${i === s.sc ? 'active' : ''}" data-sc="${i}">${['小テスト', 'ハンドボール投げ', '読書時間（中央値が同じ）'][i]}${x.ws ? ' 📄' : ''}</button>`).join('');
+    $('p3Scene').textContent = sc.title;
+    drawCompare($('p3Svg'), sc, s.view);
+    viewChips($('p3View'), s.view, renderP3);
+    $('p3Qs').innerHTML = sc.qs.map((x, i) => `<button class="chip ${i === s.qi ? 'active' : ''} ${s.solved[s.sc + '-' + i] ? 'done' : ''}" data-qi="${i}">問${i + 1} ${x.kind === 'high' ? '高い？' : 'ばらつき？'}</button>`).join('');
+    $('p3Ask').textContent = q.text;
+    const concls = [...sc.groups.map(g => g.name), 'どちらともいえない'];
+    $('p3Concl').innerHTML = concls.map(c => `<button class="chip ${s.concl === c ? 'active' : ''}" data-cc="${esc(c)}">${esc(c)}</button>`).join('');
+    $('p3Ev').innerHTML = EV.map(e => `<button class="chip ${s.ev.includes(e.k) ? 'active' : ''}" data-ev="${e.k}">${e.t}</button>`).join('');
+    $('p3Sent').innerHTML = (s.ev.length || s.concl) ? s.ev.map(k => esc(evSentence(sc, k))).join('') + (s.concl ? `<b>${esc(conclSentence(sc, q, s.concl))}</b>` : '') : '';
+    setMsg('p3Msg', s.msg);
+  }
+  $('part3').addEventListener('click', e => {
+    const s = S[3], t = e.target;
+    const scB = t.closest('[data-sc]'); if (scB) { push(); Object.assign(s, { sc: +scB.dataset.sc, qi: 0, concl: null, ev: [], msg: null }); s.view.ruler = null; render(); return; }
+    const qb = t.closest('[data-qi]'); if (qb) { push(); Object.assign(s, { qi: +qb.dataset.qi, concl: null, ev: [], msg: null }); render(); return; }
+    const cc = t.closest('[data-cc]'); if (cc) { push(); s.concl = cc.dataset.cc; s.msg = null; render(); return; }
+    const ev = t.closest('[data-ev]');
+    if (ev) {
+      push(); const k = ev.dataset.ev;
+      if (s.ev.includes(k)) s.ev = s.ev.filter(x => x !== k);
+      else { s.ev.push(k); if (s.ev.length > 2) s.ev.shift(); }
+      s.msg = null; render(); return;
+    }
+  });
+  attachRuler($('p3Svg'), p3Sc, () => S[3].view, () => drawCompare($('p3Svg'), p3Sc(), S[3].view));
+  $('p3Check').addEventListener('click', p3Check);
+
+  // 根拠を1つずつ調べる：'good'（正しく使えている）・トリップ名（まちがい）
+  function judgeEv(sc, q, concl, k) {
+    const [A, B] = sc.groups, a = st(A), b = st(B);
+    const me = concl === A.name ? a : concl === B.name ? b : null, ot = concl === A.name ? b : concl === B.name ? a : null;
+    if (k === 'max' || k === 'min') return 'oneValue';
+    if (q.kind === 'high') {
+      if (k === 'iqr' || k === 'range') return 'centerSpread';
+      if (!me) {   // 「どちらともいえない」をえらんだとき
+        if (k === 'med') return same(a.med, b.med) ? 'good' : 'calc';
+        return (a.q1 - b.q1) * (a.q3 - b.q3) < 0 ? 'good' : 'calc';   // 箱の左はしと右はしで、向きが逆
+      }
+      if (k === 'med') return me.med > ot.med ? 'good' : 'calc';
+      if (k === 'box') return me.q1 >= ot.q1 && me.q3 >= ot.q3 && (me.q1 > ot.q1 || me.q3 > ot.q3) ? 'good' : 'mixed';
+    } else {
+      if (k === 'med' || k === 'box') return 'centerSpread';
+      if (!me) return 'calc';
+      if (k === 'iqr') return me.iqr > ot.iqr ? 'good' : 'calc';
+      if (k === 'range') {
+        const iqrSays = a.iqr > b.iqr ? A.name : B.name;
+        if (me.rng <= ot.rng) return 'calc';
+        return iqrSays === concl ? 'good' : 'rangeIqr';
+      }
+    }
+    return 'calc';
+  }
+  function p3Check() {
+    const s = S[3], sc = p3Sc(), q = sc.qs[s.qi];
+    if (!s.concl || !s.ev.length) { s.msg = { cls: 'info', html: '結論と根拠を えらぼう。' }; renderP3(); return; }
+    const js = s.ev.map(k => judgeEv(sc, q, s.concl, k));
+    const okConcl = s.concl === q.ans;
+    const bad = js.find(j => j !== 'good' && j !== 'mixed');
+    if (okConcl && !bad && js.includes('good')) {
+      push(); sndOK(); s.solved[s.sc + '-' + s.qi] = true;
+      const text = s.ev.map(k => evSentence(sc, k)).join('') + conclSentence(sc, q, s.concl);
+      addNote(`【${sc.title.split('　')[0]}】${q.text}<br>→ ${text}`);
+      s.msg = { cls: 'ok', html: '✅ 根拠のある説明になった！「📝 わたしの説明文」に入れたよ。' + (js.includes('mixed') ? '<br>（箱の位置は、第1と第3四分位数で向きがちがうので、中央値の方が根拠としてはっきりしている）' : '') +
+        (sc.ws && q.kind === 'spread' ? '<br>📄 中央値が同じでも、ばらつきはちがう。ワークシートの「＋ 記録する」で記録しよう。' : '') };
+      if (P3.every((x, i) => x.qs.every((_, j) => s.solved[i + '-' + j]))) markDone(3);
+      renderP3(); return;
+    }
+    sndNG();
+    // つまずきの型：根拠のまちがい方で決める。中央値が同じ場面の結論まちがいは、型にせずヒントを出す
+    let type = bad && bad !== 'calc' ? bad : (!okConcl && bad === 'calc' ? 'calc' : null);
+    if (!okConcl && q.ans === 'どちらともいえない' && type === 'calc') type = null;
+    if (type) addTrip(type);
+    const hintTxt = q.ans === 'どちらともいえない' && !okConcl ? '中央値が同じとき、全体として高い・低いはいえるかな？ 箱の左はしと右はしの向きも見よう。' : '';
+    s.msg = { cls: 'ng', html: '❌ ' + (type ? `<span class="bad">つまずき：${TRIPS[type].name}</span><br>${TRIPS[type].exp}` : okConcl ? '結論は合っている。根拠の数とことばを、グラフで確かめよう（🔢 値）。' : (hintTxt || '結論をもう一度考えよう。')) };
+    renderP3();
+  }
+
+  /* =====================================================================
+     9. パート④ 箱ひげ図とヒストグラム
+     stage：0 予想 → 1 ヒストグラムを見る → 2 分かる・分からない → 3 箱の長さクイズ → 4 できた
+     ===================================================================== */
+  function initP4() { return { stage: 0, pred: null, know: {}, knowChecked: false, boxAns: null, msg: null }; }
+  function histDraw(svg, d, gi, showHist) {
+    const ax = P4AX, s = [...d.data].sort((a, b) => a - b), c = quart(s);
+    const top = 20, boxY = 46, hTop = 92, hBot = showHist ? 250 : 92, axY = hBot + 8;
+    svg.setAttribute('viewBox', `0 0 ${W} ${axY + 58}`);
+    svg.innerHTML = ''; defsFor(svg);
+    svg.appendChild(el('text', { x: 8, y: boxY + 7, 'font-size': NARROW ? 19 : 21, fill: GS[gi].c, 'font-weight': 'bold' }, `${GS[gi].sym} ${d.name}`));
+    drawBox(svg, ax, c.five, boxY, gi, { vals: true, hh: 18 });
+    if (showHist) {
+      const bins = Array(8).fill(0); s.forEach(v => bins[Math.min(7, Math.floor(v / 5))]++);
+      const maxF = 8, hy = (f) => hBot - f / maxF * (hBot - hTop);
+      for (let f = 0; f <= maxF; f += 2) {
+        svg.appendChild(el('line', { x1: AXL, y1: hy(f), x2: AXR, y2: hy(f), stroke: '#eceff1' }));
+        svg.appendChild(el('text', { x: AXL - 8, y: hy(f) + 5, 'font-size': 14, 'text-anchor': 'end', fill: '#78909c' }, f));
+      }
+      svg.appendChild(el('text', { x: AXL - 40, y: hTop + 4, 'font-size': 14, 'text-anchor': 'middle', fill: '#78909c' }, '(人)'));
+      bins.forEach((f, i) => {
+        if (!f) return;
+        svg.appendChild(el('rect', { x: xOf(ax, i * 5), y: hy(f), width: xOf(ax, 5) - xOf(ax, 0), height: hBot - hy(f), fill: `url(#${svg.id}-pat${gi})`, stroke: GS[gi].c, 'stroke-width': 2 }));
+      });
+      const mean = s.reduce((a, b) => a + b, 0) / s.length;
+      svg.appendChild(el('text', { x: AXR, y: hTop - 4, 'font-size': 16, 'text-anchor': 'end', fill: '#6a1b9a', 'font-weight': 'bold' }, `平均値 ${fmt(mean, 2)}点`));
+    }
+    drawAxis(svg, ax, axY, '点');
+  }
+  function renderP4() {
+    const s = S[4], show = s.stage >= 1;
+    $('p4Panels').innerHTML = P4.map((d, i) => `<div class="hist-panel"><svg class="chart" id="p4Svg${i}" viewBox="0 0 ${W} 150" role="img" aria-label="${d.name}の箱ひげ図とヒストグラム"></svg>${show ? `<div class="small" style="text-align:right">ヒストグラムの形：<b>${d.shape}</b>（階級の幅 5点）</div>` : ''}</div>`).join('');
+    P4.forEach((d, i) => histDraw($('p4Svg' + i), d, i, show));
+    let h = '';
+    if (s.stage === 0) {
+      h = `<div class="ask">3つのクラスの箱ひげ図は、まったく同じ。では、ヒストグラム（点数の分布の形）も同じだろうか？</div>
+        <div class="opt-list">${['同じ形になる', 'ちがう形になることもある', 'わからない'].map(t => `<button class="opt" data-pred="${t}">${t}</button>`).join('')}</div>`;
+    } else if (s.stage === 1 || s.stage === 2) {
+      h = `<div class="ask">箱ひげ図だけを見て、分かること・分からないことに分けよう。</div>` +
+        KNOW.map((k, i) => `<div class="kcard ${s.knowChecked ? (s.know[i] === k.ok ? 'okk' : 'ngk') : ''}"><span class="kname">${k.t}</span><button class="chip ${s.know[i] === true ? 'active' : ''}" data-kn="${i}" data-v="1">分かる</button><button class="chip ${s.know[i] === false ? 'active' : ''}" data-kn="${i}" data-v="0">分からない</button></div>`).join('') +
+        `<div class="tools"><button class="go" id="p4KnowGo">答え合わせ</button>${s.stage === 2 ? '<button class="go next" id="p4ToBox">次へ</button>' : ''}</div>`;
+    } else {
+      h = `<div class="ask">下の箱ひげ図（20人）で、<b>左のひげ（最小値〜第1四分位数）</b>は短く、<b>箱の左がわ（第1四分位数〜中央値）</b>は長い。人数が多いのはどっち？</div>
+        <svg class="chart" id="p4BoxQ" viewBox="0 0 ${W} 140"></svg>
+        <div class="opt-list">${['左のひげ（短い方）', '箱の左がわ（長い方）', '同じくらい（どちらも約4分の1）'].map((t, i) => `<button class="opt ${s.boxAns === i ? 'active' : ''}" data-bq="${i}">${t}</button>`).join('')}</div>`;
+    }
+    $('p4Stage').innerHTML = h;
+    if (s.stage >= 3) {
+      const svg = $('p4BoxQ'); svg.innerHTML = ''; defsFor(svg);
+      const ax = { min: 0, max: 40, major: 5, minor: 1 }, f = [10, 12, 20, 24, 36];
+      drawBox(svg, ax, f, 50, 0, { vals: true });
+      svg.appendChild(el('text', { x: (xOf(ax, 10) + xOf(ax, 12)) / 2, y: 98, 'font-size': 15, 'text-anchor': 'middle', fill: '#ad1457', 'font-weight': 'bold' }, '短い'));
+      svg.appendChild(el('text', { x: (xOf(ax, 12) + xOf(ax, 20)) / 2, y: 98, 'font-size': 15, 'text-anchor': 'middle', fill: '#ad1457', 'font-weight': 'bold' }, '長い'));
+      drawAxis(svg, ax, 112, '');
+    }
+    setMsg('p4Msg', s.msg);
+  }
+  $('part4').addEventListener('click', e => {
+    const s = S[4], t = e.target;
+    const pr = t.closest('[data-pred]');
+    if (pr && s.stage === 0) {
+      push(); s.pred = pr.dataset.pred; s.stage = 1;
+      if (s.pred === '同じ形になる') { addTrip('boxKnows'); s.msg = { cls: 'ng', html: `ヒストグラムを見てみると…形がちがう！ <span class="bad">つまずき：${TRIPS.boxKnows.name}</span><br>${TRIPS.boxKnows.exp}` }; }
+      else s.msg = { cls: 'info', html: '箱ひげ図は同じなのに、山が1つ・山が2つ・平ら と、ヒストグラムの形はちがう。平均値もちがう。' };
+      render(); return;
+    }
+    const kn = t.closest('[data-kn]');
+    if (kn) { push(); s.know[+kn.dataset.kn] = kn.dataset.v === '1'; s.knowChecked = false; render(); return; }
+    if (t.id === 'p4KnowGo') {
+      if (KNOW.some((_, i) => s.know[i] == null)) { s.msg = { cls: 'info', html: '7つとも えらぼう。' }; render(); return; }
+      push(); s.knowChecked = true;
+      const wrong = KNOW.filter((k, i) => s.know[i] !== k.ok);
+      if (!wrong.length) { s.stage = 2; sndOK(); s.msg = { cls: 'ok', html: '✅ 全問正解！ 箱ひげ図から分かるのは 5つの値と、そこから求められる値（範囲・四分位範囲・約半分が入る区間）だけ。山の形・平均値・いちばん多い階級は、ヒストグラムを見ないと分からない。' }; }
+      else {
+        sndNG();
+        if (wrong.some(k => !k.ok)) addTrip('boxKnows');
+        s.msg = { cls: 'ng', html: `❌ × のところを見なおそう。上の3つのクラスは、箱ひげ図が同じなのに${wrong.some(k => !k.ok) ? `ヒストグラムや平均値がちがう。<br><span class="bad">つまずき：${TRIPS.boxKnows.name}</span>` : '、5つの値は同じ。5つの値から計算できるものは分かる。'}` };
+      }
+      render(); return;
+    }
+    if (t.id === 'p4ToBox') { push(); s.stage = 3; s.msg = null; render(); return; }
+    const bq = t.closest('[data-bq]');
+    if (bq && s.stage >= 3) {
+      push(); s.boxAns = +bq.dataset.bq;
+      if (s.boxAns === 2) { s.stage = 4; sndOK(); markDone(4); s.msg = { cls: 'ok', html: '✅ そのとおり。どちらも約4分の1（20人なら約5人）。箱の左がわが長いのは、その5人の点数が広く散らばっているということ。' }; }
+      else { sndNG(); addTrip('boxShape'); s.msg = { cls: 'ng', html: `❌ <span class="bad">つまずき：${TRIPS.boxShape.name}</span><br>${TRIPS.boxShape.exp}` }; }
+      render();
+    }
+  });
+
+  /* =====================================================================
+     10. パート⑤ 判断する
+     ===================================================================== */
+  function initP5() { return { qi: 0, sel: [], reasons: [], msg: null, solved: {}, miss: 0, view: { vals: false, rulerOn: false, ruler: null } }; }
+  const p5Q = () => P5[S[5].qi];
+  function renderP5() {
+    const s = S[5], q = p5Q();
+    $('p5Qs').innerHTML = P5.map((x, i) => `<button class="chip ${i === s.qi ? 'active' : ''} ${s.solved[i] ? 'done' : ''}" data-q5="${i}">${x.label}</button>`).join('');
+    $('p5Scene').textContent = q.title;
+    if (s.view.ruler == null && q.ruler != null) { s.view.ruler = q.ruler; s.view.rulerOn = true; }
+    drawCompare($('p5Svg'), q, s.view);
+    viewChips($('p5View'), s.view, renderP5);
+    $('p5Ask').textContent = q.q;
+    let h = `<div class="q-label">${q.type === 'one' ? '1. 結論をえらぶ' : 'あてはまるものをすべてえらぶ'}</div><div class="opt-list">` +
+      q.opts.map((o, i) => `<button class="opt ${s.sel.includes(i) ? 'active' : ''}" data-o5="${i}">${esc(o.t)}</button>`).join('') + '</div>';
+    if (q.type === 'one') h += '<div class="q-label">2. 理由をえらぶ（あてはまるものをすべて）</div><div class="opt-list">' +
+      q.reasons.map((r, i) => `<button class="opt ${s.reasons.includes(i) ? 'active' : ''}" data-r5="${i}">${esc(r.t)}</button>`).join('') + '</div>';
+    $('p5Body').innerHTML = h;
+    $('p5Sent').innerHTML = q.type === 'one' && (s.sel.length || s.reasons.length)
+      ? `結論：${s.sel.length ? esc(q.opts[s.sel[0]].t) : '（　）'}。<br>理由：${s.reasons.length ? s.reasons.map(i => esc(q.reasons[i].t)).join('。また、') : '（　）'}。` : '';
+    setMsg('p5Msg', s.msg);
+  }
+  $('part5').addEventListener('click', e => {
+    const s = S[5], q = p5Q(), t = e.target;
+    const qb = t.closest('[data-q5]'); if (qb) { push(); Object.assign(s, { qi: +qb.dataset.q5, sel: [], reasons: [], msg: null, miss: 0 }); s.view.ruler = null; s.view.rulerOn = false; render(); return; }
+    const o = t.closest('[data-o5]');
+    if (o) {
+      push(); const i = +o.dataset.o5;
+      if (q.type === 'one') s.sel = [i];
+      else if (q.opts[i].t === 'どちらもいえない') s.sel = s.sel.includes(i) ? [] : [i];
+      else { s.sel = s.sel.filter(x => q.opts[x].t !== 'どちらもいえない'); s.sel = s.sel.includes(i) ? s.sel.filter(x => x !== i) : [...s.sel, i]; }
+      s.msg = null; render(); return;
+    }
+    const r = t.closest('[data-r5]');
+    if (r) { push(); const i = +r.dataset.r5; s.reasons = s.reasons.includes(i) ? s.reasons.filter(x => x !== i) : [...s.reasons, i]; s.msg = null; render(); return; }
+    if (t.id === 'p5Reveal') { s.msg = { cls: 'info', html: '答えの例：' + esc(q.explain) }; render(); }
+  });
+  attachRuler($('p5Svg'), p5Q, () => S[5].view, () => drawCompare($('p5Svg'), p5Q(), S[5].view));
+  $('p5Check').addEventListener('click', p5Check);
+  function p5Check() {
+    const s = S[5], q = p5Q();
+    const fail = (type, html) => {
+      s.miss++; sndNG(); if (type) addTrip(type);
+      s.msg = { cls: 'ng', html: '❌ ' + (type ? `<span class="bad">つまずき：${TRIPS[type].name}</span><br>${TRIPS[type].exp}` : html) + (s.miss >= 2 ? '<div class="tools"><button class="op-btn" id="p5Reveal">👀 答えの例を見る</button></div>' : '') };
+      renderP5();
+    };
+    if (!s.sel.length) { s.msg = { cls: 'info', html: 'えらんでから「こたえる」。' }; renderP5(); return; }
+    if (q.type === 'one') {
+      const o = q.opts[s.sel[0]];
+      if (!o.ok) return fail(o.trip);
+      if (!s.reasons.length) { s.msg = { cls: 'info', html: '結論は合っている！ 理由もえらぼう。' }; renderP5(); return; }
+      const badR = s.reasons.map(i => q.reasons[i]).find(r => !r.ok);
+      if (badR) return fail(badR.trip);
+      push(); sndOK(); s.solved[s.qi] = true;
+      addNote(`【${q.label.replace(/^問\d+ /, '')}】${q.q}<br>→ 結論：${o.t}。理由：${s.reasons.map(i => q.reasons[i].t).join('。また、')}。`);
+    } else {
+      const picked = s.sel.map(i => q.opts[i].t).sort().join(','), ans = [...q.ans].sort().join(',');
+      if (picked !== ans) return fail('pct');
+      push(); sndOK(); s.solved[s.qi] = true;
+      addNote(`【${q.label.replace(/^問\d+ /, '')}】${q.q}<br>→ ${q.ans.join('と')}。${q.explain}`);
+    }
+    s.msg = { cls: 'ok', html: '✅ 正解！ ' + esc(q.explain) + (s.qi < P5.length - 1 ? '<div class="tools"><button class="go next" id="p5Next">次の問題へ</button></div>' : '') };
+    if (P5.every((_, i) => s.solved[i])) markDone(5);
+    renderP5();
+  }
+  $('part5').addEventListener('click', e => { if (e.target.id === 'p5Next') { push(); const s = S[5]; Object.assign(s, { qi: s.qi + 1, sel: [], reasons: [], msg: null, miss: 0 }); s.view.ruler = null; s.view.rulerOn = false; render(); } });
+
+  /* =====================================================================
+     11. つまずき・説明文ノート の記録（Worksheet.appData に入れる）
+     ===================================================================== */
+  const mem = {};
+  const getApp = (k, d) => { const v = window.Worksheet ? Worksheet.appData(k) : mem[k]; return v == null ? d : v; };
+  const setApp = (k, v) => { if (window.Worksheet) Worksheet.appData(k, v); else mem[k] = v; };
+  const sess = {};
+  function addTrip(type) {
+    sess[type] = (sess[type] || 0) + 1;
+    const r = getApp('rec', { trips: {} }); r.trips = r.trips || {}; r.trips[type] = (r.trips[type] || 0) + 1; setApp('rec', r);
+    renderTrips();
+  }
+  function renderTrips() {
+    const keys = Object.keys(sess);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${sess[k]}回）</div><div class="small">${TRIPS[k].exp}</div><div class="tools left"><button class="op-btn" data-prac="${k}">🔁 この型を練習</button>${['incMed', 'noAvg', 'swapQ', 'orderBox'].includes(k) ? '<a class="op-btn" href="箱ひげ図とヒストグラム.html" target="_blank" rel="noopener">👀 箱ひげ図とヒストグラムで確かめる</a>' : ''}</div></div>`).join('')
+      : '<div class="small">まだ ありません。まちがえると、まちがえ方の型がここに出るよ。</div>';
+  }
+  // 「この型を練習」：その型が出やすい問題を開く
+  $('tripList').addEventListener('click', e => {
+    const b = e.target.closest('[data-prac]'); if (!b) return;
+    const k = b.dataset.prac;
+    if (k === 'incMed') { parity = 'odd'; S[1] = initP1(); goPart(1); }
+    else if (k === 'noAvg') { parity = 'even'; S[1] = initP1(); goPart(1); }
+    else if (k === 'swapQ' || k === 'calc') { S[1] = initP1(); goPart(1); }
+    else if (k === 'orderBox') { S[2] = initP2(); goPart(2); }
+    else if (k === 'rangeIqr') { Object.assign(S[3], { sc: 1, qi: 1, concl: null, ev: [], msg: null }); goPart(3); }
+    else if (k === 'centerSpread') { Object.assign(S[3], { sc: 0, qi: 1, concl: null, ev: [], msg: null }); goPart(3); }
+    else if (k === 'oneValue') { Object.assign(S[3], { sc: 0, qi: 0, concl: null, ev: [], msg: null }); goPart(3); }
+    else if (k === 'boxKnows' || k === 'boxShape') { S[4] = initP4(); goPart(4); }
+    else { const qi = k === 'pct' ? 3 : 0; Object.assign(S[5], { qi, sel: [], reasons: [], msg: null, miss: 0 }); S[5].view.ruler = null; S[5].view.rulerOn = false; goPart(5); }
+    $('tabs').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+  function addNote(html) {
+    const n = getApp('notes', []);
+    if (!n.includes(html)) n.push(html);
+    setApp('notes', n); renderNotes();
+  }
+  function renderNotes() {
+    const n = getApp('notes', []);
+    $('noteList').innerHTML = n.length ? n.map((t, i) => `<div class="note-item">${i + 1}. ${t}</div>`).join('') : '<div class="small">③・⑤ で正しい説明ができると、ここにたまる。ワークシートの「まとめ」を書くときに使おう。</div>';
+  }
+  $('noteCopy').addEventListener('click', () => {
+    const txt = getApp('notes', []).map((t, i) => `${i + 1}. ` + t.replace(/<br>/g, ' ').replace(/<[^>]*>/g, '')).join('\n');
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => alert('コピーしました'), () => prompt('コピーしてください', txt));
+    else prompt('コピーしてください', txt);
+  });
+  $('noteClear').addEventListener('click', () => { if (confirm('説明文をぜんぶ消しますか？')) { setApp('notes', []); renderNotes(); } });
+  function markDone(p) { done[p] = true; setApp('done', Object.assign(getApp('done', {}), { [p]: true })); renderTabs(); }
+
+  /* =====================================================================
+     12. 先生モード（答え・自動で1ステップ）
+     ===================================================================== */
+  function teacherAnswer() {
+    if (cur === 1) { const c = p1Calc(); return `データ（小さい順）：${[...S[1].data].sort((a, b) => a - b).join(', ')}<br>中央値 ${c.med}・第1四分位数 ${c.q1}・第3四分位数 ${c.q3}・範囲 ${c.rng}・四分位範囲 ${c.iqr}` + (c.q1inc != null ? `<br>（中央値をふくめると 第1 ${c.q1inc}・第3 ${c.q3inc} ← つまずきの答え）` : ''); }
+    if (cur === 2) { const c = quart(S[2].data); return `5つの値：${c.five.join('・')}`; }
+    if (cur === 3) { const sc = p3Sc(), q = sc.qs[S[3].qi]; return `答え：${q.ans}（根拠：${q.kind === 'high' ? '中央値' : '四分位範囲'}）<br>話し合いの問い：「最大値で比べてはいけないのはなぜ？」「範囲と四分位範囲で答えがちがうときは？」`; }
+    if (cur === 4) return '分かる：中央値・四分位範囲・約半分の区間・範囲／分からない：山の数・平均値・いちばん多い階級。箱の長さクイズの答え：同じくらい（約4分の1）。';
+    const q = p5Q(); return '答え：' + (q.type === 'one' ? `${q.opts.find(o => o.ok).t}（理由：${q.reasons.filter(r => r.ok).map(r => r.t).join('／')}）` : q.ans.join('・')) + '<br>' + q.explain;
+  }
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').innerHTML = teacherAnswer();
+    const r = getApp('rec', { trips: {} }), t = Object.keys(r.trips || {}).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function teacherStep() {
+    TEACHER_BUSY = true;
+    try {
+      if (cur === 1) {
+        const s = S[1], c = p1Calc();
+        if (s.step === 0) { push(); s.order = s.data.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[1]); s.step = 1; render(); }
+        else if (s.step === 1) { push(); const h = s.data.length >> 1; s.tapped = s.data.length % 2 ? [h] : [h - 1, h]; s.step = 2; s.msg = { cls: 'ok', html: 'まん中のカードが光った。' }; render(); }
+        else if (s.step === 3) { push(); s.step = 4; s.msg = { cls: 'ok', html: '前半と後半に分けた（奇数個のときは中央値を入れない）。' }; render(); }
+        else if (s.step === 6) { $('p1InR').value = c.rng; $('p1InI').value = c.iqr; p1Answer(); }
+        else if (s.step < 7) { $('p1In').value = { 2: c.med, 4: c.q1, 5: c.q3 }[s.step]; p1Answer(); }
+        else { push(); S[1] = initP1(); render(); }
+      } else if (cur === 2) {
+        const s = S[2], f = quart(s.data).five, i = s.pos.findIndex((v, k) => v == null || Math.abs(v - f[k]) > 0.05);
+        if (i >= 0) { push(); s.pos[i] = f[i]; s.bad = []; render(); } else if (!s.ok) p2Check(); else { push(); S[2] = initP2(); render(); }
+      } else if (cur === 3) {
+        const s = S[3], sc = p3Sc(), q = sc.qs[s.qi];
+        if (s.solved[s.sc + '-' + s.qi]) {
+          push();
+          if (s.qi < sc.qs.length - 1) Object.assign(s, { qi: s.qi + 1, concl: null, ev: [], msg: null });
+          else Object.assign(s, { sc: (s.sc + 1) % P3.length, qi: 0, concl: null, ev: [], msg: null });
+          render();
+        } else if (s.concl !== q.ans) { push(); s.concl = q.ans; render(); }
+        else { push(); s.ev = [q.kind === 'high' ? 'med' : 'iqr']; p3Check(); }
+      } else if (cur === 4) {
+        const s = S[4];
+        if (s.stage === 0) { push(); s.pred = 'ちがう形になることもある'; s.stage = 1; s.msg = { cls: 'info', html: '箱ひげ図は同じなのに、ヒストグラムの形はちがう。' }; render(); }
+        else if (s.stage === 1) { push(); KNOW.forEach((k, i) => s.know[i] = k.ok); render(); $('p4KnowGo').click(); }
+        else if (s.stage === 2) { push(); s.stage = 3; s.msg = null; render(); }
+        else if (s.stage === 3) { const b = document.querySelector('[data-bq="2"]'); if (b) b.click(); }
+        else { push(); S[4] = initP4(); render(); }
+      } else {
+        const s = S[5], q = p5Q();
+        if (s.solved[s.qi]) { push(); Object.assign(s, { qi: (s.qi + 1) % P5.length, sel: [], reasons: [], msg: null, miss: 0 }); s.view.ruler = null; s.view.rulerOn = false; render(); }
+        else {
+          push();
+          if (q.type === 'one') { s.sel = [q.opts.findIndex(o => o.ok)]; s.reasons = q.reasons.map((r, i) => r.ok ? i : -1).filter(i => i >= 0); }
+          else s.sel = q.ans.map(a => q.opts.findIndex(o => o.t === a));
+          p5Check();
+        }
+      }
+    } finally { TEACHER_BUSY = false; }
+  }
+  if (TEACHER) {
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき）を消しますか？')) return;
+      setApp('rec', { trips: {} }); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     13. ワークシート（①予想 → ②操作 → ③気づき → ④まとめ）
+     ===================================================================== */
+  // 「＋ 記録する」：今のパートのデータを、グループごとに1行ずつ記録する
+  function capture() {
+    const rows = [];
+    const row = (scene, name, f, unit, dec, shape) => rows.push({
+      scene, grp: name, med: fmt(f[2], dec) + unit, iqr: fmt(f[3] - f[1], dec) + unit, rng: fmt(f[4] - f[0], dec) + unit, shape: shape || '—' });
+    if (cur === 1) {
+      if (S[1].step < 7) { alert('① で5つの値を求めおわってから記録しよう。'); return null; }
+      const c = p1Calc(); row('① 小テスト', `${c.n}人`, c.five, '点');
+    } else if (cur === 2) { const c = quart(S[2].data); row('② 小テスト', `${c.n}人`, c.five, '点'); }
+    else if (cur === 3) { const sc = p3Sc(); sc.groups.forEach(g => row(sc.title.split('　')[0], g.name, g.f, sc.unit, sc.ax.dec)); }
+    else if (cur === 4) {
+      if (S[4].stage < 1) { alert('予想をえらんで、ヒストグラムを見てから記録しよう。'); return null; }
+      P4.forEach(d => row('④ 40点テスト', d.name, quart([...d.data].sort((a, b) => a - b)).five, '点', 0, d.shape));
+    } else { const q = p5Q(); q.groups.forEach(g => row(q.title.split('　')[0], g.name, g.f, q.unit, q.ax.dec)); }
+    rows.slice(0, -1).forEach(r => Worksheet.addRecord(r));
+    return rows[rows.length - 1];
+  }
+  if (window.Worksheet) Worksheet.init({
+    title: 'データを比べて説明しよう',
+    question: '中央値が同じなら、2つのデータは「同じ」と言えるだろうか？',
+    predictions: ['同じと言える', '同じとは言えない', '場合による', 'わからない'],
+    operationNote: '③ の「読書時間（中央値が同じ）📄」や ④ を開いて「＋ 記録する」。グループごとに 中央値・四分位範囲・範囲 が1行ずつ入る。',
+    fields: [
+      { key: 'scene', label: '場面', math: false },
+      { key: 'grp', label: 'データ', math: false },
+      { key: 'med', label: '中央値', math: false },
+      { key: 'iqr', label: '四分位範囲', math: false },
+      { key: 'rng', label: '範囲', math: false },
+      { key: 'shape', label: '山の形', math: false }
+    ],
+    capture,
+    summaryHint: '「中央値が同じでも、〜が ちがうと…。だから、データを比べるときは〜も見る」の形で書こう。「📝 わたしの説明文」も使える。',
+    teacher: {
+      hint: '③ の読書時間は中央値が同じで、四分位範囲が 20分 と 70分。④ は5つの値まで同じでも、ヒストグラムの形がちがう。どちらも記録させて、「同じ」の意味を話し合う。',
+      answer: '例：中央値が同じでも、四分位範囲や範囲（ばらつき）がちがえば、データのようすはちがう。5つの値が同じでも、山の数がちがうこともある。だから、中央値だけでなく、箱の長さ（四分位範囲）や、ヒストグラムの形も見てくらべる。'
+    }
+  });
+
+  /* ===== はじめの準備 ===== */
+  Object.assign(done, getApp('done', {}));
+  S[1] = initP1(); S[2] = initP2(S[1].data); S[3] = initP3(); S[4] = initP4(); S[5] = initP5();
+  renderTrips(); renderNotes();
+  const p0 = +Q.get('part');
+  goPart(p0 >= 1 && p0 <= 5 ? p0 : 1);
+  // 画面のはばが変わったら（タブレットを回したときなど）かきなおす
+  let lastNarrow = NARROW;
+  window.addEventListener('resize', () => { setGeom(); if (NARROW !== lastNarrow) { lastNarrow = NARROW; render(); } });
+})();
+</script>
+
+</body>
+</html>
