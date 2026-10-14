@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ためして 説明して 文字式</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり：正解・成り立つ＝緑（✅）、まちがい・成り立たない＝赤紫（✖）、注意＝黄（△）
+     実験のおはじき：1つめの数＝オレンジの丸、2つめ＝青の四角、3つめ＝緑の三角（色だけでなく形でも区別する）。 */
+  :root {
+    --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3faf8 0%, #d9efea 100%);
+    min-height: 100vh; padding: 10px 16px 28px; font-size: 18px;
+  }
+  button, input { font-family: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  .topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; }
+  h1 { margin: 0; flex: 1; text-align: center; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--accent-dark); }
+  .subtitle { margin: -6px 0 0; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .card { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.1rem; color: var(--accent-dark); }
+  .note { font-size: 0.9rem; color: #546e7a; margin: 6px 0 0; line-height: 1.6; }
+  .lbl { font-weight: 900; color: var(--accent-dark); }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; }
+  i.v { font-family: "Times New Roman", "Hiragino Mincho ProN", serif; font-style: italic; font-weight: bold; padding-right: .04em; }
+
+  /* ===== パートのタブ ===== */
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tab {
+    min-height: 56px; border: 3px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: 1.05rem; font-weight: bold; cursor: pointer; touch-action: manipulation; padding: 2px 4px;
+  }
+  .tab small { display: block; font-size: 0.75rem; font-weight: normal; color: #78909c; }
+  .tab.on { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .tab.on small { color: #e0f2f1; }
+
+  /* ===== 3つの列：ことがら（左）・実験（中央）・文字式で説明（右） ===== */
+  .claims { display: flex; flex-direction: column; gap: 8px; }   /* せまい画面：たてにならべる（下の @container で切りかえ） */
+  .main { container-type: inline-size; }
+  .grid3 { display: grid; gap: 12px; grid-template-columns: 1fr; grid-template-areas: "l" "c" "r"; }
+  @container (min-width: 700px) {
+    .grid3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "l l" "c r"; align-items: start; }
+    .claims { flex-direction: row; flex-wrap: wrap; }
+    .claim { flex: 1 1 220px; }
+  }
+  @container (min-width: 940px) {
+    .grid3 { grid-template-columns: 200px minmax(0, 1fr) minmax(0, 1.05fr); grid-template-areas: "l c r"; }
+    .claims { flex-direction: column; flex-wrap: nowrap; }
+    .claim { flex: none; }
+  }
+  .col-l { grid-area: l; } .col-c { grid-area: c; } .col-r { grid-area: r; }
+
+  /* ===== ことがら ===== */
+  .claim {
+    text-align: left; min-height: 56px; border: 3px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation; padding: 6px 10px; line-height: 1.45;
+  }
+  .claim.on { border-color: var(--accent-dark); background: #e0f2f1; box-shadow: inset 6px 0 0 var(--accent-dark); }
+  .claim .done { color: var(--ok); }
+  .now { font-size: 1.25rem; font-weight: 900; line-height: 1.5; background: #fffde7; border: 2px solid #ffe082; border-radius: 12px; padding: 6px 12px; margin-bottom: 10px; }
+
+  /* ===== 実験 ===== */
+  .inrow { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; }
+  .inbox { display: flex; flex-direction: column; gap: 2px; }
+  .inbox .kl { font-size: .9rem; font-weight: 900; color: #455a64; }
+  .stp { display: inline-flex; align-items: center; gap: 4px; }
+  .stp button { min-width: 44px; min-height: 48px; border-radius: 10px; border: 2px solid var(--soft); background: #fff; font-weight: 900; font-size: 1rem; cursor: pointer; touch-action: manipulation; }
+  .num { width: 5.2em; min-height: 48px; font-size: 1.5rem; font-weight: 900; text-align: center; border: 3px solid #4db6ac; border-radius: 10px; }
+  .num.bad { border-color: var(--ng); background: #fce4ec; }
+  .plus { font-size: 1.6rem; font-weight: 900; color: #546e7a; padding-bottom: 6px; }
+  .calc { font-size: 1.6rem; font-weight: 900; margin-top: 8px; overflow-wrap: anywhere; }
+  .viz { margin-top: 8px; overflow-x: auto; }
+  .viz svg { display: block; width: 100%; height: auto; }
+  .tbl { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 1.05rem; }
+  .tbl th { background: #e0f2f1; font-size: .85rem; padding: 4px; }
+  .tbl td { border-bottom: 1px dashed #cfd8dc; padding: 3px 6px; text-align: center; font-weight: bold; }
+  .tbl tr.x td { background: #fce4ec; }
+  .tbl tr.new td { animation: hl 1.2s ease; }
+  @keyframes hl { from { background: #fff59d; } }
+  .yes { color: var(--ok); font-weight: 900; }
+  .no { color: var(--ng); font-weight: 900; }
+  .count { margin-top: 8px; font-weight: 900; font-size: 1.05rem; }
+
+  /* ===== ボタン ===== */
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .act {
+    min-height: 52px; padding: 4px 14px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: 1.02rem; font-weight: 900; cursor: pointer; touch-action: manipulation;
+  }
+  .act:disabled { opacity: .45; cursor: default; }
+  .act.primary { background: linear-gradient(150deg, #009688 0%, #00695c 100%); color: #fff; border: none; box-shadow: 0 4px 0 rgba(0,70,60,0.35); }
+  .act.primary:disabled { background: #b0bec5; box-shadow: none; }
+  .act.zero { border-color: #9ccc65; background: #f1f8e9; color: #33691e; }
+  .act.pick { border-color: #ce93d8; background: #f3e5f5; color: #6a1b9a; }
+  .act.blink { animation: blink 1s ease 3; }
+  @keyframes blink { 50% { box-shadow: 0 0 0 6px #ffeb3b; } }
+
+  /* ===== メッセージ・つまずき ===== */
+  .msg { margin-top: 8px; border-radius: 12px; padding: 8px 12px; line-height: 1.7; }
+  .msg.info { background: #f1f8e9; border: 2px solid #9ccc65; }
+  .msg.info::before { content: "💡 "; }
+  .msg.good { background: #e8f5e9; border: 3px solid #66bb6a; }
+  .msg.good::before { content: "○ "; color: var(--ok); font-weight: 900; font-size: 1.3em; }
+  .msg.bad { background: #fff8e1; border: 2px solid #ffb300; }
+  .msg.bad::before { content: "△ "; font-weight: 900; }
+  .trip { margin-top: 8px; background: #fce4ec; border-radius: 12px; padding: 8px 12px; border-left: 8px solid var(--ng); line-height: 1.7; }
+  .trip h3 { margin: 0; font-size: 1.05rem; color: var(--ng); }
+  .trip h3::before { content: "✖ "; }
+  .stats { margin-top: 10px; font-size: 0.95rem; color: #455a64; line-height: 1.7; }
+  .qcard { background: #fffde7; border: 3px solid #ffe082; border-radius: 14px; padding: 10px 12px; font-weight: bold; line-height: 1.7; margin-top: 8px; }
+
+  /* ===== ② 式の道具 ===== */
+  .tools { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tool { min-height: 46px; border: 2px solid #ffcc80; background: #fff8e1; border-radius: 12px; padding: 2px 10px; font-weight: 900; cursor: pointer; touch-action: manipulation; font-size: .95rem; }
+  .tool.on { background: #ffb74d; border-color: #e65100; }
+  .tbox { margin-top: 8px; background: #fff8e1; border-radius: 12px; padding: 6px 12px; line-height: 1.7; }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 6px; }
+  .opt { min-height: 52px; border: 3px solid #ce93d8; background: #fff; border-radius: 12px; font-size: 1.2rem; font-weight: 900; cursor: pointer; touch-action: manipulation; }
+  .opt.ok { border-color: var(--ok); background: #e8f5e9; }
+  .opt.ok::before { content: "✅ "; }
+  .sl { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 8px; }
+  .sl input[type=range] { flex: 1 1 140px; min-width: 120px; height: 36px; }
+  .sl .num { width: 3.6em; font-size: 1.3rem; }
+  .vals { font-size: 1.3rem; font-weight: 900; margin-top: 6px; line-height: 1.6; }
+
+  /* ===== ③ 説明の組み立て ===== */
+  .slots { display: flex; flex-direction: column; gap: 6px; }
+  .slot { display: flex; gap: 8px; align-items: stretch; }
+  .slot .sn { flex: none; width: 92px; font-size: .85rem; font-weight: 900; color: #00695c; background: #e0f2f1; border-radius: 10px; padding: 4px 6px; display: flex; align-items: center; line-height: 1.3; }
+  .slot .sp { flex: 1; min-height: 52px; border: 2px dashed #b0bec5; border-radius: 12px; display: flex; align-items: center; color: #90a4ae; padding: 4px 8px; font-size: .9rem; }
+  .pc { text-align: left; width: 100%; min-height: 52px; border: 3px solid #90caf9; background: #e3f2fd; border-radius: 12px; padding: 6px 10px; font-size: 1.05rem; font-weight: bold; line-height: 1.6; cursor: pointer; touch-action: manipulation; }
+  .pc.set { border-color: #4db6ac; background: #fff; cursor: default; }
+  .pc.wrong { border-color: var(--ng); background: #fce4ec; }
+  .hand { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 2px dashed #cfd8dc; }
+  .blank { display: inline-block; min-width: 3em; border-bottom: 3px solid #90a4ae; text-align: center; color: #90a4ae; }
+  .bin { width: 8.5em; max-width: 100%; min-height: 44px; font-size: 1.15rem; font-weight: 900; padding: 2px 6px; border: 3px solid #4db6ac; border-radius: 10px; }
+  .bin.ok { border-color: var(--ok); background: #e8f5e9; }
+  .bin.ng { border-color: var(--ng); background: #fce4ec; }
+  .proof { background: #f1f8e9; border: 3px solid #66bb6a; border-radius: 14px; padding: 8px 12px; line-height: 1.9; font-weight: bold; margin-top: 8px; }
+
+  /* ===== ことば・リンク ===== */
+  .words { font-size: 0.95rem; line-height: 1.7; margin: 8px 0 0; }
+  .words dt { font-weight: 900; display: inline; }
+  .words dd { display: inline; margin: 0 0 0 .3em; }
+  .words dd::after { content: ""; display: block; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+  .links a { color: var(--accent-dark); font-weight: bold; }
+
+  @media (max-width: 640px) {
+    .tabs { grid-template-columns: repeat(2, 1fr); }
+    .tab { font-size: .95rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← もどる</a>
+    <h1>🧮 ためして 説明して 文字式</h1>
+  </div>
+  <p class="subtitle">数でためしても「ぜんぶ」とは言えない。文字を使うと、ぜんぶの数についての説明ができる</p>
+  <div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" data-mode="exp" role="tab">① 実験<small>数でためす</small></button>
+    <button class="tab" data-mode="tool" role="tab">② 式の道具<small>文字で表す</small></button>
+    <button class="tab" data-mode="build" role="tab">③ 説明の組み立て<small>順番と穴うめ</small></button>
+    <button class="tab" data-mode="cex" role="tab">④ 反例<small>成り立たない例</small></button>
+  </div>
+
+  <div class="main">
+    <div class="grid3">
+      <!-- 左：ことがら -->
+      <section class="card col-l">
+        <h2 id="lTitle">📜 ことがら</h2>
+        <div class="claims" id="claims"></div>
+        <p class="note" id="lNote"></p>
+      </section>
+
+      <!-- 中央：実験 -->
+      <section class="card col-c">
+        <h2>🧪 実験（数でためす）</h2>
+        <div class="now" id="claimNow"></div>
+        <div class="inrow" id="inputs"></div>
+        <div class="calc" id="calc" aria-live="polite"></div>
+        <div class="acts">
+          <button class="act primary" id="tryBtn">✔ ためす</button>
+          <button class="act" id="randBtn">🎲 数をえらぶ</button>
+          <button class="act zero" id="tenBtn">🔟 10組ためす</button>
+          <button class="act" id="bigBtn">🐘 大きな数で</button>
+        </div>
+        <div class="viz" id="viz"></div>
+        <div id="expMsg"></div>
+        <div id="table"></div>
+        <div class="acts">
+          <button class="act" id="undoBtn">↶ ひとつもどす</button>
+          <button class="act" id="resetBtn">⟲ もういちど</button>
+        </div>
+      </section>
+
+      <!-- 右：文字式で説明 -->
+      <section class="card col-r">
+        <h2 id="rTitle">✍️ 文字式で説明</h2>
+        <div id="right"></div>
+        <div id="rMsg"></div>
+        <div class="stats" id="stats"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ことば・リンク -->
+  <div class="card">
+    <dl class="words">
+      <dt>整数</dt><dd>…, −2, −1, 0, 1, 2, 3, … のような数。限りなくある。</dd>
+      <dt>偶数</dt><dd>2 でわり切れる整数（2の倍数）。<i class="v">m</i> を整数とすると 2<i class="v">m</i> と表せる。0 も偶数。</dd>
+      <dt>奇数</dt><dd>2 でわると 1 あまる整数。<i class="v">n</i> を整数とすると 2<i class="v">n</i>＋1 と表せる。</dd>
+      <dt>○の倍数</dt><dd>○×(整数) の形で表せる数。3(<i class="v">n</i>＋1) は、<i class="v">n</i>＋1 が整数なので 3の倍数。</dd>
+      <dt>反例</dt><dd>ことがらが成り立たない例。1つでもあれば、そのことがらは「いつも成り立つ」とは言えない。</dd>
+    </dl>
+    <p class="note">※じっさいとのちがい：実験のおはじきは、数が大きいときや負の数のときは表示しません。説明の文は教科書の書き方の一例です（ほかの書き方でも正しい説明はあります）。</p>
+    <div class="links">
+      <span>小学校の「2こずつ・3こずつ まとめる」 → <a href="ブロック・おはじき操作盤.html">ブロック・おはじき操作盤</a></span>
+      <a href="文字式の立式.html">🍎 文字式の立式（中1）</a>
+      <a href="寄せて ならべて 式の計算.html">🧱 寄せて ならべて 式の計算（中2）</a>
+    </div>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   ためして 説明して 文字式（中2 文字式による説明）
+   ・左の「ことがら」をえらぶ → 中央で数をためす（① 実験）→ 右で文字式の説明（② 式の道具・③ 組み立て）
+   ・④ 反例：成り立たないことがらを見つけて、反例をあげる。
+   ・ことがら（CLAIMS）を1つ足せば、実験・説明・反例にそのまま出る（下の「1. ことがら」を見る）。
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const ri = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const pick = a => a[ri(0, a.length - 1)];
+const MINUS = '−';
+const mod = (a, m) => ((a % m) + m) % m;
+const vH = v => '<i class="v">' + v + '</i>';
+const params = new URLSearchParams(location.search);
+const TEACHER = params.get('teacher') === '1';
+
+/* =====================================================================
+   1. ことがら
+   ・inK：入れる数の種類（e＝偶数、o＝奇数、z＝整数、d＝2けたの整数）
+   ・nums：入れた数 → 計算に使う数（連続する3つの整数なら n → n, n+1, n+2）
+   ・R：おはじきを何列にならべるか（2の倍数なら 2、3の倍数なら 3）
+   ・test：結果の数で、ことがらが成り立つか
+   ・ok：いつも成り立つ（true）か、成り立たない（false。④ 反例で使う）か
+   ===================================================================== */
+const KIND = {
+  e: { name: '偶数', ok: v => mod(v, 2) === 0, step: 2, rand: () => 2 * ri(0, 20), big: () => 2 * ri(50000, 499999) },
+  o: { name: '奇数', ok: v => mod(v, 2) === 1, step: 2, rand: () => 2 * ri(0, 19) + 1, big: () => 2 * ri(50000, 499999) + 1 },
+  z: { name: '整数', ok: () => true, step: 1, rand: () => ri(0, 30), big: () => ri(100000, 999999) },
+  d: { name: '2けたの整数', ok: v => v >= 10 && v <= 99, step: 1, rand: () => ri(10, 99), big: () => ri(10, 99) }
+};
+const swap2 = x => (x % 10) * 10 + Math.floor(x / 10);       // 2けたの数の十の位と一の位を入れかえる
+const isMul = R => v => mod(v, R) === 0;
+const CLAIMS = [
+  { id: 'ee', ok: true, title: '2つの偶数の和は、偶数である', inK: ['e', 'e'], nums: x => x, R: 2, test: isMul(2), want: '偶数' },
+  { id: 'oo', ok: true, title: '2つの奇数の和は、偶数である', inK: ['o', 'o'], nums: x => x, R: 2, test: isMul(2), want: '偶数' },
+  { id: 'eo', ok: true, title: '偶数と奇数の和は、奇数である', inK: ['e', 'o'], nums: x => x, R: 2, test: v => mod(v, 2) === 1, want: '奇数' },
+  { id: 'c3', ok: true, title: '連続する3つの整数の和は、3の倍数である', inK: ['z'], inL: ['いちばん小さい整数'], nums: ([n]) => [n, n + 1, n + 2], R: 3, test: isMul(3), want: '3の倍数' },
+  { id: 'o2', ok: true, title: '連続する2つの奇数の和は、4の倍数である', inK: ['o'], inL: ['小さいほうの奇数'], nums: ([n]) => [n, n + 2], R: 4, test: isMul(4), want: '4の倍数' },
+  { id: 'd2', ok: true, title: '2けたの整数と、その十の位と一の位を入れかえた数の和は、11の倍数である', inK: ['d'], inL: ['2けたの整数'], nums: ([x]) => [x, swap2(x)], R: 11, test: isMul(11), want: '11の倍数' },
+  // ④ 反例（いつも成り立つものも1つまぜる）
+  { id: 'xo', ok: false, title: '2つの奇数の和は、奇数である', inK: ['o', 'o'], nums: x => x, R: 2, test: v => mod(v, 2) === 1, want: '奇数' },
+  { id: 'x4', ok: false, title: '2つの偶数の和は、4の倍数である', inK: ['e', 'e'], nums: x => x, R: 4, test: isMul(4), want: '4の倍数' },
+  { id: 'xc2', ok: false, title: '連続する2つの整数の和は、偶数である', inK: ['z'], inL: ['小さいほうの整数'], nums: ([n]) => [n, n + 1], R: 2, test: isMul(2), want: '偶数' },
+  { id: 'xc6', ok: false, title: '連続する3つの整数の和は、6の倍数である', inK: ['z'], inL: ['いちばん小さい整数'], nums: ([n]) => [n, n + 1, n + 2], R: 6, test: isMul(6), want: '6の倍数' },
+  { id: 'xe3', ok: true, cex: true, title: '3つの偶数の和は、偶数である', inK: ['e', 'e', 'e'], nums: x => x, R: 2, test: isMul(2), want: '偶数' }
+];
+const claimById = id => CLAIMS.find(c => c.id === id);
+const inCex = c => !c.ok || c.cex;                          // ④ 反例 の一覧に出すもの
+
+/* =====================================================================
+   2. アプリの状態
+   ===================================================================== */
+const MODES = ['exp', 'tool', 'build', 'cex'];
+const st = {
+  mode: MODES.includes(params.get('mode')) ? params.get('mode') : 'exp',
+  cur: { main: 'ee', cex: 'xo' },   // いまえらんでいることがら（①②③ と ④ で別）
+  inp: {},                          // ことがらごとの入力 { ee:[4,6] }
+  rows: {},                         // ことがらごとの実験の記録 { ee:[{x:[4,6], nums, v, ok}] }
+  hist: [],                         // ひとつもどす用（実験の記録の行数）
+  asked: {},                        // ①「ぜんぶと言える？」に答えたか
+  tool: null,                       // ② で開いている道具カード
+  rep: {}, lv: {},                  // ② 正しい表し方をえらんだか・文字の値
+  bld: {},                          // ③ 組み立てのようす
+  cx: {},                           // ④ 反例のようす
+  tripsNow: []
+};
+const claim = () => claimById(st.mode === 'cex' ? st.cur.cex : st.cur.main);
+const rowsOf = c => st.rows[c.id] || (st.rows[c.id] = []);
+const inpOf = c => st.inp[c.id] || (st.inp[c.id] = c.inK.map(k => KIND[k].rand()));
+
+/* =====================================================================
+   3. 左：ことがらの一覧
+   ===================================================================== */
+function renderClaims() {
+  const cex = st.mode === 'cex';
+  $('#lTitle').textContent = cex ? '🔍 成り立つ？ 成り立たない？' : '📜 ことがら';
+  $('#lNote').innerHTML = cex ? 'この中には、いつも成り立つものも まじっている。実験でためして、成り立たない例（反例）をさがそう。' : 'ことがらをえらんで、まず数でためそう。';
+  const list = CLAIMS.filter(c => cex ? inCex(c) : c.ok && !c.cex);
+  const cur = claim().id;
+  $('#claims').innerHTML = list.map(c => '<button class="claim' + (c.id === cur ? ' on' : '') + '" data-claim="' + c.id + '">' + (cex ? '？ ' : '') + c.title + doneMark(c) + '</button>').join('');
+}
+// 説明・反例ができたことがらに印
+function doneMark(c) {
+  const d = Worksheet.appData('done') || {};
+  return d[c.id] ? ' <span class="done">✅</span>' : '';
+}
+
+/* =====================================================================
+   4. 中央：実験（数でためす）
+   ===================================================================== */
+// 数 → 式の中の書き方（負の数はかっこ）
+const nH = v => v < 0 ? '(' + MINUS + Math.abs(v) + ')' : String(v);
+const fmt = v => (v < 0 ? MINUS : '') + Math.abs(v).toLocaleString('ja-JP');
+// 計算の式：4＋6＝10
+const calcH = (c, nums) => nums.map(nH).join('＋') + '＝' + fmt(nums.reduce((a, b) => a + b, 0));
+// 結果の説明：10 は偶数、12＝3×4、13 は 3でわると 1 あまる
+function judgeH(c, v) {
+  if (c.R === 2) return fmt(v) + ' は ' + (mod(v, 2) ? '奇数' : '偶数');
+  return mod(v, c.R) === 0 ? fmt(v) + '＝' + c.R + '×' + nH(v / c.R) : fmt(v) + ' は ' + c.R + ' でわると ' + mod(v, c.R) + ' あまる';
+}
+function renderInputs() {
+  const c = claim(), x = inpOf(c);
+  $('#claimNow').innerHTML = (st.mode === 'cex' ? '？ ' : '') + c.title;
+  $('#inputs').innerHTML = c.inK.map((k, i) =>
+    (i ? '<span class="plus">＋</span>' : '') +
+    '<div class="inbox"><span class="kl">' + (c.inL ? c.inL[i] : KIND[k].name) + '</span>' +
+    '<span class="stp"><button data-i="' + i + '" data-d="-1" aria-label="へらす">▼</button>' +
+    '<input class="num' + (KIND[k].ok(x[i]) ? '' : ' bad') + '" type="number" inputmode="numeric" data-i="' + i + '" value="' + x[i] + '" aria-label="' + KIND[k].name + '">' +
+    '<button data-i="' + i + '" data-d="1" aria-label="ふやす">▲</button></span></div>').join('') +
+    (c.inK.length === 1 ? '<span class="small" style="padding-bottom:10px">→ ' + c.nums(x).map(nH).join('、') + '</span>' : '');
+  renderCalc();
+}
+// 入力が正しい種類か（偶数のところに奇数を入れていないか）。まちがいがあれば理由を返す
+function badInput(c, x) {
+  for (let i = 0; i < c.inK.length; i++) {
+    const K = KIND[c.inK[i]];
+    if (!Number.isInteger(x[i])) return '整数を入れよう。';
+    if (!K.ok(x[i])) return (i + 1) + 'つめは<b>' + K.name + '</b>を入れよう（' + fmt(x[i]) + ' は' + K.name + 'ではない）。';
+  }
+  return null;
+}
+function renderCalc() {
+  const c = claim(), x = inpOf(c), bad = badInput(c, x);
+  if (bad) { $('#calc').innerHTML = '<span class="small" style="color:var(--ng)">⚠ ' + bad + '</span>'; $('#viz').innerHTML = ''; return; }
+  const nums = c.nums(x), v = nums.reduce((a, b) => a + b, 0);
+  $('#calc').innerHTML = calcH(c, nums) + ' <span class="small">（' + judgeH(c, v) + '）</span>';
+  $('#viz').innerHTML = dotsSvg(c, nums);
+}
+
+/* おはじきの図：それぞれの数を R 列にならべ、合わせたものも R 列にならべる。
+   R でわり切れれば、長方形がちょうどそろう（あまりは赤紫のわくで示す）。 */
+const SHAPES = [
+  (x, y, r) => '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="#ffb74d" stroke="#e65100" stroke-width="1.5"/>',
+  (x, y, r) => '<rect x="' + (x - r) + '" y="' + (y - r) + '" width="' + 2 * r + '" height="' + 2 * r + '" rx="2" fill="#81d4fa" stroke="#1565c0" stroke-width="1.5"/>',
+  (x, y, r) => '<path d="M' + x + ' ' + (y - r - 1) + 'L' + (x + r + 1) + ' ' + (y + r) + 'L' + (x - r - 1) + ' ' + (y + r) + 'Z" fill="#c5e1a5" stroke="#33691e" stroke-width="1.5"/>'
+];
+function dotsSvg(c, nums) {
+  const total = nums.reduce((a, b) => a + b, 0);
+  if (nums.some(n => n < 0) || total > 220) return '<p class="small">（数が大きいときや負の数のときは、おはじきは表示しません）</p>';
+  const R = c.R, D = R > 6 ? 13 : 18, r = D * .36;
+  const colsOf = n => Math.ceil(n / R);
+  // 上の段：1つずつ
+  let g = '', x0 = 8;
+  const top = 24, topH = R * D;
+  nums.forEach((n, k) => {
+    for (let i = 0; i < n; i++) g += SHAPES[k % 3](x0 + Math.floor(i / R) * D + D / 2, top + (i % R) * D + D / 2, r);
+    g += '<text x="' + (x0 + Math.max(colsOf(n), 1) * D / 2) + '" y="16" text-anchor="middle" font-size="14" font-weight="900" fill="#455a64">' + n + '</text>';
+    x0 += Math.max(colsOf(n), 1) * D + 26;
+  });
+  const W1 = x0;
+  // 下の段：合わせて R 列にならべ直す
+  const y2 = top + topH + 34;
+  let i = 0;
+  nums.forEach((n, k) => { for (let j = 0; j < n; j++, i++) g += SHAPES[k % 3](8 + Math.floor(i / R) * D + D / 2, y2 + (i % R) * D + D / 2, r); });
+  const full = Math.floor(total / R), rest = total % R;
+  g += '<text x="8" y="' + (y2 - 10) + '" font-size="14" font-weight="900" fill="#455a64">あわせて ' + total + ' こを ' + R + ' 列にならべると</text>';
+  if (full) g += '<rect x="6" y="' + (y2 - 2) + '" width="' + (full * D + 4) + '" height="' + (R * D + 4) + '" rx="6" fill="none" stroke="#2e7d32" stroke-width="3"/>';
+  if (rest) g += '<rect x="' + (8 + full * D - 1) + '" y="' + (y2 - 2) + '" width="' + (D + 2) + '" height="' + (rest * D + 4) + '" rx="5" fill="none" stroke="#ad1457" stroke-width="3" stroke-dasharray="5 3"/>';
+  const W = Math.max(W1, 8 + (full + 1) * D + 150, 350), H = y2 + R * D + 30;
+  g += '<text x="8" y="' + (H - 8) + '" font-size="14" font-weight="900" fill="' + (rest ? '#ad1457' : '#2e7d32') + '">' +
+    (rest ? '✖ ' + R + ' こずつの列が ' + full + ' 列と、あまり ' + rest + ' こ' : '✅ ' + R + ' こずつの列が ちょうど ' + full + ' 列（' + R + '×' + full + '）') + '</text>';
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="max-width:' + Math.max(W, 320) + 'px" role="img" aria-label="おはじきを ' + R + ' 列にならべた図">' + g + '</svg>';
+}
+
+// 1組ためす（記録に1行足す）
+function addRow(c, x) {
+  const nums = c.nums(x), v = nums.reduce((a, b) => a + b, 0);
+  rowsOf(c).push({ x: x.slice(), nums, v, ok: c.test(v), t: Date.now() });
+}
+function tryNow() {
+  const c = claim(), x = inpOf(c), bad = badInput(c, x);
+  if (bad) { setExp(bad, 'bad'); return; }
+  st.hist.push({ id: c.id, n: rowsOf(c).length });
+  addRow(c, x);
+  afterTry(c);
+}
+function tryTen(big) {
+  const c = claim();
+  st.hist.push({ id: c.id, n: rowsOf(c).length });
+  for (let k = 0; k < (big ? 1 : 10); k++) {
+    const x = c.inK.map(q => big ? KIND[q].big() : KIND[q].rand());
+    addRow(c, x);
+    st.inp[c.id] = x;
+  }
+  renderInputs();
+  afterTry(c);
+}
+function afterTry(c) {
+  const R = rowsOf(c), h = st.hist[st.hist.length - 1];
+  const bad = R.slice(h ? h.n : 0).find(r => !r.ok);          // いまためした組の中の、成り立たない例
+  if (bad) setExp('<b>✖ 成り立たない例が見つかった！</b> ' + calcH(c, bad.nums) + ' は' + c.want + 'ではない。', 'bad');
+  else setExp('');
+  renderTable(true);
+  renderRight();
+}
+function renderTable(fresh) {
+  const c = claim(), R = rowsOf(c);
+  if (!R.length) { $('#table').innerHTML = ''; return; }
+  const show = R.slice(-10).reverse();
+  const nOk = R.filter(r => r.ok).length;
+  $('#table').innerHTML = '<table class="tbl"><thead><tr><th>回</th><th>計算</th><th>' + c.want + '？</th></tr></thead><tbody>' +
+    show.map((r, k) => '<tr class="' + (r.ok ? '' : 'x') + (fresh && r.t === R[R.length - 1].t ? ' new' : '') + '"><td>' + (R.length - k) + '</td><td>' + calcH(c, r.nums) + '</td><td>' + (r.ok ? '<span class="yes">✅</span>' : '<span class="no">✖</span>') + '</td></tr>').join('') +
+    '</tbody></table>' + (R.length > 10 ? '<p class="small">（新しい 10 組だけ表示）</p>' : '') +
+    '<div class="count">ためした組：' + R.length + ' 組（✅ ' + nOk + '・✖ ' + (R.length - nOk) + '）</div>' +
+    (nOk === R.length ? '<p class="small">整数は限りなくあるので、何組ためしても「ぜんぶ」をためしたことにはならない。</p>' : '');
+}
+function setExp(html, kind = 'info') { $('#expMsg').innerHTML = html ? '<div class="msg ' + kind + '">' + html + '</div>' : ''; }
+function setR(html, kind = 'info') { $('#rMsg').innerHTML = html ? (kind === 'none' ? html : '<div class="msg ' + kind + '">' + html + '</div>') : ''; }
+
+/* =====================================================================
+   5. 右：文字式で説明（パートごと）
+   ===================================================================== */
+function renderRight() {
+  const c = claim(), R = rowsOf(c);
+  const m = st.mode;
+  $('#rTitle').textContent = m === 'exp' ? '🤔 わかったこと' : m === 'tool' ? '🧰 式の道具（文字で表す）' : m === 'build' ? '🧩 説明の組み立て' : '🔍 反例をあげよう';
+  if (m === 'exp') {
+    const ok = R.length && R.every(r => r.ok);
+    $('#right').innerHTML = R.length < 3
+      ? '<p>中央で、数を入れて「ためす」を押そう。「🔟 10組ためす」で一度にたくさんためせる。</p>'
+      : ok ? '<div class="qcard">ためした ' + R.length + ' 組は、ぜんぶ ✅ だった。<br>これで「<b>どんな数でも</b>」' + c.title.replace(/である$/, 'だ') + 'と言える？</div>' +
+          '<div class="acts"><button class="act pick" data-ans="yes">言える</button><button class="act pick" data-ans="no">言えない</button></div>'
+        : '<p>✖ の例がある。このことがらは、いつも成り立つとは言えない。</p>';
+    return;
+  }
+  if (m === 'tool') return renderTool(c);
+  if (m === 'build') return renderBuild(c);
+  return renderCex(c);
+}
+
+/* =====================================================================
+   5-2. 文字式の道具：式を読む（1次式・係数は整数）
+   ・parseLin('2(m+n+1)') → { m:2, n:2, '1':2 }。読めなければ null
+   ・shapeOf('2(m+n+1)') → { k:2, inner:'m+n+1', plus:0 }（○×(式) または ○×(式)＋□ の形）
+   ===================================================================== */
+function norm(s) {
+  return String(s)
+    .replace(/[０-９ａ-ｚＡ-Ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/\s+/g, '').replace(/[−－ー‐–]/g, '-').replace(/＋/g, '+').replace(/[×✕＊]/g, '*')
+    .replace(/（/g, '(').replace(/）/g, ')').toLowerCase();
+}
+function parseLin(src) {
+  const s = norm(src);
+  if (!s) return null;
+  let i = 0;
+  const add = (a, b, k = 1) => { const r = Object.assign({}, a); for (const v in b) r[v] = (r[v] || 0) + k * b[v]; return r; };
+  const isConst = a => Object.keys(a).every(v => v === '1' || !a[v]);
+  const mul = (a, b) => isConst(a) ? add({}, b, a['1'] || 0) : isConst(b) ? add({}, a, b['1'] || 0) : null;
+  function factor() {
+    if (s[i] === '(') { i++; const r = expr(); if (s[i] !== ')') throw 0; i++; return r; }
+    const m = s.slice(i).match(/^\d+/);
+    if (m) { i += m[0].length; return { '1': +m[0] }; }
+    if (/[a-z]/.test(s[i] || '')) return { [s[i++]]: 1 };
+    throw 0;
+  }
+  function term() {
+    let sg = 1;
+    if (s[i] === '+' || s[i] === '-') sg = s[i++] === '-' ? -1 : 1;
+    let r = factor();
+    while (i < s.length && (s[i] === '*' || /[a-z0-9(]/.test(s[i]))) {
+      if (s[i] === '*') i++;
+      r = mul(r, factor());
+      if (!r) throw 0;                                   // 文字×文字（1次式でない）
+    }
+    return add({}, r, sg);
+  }
+  function expr() {
+    let r = term();
+    while (s[i] === '+' || s[i] === '-') { const sg = s[i++] === '-' ? -1 : 1; r = add(r, term(), sg); }
+    return r;
+  }
+  try { const r = expr(); return i === s.length ? r : null; } catch (e) { return null; }
+}
+const linEq = (a, b) => { const ks = new Set(Object.keys(a).concat(Object.keys(b))); for (const k of ks) if ((a[k] || 0) !== (b[k] || 0)) return false; return true; };
+// 同類項がまとまっているか（かっこがなく、同じ文字・数の項が1つずつ）
+function tidy(src) {
+  const s = norm(src);
+  if (/[()*]/.test(s)) return false;
+  const ts = s.replace(/^[+-]/, '').split(/[+-]/).map(t => t.replace(/^\d+/, '') || '1');
+  return new Set(ts).size === ts.length;
+}
+function shapeOf(src) {
+  const m = norm(src).match(/^(\d+)\*?\(([^()]+)\)(?:\+(\d+))?$/);
+  return m ? { k: +m[1], inner: m[2], plus: m[3] ? +m[3] : 0 } : null;
+}
+const evalLin = (p, vals) => Object.keys(p).reduce((a, k) => a + p[k] * (k === '1' ? 1 : vals[k]), 0);
+// 式の文字列 → HTML（文字はななめ、- は −、+ は ＋）
+const exH = s => s.replace(/[a-z]/g, ch => vH(ch)).replace(/-/g, MINUS).replace(/\+/g, '＋');
+
+/* =====================================================================
+   5-3. 説明のデータ（いつも成り立つことがら）
+   ・rep：数の表し方（② で選ぶ正しい表し方）、letters：文字と、② のスライダーのはんい
+   ・opts：② の選択肢 [ 表示, 'ok' か つまずきの型 ]
+   ・sum：和の式、b1：かっこをはずしてまとめた式（なければ null）、mult・plus：○×(整数)＋□ の形、inner：かっこの中の例
+   ===================================================================== */
+const EXPL = {
+  ee: { rep: ['2m', '2n'], letters: { m: [-10, 10], n: [-10, 10] }, repText: 'm, n を整数とすると、2つの偶数は 2m, 2n と表される。',
+    opts: [['2m と 2n', 'ok'], ['2m と 2m', 'sameLetter'], ['m と n', 'wrongKind'], ['2m と 2n+1', 'wrongKind']],
+    sum: '2m+2n', b1: null, mult: 2, plus: 0, inner: 'm+n' },
+  oo: { rep: ['2m+1', '2n+1'], letters: { m: [-10, 10], n: [-10, 10] }, repText: 'm, n を整数とすると、2つの奇数は 2m+1, 2n+1 と表される。',
+    opts: [['2m+1 と 2n+1', 'ok'], ['2m+1 と 2m+1', 'sameLetter'], ['m+1 と n+1', 'oddN1'], ['2m と 2n', 'wrongKind']],
+    sum: '(2m+1)+(2n+1)', b1: '2m+2n+2', mult: 2, plus: 0, inner: 'm+n+1' },
+  eo: { rep: ['2m', '2n+1'], letters: { m: [-10, 10], n: [-10, 10] }, repText: 'm, n を整数とすると、偶数は 2m、奇数は 2n+1 と表される。',
+    opts: [['2m と 2n+1', 'ok'], ['2m と 2m+1', 'sameLetter'], ['m と n+1', 'oddN1'], ['2m と 2n', 'wrongKind']],
+    sum: '2m+(2n+1)', b1: '2m+2n+1', mult: 2, plus: 1, inner: 'm+n' },
+  c3: { rep: ['n', 'n+1', 'n+2'], letters: { n: [-10, 20] }, repText: 'n を整数とすると、連続する3つの整数は n, n+1, n+2 と表される。',
+    opts: [['n, n+1, n+2', 'ok'], ['n, m, k', 'notConsec'], ['n, 2n, 3n', 'notConsec'], ['n, n+2, n+4', 'notConsec']],
+    sum: 'n+(n+1)+(n+2)', b1: '3n+3', mult: 3, plus: 0, inner: 'n+1' },
+  o2: { rep: ['2n+1', '2n+3'], letters: { n: [-10, 20] }, repText: 'n を整数とすると、連続する2つの奇数は 2n+1, 2n+3 と表される。',
+    opts: [['2n+1 と 2n+3', 'ok'], ['2m+1 と 2n+1', 'notConsec'], ['2n+1 と 2n+2', 'notConsec'], ['n+1 と n+3', 'oddN1']],
+    sum: '(2n+1)+(2n+3)', b1: '4n+4', mult: 4, plus: 0, inner: 'n+1' },
+  d2: { rep: ['10a+b', '10b+a'], letters: { a: [1, 9], b: [0, 9] }, repText: '十の位の数を a、一の位の数を b とすると、2けたの整数は 10a+b、入れかえた数は 10b+a と表される。',
+    opts: [['10a+b と 10b+a', 'ok'], ['ab と ba', 'abProduct'], ['a+b と b+a', 'abProduct']],
+    sum: '(10a+b)+(10b+a)', b1: '11a+11b', mult: 11, plus: 0, inner: 'a+b' },
+  xe3: { sum: '2a+2b+2c', mult: 2, plus: 0, inner: 'a+b+c' }
+};
+// 式の道具箱（② の上に出すカード）
+const TOOLS = [
+  ['偶数', '2m', '2×(整数)。m に 0, 1, 2, 3, … を入れると 0, 2, 4, 6, …'],
+  ['奇数', '2n+1', '偶数より 1 大きい。n に 0, 1, 2, … を入れると 1, 3, 5, …'],
+  ['連続する整数', 'n, n+1, n+2', '1 ずつ大きくなる。いちばん小さい数を n とする'],
+  ['連続する奇数', '2n+1, 2n+3', '奇数は 2 ずつ大きくなる'],
+  ['2けたの整数', '10a+b', '十の位が a、一の位が b。ab と書くと a×b になってしまう'],
+  ['3けたの整数', '100a+10b+c', '百の位が a、十の位が b、一の位が c'],
+  ['○の倍数', '○×(整数)', 'かっこの中が整数なら、○ の倍数といえる']
+];
+
+/* ===== ② 式の道具 ===== */
+function renderTool(c) {
+  const E = EXPL[c.id], ok = st.rep[c.id];
+  let h = '<div class="tools">' + TOOLS.map((t, i) => '<button class="tool' + (st.tool === i ? ' on' : '') + '" data-tool="' + i + '">' + t[0] + '：' + exH(t[1]) + '</button>').join('') + '</div>';
+  if (st.tool != null) h += '<div class="tbox"><b>' + TOOLS[st.tool][0] + '＝' + exH(TOOLS[st.tool][1]) + '</b>　' + exH(TOOLS[st.tool][2]) + '</div>';
+  h += '<p style="margin:12px 0 0"><b>「' + c.title + '」の数を、文字でどう表す？</b></p>' +
+    '<div class="opts">' + E.opts.map((o, i) => '<button class="opt' + (ok && o[1] === 'ok' ? ' ok' : '') + '" data-opt="' + i + '">' + exH(o[0]) + '</button>').join('') + '</div>';
+  if (ok) {
+    const vals = st.lv[c.id] || (st.lv[c.id] = Object.fromEntries(Object.keys(E.letters).map(v => [v, Math.max(E.letters[v][0], Math.min(3, E.letters[v][1]))])));
+    h += '<div class="msg good">' + exH(E.repText) + '</div>' +
+      '<p class="small" style="margin-top:8px">文字に数を入れてみよう（文字はどんな整数でもよい）：</p>' +
+      Object.keys(E.letters).map(v => '<div class="sl"><b>' + vH(v) + ' ＝</b><input type="range" min="' + E.letters[v][0] + '" max="' + E.letters[v][1] + '" value="' + vals[v] + '" data-lv="' + v + '" aria-label="' + v + ' の値"><input class="num" type="number" min="' + E.letters[v][0] + '" max="' + E.letters[v][1] + '" value="' + vals[v] + '" data-lv="' + v + '" aria-label="' + v + ' の値"></div>').join('') +
+      '<div class="vals">' + E.rep.map(r => exH(r) + ' ＝ ' + fmt(evalLin(parseLin(r), vals))).join('　') + '</div>' +
+      '<div class="acts"><button class="act zero" id="sendBtn">🧪 この数で実験する</button><button class="act primary" data-goto="build">③ 説明の組み立てへ →</button></div>';
+  }
+  $('#right').innerHTML = h;
+}
+// ② の文字の値 → 実験の入力（2つの数なら それぞれ、1つなら はじめの数）
+function lettersToInputs(c) {
+  const E = EXPL[c.id], vals = st.lv[c.id];
+  const xs = E.rep.map(r => evalLin(parseLin(r), vals));
+  return c.inK.length === xs.length ? xs : c.id === 'd2' ? [10 * vals.a + vals.b] : [xs[0]];
+}
+
+/* ===== ③ 説明の組み立て ===== */
+const STEPS = ['文字で表す', '式を変形する', '倍数の形に整理する', '結論'];
+function cardsOf(c) {
+  const E = EXPL[c.id];
+  const form = E.plus ? '2×(整数)＋1 の形なので、奇数' : E.mult + '×(整数) の形なので、' + c.want;
+  return [
+    E.repText,
+    'それらの和は ' + E.sum + (E.b1 ? ' ＝ {1}' : ''),
+    '＝ {2}　かっこの中は整数だから、' + form + 'である。',
+    'したがって、' + c.title + '。'
+  ];
+}
+function bldOf(c) {
+  if (!st.bld[c.id]) {
+    let order;
+    do { order = [0, 1, 2, 3].sort(() => Math.random() - .5); } while (order.every((x, i) => x === i));
+    st.bld[c.id] = { order, slots: [], ordered: false, vals: { b1: '', b2: '' }, ok: {}, done: false };
+  }
+  return st.bld[c.id];
+}
+// カードの文 → HTML（{1}・{2} は穴。順番が決まるまでは □、決まったら入力らん）
+function cardH(c, i, B, live) {
+  return exH(cardsOf(c)[i]).replace(/\{([12])\}/g, (m, n) => { const k = 'b' + n; return live
+    ? (B.done ? '<b>' + exH(blankAns(c, k)) + '</b>' : '<input class="bin' + (B.ok[k] === true ? ' ok' : B.ok[k] === false ? ' ng' : '') + '" data-b="' + k + '" value="' + B.vals[k].replace(/"/g, '') + '" autocomplete="off" spellcheck="false" aria-label="穴うめ">')
+    : '<span class="blank">□</span>'; });
+}
+const blankAns = (c, k) => { const E = EXPL[c.id]; return k === 'b1' ? E.b1 : E.mult + '(' + E.inner + ')' + (E.plus ? '+' + E.plus : ''); };
+function renderBuild(c) {
+  const B = bldOf(c);
+  let h = '<p class="small" style="margin-top:0">下のカードをタップして、①〜④ の正しい順にならべよう。そのあと □ をうめよう。</p><div class="slots">';
+  STEPS.forEach((nm, k) => {
+    const i = B.slots[k];
+    h += '<div class="slot"><div class="sn">' + '①②③④'[k] + ' ' + nm + '</div>' +
+      (i == null ? '<div class="sp">ここに入れる</div>' : '<div style="flex:1"><div class="pc set' + (B.wrong === k ? ' wrong' : '') + '" data-back="' + k + '"' + (B.ordered ? '' : ' role="button" tabindex="0" style="cursor:pointer"') + '>' + cardH(c, i, B, B.ordered) + '</div></div>') + '</div>';
+  });
+  h += '</div>';
+  const rest = B.order.filter(i => !B.slots.includes(i));
+  if (rest.length) h += '<div class="hand">' + rest.map(i => '<button class="pc" data-card="' + i + '">' + cardH(c, i, B, false) + '</button>').join('') + '</div>';
+  h += '<div class="acts">' +
+    (B.slots.length === 4 && !B.ordered ? '<button class="act primary" id="orderBtn">✔ 順番をたしかめる</button>' : '') +
+    (B.ordered && !B.done ? '<button class="act primary" id="fillBtn">✔ 穴うめをたしかめる</button>' : '') +
+    '<button class="act" id="bUndo"' + (B.slots.length && !B.done ? '' : ' disabled') + '>↶ ひとつもどす</button><button class="act" id="bReset">⟲ もういちど</button>' +
+    (TEACHER && !B.done ? '<button class="act" id="bAuto">▶ 説明を自動で組み立てる</button>' : '') + '</div>';
+  if (B.done) h += '<div class="proof">' + [0, 1, 2, 3].map(i => cardH(c, i, B, true)).join('<br>') + '</div>';
+  $('#right').innerHTML = h;
+}
+function checkOrder(c) {
+  const B = bldOf(c);
+  B.wrong = B.slots.findIndex((x, k) => x !== k);
+  if (B.wrong < 0) {
+    B.ordered = true; B.wrong = null;
+    setR('順番はばっちり。□ の中の式を書こう（キーボードの - や + も使える）。', 'good');
+  } else if (B.slots[3] !== 3 || B.slots[0] === 3) {
+    trip('conclFirst');
+  } else setR('ちがうところがある（赤いわくのカード）。「文字で表す」→「式を変形する」→「倍数の形に整理する」→「結論」の順にしよう。', 'bad');
+  renderRight();
+}
+function checkFill(c) {
+  const B = bldOf(c), E = EXPL[c.id];
+  document.querySelectorAll('#right .bin').forEach(x => B.vals[x.dataset.b] = x.value);
+  let msg = null, tripType = null;
+  if (E.b1) {
+    const p = parseLin(B.vals.b1);
+    B.ok.b1 = !!p && linEq(p, parseLin(E.b1)) && tidy(B.vals.b1);
+    if (!p) msg = '1つめの □ が式として読めません。';
+    else if (!linEq(p, parseLin(E.b1))) msg = '1つめの □：かっこをはずして、同類項をまとめた式にしよう（' + exH(E.sum) + ' と等しくなっていない）。';
+    else if (!tidy(B.vals.b1)) msg = '1つめの □：値は合っているけれど、かっこをはずして同類項をまとめよう。';
+  }
+  const p2 = parseLin(B.vals.b2), sh = shapeOf(B.vals.b2), whole = parseLin(E.sum);
+  B.ok.b2 = !!p2 && linEq(p2, whole) && !!sh && sh.k % E.mult === 0 && sh.plus === E.plus;
+  if (!B.ok.b2 && !msg) {
+    if (!p2) msg = '2つめの □ が式として読めません。例：' + E.mult + '(…)';
+    else if (!linEq(p2, whole)) msg = '2つめの □：もとの和 ' + exH(E.sum) + ' と等しくなっていない。かっこをはずして たしかめよう。';
+    else tripType = 'notFactored';
+  }
+  if (tripType) trip(tripType);
+  else if (msg) setR(msg, 'bad');
+  if (B.ok.b2 && (!E.b1 || B.ok.b1)) {
+    B.done = true;
+    const d = Worksheet.appData('done') || {}; d[c.id] = true; Worksheet.appData('done', d);
+    setR('説明ができた！ 文字 ' + Object.keys(E.letters).map(vH).join('・') + ' はどんな整数でもよいので、<b>ぜんぶの数について</b>言えたことになる。', 'good');
+    renderClaims();
+  }
+  renderRight();
+}
+async function autoBuild(c) {
+  const B = bldOf(c);
+  B.slots = []; B.ordered = false; B.done = false; B.ok = {};
+  for (let k = 0; k < 4; k++) { B.slots.push(k); renderRight(); await new Promise(r => setTimeout(r, 450)); }
+  B.ordered = true; renderRight();
+  await new Promise(r => setTimeout(r, 450));
+  B.vals = { b1: EXPL[c.id].b1 || '', b2: blankAns(c, 'b2') };
+  renderRight();
+  await new Promise(r => setTimeout(r, 450));
+  checkFill(c);
+}
+
+/* ===== ④ 反例 ===== */
+function renderCex(c) {
+  const X = st.cx[c.id] || (st.cx[c.id] = { judge: null, done: false, x: c.inK.map(k => KIND[k].rand()) });
+  let h = '<p style="margin-top:0"><b>「' + c.title + '」は？</b></p>' +
+    '<div class="acts" style="margin-top:4px"><button class="act pick" data-judge="always">いつも成り立つ</button><button class="act pick" data-judge="not">成り立たないことがある</button></div>';
+  if (X.judge === 'not' && !X.done) {
+    const bad = rowsOf(c).filter(r => !r.ok);
+    h += '<p style="margin-bottom:0">反例（成り立たない例）を書こう：</p><div class="inrow">' + c.inK.map((k, i) =>
+      (i ? '<span class="plus">＋</span>' : '') + '<div class="inbox"><span class="kl">' + (c.inL ? c.inL[i] : KIND[k].name) + '</span><input class="num" type="number" inputmode="numeric" data-cx="' + i + '" value="' + X.x[i] + '"></div>').join('') + '</div>' +
+      '<div class="acts"><button class="act primary" id="cexBtn">✔ 反例か たしかめる</button>' +
+      (bad.length ? '<button class="act" id="cexUse">表の ✖ の組を使う</button>' : '') + '</div>';
+  }
+  if (X.done) h += '<div class="proof">' + X.done + '</div>';
+  $('#right').innerHTML = h;
+}
+function judge(c, j) {
+  const X = st.cx[c.id];
+  X.judge = j;
+  if (j === 'always') {
+    if (c.ok) {
+      const E = EXPL[c.id];
+      X.done = 'a, b, c を整数とすると、3つの偶数は 2a, 2b, 2c と表される。<br>その和は ' + exH(E.sum) + ' ＝ ' + exH('2(' + E.inner + ')') + '<br>かっこの中は整数だから、2×(整数) の形なので偶数。<br>→ このことがらは<b>いつも成り立つ</b>（反例はない）。';
+      markDone(c);
+      setR('そのとおり。文字で説明できるので、反例は見つからない。', 'good');
+    } else setR('本当かな？ 中央で数をいろいろためしてみよう。1つでも ✖ が出たら、いつも成り立つとは言えない。', 'bad');
+  } else setR(c.ok ? 'さがしてみよう。中央でたくさんためして、✖ が出るかな？' : '');
+  renderRight();
+}
+function checkCex(c, x) {
+  const X = st.cx[c.id];
+  X.x = x.slice();
+  const bad = badInput(c, x);
+  if (bad) { trip('notCounter', bad); renderRight(); return; }
+  const nums = c.nums(x), v = nums.reduce((a, b) => a + b, 0);
+  if (c.test(v)) {
+    if (c.ok) setR(calcH(c, nums) + '：成り立つ。いくらさがしても ✖ が出ないなら、文字で説明できるかも（「いつも成り立つ」をえらぼう）。', 'bad');
+    else trip('notCounter', calcH(c, nums) + ' では、' + judgeH(c, v) + '（成り立っている）。');
+    renderRight();
+    return;
+  }
+  X.done = '反例：' + calcH(c, nums) + '　' + judgeH(c, v) + '。<br>→ 「' + c.title + '」は、<b>いつも成り立つとは言えない</b>（反例が1つあれば十分）。';
+  markDone(c);
+  setR('反例をあげられた！', 'good');
+  renderRight();
+}
+function markDone(c) { const d = Worksheet.appData('done') || {}; d[c.id] = true; Worksheet.appData('done', d); renderClaims(); }
+
+/* =====================================================================
+   6. つまずき検知
+   ===================================================================== */
+// back：もどる先のパート（「▶ もどって見る」ボタン）
+const TRIPS = {
+  sameLetter: { name: '別の数を、同じ文字で表した', icon: '🔤', back: 'tool' },
+  oddN1: { name: '奇数を n＋1 と表した', icon: '1️⃣', back: 'tool' },
+  wrongKind: { name: '偶数・奇数の表し方のまちがい', icon: '⚖', back: 'tool' },
+  notConsec: { name: '「連続する」数の表し方のまちがい', icon: '🔗', back: 'tool' },
+  abProduct: { name: '2けたの整数を ab や a＋b と表した', icon: '🔟', back: 'tool' },
+  conclFirst: { name: '結論を先に書いた（説明の順番）', icon: '🔀', back: 'build' },
+  notFactored: { name: '「○×(整数)」の形に整理していない', icon: '📦', back: 'build' },
+  onlyExamples: { name: '数でためしただけで「ぜんぶ」と言った', icon: '🔢', back: 'exp' },
+  notCounter: { name: '反例になっていない例をあげた', icon: '🔍', back: 'cex' }
+};
+function tripMsg(type, extra) {
+  const c = claim(), E = EXPL[c.id] || {};
+  if (type === 'sameLetter') return '2m と 2m のように同じ文字にすると、<b>2つが同じ数</b>のとき（4 と 4 など）しか表せない。別々の数は、<b>別の文字</b>（2m と 2n）で表そう。'.replace(/[mn]/g, ch => vH(ch));
+  if (type === 'oddN1') return vH('n') + '＋1 は、' + vH('n') + ' が奇数なら偶数になってしまう（' + vH('n') + '＝3 → 4）。奇数は、偶数より 1 大きい数なので <b>2' + vH('n') + '＋1</b> と表す。';
+  if (type === 'wrongKind') return vH('m') + ' だけでは偶数とは限らない（' + vH('m') + '＝3 なら奇数）。偶数は <b>2' + vH('m') + '</b>（2×整数）、奇数は <b>2' + vH('n') + '＋1</b> と表す。';
+  if (type === 'notConsec') return '「連続する」は、となりどうしの数。いちばん小さい数を ' + vH('n') + ' とすると、整数なら ' + vH('n') + ', ' + vH('n') + '＋1, ' + vH('n') + '＋2、奇数なら 2' + vH('n') + '＋1, 2' + vH('n') + '＋3（2 ずつ大きくなる）。別の文字にすると、連続しているかどうかがわからない。';
+  if (type === 'abProduct') return vH('ab') + ' は ' + vH('a') + '×' + vH('b') + ' のこと。37 は 3×7 ではなく 10×3＋7。十の位が ' + vH('a') + '、一の位が ' + vH('b') + ' の2けたの整数は <b>10' + vH('a') + '＋' + vH('b') + '</b>。';
+  if (type === 'conclFirst') return '結論（したがって〜）は、説明の<b>いちばん最後</b>。①文字で表す → ②式を変形する → ③倍数の形に整理する → ④結論 の順に書く。';
+  if (type === 'notFactored') return exH(E.b1 || E.sum) + ' のままでは、' + c.want + 'だと言いきれない。<b>' + E.mult + '×(整数)' + (E.plus ? '＋' + E.plus : '') + '</b> の形（' + exH(blankAns(c, 'b2')) + '）にくくって、かっこの中が整数だと言おう。';
+  if (type === 'onlyExamples') return '何組ためして ✅ でも、ためしていない数は限りなく残っている。「どんな数でも」と言うには、<b>文字を使って、ぜんぶの数をまとめて</b>説明する必要がある。';
+  if (type === 'notCounter') return (extra ? extra + '<br>' : '') + '反例は、ことがらの<b>条件にあう数</b>（偶数なら偶数）で、<b>結論が成り立たない</b>例。成り立つ例をいくつあげても、反例にはならない。';
+  return '';
+}
+function trip(type, extra) {
+  const t = TRIPS[type];
+  setR('<div class="trip"><h3>あなたのつまずき：' + t.icon + ' ' + t.name + '</h3><div>' + tripMsg(type, extra) + '</div>' +
+    (t.back !== st.mode ? '<div class="acts"><button class="act zero" data-goto="' + t.back + '">▶ もどって見る</button></div>' : '') + '</div>', 'none');
+  if (!st.tripsNow.includes(type)) st.tripsNow.push(type);
+  const s = Worksheet.appData('trips') || {};
+  s[type] = (s[type] || 0) + 1;
+  Worksheet.appData('trips', s);
+  renderStats();
+}
+function renderStats() {
+  const s = Worksheet.appData('trips') || {};
+  const list = Object.keys(TRIPS).filter(k => s[k]);
+  $('#stats').innerHTML = list.length
+    ? '<b>📒 つまずきの記録</b><br>' + list.map(k => TRIPS[k].icon + ' ' + TRIPS[k].name + '：' + s[k] + ' 回').join('<br>') +
+      '<br><button class="act" id="clearStats" style="min-height:44px;margin-top:4px">記録を消す</button>'
+    : '';
+}
+
+/* =====================================================================
+   7. 操作
+   ===================================================================== */
+function setMode(m) {
+  st.mode = m;
+  document.querySelectorAll('.tab').forEach(t => { t.classList.toggle('on', t.dataset.mode === m); t.setAttribute('aria-selected', t.dataset.mode === m); });
+  setExp(''); setR('');
+  renderAll();
+}
+function setClaim(id) {
+  if (st.mode === 'cex') st.cur.cex = id; else st.cur.main = id;
+  setExp(''); setR('');
+  renderAll();
+}
+function renderAll() { renderClaims(); renderInputs(); renderTable(); renderRight(); }
+
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { if (st.mode !== t.dataset.mode) setMode(t.dataset.mode); }));
+$('#claims').addEventListener('click', ev => { const b = ev.target.closest('[data-claim]'); if (b) setClaim(b.dataset.claim); });
+// 入力：▲▼ は偶数・奇数なら 2 ずつ動かす（種類がかわらないように）
+$('#inputs').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-d]');
+  if (!b) return;
+  const c = claim(), x = inpOf(c), i = +b.dataset.i;
+  x[i] += +b.dataset.d * KIND[c.inK[i]].step;
+  renderInputs();
+});
+$('#inputs').addEventListener('input', ev => {
+  const n = ev.target.closest('input[data-i]');
+  if (!n) return;
+  const c = claim(), x = inpOf(c);
+  x[+n.dataset.i] = n.value === '' ? NaN : Number(n.value);
+  n.classList.toggle('bad', !KIND[c.inK[+n.dataset.i]].ok(x[+n.dataset.i]));
+  renderCalc();
+});
+$('#inputs').addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.matches('input')) tryNow(); });
+$('#tryBtn').addEventListener('click', tryNow);
+$('#randBtn').addEventListener('click', () => { const c = claim(); st.inp[c.id] = c.inK.map(k => KIND[k].rand()); renderInputs(); });
+$('#tenBtn').addEventListener('click', () => tryTen(false));
+$('#bigBtn').addEventListener('click', () => tryTen(true));
+$('#undoBtn').addEventListener('click', () => {
+  const h = st.hist.pop();
+  if (!h) return;
+  const c = claimById(h.id);
+  rowsOf(c).length = h.n;
+  setExp(''); renderAll();
+});
+$('#resetBtn').addEventListener('click', () => {
+  const c = claim();
+  st.rows[c.id] = []; st.hist = st.hist.filter(h => h.id !== c.id); delete st.asked[c.id];
+  setExp(''); setR(''); renderAll();
+});
+$('#right').addEventListener('click', ev => {
+  const c = claim();
+  const t = ev.target.closest('[data-tool]');
+  if (t) { st.tool = st.tool === +t.dataset.tool ? null : +t.dataset.tool; return renderRight(); }
+  const o = ev.target.closest('[data-opt]');
+  if (o) {
+    const r = EXPL[c.id].opts[+o.dataset.opt][1];
+    if (r === 'ok') { st.rep[c.id] = true; setR(''); renderRight(); }
+    else { st.rep[c.id] = false; renderRight(); trip(r); }
+    return;
+  }
+  if (ev.target.id === 'sendBtn') { st.inp[c.id] = lettersToInputs(c); renderInputs(); tryNow(); return; }
+  const cd = ev.target.closest('[data-card]');
+  if (cd) { const B = bldOf(c); B.slots.push(+cd.dataset.card); B.wrong = null; setR(''); return renderRight(); }
+  const bk = ev.target.closest('[data-back]');
+  if (bk && !bldOf(c).ordered) { const B = bldOf(c); B.slots.splice(+bk.dataset.back, 1); B.wrong = null; return renderRight(); }
+  if (ev.target.id === 'orderBtn') return checkOrder(c);
+  if (ev.target.id === 'fillBtn') return checkFill(c);
+  if (ev.target.id === 'bUndo') { const B = bldOf(c); if (B.ordered) { B.ordered = false; B.ok = {}; } else B.slots.pop(); B.wrong = null; setR(''); return renderRight(); }
+  if (ev.target.id === 'bReset') { delete st.bld[c.id]; setR(''); return renderRight(); }
+  if (ev.target.id === 'bAuto') return autoBuild(c);
+  const jd = ev.target.closest('[data-judge]');
+  if (jd) return judge(c, jd.dataset.judge);
+  if (ev.target.id === 'cexBtn') return checkCex(c, [...document.querySelectorAll('#right [data-cx]')].map(x => x.value === '' ? NaN : Number(x.value)));
+  if (ev.target.id === 'cexUse') { const r = rowsOf(c).filter(r => !r.ok).pop(); st.cx[c.id].x = r.x.slice(); return renderRight(); }
+  const b = ev.target.closest('[data-ans]');
+  if (!b) return;
+  st.asked[c.id] = b.dataset.ans;
+  if (b.dataset.ans === 'yes') trip('onlyExamples');
+  else setR('そのとおり！ 整数は限りなくあるので、ためしきれない。<b>文字を使うと、ぜんぶの数をまとめて表せる</b>。「② 式の道具」へ進もう。', 'good');
+});
+// ② のスライダーと数の入力（どちらを動かしても、もう片方と値がそろう）
+$('#right').addEventListener('input', ev => {
+  const x = ev.target.closest('[data-lv]');
+  if (x) {
+    const c = claim(), E = EXPL[c.id], v = x.dataset.lv, [lo, hi] = E.letters[v];
+    const n = Math.round(Number(x.value));
+    if (x.value === '' || isNaN(n)) return;
+    st.lv[c.id][v] = Math.max(lo, Math.min(hi, n));
+    document.querySelectorAll('#right [data-lv="' + v + '"]').forEach(e => { if (e !== x) e.value = st.lv[c.id][v]; });
+    document.querySelector('#right .vals').innerHTML = E.rep.map(r => exH(r) + ' ＝ ' + fmt(evalLin(parseLin(r), st.lv[c.id]))).join('　');
+  }
+  const b = ev.target.closest('.bin');
+  if (b) { const B = bldOf(claim()); B.vals[b.dataset.b] = b.value; }
+});
+$('#right').addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.matches('.bin')) checkFill(claim()); });
+document.addEventListener('click', ev => {
+  const g = ev.target.closest('[data-goto]');
+  if (g) { setMode(g.dataset.goto); return; }
+  if (ev.target.id === 'clearStats' && confirm('つまずきの記録を消しますか？')) { Worksheet.appData('trips', {}); renderStats(); }
+});
+
+/* =====================================================================
+   8. ワークシート
+   ===================================================================== */
+Worksheet.init({
+  title: 'ためして 説明して 文字式',
+  question: '奇数＋奇数 は、いつも偶数になるだろうか？　数でためしてから、文字式で説明しよう。',
+  predictions: ['いつも偶数', 'いつも奇数', '偶数のときも 奇数のときもある', 'わからない'],
+  operationNote: '左で「2つの奇数の和は、偶数である」をえらび、中央で数をためして「＋ 記録する」（いちばん新しい1組が入ります）。何組かためしたら、③ で説明を組み立てよう。',
+  fields: [
+    { key: 'koto', label: 'ことがら', math: false },
+    { key: 'shiki', label: 'ためした計算', math: false },
+    { key: 'kekka', label: '成り立つ？', math: false }
+  ],
+  capture: () => {
+    const c = claim(), R = rowsOf(c);
+    if (!R.length) { setExp('先に「ためす」を押してから記録しよう。', 'bad'); return null; }
+    const r = R[R.length - 1];
+    return { koto: c.title, shiki: calcH(c, r.nums).replace(/<[^>]+>/g, ''), kekka: r.ok ? '✅ 成り立つ' : '✖ 成り立たない' };
+  },
+  summaryHint: '「m, n を整数とすると、2つの奇数は 2m＋1、2n＋1 と表される。」から書き始めて、和を「2×(整数)」の形にして説明しよう。',
+  teacher: {
+    hint: '実験で ✅ が10組並んだところで「これで、どんな奇数でも言える？」と問う。「言える」に手が挙がったら、ためしていない数が限りなくあることを話題にする。',
+    answer: 'm, n を整数とすると、2つの奇数は 2m＋1、2n＋1 と表される。<br>それらの和は (2m＋1)＋(2n＋1) ＝ 2m＋2n＋2 ＝ 2(m＋n＋1)<br>m＋n＋1 は整数だから、2(m＋n＋1) は偶数である。<br>したがって、2つの奇数の和は偶数である。'
+  }
+});
+
+// ===== はじめ =====
+if (TEACHER) $('#teacherBadge').hidden = false;
+setMode(st.mode);
+renderStats();
+</script>
+</body>
+</html>
