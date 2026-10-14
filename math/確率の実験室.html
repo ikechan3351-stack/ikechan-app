@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>確率の実験室</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中学の教材とそろえる）：正解・理論の確率＝緑（点線）、まちがい・注意＝赤紫（×）、
+     注目する結果・今の実験＝オレンジ（★・太い線）、前の実験＝灰色（細い点線）。色だけでなく 記号・線の種類でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #2e7d32; --soft: #a5d6a7;
+    --ok: #2e7d32; --ng: #ad1457; --gold: #f9a825; --org: #e65100; --blu: #1565c0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #e8f5e9 0%, #fffde7 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input, select { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #2e7d32; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #1b5e20; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #2e7d32; text-align: center; line-height: 1.7; }
+  .panel { width: 100%; max-width: 1180px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip-row.left { justify-content: flex-start; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #1b5e20;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.exp { border-color: #ffcc80; color: #6d4c41; }
+  .chip.exp.active { background: #ef6c00; border-color: #ef6c00; color: #fff; }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .part-note { text-align: center; font-size: 0.98rem; color: #1b5e20; font-weight: bold; line-height: 1.6; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.08rem; color: #1b5e20; }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #1b5e20;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12); text-decoration: none;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled, .op-btn.off { opacity: 0.4; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.warm { background: #ef6c00; border-color: #ef6c00; color: #fff; }
+  .op-btn.on { background: #fff8e1; border-color: #fbc02d; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+  .tools.left { justify-content: flex-start; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg:empty { display: none; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .msg.info { color: #37474f; background: #fffde7; }
+  .small { font-size: 0.88rem; color: #546e7a; line-height: 1.6; }
+  .bad { color: var(--ng); font-weight: bold; }
+
+  /* 広い画面は2列 */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  @container (min-width: 820px) { .board-in { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
+
+  /* 設定（ステッパー：− 数 ＋） */
+  .set-row { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-weight: bold; }
+  .set-row select { font-size: 1.05rem; min-height: 46px; padding: 6px 10px; border-radius: 10px; border: 2px solid var(--soft); font-weight: bold; max-width: 100%; }
+  .stepper { display: inline-flex; align-items: center; gap: 4px; margin: 4px 0 0; font-weight: bold; }
+  .stepper button { width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--soft); background: #fff; font-size: 1.3rem; font-weight: bold; cursor: pointer; color: #1b5e20; touch-action: manipulation; }
+  .stepper input { width: 62px; height: 44px; font-size: 1.25rem; text-align: center; border-radius: 10px; border: 2px solid var(--soft); font-weight: bold; }
+
+  /* 実験の台 */
+  .stage {
+    margin-top: 8px; background: #2e7d32; background-image: radial-gradient(circle at 50% 30%, #43a047, #1b5e20);
+    border-radius: 14px; padding: 14px 10px; min-height: 150px;
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; color: #fff;
+  }
+  .stage .say { width: 100%; text-align: center; font-weight: bold; font-size: 1.15rem; }
+  .coin {
+    width: 104px; height: 104px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-direction: column;
+    font-size: 2.4rem; font-weight: bold; color: #6d4c41; background: radial-gradient(circle at 35% 35%, #fff59d, #fbc02d 70%, #f57f17);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.35), inset 0 0 0 6px rgba(255,255,255,0.35);
+  }
+  .coin.ura { color: #37474f; background: radial-gradient(circle at 35% 35%, #ffffff, #b0bec5 70%, #78909c); }
+  .coin small { font-size: .8rem; line-height: 1; }
+  .spin { animation: spin 0.45s ease-out; }
+  @keyframes spin { 0% { transform: rotateY(0) translateY(0); } 50% { transform: rotateY(540deg) translateY(-30px); } 100% { transform: rotateY(1080deg) translateY(0); } }
+  .roll { animation: roll 0.4s ease-out; }
+  @keyframes roll { 0% { transform: rotate(-220deg) scale(.6); } 100% { transform: rotate(0) scale(1); } }
+  .dice svg { width: 92px; height: 92px; }
+  .ball {
+    width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-weight: bold; font-size: .95rem; border: 3px solid; box-shadow: inset -4px -6px 0 rgba(0,0,0,0.12); transition: transform .2s;
+  }
+  .ball.c0 { background: #ef5350; border-color: #b71c1c; color: #fff; }
+  .ball.c1 { background: #fff; border-color: #78909c; color: #37474f; }
+  .ball.c2 { background: #1e88e5; border-color: #0d47a1; color: #fff; }
+  .ball.pk, .lot.pk { transform: translateY(-10px) scale(1.2); box-shadow: 0 0 0 4px #ffd54f; }
+  .bag {
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center; max-width: 360px;
+    background: #efebe9; border: 3px solid #a1887f; border-radius: 18px 18px 40px 40px; padding: 14px 10px; min-height: 76px;
+  }
+  .lot { width: 32px; height: 46px; border-radius: 6px; border: 2px solid; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: .95rem; background: #fff; transition: transform .2s; }
+  .lot.c0 { border-color: #c62828; color: #c62828; background: #fff8e1; }
+  .lot.c1 { border-color: #78909c; color: #546e7a; }
+  .lotbox { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; max-width: 360px; background: #fbe9e7; border: 3px solid #bcaaa4; border-radius: 14px; padding: 10px; }
+  .capv { display: inline-flex; flex-direction: column; align-items: center; font-weight: bold; }
+  .capv svg { width: 120px; height: 84px; }
+
+  /* 最近の結果のならび */
+  .strip { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; min-height: 30px; align-items: center; }
+  .strip .s { min-width: 26px; height: 26px; padding: 0 3px; border-radius: 6px; border: 2px solid #cfd8dc; font-size: .82rem; font-weight: bold; display: inline-flex; align-items: center; justify-content: center; background: #fafafa; color: #546e7a; }
+  .strip .s.t { border-color: var(--org); background: #fff3e0; color: var(--org); }
+  .strip .lbl { font-size: .8rem; color: #78909c; margin-right: 4px; }
+
+  /* 回数のはこ */
+  .bigcount { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; justify-content: center; margin-top: 8px; font-weight: bold; }
+  .bigcount .n { font-size: 2.3rem; color: #1b5e20; font-variant-numeric: tabular-nums; }
+  .bigcount .rf { font-size: 2rem; color: var(--org); font-variant-numeric: tabular-nums; }
+  .bigcount .lab { font-size: .95rem; color: #546e7a; }
+  .gap-line { text-align: center; font-size: .95rem; color: #455a64; line-height: 1.6; margin-top: 4px; }
+  .run-btns { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
+  .run-btns .op-btn { justify-content: center; padding: 8px 4px; font-size: 1.05rem; }
+  .run-btns .op-btn.go-on { background: #ad1457; border-color: #ad1457; color: #fff; }
+  .seed-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin-top: 8px; font-weight: bold; font-size: .98rem; }
+  .seed-row input { width: 92px; height: 44px; font-size: 1.2rem; text-align: center; border-radius: 10px; border: 2px solid var(--soft); font-weight: bold; }
+
+  /* グラフ */
+  .cv-wrap { position: relative; width: 100%; touch-action: none; }
+  canvas.gr { display: block; width: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .88rem; color: #455a64; margin-top: 4px; }
+  .legend span { white-space: nowrap; }
+  .readout { min-height: 1.6em; text-align: center; font-size: .95rem; font-weight: bold; color: #37474f; }
+
+  /* 表 */
+  .tbl-wrap { overflow-x: auto; }
+  table.res { border-collapse: collapse; width: 100%; text-align: center; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  table.res th, table.res td { border: 2px solid #c8e6c9; padding: 4px 6px; }
+  table.res th { background: #f1f8e9; font-size: .92rem; }
+  table.res tr[data-t] { cursor: pointer; }
+  table.res tr.tg td { background: #fff3e0; font-weight: bold; }
+  table.res tr.tg td:first-child { color: var(--org); }
+  table.res tr.sum td { background: #f5f5f5; font-weight: bold; }
+  .rbar { position: relative; height: 14px; background: #eceff1; border-radius: 4px; min-width: 70px; }
+  .rbar i { position: absolute; left: 0; top: 0; bottom: 0; background: #ffb74d; border-radius: 4px; }
+  .rbar b { position: absolute; top: -3px; bottom: -3px; width: 3px; background: var(--ok); }
+  .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; font-weight: bold; line-height: 1.1; }
+  .frac span { padding: 0 5px; }
+  .frac span:first-child { border-bottom: 2px solid currentColor; }
+
+  /* ② ばらつき */
+  .pred-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-weight: bold; }
+  svg.dots { width: 100%; display: block; }
+  svg.dots text { font-family: inherit; }
+  .concl { margin-top: 10px; background: #e8f5e9; border-left: 6px solid var(--ok); border-radius: 10px; padding: 8px 12px; line-height: 1.75; }
+  .concl.warn { background: #fce4ec; border-left-color: var(--ng); }
+
+  /* ③ 合算 */
+  .pool-big { text-align: center; font-weight: bold; font-size: 1.15rem; line-height: 1.7; }
+  .pool-big .rf { font-size: 2rem; color: var(--org); }
+  .in-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; font-weight: bold; margin-top: 6px; }
+  .in-row input { width: 96px; height: 44px; font-size: 1.15rem; text-align: center; border-radius: 10px; border: 2px solid var(--soft); font-weight: bold; }
+  .in-row select { font-size: 1.05rem; min-height: 44px; padding: 4px 8px; border-radius: 10px; border: 2px solid var(--soft); font-weight: bold; }
+  .pool-tbl { max-height: 320px; overflow-y: auto; }
+
+  /* ④ クイズ */
+  .q-text { font-size: 1.15rem; font-weight: bold; line-height: 1.75; }
+  .choices { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .choice { text-align: left; border: 3px solid #cfd8dc; background: #fff; border-radius: 14px; min-height: 52px; padding: 8px 14px; font-size: 1.05rem; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation; }
+  .choice.ok { border-color: var(--ok); background: #e8f5e9; }
+  .choice.ok::before { content: '✓ '; color: var(--ok); }
+  .choice.ng { border-color: var(--ng); background: #fce4ec; }
+  .choice.ng::before { content: '× '; color: var(--ng); }
+  .choice:disabled { cursor: default; }
+  .flips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; }
+  .flips .s { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #cfd8dc; font-size: .8rem; font-weight: bold; display: inline-flex; align-items: center; justify-content: center; }
+  .flips .s.h { background: #fff59d; border-color: #f9a825; color: #6d4c41; }
+  .flips .s.u { background: #eceff1; color: #37474f; }
+  .flips .s.run { box-shadow: 0 3px 0 var(--org); }
+  .flips .s.nx { outline: 3px solid var(--blu); outline-offset: 1px; }
+  .cmpbars { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 8px; align-items: center; margin-top: 10px; font-weight: bold; font-size: .98rem; }
+  .cmpbars .rbar { height: 22px; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.98rem; color: #444; line-height: 1.75; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.05rem; margin: 0 0 6px; color: #1b5e20; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.88rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  @media (max-width: 480px) {
+    body { padding: 10px 8px 24px; }
+    .run-btns { grid-template-columns: repeat(3, 1fr); }
+    .bigcount .n { font-size: 1.9rem; }
+    .bigcount .rf { font-size: 1.7rem; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🎲 確率の実験室</h1>
+<p class="subtitle">実験の回数をふやすと、相対度数はどうなる？<br>相対度数 ＝（その結果が起こった回数）÷（実験の回数）</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+  <!-- パート：① 実験する ② ばらつきをくらべる ③ クラスで合算 ④ 次はどっち？ -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+  <!-- 実験の種類（①〜③ で使う） -->
+  <div class="chip-row" id="expRow"></div>
+
+  <div class="card">
+    <div class="tools" style="margin-top:0">
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <!-- パートごとの画面（JS で作る） -->
+  <div id="view"></div>
+
+  <!-- つながる教材 -->
+  <div class="card">
+    <h2>🔗 つながる教材</h2>
+    <div class="tools left" id="links"></div>
+  </div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 自動で1ステップ進める</button></div>
+    <div class="small" id="tTalk"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>① 実験する</b>：上で実験をえらび、「1回」「10回」「100回」「1000回」「▶ 連続」でふやす。表の行をタップすると、<b>★ 注目する結果</b>がかわる。グラフは ★ の相対度数。緑の点線が理論の確率（📏 で出す・消す）。</li>
+      <li><b>⟲ もういちど</b>：新しい種で はじめから。前の実験は灰色の細い点線でのこるので、くらべられる。<b>🔁 同じ種で再現</b>：同じ種（実験番号）で はじめから。同じボタンを押すと、まったく同じ結果になる。種を黒板に書けば、クラス全員で同じ実験もできる。</li>
+      <li><b>② ばらつきをくらべる</b>：10回・100回・1000回の実験を、何人分もやってみる。1人分が1つの点。回数が多いほど、点が理論の確率の近くに集まる。</li>
+      <li><b>③ クラスで合算</b>：①の実験を「＋ 合算に入れる」→「もういちど」…とくり返すと、何人分でも積み上がる。ほかの人の結果を数で入れることもできる。</li>
+      <li><b>④ 次はどっち？</b>：表が何回も続いたあと、次に表が出る確率は？ 実験で確かめて、クイズで考える。</li>
+      <li><b>相対度数</b>（中1）：全体の回数をもとにしたときの、その結果の回数の割合。<b>確率</b>：あることがらの起こりやすさの程度を表す数。たくさん実験すると、相対度数はある値に近づく。その値を確率と考える。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：結果はコンピューターの計算（乱数）で決めています。コイン・サイコロ・玉・くじは、どの結果も同じ程度に起こるものとしています（本物は形のゆがみなどで少しずれることがあります）。びんのふたが上向きになる割合は、この教材で決めた架空の値で、ふたの形や投げ方で変わります。サイコロの和の実験では、2つのサイコロを別々にふっています。</p>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const PARAMS = new URLSearchParams(location.search);
+  // ?teacher=1 で先生モード（答え・自動で進める・発問の例・ふたの値・この端末のきろく）
+  const TEACHER = PARAMS.get('teacher') === '1';
+
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const OK = '#2e7d32', NG = '#ad1457', ORG = '#e65100', BLU = '#1565c0';
+  const MAXN = 100000;                       // 1回の実験の回数の上限（10万回）
+  // 分数 a/b を約分した文字（"3/5"。0 や 1 はそのまま）
+  function fstr(a, b) { if (a === 0) return '0'; const g = gcd(a, b) || 1; return b / g === 1 ? String(a / g) : `${a / g}/${b / g}`; }
+  // 分数を縦の形の HTML にする
+  function fracHTML(a, b) { const s = fstr(a, b); if (!s.includes('/')) return s; const [x, y] = s.split('/'); return `<span class="frac"><span>${x}</span><span>${y}</span></span>`; }
+  // 相対度数 k/n を小数第3位まで（四捨五入。整数だけで計算するので小数の誤差が出ない）
+  function rf3(k, n) { if (!n) return '—'; const m = Math.floor((2000 * k + n) / (2 * n)); return (m / 1000).toFixed(3); }
+  const fmt = (x) => x.toLocaleString('ja-JP');
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+  const sndTick = () => beep([[660, 0, 0.05, 'triangle', 0.06]]);
+
+  /* =====================================================================
+     1. 乱数（種で再現できるようにする）
+     ・種（実験番号）は Math.random で決める。
+     ・i 回目の結果は「種と i」だけから計算で決まる（rnd(種, i)）。
+       → 同じ種なら何度やっても同じ結果。ひとつもどす も、回数をへらすだけでよい。
+     ===================================================================== */
+  function fmix(h) { h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16; return h >>> 0; }
+  // 0 以上 1 未満の数
+  function rnd(seed, i) { return fmix(fmix((Math.imul(seed | 0, 0x9e3779b1) + 0x7f4a7c15) | 0) ^ Math.imul((i + 1) | 0, 0x85ebca77)) / 4294967296; }
+  const newSeed = () => 1000 + Math.floor(Math.random() * 9000);   // 4けたの種（黒板に書きやすい）
+
+  /* =====================================================================
+     2. 実験の種類
+     outs(c)：結果の一覧 { label：表の名前, sh：短い名前, num/den：理論の確率（わからないときは null） }
+     gen(c, seed, i)：i 回目の結果の番号（outs の何番目か）
+     ここに足せば、実験をふやせる。
+     ===================================================================== */
+  const COLORS = ['赤', '白', '青'];
+  const CAPS = { A: { name: '王冠（金属のふた）', p: 0.42 }, B: { name: 'プラスチックのふた', p: 0.63 } };  // ※架空の値
+  const SUMC = [1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];   // 和 2〜12 になる組の数（36 通り中）
+  const EXPS = {
+    coin: { name: '🪙 コイン', what: 'コインを投げる',
+      outs: () => [{ label: '表', sh: '表', num: 1, den: 2 }, { label: '裏', sh: '裏', num: 1, den: 2 }],
+      gen: (c, s, i) => (rnd(s, i) < 0.5 ? 0 : 1) },
+    die: { name: '🎲 サイコロ1個', what: 'サイコロを1個ふる',
+      outs: () => [1, 2, 3, 4, 5, 6].map(v => ({ label: v + ' の目', sh: String(v), num: 1, den: 6 })),
+      gen: (c, s, i) => Math.floor(rnd(s, i) * 6) },
+    sum: { name: '🎲🎲 2個の和', what: 'サイコロを2個ふって、目の和を調べる',
+      outs: () => SUMC.map((k, j) => ({ label: '和 ' + (j + 2), sh: String(j + 2), num: k, den: 36 })),
+      gen: (c, s, i) => Math.floor(rnd(s, 2 * i) * 6) + Math.floor(rnd(s, 2 * i + 1) * 6) },
+    bag: { name: '🔴 袋の玉', what: '袋から玉を1個取り出して色を見て、袋にもどす',
+      outs: (c) => { const T = c.r + c.w + c.b; return [c.r, c.w, c.b].map((k, j) => ({ label: COLORS[j] + '玉', sh: COLORS[j], num: k, den: T, hide: k === 0 })); },
+      gen: (c, s, i) => { const j = Math.floor(rnd(s, i) * (c.r + c.w + c.b)); return j < c.r ? 0 : j < c.r + c.w ? 1 : 2; } },
+    lot: { name: '🎫 くじ', what: 'くじを1本引いて、もとにもどす',
+      outs: (c) => [{ label: '当たり', sh: '当', num: c.a, den: c.n }, { label: 'はずれ', sh: 'は', num: c.n - c.a, den: c.n }],
+      gen: (c, s, i) => (Math.floor(rnd(s, i) * c.n) < c.a ? 0 : 1) },
+    cap: { name: '🍶 びんのふた', what: 'びんのふたを投げる（理論では確率がわからない）',
+      outs: () => [{ label: '上向き', sh: '上', num: null, den: null }, { label: '下向き', sh: '下', num: null, den: null }],
+      gen: (c, s, i) => (rnd(s, i) < CAPS[c.k].p ? 0 : 1) },
+  };
+  const EXP_KEYS = Object.keys(EXPS);
+  // 実験と設定を1つの文字にする（設定がちがうと、別の実験としてあつかう）
+  function expKey(e, c) {
+    if (e === 'bag') return `bag:${c.r},${c.w},${c.b}`;
+    if (e === 'lot') return `lot:${c.n},${c.a}`;
+    if (e === 'cap') return `cap:${c.k}`;
+    return e;
+  }
+  function expLabel(e, c) {
+    if (e === 'bag') return `袋（赤${c.r}・白${c.w}${c.b ? '・青' + c.b : ''}）`;
+    if (e === 'lot') return `くじ（${c.n}本中 当たり${c.a}本）`;
+    if (e === 'cap') return `びんのふた（${CAPS[c.k].name}）`;
+    return EXPS[e].name.replace(/^\S+\s/, '');
+  }
+
+  // 結果のならびを、種ごとにおぼえておく（同じ種なら計算しなおさない）
+  const cache = new Map();
+  function getArr(e, c, seed, len) {
+    const key = expKey(e, c) + '|' + seed;
+    let o = cache.get(key);
+    if (!o) {
+      o = { arr: new Uint8Array(1024), len: 0 };
+      cache.set(key, o);
+      if (cache.size > 24) cache.delete(cache.keys().next().value);
+    }
+    if (o.len < len) {
+      if (o.arr.length < len) { let m = o.arr.length; while (m < len) m *= 2; const a = new Uint8Array(m); a.set(o.arr.subarray(0, o.len)); o.arr = a; }
+      const g = EXPS[e].gen;
+      for (let i = o.len; i < len; i++) o.arr[i] = g(c, seed, i);
+      o.len = len;
+    }
+    return o.arr;
+  }
+  // n 回のうち、結果 t が何回か
+  function countT(e, c, seed, n, t) { const a = getArr(e, c, seed, n); let k = 0; for (let i = 0; i < n; i++) if (a[i] === t) k++; return k; }
+
+  /* =====================================================================
+     3. パートとつまずきの型
+     ===================================================================== */
+  const PARTS = [null,
+    { name: '① 実験する', note: '回数をふやすと、★ の相対度数のグラフはどうなる？ 少ない回数のときと くらべよう。' },
+    { name: '② ばらつきをくらべる', note: '10回の実験と 1000回の実験。たくさんの人がやると、相対度数のちらばりはどうちがう？' },
+    { name: '③ クラスで合算', note: '1人ずつの結果をたし合わせると、全体の相対度数はどうなる？' },
+    { name: '④ 次はどっち？', note: '表が何回も続いたら、次は裏が出やすい？ 実験で確かめよう。' },
+  ];
+  // つまずきの型（名前・説明・練習するパート）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    gambler: { name: 'ギャンブラーの誤り（続いたから、次は反対が出やすい）', part: 4,
+      exp: 'コインやサイコロは、前の結果をおぼえていない。表が何回続いても、次に表が出る確率は 1/2 のまま。「そろそろ裏が出るはず」は、まちがい。' },
+    streak: { name: '「流れ」があると考えた（続いたから、次も同じが出やすい）', part: 4,
+      exp: '続いたのは たまたま。前の結果は次の結果に影響しないので、次の確率は変わらない。' },
+    sure: { name: '確率を「必ずその回数だけ起こる」と考えた', part: 4,
+      exp: '確率 1/6 は「6回に1回必ず」ではない。6回ふって1回も出ないことも、3回出ることもある。たくさんくり返したときに、だいたい 1/6 の割合になる、という意味。' },
+    fewN: { name: '少ない回数の結果で確率を決めた', part: 4,
+      exp: '10回くらいの実験では、相対度数は大きくばらつく。確率を考えるには、たくさんの回数の実験が必要。' },
+    countdiff: { name: '回数のずれと相対度数を取りちがえた', part: 4,
+      exp: '回数をふやすと、「理論どおりの回数」とのずれ（回数の差）は大きくなることもある。でも全体の回数でわった相対度数は、確率に近づいていく。' },
+    spread: { name: '回数をふやしても、ばらつきは同じと考えた', part: 2,
+      exp: '1回1回の結果は予想できないが、回数を多くするほど相対度数のちらばりは小さくなり、確率の近くに集まる（大数の法則）。' },
+    equal: { name: '同じ程度に起こらない結果を、同じとして数えた', part: 4,
+      exp: '「表か裏の2通りだから 1/2」は、どちらも同じ程度に起こるときだけ使える。びんのふたは形がちがうので、たくさん実験して相対度数で確率を考える。' },
+  };
+
+  /* =====================================================================
+     4. 状態（ひとつもどす で写しやすいよう、数と文字だけで持つ）
+     ===================================================================== */
+  const st = {
+    part: 1, exp: 'coin',
+    cfg: { coin: { t: 0 }, die: { t: 0 }, sum: { t: 5 }, bag: { r: 3, w: 2, b: 0, t: 0 }, lot: { n: 10, a: 3, t: 0 }, cap: { k: 'A', t: 0 } },
+    seed: newSeed(), n: 0, ghosts: [], theo: true, xlog: false, lastAdd: '',
+    p2: { key: '', pred: null, rows: { 10: [], 100: [], 1000: [] }, cnt: 0, base: newSeed(), judged: false },
+    p3: { per: 100 },
+    p4: { k: 3, N: 10000, seed: newSeed(), sim: false, qi: -1, pick: null, done: [] },
+  };
+  const ui = { hist: [], sessTrips: {}, focus: null, busy: false, run: null, last: null };
+  const C = () => st.cfg[st.exp];
+  const curKey = () => expKey(st.exp, C());
+  const outsNow = () => EXPS[st.exp].outs(C());
+  const theoNow = () => { const o = outsNow()[C().t]; return o.num == null ? null : [o.num, o.den]; };
+  // ?seed=1234 で種を決められる
+  if (/^\d{1,9}$/.test(PARAMS.get('seed') || '')) st.seed = +PARAMS.get('seed');
+
+  // 合算のデータ（Worksheet.appData('pools') に保存）：{ 実験のキー＋注目: { label, entries: [[回数, 起こった回数, 'm'|'a'|'h'], …] } }
+  let pools = {};
+  const poolKey = () => curKey() + '#' + C().t;
+  const poolNow = () => pools[poolKey()] || (pools[poolKey()] = { label: `${expLabel(st.exp, C())}：${outsNow()[C().t].label}`, entries: [] });
+  function savePools() { if (window.Worksheet) Worksheet.appData('pools', pools); }
+
+  function snap() { return clone({ part: st.part, exp: st.exp, cfg: st.cfg, seed: st.seed, n: st.n, ghosts: st.ghosts, theo: st.theo, xlog: st.xlog, lastAdd: st.lastAdd, p2: st.p2, p3: st.p3, p4: st.p4, pools: st.part === 3 ? pools : null }); }
+  function pushHist() { ui.hist.push(snap()); if (ui.hist.length > 80) ui.hist.shift(); }
+  function undo() {
+    if (ui.busy) return;
+    if (!ui.hist.length) { setMsg('もどせる操作は ありません。'); return; }
+    const h = ui.hist.pop();
+    if (h.pools) { pools = h.pools; savePools(); }
+    delete h.pools;
+    Object.assign(st, h);
+    buildAll(); setMsg('↶ ひとつもどしました。', 'info');
+  }
+  function setMsg(html, kind) { const m = $('msg'); m.innerHTML = html || ''; m.className = 'msg ' + (kind || 'info'); }
+
+  /* =====================================================================
+     5. 画面全体
+     ===================================================================== */
+  function buildAll() {
+    $('partRow').querySelectorAll('.chip').forEach(b => b.classList.toggle('active', +b.dataset.p === st.part));
+    $('partNote').textContent = PARTS[st.part].note;
+    $('expRow').hidden = st.part === 4;
+    $('expRow').innerHTML = EXP_KEYS.map(k => `<button class="chip exp${k === st.exp ? ' active' : ''}" data-e="${k}">${EXPS[k].name}</button>`).join('');
+    if (st.part === 1) build1();
+    else if (st.part === 2) build2();
+    else if (st.part === 3) build3();
+    else build4();
+    renderTrips(); renderTeacher();
+  }
+  function setPart(p) {
+    if (ui.busy) return;
+    stopRun();
+    st.part = p; buildAll(); setMsg('');
+  }
+  $('expRow').addEventListener('click', e => {
+    const b = e.target.closest('[data-e]');
+    if (!b || ui.busy || b.dataset.e === st.exp) return;
+    stopRun(); pushHist();
+    st.exp = b.dataset.e; st.n = 0; st.ghosts = []; st.seed = newSeed();
+    buildAll();
+    setMsg(`${EXPS[st.exp].name}：${EXPS[st.exp].what}。` + (st.exp === 'cap' ? '<br>上向きと下向きは同じ程度に起こるとはいえないので、理論では確率がわからない。たくさん投げて考えよう。' : ''), 'info');
+  });
+
+  /* =====================================================================
+     6. ① 実験する
+     ===================================================================== */
+  function stepperHTML(key, label, val, min, max) {
+    return `<span class="stepper">${label}<button data-st="${key}" data-d="-1" aria-label="${label}をへらす">−</button><input type="number" data-in="${key}" value="${val}" min="${min}" max="${max}"><button data-st="${key}" data-d="1" aria-label="${label}をふやす">＋</button></span>`;
+  }
+  // 設定（袋の玉の数・くじの本数・ふたの種類・★注目）
+  function settingsHTML() {
+    const c = C(), outs = outsNow();
+    let h = '';
+    if (st.exp === 'bag') h += stepperHTML('r', '赤', c.r, 0, 10) + stepperHTML('w', '白', c.w, 0, 10) + stepperHTML('b', '青', c.b, 0, 10);
+    if (st.exp === 'lot') h += stepperHTML('n', '全部', c.n, 2, 30) + stepperHTML('a', '当たり', c.a, 0, c.n);
+    if (st.exp === 'cap') h += `<label>ふた：<select data-sel="k">${Object.keys(CAPS).map(k => `<option value="${k}"${k === c.k ? ' selected' : ''}>${CAPS[k].name}</option>`).join('')}</select></label>`;
+    h += `<label>★ 注目する結果：<select data-sel="t">${outs.map((o, j) => o.hide ? '' : `<option value="${j}"${j === c.t ? ' selected' : ''}>${o.label}</option>`).join('')}</select></label>`;
+    return h;
+  }
+  const LIM = { r: [0, 10], w: [0, 10], b: [0, 10], n: [2, 30], a: [0, 30] };
+  function setCfg(k, v) {
+    const c = C();
+    if (k === 't') { pushHist(); c.t = +v; build1(); return; }
+    if (k === 'k') { pushHist(); c.k = v; st.n = 0; st.ghosts = []; build1(); setMsg('ふたをかえたので、はじめから。', 'info'); return; }
+    v = Math.round(+v);
+    if (!Number.isFinite(v)) { build1(); return; }
+    const [lo, hi] = LIM[k];
+    v = Math.max(lo, Math.min(k === 'a' ? c.n : hi, v));
+    const nc = Object.assign({}, c, { [k]: v });
+    if (st.exp === 'bag' && nc.r + nc.w + nc.b === 0) { setMsg('玉が1個もないと取り出せないよ。', 'ng'); build1(); return; }
+    if (st.exp === 'lot' && nc.a > nc.n) nc.a = nc.n;
+    if (nc[k] === c[k] && nc.a === c.a) { build1(); return; }
+    pushHist();
+    Object.assign(c, nc);
+    // 注目している色がなくなったら、ある色にうつす
+    const outs = outsNow();
+    if (outs[c.t].hide) c.t = outs.findIndex(o => !o.hide);
+    st.n = 0; st.ghosts = [];
+    build1(); setMsg('設定をかえたので、はじめから実験します。', 'info');
+  }
+
+  function build1() {
+    $('view').innerHTML = `
+    <div class="board"><div class="board-in">
+      <div class="col">
+        <div class="card">
+          <h2>🧪 ${EXPS[st.exp].name}：${EXPS[st.exp].what}</h2>
+          <div class="set-row" id="setRow">${settingsHTML()}</div>
+          <div class="stage" id="stage"></div>
+          <div class="strip" id="strip"></div>
+          <div class="run-btns">
+            <button class="op-btn" data-run="1">1回</button>
+            <button class="op-btn" data-run="10">10回</button>
+            <button class="op-btn" data-run="100">100回</button>
+            <button class="op-btn" data-run="1000">1000回</button>
+            <button class="op-btn warm" id="btnRun">▶ 連続</button>
+          </div>
+          <div class="bigcount" id="bigcount"></div>
+          <div class="gap-line" id="gapLine"></div>
+          <div class="seed-row">
+            <label>種（実験番号）<input type="number" id="seedIn" min="0" max="999999999" value="${st.seed}"></label>
+            <button class="op-btn" id="btnSame">🔁 同じ種で再現</button>
+            <button class="op-btn" id="btnNewSeed">🎲 新しい種</button>
+          </div>
+          <div class="small" style="text-align:center">種が同じなら、何度やっても同じ結果になる。</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h2>📈 ★ の相対度数のグラフ</h2>
+          <div class="tools left" style="margin-top:0">
+            <button class="op-btn ${st.theo ? 'on' : ''}" id="btnTheo">📏 理論の確率の線 ${st.theo ? 'ON' : 'OFF'}</button>
+            <button class="op-btn ${st.xlog ? 'on' : ''}" id="btnXlog">↔ 横の目もり：${st.xlog ? '10倍ずつ' : 'ふつう'}</button>
+            <button class="op-btn" id="btnClrG" ${st.ghosts.length ? '' : 'disabled'}>🧹 前の線を消す</button>
+          </div>
+          <div class="cv-wrap"><canvas class="gr" id="cv"></canvas></div>
+          <div class="readout" id="readout"></div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="card">
+          <h2>📋 結果の表 <span class="small">（行をタップすると ★ がかわる）</span></h2>
+          <div class="tbl-wrap"><table class="res" id="resTbl"></table></div>
+        </div>
+        <div class="card">
+          <h2>🔢 回数と ★ の相対度数</h2>
+          <div class="tbl-wrap"><table class="res" id="cpTbl"></table></div>
+          <div class="tools"><button class="op-btn action" id="btnRec">＋ ワークシートに記録する</button><button class="op-btn" id="btnToPool">👥 合算に入れる</button></div>
+        </div>
+      </div>
+    </div></div>`;
+    update1();
+  }
+
+  // 実験の台（いちばん新しい結果を絵で出す）
+  function stageHTML(anim) {
+    const c = C(), n = st.n, i = n - 1, has = n > 0;
+    const o = has ? getArr(st.exp, c, st.seed, n)[i] : -1;
+    const tgt = o === c.t;
+    let h = '';
+    if (st.exp === 'coin') h = `<span class="coin ${o === 1 ? 'ura' : ''} ${anim ? 'spin' : ''}">${has ? (o === 0 ? '表' : '裏') : '？'}<small>${has ? (o === 0 ? 'おもて' : 'うら') : ''}</small></span>`;
+    else if (st.exp === 'die') h = `<span class="dice ${anim ? 'roll' : ''}">${dieSVG(has ? o + 1 : 0)}</span>`;
+    else if (st.exp === 'sum') {
+      const d1 = has ? Math.floor(rnd(st.seed, 2 * i) * 6) + 1 : 0, d2 = has ? Math.floor(rnd(st.seed, 2 * i + 1) * 6) + 1 : 0;
+      h = `<span class="dice ${anim ? 'roll' : ''}">${dieSVG(d1, '#e65100')}</span><span class="dice ${anim ? 'roll' : ''}">${dieSVG(d2, '#1565c0')}</span>` +
+        `<div class="say">${has ? `${d1} ＋ ${d2} ＝ 和 ${d1 + d2}` : '2個のサイコロ（オレンジ・青）'}</div>`;
+    } else if (st.exp === 'bag') {
+      const T = c.r + c.w + c.b, j = has ? Math.floor(rnd(st.seed, i) * T) : -1;
+      let balls = '';
+      for (let x = 0; x < T; x++) { const col = x < c.r ? 0 : x < c.r + c.w ? 1 : 2; balls += `<span class="ball c${col} ${x === j ? 'pk' : ''}">${COLORS[col]}</span>`; }
+      h = `<div class="bag">${balls}</div>`;
+    } else if (st.exp === 'lot') {
+      const j = has ? Math.floor(rnd(st.seed, i) * c.n) : -1;
+      let lots = '';
+      for (let x = 0; x < c.n; x++) lots += `<span class="lot c${x < c.a ? 0 : 1} ${x === j ? 'pk' : ''}">${x < c.a ? '当' : 'は'}</span>`;
+      h = `<div class="lotbox">${lots}</div>`;
+    } else h = `<span class="capv ${anim ? 'roll' : ''}">${capSVG(has ? o : -1)}<span>${has ? (o === 0 ? '上向き' : '下向き') : '？'}</span></span>`;
+    if (st.exp !== 'sum') h += `<div class="say">${has ? `${fmt(n)} 回目：${outsNow()[o].label}${tgt ? '　★' : ''}` : 'ボタンを押して実験しよう'}</div>`;
+    return h;
+  }
+  // サイコロの目（v＝0 は白紙）
+  function dieSVG(v, col) {
+    const P = { 1: [[50, 50]], 2: [[28, 28], [72, 72]], 3: [[28, 28], [50, 50], [72, 72]], 4: [[28, 28], [72, 28], [28, 72], [72, 72]],
+      5: [[28, 28], [72, 28], [50, 50], [28, 72], [72, 72]], 6: [[28, 26], [72, 26], [28, 50], [72, 50], [28, 74], [72, 74]] };
+    return `<svg viewBox="0 0 100 100" aria-label="${v ? v + 'の目' : 'サイコロ'}"><rect x="4" y="4" width="92" height="92" rx="16" fill="#fff" stroke="${col || '#37474f'}" stroke-width="6"/>` +
+      (P[v] || []).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${v === 1 ? 13 : 9}" fill="${v === 1 ? '#c62828' : '#263238'}"/>`).join('') + '</svg>';
+  }
+  // びんのふた（横から見た図）：o＝0 上向き（口が上）、1 下向き、-1 まだ
+  function capSVG(o) {
+    const teeth = (y, dir) => { let d = ''; for (let x = 18; x <= 102; x += 7) d += `<path d="M${x} ${y} l3.5 ${dir * 7} l3.5 ${-dir * 7}" fill="#9e9e9e" stroke="#616161" stroke-width="1.5"/>`; return d; };
+    if (o === 0) return `<svg viewBox="0 0 120 84"><path d="M22 30 L30 66 Q60 74 90 66 L98 30 Z" fill="#cfd8dc" stroke="#546e7a" stroke-width="3"/><ellipse cx="60" cy="30" rx="38" ry="9" fill="#455a64" stroke="#546e7a" stroke-width="3"/>${teeth(24, -1)}</svg>`;
+    if (o === 1) return `<svg viewBox="0 0 120 84"><path d="M30 22 L22 58 L98 58 L90 22 Z" fill="#cfd8dc" stroke="#546e7a" stroke-width="3"/><ellipse cx="60" cy="22" rx="30" ry="7" fill="#eceff1" stroke="#546e7a" stroke-width="3"/>${teeth(58, 1)}</svg>`;
+    return `<svg viewBox="0 0 120 84"><text x="60" y="54" text-anchor="middle" font-size="40" fill="#fff">？</text></svg>`;
+  }
+
+  function update1(anim) {
+    if (st.part !== 1 || !$('stage')) return;
+    const c = C(), n = st.n, outs = outsNow(), th = theoNow();
+    const arr = n ? getArr(st.exp, c, st.seed, n) : null;
+    $('stage').innerHTML = stageHTML(anim);
+    // 最近の結果（30回分）
+    let s = '<span class="lbl">さいきんの結果：</span>';
+    for (let i = Math.max(0, n - 30); i < n; i++) s += `<span class="s ${arr[i] === c.t ? 't' : ''}">${outs[arr[i]].sh}</span>`;
+    $('strip').innerHTML = n ? s : '';
+    // 度数
+    const cnt = new Array(outs.length).fill(0);
+    for (let i = 0; i < n; i++) cnt[arr[i]]++;
+    const k = cnt[c.t];
+    $('bigcount').innerHTML = `<span><span class="lab">実験の回数</span> <span class="n">${fmt(n)}</span> 回</span>` +
+      `<span><span class="lab">★ ${outs[c.t].label}</span> ${fmt(k)} 回</span>` +
+      `<span><span class="lab">相対度数</span> <span class="rf">${rf3(k, n)}</span></span>`;
+    // 理論どおりの回数とのずれ（回数のずれは大きくなっても、相対度数のずれは小さくなる）
+    if (n && th) {
+      const ex = n * th[0] / th[1], d = k - ex, exS = Number.isInteger(ex) ? fmt(ex) : '約 ' + ex.toFixed(1);
+      const dS = Math.abs(d) < 1e-9 ? '0' : (d > 0 ? '＋' : '−') + (Number.isInteger(d) ? fmt(Math.abs(d)) : Math.abs(d).toFixed(1));
+      $('gapLine').innerHTML = `確率 ${fstr(th[0], th[1])} どおりなら ${exS} 回 → 回数のずれ <b>${dS}</b> 回 ／ 相対度数のずれ <b>${(Math.abs(k / n - th[0] / th[1])).toFixed(3)}</b>`;
+    } else $('gapLine').innerHTML = th ? '' : '<span class="small">びんのふたは、理論の確率がわからない。たくさん投げると、相対度数はどこに落ちつく？</span>';
+    // 結果の表
+    let t = `<tr><th>結果</th><th>度数（回）</th><th>相対度数</th><th>確率（理論）</th></tr>`;
+    outs.forEach((o, j) => {
+      if (o.hide) return;
+      const w = n ? cnt[j] / n * 100 : 0;
+      const bar = `<div class="rbar"><i style="width:${w}%"></i>${o.num != null && st.theo ? `<b style="left:calc(${o.num / o.den * 100}% - 1px)"></b>` : ''}</div>`;
+      t += `<tr data-t="${j}" class="${j === c.t ? 'tg' : ''}"><td>${j === c.t ? '★ ' : ''}${o.label}</td><td>${fmt(cnt[j])}</td><td>${rf3(cnt[j], n)}${bar}</td><td>${o.num == null ? '？' : fracHTML(o.num, o.den)}</td></tr>`;
+    });
+    t += `<tr class="sum"><td>合計</td><td>${fmt(n)}</td><td>${n ? '1.000' : '—'}</td><td>${th ? '1' : '？'}</td></tr>`;
+    $('resTbl').innerHTML = t;
+    // 回数ごとの相対度数（ばらつきを表で見る）
+    const CP = [10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000];
+    let cp = `<tr><th>回数</th><th>★ の回数</th><th>相対度数</th>${th ? '<th>確率とのずれ</th>' : ''}</tr>`;
+    let k2 = 0, ci = 0, any = false;
+    for (let i = 0; i < n && ci < CP.length; i++) {
+      if (arr[i] === c.t) k2++;
+      while (ci < CP.length && i + 1 === CP[ci]) {
+        any = true;
+        cp += `<tr><td>${fmt(CP[ci])}</td><td>${fmt(k2)}</td><td><b>${rf3(k2, CP[ci])}</b></td>${th ? `<td>${Math.abs(k2 / CP[ci] - th[0] / th[1]).toFixed(3)}</td>` : ''}</tr>`;
+        ci++;
+      }
+    }
+    if (!any) cp += `<tr><td colspan="4" class="small">10回 実験すると、ここに出るよ。</td></tr>`;
+    $('cpTbl').innerHTML = cp;
+    $('btnClrG').disabled = !st.ghosts.length;
+    drawGraph();
+  }
+
+  // ===== グラフ（Canvas）=====
+  // 1本の線の点：[回数, 相対度数] の列。点が多すぎないように間引く
+  function seriesOf(e, c, seed, n, t, xlog) {
+    if (!n) return [];
+    const arr = getArr(e, c, seed, n), pts = [];
+    const want = new Set();
+    if (xlog) { for (let i = 1; i <= Math.min(n, 100); i++) want.add(i); for (let s = 0; s <= 700; s++) want.add(Math.max(1, Math.round(Math.pow(n, s / 700)))); }
+    else { const step = Math.max(1, Math.floor(n / 900)); for (let i = 1; i <= n; i += step) want.add(i); for (let i = 1; i <= Math.min(n, 60); i++) want.add(i); }
+    want.add(n);
+    let k = 0;
+    for (let i = 0; i < n; i++) { if (arr[i] === t) k++; if (want.has(i + 1)) pts.push([i + 1, k / (i + 1), k]); }
+    return pts;
+  }
+  const NICE = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
+  let gview = null;      // さわったときの読み取り用
+  function drawGraph() {
+    const cv = $('cv'); if (!cv) return;
+    const W = cv.clientWidth || 500, H = W < 480 ? 250 : 300, dpr = window.devicePixelRatio || 1;
+    cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const L = 46, R = 16, T = 12, B = 38, w = W - L - R, h = H - T - B;
+    const c = C(), th = theoNow();
+    const nMax = Math.max(st.n, ...st.ghosts.map(gh => gh.n), 10);
+    const xmax = st.xlog ? Math.pow(10, Math.ceil(Math.log10(nMax))) : NICE.find(v => v >= nMax) || MAXN;
+    const X = (i) => st.xlog ? L + Math.log10(i) / Math.log10(xmax) * w : L + i / xmax * w;
+    const Y = (r) => T + (1 - r) * h;
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    // たての目もり 0〜1
+    g.font = '12px sans-serif'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let j = 0; j <= 10; j++) {
+      const y = Y(j / 10);
+      g.strokeStyle = j % 5 === 0 ? '#b0bec5' : '#eceff1'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(L, y); g.lineTo(L + w, y); g.stroke();
+      g.fillStyle = '#546e7a'; g.fillText(j === 0 ? '0' : j === 10 ? '1' : '0.' + j, L - 6, y);
+    }
+    // 横の目もり
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    const ticks = [];
+    if (st.xlog) for (let v = 1; v <= xmax; v *= 10) ticks.push(v);
+    else for (let j = 0; j <= 5; j++) ticks.push(xmax * j / 5);
+    ticks.forEach(v => {
+      const x = X(v);
+      g.strokeStyle = '#eceff1'; g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + h); g.stroke();
+      g.fillStyle = '#546e7a'; g.fillText(fmt(v), x, T + h + 4);
+    });
+    g.fillStyle = '#37474f'; g.font = 'bold 12px sans-serif'; g.fillText('実験の回数（回）', L + w / 2, T + h + 20);
+    g.strokeStyle = '#78909c'; g.lineWidth = 1.5; g.strokeRect(L, T, w, h);
+    // 理論の確率（緑の点線）
+    if (st.theo && th) {
+      const y = Y(th[0] / th[1]);
+      g.save(); g.setLineDash([8, 6]); g.strokeStyle = OK; g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(L, y); g.lineTo(L + w, y); g.stroke(); g.restore();
+      g.fillStyle = OK; g.font = 'bold 13px sans-serif'; g.textAlign = 'right'; g.textBaseline = 'bottom';
+      g.fillText('確率 ' + fstr(th[0], th[1]), L + w - 4, y - 3);
+    }
+    const line = (pts, col, lw, dash) => {
+      if (!pts.length) return;
+      g.save(); if (dash) g.setLineDash(dash); g.strokeStyle = col; g.lineWidth = lw; g.lineJoin = 'round';
+      g.beginPath(); pts.forEach(([i, r], j) => j ? g.lineTo(X(i), Y(r)) : g.moveTo(X(i), Y(r))); g.stroke(); g.restore();
+    };
+    // 前の実験（灰色の細い点線）
+    st.ghosts.forEach(gh => line(seriesOf(st.exp, c, gh.seed, gh.n, c.t, st.xlog), '#90a4ae', 1.6, [3, 3]));
+    // 今の実験（オレンジの太い線）
+    const pts = seriesOf(st.exp, c, st.seed, st.n, c.t, st.xlog);
+    line(pts, ORG, 3);
+    if (pts.length) {
+      const [i, r] = pts[pts.length - 1];
+      g.fillStyle = ORG; g.beginPath(); g.arc(X(i), Y(r), 5, 0, Math.PI * 2); g.fill();
+    } else {
+      g.fillStyle = '#90a4ae'; g.font = 'bold 15px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('実験すると、ここに線がのびていく', L + w / 2, T + h / 2);
+    }
+    gview = { L, T, w, h, xmax, X, pts };
+    const leg = [`<span><b style="color:${ORG}">━━ ●</b> 今の実験（種 ${st.seed}）</span>`];
+    if (st.ghosts.length) leg.push(`<span><b style="color:#90a4ae">┅┅</b> 前の実験 ${st.ghosts.length} 本</span>`);
+    if (th && st.theo) leg.push(`<span><b style="color:${OK}">- - -</b> 理論の確率</span>`);
+    $('legend').innerHTML = leg.join('');
+  }
+  // グラフをさわると、その回数までの相対度数を読める
+  function readAt(ev) {
+    const cv = $('cv'); if (!cv || !gview || !st.n) return;
+    const r = cv.getBoundingClientRect(), x = ev.clientX - r.left;
+    const f = Math.max(0, Math.min(1, (x - gview.L) / gview.w));
+    let i = st.xlog ? Math.round(Math.pow(gview.xmax, f)) : Math.round(f * gview.xmax);
+    i = Math.max(1, Math.min(st.n, i));
+    const c = C(), k = countT(st.exp, c, st.seed, i, c.t);
+    $('readout').innerHTML = `${fmt(i)} 回目まで：★ ${fmt(k)} 回 → 相対度数 ${rf3(k, i)}`;
+  }
+
+  // ===== 実験を進める =====
+  async function runN(m) {
+    if (ui.busy) return;
+    if (st.n >= MAXN) { setMsg(`1つの実験は ${fmt(MAXN)} 回までです。「⟲ もういちど」で新しい実験を始めよう。`, 'info'); return; }
+    m = Math.min(m, MAXN - st.n);
+    pushHist();
+    if (m === 1) { st.n++; sndTick(); update1(true); return; }
+    if (m <= 10) {
+      ui.busy = true; lockRun(true);
+      for (let j = 0; j < m; j++) { st.n++; update1(true); await sleep(110); }
+      ui.busy = false; lockRun(false); afterRun(); return;
+    }
+    st.n += m; update1(); afterRun();
+  }
+  function afterRun() {
+    const n = st.n;
+    if (n === 10 || n === 100 || n === 1000 || n === 10000) {
+      const c = C(), k = countT(st.exp, c, st.seed, n, c.t);
+      setMsg(`${fmt(n)} 回で ★ の相対度数は ${rf3(k, n)}。` + (n === 10 ? 'もういちど 10回だけやると、同じくらいになるかな？' : n >= 1000 ? 'グラフの線は、どこに落ちついてきた？' : ''), 'info');
+    }
+  }
+  function lockRun(on) { document.querySelectorAll('[data-run],#btnSame,#btnNewSeed,#seedIn,#setRow select,#setRow button,#setRow input').forEach(b => b.disabled = on); }
+  // ▶ 連続：はじめは1回ずつ、回数がふえると速くする
+  function toggleRun() {
+    if (ui.run) { stopRun(); return; }
+    if (ui.busy) return;
+    if (st.n >= MAXN) { setMsg(`1つの実験は ${fmt(MAXN)} 回までです。`, 'info'); return; }
+    pushHist();
+    lockRun(true);
+    $('btnRun').textContent = '⏸ とめる'; $('btnRun').classList.add('go-on');
+    ui.run = setInterval(() => {
+      const n = st.n, add = n < 30 ? 1 : n < 200 ? 3 : n < 1000 ? 20 : n < 10000 ? 200 : 1000;
+      st.n = Math.min(MAXN, n + add);
+      update1(n < 30);
+      if (st.n >= MAXN) { stopRun(); setMsg(`${fmt(MAXN)} 回になったので とめました。`, 'info'); }
+    }, n0Delay());
+  }
+  const n0Delay = () => 90;
+  function stopRun() {
+    if (!ui.run) return;
+    clearInterval(ui.run); ui.run = null;
+    if ($('btnRun')) { $('btnRun').textContent = '▶ 連続'; $('btnRun').classList.remove('go-on'); lockRun(false); }
+  }
+  // もういちど：今の実験を灰色の線にのこして、新しい種ではじめから
+  function again1(sameSeed) {
+    stopRun(); pushHist();
+    if (st.n) { st.ghosts.push({ seed: st.seed, n: st.n }); if (st.ghosts.length > 6) st.ghosts.shift(); }
+    if (!sameSeed) st.seed = newSeed();
+    st.n = 0;
+    build1();
+    setMsg(sameSeed ? `🔁 同じ種 ${st.seed} で はじめから。さっきと同じボタンを押すと、同じ結果になるよ。` : `⟲ 新しい種 ${st.seed} で はじめから。前の実験は灰色の点線でのこっている。`, 'info');
+  }
+
+  $('view').addEventListener('click', e => {
+    const b = e.target.closest('button, tr[data-t]');
+    if (!b || b.disabled) return;
+    if (st.part === 1) {
+      if (b.dataset.run) { runN(+b.dataset.run); return; }
+      if (b.dataset.st) { const k = b.dataset.st; setCfg(k, C()[k] + +b.dataset.d); return; }
+      if (b.dataset.t != null && b.tagName === 'TR') { if (!ui.busy && !ui.run && +b.dataset.t !== C().t) { pushHist(); C().t = +b.dataset.t; build1(); } return; }
+      if (b.id === 'btnRun') toggleRun();
+      else if (b.id === 'btnSame') again1(true);
+      else if (b.id === 'btnNewSeed') again1(false);
+      else if (b.id === 'btnTheo') { st.theo = !st.theo; build1(); }
+      else if (b.id === 'btnXlog') { st.xlog = !st.xlog; build1(); }
+      else if (b.id === 'btnClrG') { pushHist(); st.ghosts = []; update1(); }
+      else if (b.id === 'btnRec') record1();
+      else if (b.id === 'btnToPool') { addFromLab(); }
+    } else if (st.part === 2) click2(b);
+    else if (st.part === 3) click3(b);
+    else click4(b);
+  });
+  $('view').addEventListener('change', e => {
+    const t = e.target;
+    if (st.part === 1) {
+      if (t.dataset.in) setCfg(t.dataset.in, t.value);
+      else if (t.dataset.sel) setCfg(t.dataset.sel, t.value);
+      else if (t.id === 'seedIn') {
+        const v = Math.round(+t.value);
+        if (!Number.isFinite(v) || v < 0 || v > 999999999) { t.value = st.seed; return; }
+        stopRun(); pushHist();
+        if (st.n) { st.ghosts.push({ seed: st.seed, n: st.n }); if (st.ghosts.length > 6) st.ghosts.shift(); }
+        st.seed = v; st.n = 0; build1(); setMsg(`種を ${v} にして、はじめから。`, 'info');
+      }
+    } else if (st.part === 3) change3(t);
+    else if (st.part === 4) change4(t);
+  });
+  $('view').addEventListener('pointerdown', e => { if (e.target.id === 'cv') readAt(e); });
+  $('view').addEventListener('pointermove', e => { if (e.target.id === 'cv') readAt(e); });
+  window.addEventListener('resize', () => { if (st.part === 1) drawGraph(); else if (st.part === 3) draw3(); });
+
+  function rec1Data() {
+    const c = C(), k = countT(st.exp, c, st.seed, st.n, c.t), th = theoNow();
+    return { exp: `${expLabel(st.exp, c)}：${outsNow()[c.t].label}`, n: String(st.n), k: String(k), rf: rf3(k, st.n), p: th ? fstr(th[0], th[1]) : '？' };
+  }
+  function record1() {
+    if (!st.n) { setMsg('実験してから記録しよう。', 'info'); return; }
+    if (window.Worksheet) { Worksheet.addRecord(rec1Data()); Worksheet.open(); }
+    setMsg('＋ ワークシートに記録しました。', 'ok');
+  }
+
+  /* =====================================================================
+     7. ② ばらつきをくらべる
+     1人分＝ちがう種で N 回の実験。★ の相対度数を1つの点にする。
+     ===================================================================== */
+  const NS = [10, 100, 1000];
+  const P2PRED = [['10', '10回の方が ちらばる'], ['1000', '1000回の方が ちらばる'], ['same', 'どちらも同じくらい']];
+  function sync2() {
+    const key = poolKey();
+    if (st.p2.key !== key) Object.assign(st.p2, { key, rows: { 10: [], 100: [], 1000: [] }, judged: false });
+  }
+  function person2(N) {
+    const p = st.p2, s = fmix(p.base * 7919 + p.cnt++) % 1000000000;
+    const c = C();
+    // ここでは種を使いすてにするので、おぼえておかずに数える
+    const g = EXPS[st.exp].gen; let k = 0;
+    for (let i = 0; i < N; i++) if (g(c, s, i) === c.t) k++;
+    return k;
+  }
+  function build2() {
+    sync2();
+    const c = C(), th = theoNow(), p = st.p2;
+    $('view').innerHTML = `
+    <div class="card">
+      <h2>📊 ${expLabel(st.exp, c)}：★ ${outsNow()[c.t].label} の相対度数を、たくさんの人で調べる</h2>
+      <div class="small">1つの点が、1人分の実験の相対度数。${th ? `緑の点線は理論の確率 ${fstr(th[0], th[1])}。` : '理論の確率はわからない。'}</div>
+      <div class="pred-row">予想：相対度数のちらばりが大きいのは？ ${P2PRED.map(([k, t]) => `<button class="chip ${p.pred === k ? 'active' : ''}" data-pred="${k}">${t}</button>`).join('')}</div>
+      <div class="tools">
+        ${NS.map(N => `<button class="op-btn" data-add="${N}" data-m="1">${N}回 ＋1人</button><button class="op-btn action" data-add="${N}" data-m="10">${N}回 ＋10人</button>`).join('')}
+      </div>
+      <div class="tools"><button class="op-btn warm" id="btnAll">🧑‍🤝‍🧑 3つとも 30人ずつにする</button></div>
+      <svg class="dots" id="dots"></svg>
+      <div class="tbl-wrap"><table class="res" id="sumTbl"></table></div>
+      <div id="concl"></div>
+      <div class="tools"><button class="op-btn action" id="btnRec2">＋ ワークシートに記録する</button></div>
+    </div>`;
+    draw2();
+  }
+  // 範囲（最小・最大）。値は k/N を整数のまま持つ
+  function stat2(N) { const a = st.p2.rows[N]; if (!a.length) return null; let lo = Infinity, hi = -Infinity, near = 0; a.forEach(k => { lo = Math.min(lo, k); hi = Math.max(hi, k); }); return { m: a.length, lo, hi }; }
+  function draw2() {
+    const th = theoNow(), p = st.p2;
+    const W = 720, rowH = 120, L = 70, R = 20, T = 30, w = W - L - R, H = T + rowH * NS.length + 30;
+    const X = (r) => L + r * w;
+    let s = `<rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>`;
+    for (let j = 0; j <= 10; j++) {
+      const x = X(j / 10);
+      s += `<line x1="${x}" y1="${T - 6}" x2="${x}" y2="${T + rowH * NS.length}" stroke="${j % 5 ? '#eceff1' : '#cfd8dc'}" stroke-width="1"/>`;
+      s += `<text x="${x}" y="${T + rowH * NS.length + 20}" font-size="15" text-anchor="middle" fill="#546e7a">${j === 0 ? '0' : j === 10 ? '1' : '0.' + j}</text>`;
+    }
+    s += `<text x="${L + w / 2}" y="16" font-size="14" text-anchor="middle" fill="#37474f" font-weight="bold">★ の相対度数</text>`;
+    NS.forEach((N, ri) => {
+      const y0 = T + ri * rowH, base = y0 + rowH - 14, a = p.rows[N], sta = stat2(N);
+      s += `<line x1="${L}" y1="${base + 6}" x2="${L + w}" y2="${base + 6}" stroke="#90a4ae" stroke-width="2"/>`;
+      s += `<text x="${L - 8}" y="${y0 + rowH / 2}" font-size="17" text-anchor="end" fill="#1b5e20" font-weight="bold">${N}回</text>`;
+      s += `<text x="${L - 8}" y="${y0 + rowH / 2 + 20}" font-size="13" text-anchor="end" fill="#78909c">${a.length}人</text>`;
+      if (sta) {
+        const x1 = X(sta.lo / N), x2 = X(sta.hi / N);
+        s += `<rect x="${x1 - 4}" y="${y0 + 8}" width="${Math.max(8, x2 - x1 + 8)}" height="${rowH - 16}" rx="8" fill="#fff3e0" stroke="#ffb74d" stroke-dasharray="5 4"/>`;
+      }
+      // 同じ位置の点は上につみ上げる（ドットプロット）
+      const stack = new Map(), step = Math.min(9, (rowH - 30) / Math.max(1, maxStack(a, N)));
+      a.forEach(k => {
+        const b = Math.round(k / N * 100), cnt = stack.get(b) || 0; stack.set(b, cnt + 1);
+        s += `<circle cx="${X(b / 100)}" cy="${base - cnt * step}" r="5" fill="${ORG}" stroke="#fff" stroke-width="1"/>`;
+      });
+    });
+    if (th) { const x = X(th[0] / th[1]); s += `<line x1="${x}" y1="${T - 6}" x2="${x}" y2="${T + rowH * NS.length}" stroke="${OK}" stroke-width="3" stroke-dasharray="8 6"/><text x="${x + 4}" y="${T + 4}" font-size="14" fill="${OK}" font-weight="bold">確率 ${fstr(th[0], th[1])}</text>`; }
+    const sv = $('dots'); sv.setAttribute('viewBox', `0 0 ${W} ${H}`); sv.innerHTML = s;
+    // まとめの表
+    let t = `<tr><th>回数</th><th>人数</th><th>最小</th><th>最大</th><th>範囲（ちらばり）</th>${th ? '<th>確率との差が 0.05 以下の人</th>' : ''}</tr>`;
+    NS.forEach(N => {
+      const sta = stat2(N), a = p.rows[N];
+      if (!sta) { t += `<tr><td>${N}回</td><td>0</td><td colspan="${th ? 4 : 3}" class="small">まだ</td></tr>`; return; }
+      const near = th ? a.filter(k => Math.abs(k / N - th[0] / th[1]) <= 0.05 + 1e-12).length : 0;
+      t += `<tr><td>${N}回</td><td>${a.length}</td><td>${rf3(sta.lo, N)}</td><td>${rf3(sta.hi, N)}</td><td><b>${((sta.hi - sta.lo) / N).toFixed(3)}</b></td>${th ? `<td>${near} 人（${Math.round(near / a.length * 100)}%）</td>` : ''}</tr>`;
+    });
+    $('sumTbl').innerHTML = t;
+    // 気づき（10回と1000回が 10人以上そろったら）
+    const a10 = stat2(10), a1k = stat2(1000);
+    let cc = '';
+    if (a10 && a1k && a10.m >= 10 && a1k.m >= 10) {
+      const r10 = (a10.hi - a10.lo) / 10, r1k = (a1k.hi - a1k.lo) / 1000;
+      cc = `<div class="concl">範囲（ちらばり）：10回 <b>${r10.toFixed(3)}</b> ／ 1000回 <b>${r1k.toFixed(3)}</b>。<br>回数が少ないと相対度数は大きくばらつくが、回数を多くすると、${th ? `確率 ${fstr(th[0], th[1])} の近くに集まる。` : '1つの値の近くに集まる。その値を、上向きになる確率と考える。'}</div>`;
+      if (!p.judged && p.pred) {
+        p.judged = true;
+        if (p.pred !== '10') { addTrip('spread'); cc += `<div class="concl warn">予想とちがった！ ${TRIPS.spread.exp}</div>`; }
+        else { sndOK(); bumpClear(2); }
+      }
+    } else cc = `<div class="small" style="margin-top:6px">10回と1000回を、それぞれ10人以上やってみよう。</div>`;
+    $('concl').innerHTML = cc;
+  }
+  function maxStack(a, N) { const m = new Map(); let mx = 1; a.forEach(k => { const b = Math.round(k / N * 100), c = (m.get(b) || 0) + 1; m.set(b, c); mx = Math.max(mx, c); }); return mx; }
+  function click2(b) {
+    const p = st.p2;
+    if (b.dataset.pred) { pushHist(); p.pred = b.dataset.pred; p.judged = false; build2(); setMsg('予想したら、10回・1000回のボタンで人数をふやそう。', 'info'); return; }
+    if (b.dataset.add) {
+      if (!p.pred) setMsg('先に予想をえらぶと、あとでくらべられるよ。', 'info');
+      const N = +b.dataset.add, m = +b.dataset.m;
+      if (p.rows[N].length >= 60) { setMsg('1つの回数は 60人までです。', 'info'); return; }
+      pushHist();
+      for (let j = 0; j < m && p.rows[N].length < 60; j++) p.rows[N].push(person2(N));
+      draw2(); return;
+    }
+    if (b.id === 'btnAll') { pushHist(); NS.forEach(N => { while (p.rows[N].length < 30) p.rows[N].push(person2(N)); }); draw2(); return; }
+    if (b.id === 'btnRec2') {
+      const ok = NS.filter(N => p.rows[N].length);
+      if (!ok.length) { setMsg('人数をふやしてから記録しよう。', 'info'); return; }
+      const c = C(), th = theoNow();
+      ok.forEach(N => { const s = stat2(N); Worksheet.addRecord({ exp: `${expLabel(st.exp, c)}：${outsNow()[c.t].label}・${s.m}人分`, n: String(N), k: '—', rf: `${rf3(s.lo, N)}〜${rf3(s.hi, N)}（範囲 ${((s.hi - s.lo) / N).toFixed(3)}）`, p: th ? fstr(th[0], th[1]) : '？' }); });
+      Worksheet.open(); setMsg('＋ ワークシートに記録しました。', 'ok');
+    }
+  }
+
+  /* =====================================================================
+     8. ③ クラスで合算
+     ===================================================================== */
+  function build3() {
+    const c = C(), th = theoNow(), pl = poolNow();
+    $('view').innerHTML = `
+    <div class="board"><div class="board-in">
+      <div class="col">
+        <div class="card">
+          <h2>👥 ${pl.label} の合算</h2>
+          <div class="pool-big" id="poolBig"></div>
+          <div class="tools">
+            <button class="op-btn action" id="btnFromLab">＋ ①の実験（${fmt(st.n)}回）を入れる</button>
+            <button class="op-btn" id="btnNextLab">🧪 ①で次の人の実験をする</button>
+          </div>
+          <div class="in-row">🤖 自動で1人分：
+            <select id="perSel">${[10, 50, 100, 1000].map(v => `<option value="${v}"${v === st.p3.per ? ' selected' : ''}>${v}回</option>`).join('')}</select>
+            <button class="op-btn" data-auto="1">＋1人</button><button class="op-btn" data-auto="10">＋10人</button>
+          </div>
+          <div class="in-row">✍ 数で入れる：回数 <input type="number" id="inN" min="1" max="${MAXN}" placeholder="100"> のうち ★ <input type="number" id="inK" min="0" placeholder="48"> 回 <button class="op-btn" id="btnHand">＋ 足す</button></div>
+          <div class="small" style="text-align:center">ほかのタブレットの結果や、本物のコインで実験した結果も入れられる。</div>
+          <div class="tools"><button class="op-btn" id="btnRec3">＋ ワークシートに記録する</button><button class="op-btn" id="btnClr3">🗑 この合算をぜんぶ消す</button></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h2>📈 1人ずつと、合算の相対度数</h2>
+          <svg class="dots" id="poolSvg"></svg>
+          <div class="legend"><span><b style="color:#90a4ae">◆</b> 1人分の相対度数</span><span><b style="color:${ORG}">━━ ●</b> そこまでの合算</span>${th ? `<span><b style="color:${OK}">- - -</b> 理論の確率 ${fstr(th[0], th[1])}</span>` : ''}</div>
+        </div>
+        <div class="card">
+          <h2>📋 合算の表</h2>
+          <div class="tbl-wrap pool-tbl"><table class="res" id="poolTbl"></table></div>
+        </div>
+      </div>
+    </div></div>`;
+    draw3();
+  }
+  function draw3() {
+    if (st.part !== 3 || !$('poolSvg')) return;
+    const pl = poolNow(), es = pl.entries, th = theoNow();
+    let N = 0, K = 0;
+    const rows = es.map(([n, k, src], j) => { N += n; K += k; return { j, n, k, src, N, K }; });
+    $('poolBig').innerHTML = es.length
+      ? `${es.length} 人分・合計 ${fmt(N)} 回のうち ★ ${fmt(K)} 回<br>合算の相対度数 <span class="rf">${rf3(K, N)}</span>${th ? `　<span class="small">（確率 ${fstr(th[0], th[1])}）</span>` : ''}`
+      : 'まだ だれのデータも入っていない。<br><span class="small">①で実験して「＋ ①の実験を入れる」、または 🤖・✍ で入れよう。</span>';
+    // グラフ（横＝何人目、たて＝相対度数 0〜1）
+    const W = 640, H = 300, L = 46, R = 14, T = 12, B = 36, w = W - L - R, h = H - T - B;
+    const m = Math.max(es.length, 5), X = (j) => L + (j + 0.5) / m * w, Y = (r) => T + (1 - r) * h;
+    let s = `<rect width="${W}" height="${H}" fill="#fff"/>`;
+    for (let j = 0; j <= 10; j++) { const y = Y(j / 10); s += `<line x1="${L}" y1="${y}" x2="${L + w}" y2="${y}" stroke="${j % 5 ? '#eceff1' : '#cfd8dc'}"/><text x="${L - 6}" y="${y + 4}" font-size="12" text-anchor="end" fill="#546e7a">${j === 0 ? '0' : j === 10 ? '1' : '0.' + j}</text>`; }
+    const every = Math.ceil(m / 10);
+    for (let j = 0; j < m; j++) if ((j + 1) % every === 0 || j === 0) s += `<text x="${X(j)}" y="${T + h + 16}" font-size="12" text-anchor="middle" fill="#546e7a">${j + 1}</text>`;
+    s += `<text x="${L + w / 2}" y="${H - 4}" font-size="13" text-anchor="middle" fill="#37474f" font-weight="bold">何人目まで</text>`;
+    s += `<rect x="${L}" y="${T}" width="${w}" height="${h}" fill="none" stroke="#78909c" stroke-width="1.5"/>`;
+    if (th) s += `<line x1="${L}" y1="${Y(th[0] / th[1])}" x2="${L + w}" y2="${Y(th[0] / th[1])}" stroke="${OK}" stroke-width="2.5" stroke-dasharray="8 6"/>`;
+    rows.forEach(r => { const x = X(r.j), y = Y(r.k / r.n); s += `<path d="M${x} ${y - 6} L${x + 5} ${y} L${x} ${y + 6} L${x - 5} ${y} Z" fill="#90a4ae"/>`; });
+    if (rows.length) {
+      s += `<polyline points="${rows.map(r => `${X(r.j)},${Y(r.K / r.N)}`).join(' ')}" fill="none" stroke="${ORG}" stroke-width="3" stroke-linejoin="round"/>`;
+      rows.forEach(r => { s += `<circle cx="${X(r.j)}" cy="${Y(r.K / r.N)}" r="${rows.length > 40 ? 2.5 : 4}" fill="${ORG}"/>`; });
+    }
+    const sv = $('poolSvg'); sv.setAttribute('viewBox', `0 0 ${W} ${H}`); sv.innerHTML = s;
+    // 表（新しい順）
+    const SRC = { m: '①の実験', a: '🤖 自動', h: '✍ 数で' };
+    let t = `<tr><th>人</th><th>回数</th><th>★</th><th>相対度数</th><th>合計の回数</th><th>合算の相対度数</th></tr>`;
+    rows.slice().reverse().forEach(r => { t += `<tr><td>${r.j + 1}<br><span class="small">${SRC[r.src] || ''}</span></td><td>${fmt(r.n)}</td><td>${fmt(r.k)}</td><td>${rf3(r.k, r.n)}</td><td>${fmt(r.N)}</td><td><b>${rf3(r.K, r.N)}</b></td></tr>`; });
+    if (!rows.length) t += `<tr><td colspan="6" class="small">まだ ありません</td></tr>`;
+    $('poolTbl').innerHTML = t;
+  }
+  function addEntry(n, k, src) {
+    const pl = poolNow();
+    if (pl.entries.length >= 300) { setMsg('合算は 300人分までです。', 'info'); return false; }
+    pushHist(); pl.entries.push([n, k, src]); savePools(); return true;
+  }
+  // ①の今の実験を合算に入れる（同じ実験を2回入れないようにする）
+  function addFromLab() {
+    if (!st.n) { setMsg('①で実験してから入れよう。', 'info'); return; }
+    const id = `${poolKey()}|${st.seed}|${st.n}`;
+    if (st.lastAdd === id) { setMsg('この実験は もう入れました。「⟲ もういちど」で次の人の実験をしてから入れよう。', 'info'); return; }
+    const c = C(), k = countT(st.exp, c, st.seed, st.n, c.t);
+    if (!addEntry(st.n, k, 'm')) return;
+    st.lastAdd = id;
+    if (st.part === 3) draw3();
+    setMsg(`👥 合算に入れました（${fmt(st.n)}回のうち ★ ${fmt(k)}回）。「⟲ もういちど」で次の人の実験をして、また入れよう。`, 'ok');
+  }
+  function click3(b) {
+    if (b.id === 'btnFromLab') { addFromLab(); return; }
+    if (b.id === 'btnNextLab') { st.part = 1; buildAll(); again1(false); return; }
+    if (b.dataset.auto) {
+      const per = st.p3.per, m = +b.dataset.auto, c = C();
+      const pl = poolNow(); if (pl.entries.length + m > 300) { setMsg('合算は 300人分までです。', 'info'); return; }
+      pushHist();
+      for (let j = 0; j < m; j++) { const s = newSeed() * 1000 + Math.floor(Math.random() * 1000); pl.entries.push([per, countT(st.exp, c, s, per, c.t), 'a']); }
+      savePools(); draw3(); return;
+    }
+    if (b.id === 'btnHand') {
+      const n = Math.round(+$('inN').value), k = Math.round(+$('inK').value);
+      if (!(n >= 1 && n <= MAXN) || !Number.isFinite(k) || $('inK').value === '') { setMsg(`回数は 1〜${fmt(MAXN)}、★ の回数は 0 以上を入れよう。`, 'ng'); return; }
+      if (k < 0 || k > n) { setMsg('★ の回数は、0 から 回数 までの数だよ。', 'ng'); return; }
+      if (addEntry(n, k, 'h')) { $('inN').value = ''; $('inK').value = ''; draw3(); setMsg(`✍ ${fmt(n)}回のうち ★ ${fmt(k)}回 を足しました。`, 'ok'); }
+      return;
+    }
+    if (b.id === 'btnRec3') {
+      const es = poolNow().entries; if (!es.length) { setMsg('データを入れてから記録しよう。', 'info'); return; }
+      let N = 0, K = 0; es.forEach(([n, k]) => { N += n; K += k; });
+      const th = theoNow();
+      Worksheet.addRecord({ exp: `${poolNow().label}・${es.length}人分の合算`, n: String(N), k: String(K), rf: rf3(K, N), p: th ? fstr(th[0], th[1]) : '？' });
+      Worksheet.open(); setMsg('＋ ワークシートに記録しました。', 'ok'); return;
+    }
+    if (b.id === 'btnClr3') {
+      if (!poolNow().entries.length) return;
+      if (!confirm('この実験の合算データを ぜんぶ消しますか？（「ひとつもどす」でもどせます）')) return;
+      pushHist(); poolNow().entries = []; savePools(); draw3(); setMsg('🗑 合算を消しました。', 'info');
+    }
+  }
+  function change3(t) { if (t.id === 'perSel') st.p3.per = +t.value; }
+
+  /* =====================================================================
+     9. ④ 次はどっち？（ギャンブラーの誤り）
+     ===================================================================== */
+  // クイズ：ch は [ことば, まちがえたときの型（正解は null）]。type で「この型を練習」に出す問題を決める
+  const QUIZ = [
+    { q: 'コインを投げたら、5回続けて表が出た。次の1回で表が出る確率は？',
+      ch: [['1/2 より大きい（表の流れが来ている）', 'streak'], ['1/2 のまま', null], ['1/2 より小さい（そろそろ裏が出るはず）', 'gambler']],
+      exp: 'コインは前の結果をおぼえていない。何回続いても、次に表が出る確率は 1/2。' },
+    { q: 'サイコロを20回ふって、6の目が1回も出ていない。次の1回で6の目が出る確率は？',
+      ch: [['1/6 より大きい（そろそろ出るはず）', 'gambler'], ['1/6 のまま', null], ['1/6 より小さい（出にくいサイコロだから）', 'streak']],
+      exp: '20回出なかったのは たまたま。どの目も同じ程度に出るサイコロなら、次も 1/6。' },
+    { q: '10本中3本が当たりのくじを、1本引いてはもとにもどす。3回続けてはずれた。4回目に当たる確率は？',
+      ch: [['3/10 より大きい（はずれが続いたから）', 'gambler'], ['3/10 のまま', null], ['3/10 より小さい（今日は運が悪いから）', 'streak']],
+      exp: 'もとにもどすので、くじの中身は毎回同じ。4回目も 3/10。（もどさないときは、中身が変わるので確率も変わる。）' },
+    { q: 'サイコロを1回ふって 1 の目が出た。次にもう1回ふるとき、1 の目が出る確率は？',
+      ch: [['1/6 より小さくなる（さっき出たから）', 'gambler'], ['1/6 のまま', null], ['1/6 より大きくなる（出やすい目だから）', 'streak']],
+      exp: '前に何が出たかは関係ない。1 の目が出る確率は 1/6。' },
+    { q: '1 の目が出る確率は 1/6。サイコロを6回ふると、1 の目はどうなる？',
+      ch: [['必ず1回出る', 'sure'], ['1回も出ないこともあるし、2回以上出ることもある', null], ['必ず1回以上出る', 'sure']],
+      exp: '確率 1/6 は「6回に必ず1回」ではない。①で「6回」を何度かためすと、0回や2回のこともある。' },
+    { q: '当たる確率が 1/10 のくじ（引いたらもどす）を、10回引く。どうなる？',
+      ch: [['必ず1回当たる', 'sure'], ['1回も当たらないこともある', null], ['10回目には必ず当たる', 'sure']],
+      exp: '毎回 1/10 で当たるだけなので、10回引いても1回も当たらないことがある。' },
+    { q: 'コインを1000回投げる。表が出る回数は？',
+      ch: [['ちょうど500回になる', 'sure'], ['500回の前後になることが多いが、ぴったりとは限らない', null], ['500回からとても遠くなる', 'countdiff']],
+      exp: '回数が多いと相対度数は 0.5 に近づくが、回数がぴったり半分になるとは限らない。' },
+    { q: 'Aさんがコインを10回投げたら、表が7回出た。このコインの表が出る確率は 0.7 といえる？',
+      ch: [['いえる', 'fewN'], ['10回では少なすぎるので、いえない。もっと多く投げて調べる', null], ['表が出やすいコインなのは、たしか', 'fewN']],
+      exp: '10回では相対度数は大きくばらつく（②で確かめられる）。0.3 や 0.7 になることも よくある。' },
+    { q: 'コインを100回投げると表と裏の回数の差は6回、10000回投げると差は60回だった。表の相対度数は？',
+      ch: [['差がふえたから、0.5 から遠ざかった', 'countdiff'], ['0.53 から 0.503 になって、0.5 に近づいた', null], ['回数がちがうので、くらべられない', 'countdiff']],
+      exp: '100回で表53回 → 0.53、10000回で表5030回 → 0.503。回数の差はふえても、相対度数は 0.5 に近づいている。' },
+    { q: '30人がそれぞれ、コインを10回投げる実験と、1000回投げる実験をした。表の相対度数のちらばりが大きいのは？',
+      ch: [['10回の実験', null], ['1000回の実験', 'spread'], ['どちらも同じくらい', 'spread']],
+      exp: '回数が少ないほど、ちらばりは大きい。1000回の人たちは 0.5 の近くに集まる。' },
+    { q: 'びんのふたを投げると、上向きか下向きのどちらか。上向きになる確率は 1/2 といえる？',
+      ch: [['2通りなので 1/2 といえる', 'equal'], ['同じ程度に起こるとはいえないので、たくさん投げて相対度数で考える', null], ['確率はまったくわからない', 'equal']],
+      exp: 'ふたは表と裏の形がちがうので、上向きと下向きが同じ程度に起こるとはいえない。たくさん投げたときの相対度数を確率と考える。' },
+    { q: '2つのサイコロをふる。目の和は 2〜12 の11通り。和が7になる確率は 1/11 といえる？',
+      ch: [['いえる', 'equal'], ['いえない。36通りのうち6通りなので 1/6', null], ['いえない。7 は出ないことがあるから 0', 'equal']],
+      exp: '和の11通りは、同じ程度に起こらない（和7 は6通り、和2 は1通り）。①の「2個の和」で実験すると、和7 がいちばん多い。' },
+    { q: '雨の降る確率が 30% の日が、10日あった。そのうち雨が降った日は？',
+      ch: [['ちょうど3日', 'sure'], ['3日くらいのことが多いが、多いことも少ないこともある', null], ['30% は低いので、0日', 'sure']],
+      exp: '確率は、何回も起こったときの起こりやすさ。10日の中では、ちょうど3日とは限らない。' },
+  ];
+  // 表が k 回続いたすぐあとの1回を調べる
+  function sim4() {
+    const p = st.p4, a = getArr('coin', {}, p.seed, p.N);
+    let run = 0, h = 0, m = 0, H = 0;
+    for (let i = 0; i < p.N; i++) {
+      if (run >= p.k) { m++; if (a[i] === 0) h++; }
+      if (a[i] === 0) { H++; run++; } else run = 0;
+    }
+    return { m, h, H };
+  }
+  function build4() {
+    const p = st.p4;
+    $('view').innerHTML = `
+    <div class="board"><div class="board-in">
+      <div class="col">
+        <div class="card">
+          <h2>🔍 実験で確かめる：表が続いたあとの1回</h2>
+          <div class="set-row">
+            ${stepperHTML('k', '表が', p.k, 1, 8)} 回続いたあと
+            <label>コインを <select id="selN">${[1000, 10000, 100000].map(v => `<option value="${v}"${v === p.N ? ' selected' : ''}>${fmt(v)}回</option>`).join('')}</select> 投げる</label>
+          </div>
+          <div class="tools"><button class="op-btn action" id="btnSim">🔍 調べる</button><button class="op-btn" id="btnSimNew">🎲 ちがう種で</button></div>
+          <div id="simOut"></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card" id="quizCard"></div>
+      </div>
+    </div></div>`;
+    renderSim(); renderQuiz();
+  }
+  function renderSim() {
+    const p = st.p4, el = $('simOut'); if (!el) return;
+    if (!p.sim) { el.innerHTML = `<div class="small" style="margin-top:8px">予想：表が ${p.k} 回続いたあと、次に表が出る割合は 0.5 より大きい？ 小さい？ 同じくらい？ →「🔍 調べる」</div>`; return; }
+    const r = sim4(), a = getArr('coin', {}, p.seed, p.N);
+    // はじめの 60回を並べて、続いた所と その次の1回に印をつける
+    let f = '', run = 0;
+    const L = Math.min(60, p.N), mark = new Array(L).fill(0);
+    for (let i = 0; i < L; i++) { if (run >= p.k) mark[i] = 2; if (a[i] === 0) run++; else run = 0; }
+    run = 0; for (let i = 0; i < L; i++) { if (a[i] === 0) { run++; if (run >= p.k) for (let j = i - p.k + 1; j <= i; j++) mark[j] = mark[j] || 1; } else run = 0; }
+    for (let i = 0; i < L; i++) f += `<span class="s ${a[i] === 0 ? 'h' : 'u'} ${mark[i] === 1 ? 'run' : ''} ${mark[i] === 2 ? 'nx' : ''}">${a[i] === 0 ? '表' : '裏'}</span>`;
+    const w1 = r.m ? r.h / r.m * 100 : 0, w2 = r.H / p.N * 100;
+    el.innerHTML = `
+      <div class="small" style="margin-top:8px">はじめの ${L} 回（<b style="color:${ORG}">下線</b>＝表が ${p.k} 回以上続いた所、<b style="color:${BLU}">青いわく</b>＝その次の1回）</div>
+      <div class="flips">${f}</div>
+      <div class="cmpbars">
+        <span>全体（${fmt(p.N)}回）</span><div class="rbar"><i style="width:${w2}%"></i><b style="left:calc(50% - 1px)"></b></div><span>${rf3(r.H, p.N)}</span>
+        <span>表が${p.k}回続いたあと（${fmt(r.m)}回）</span><div class="rbar"><i style="width:${w1}%;background:#64b5f6"></i><b style="left:calc(50% - 1px)"></b></div><span>${r.m ? rf3(r.h, r.m) : '—'}</span>
+      </div>
+      <div class="concl">表が ${p.k} 回続いた場面は ${fmt(r.m)} 回。その次は 表 ${fmt(r.h)} 回・裏 ${fmt(r.m - r.h)} 回 → 表の相対度数 <b>${r.m ? rf3(r.h, r.m) : '—'}</b>。<br>
+      続いたあとでも、表の出る割合は 0.5 くらいのまま。<b>コインは前の結果をおぼえていない。</b>${r.m < 50 ? '<br><span class="small">（場面が少ないと ばらつく。投げる回数をふやしてみよう。）</span>' : ''}</div>
+      <div class="tools"><button class="op-btn" id="btnRec4">＋ ワークシートに記録する</button></div>`;
+  }
+  // クイズの問題をえらぶ（同じ問題が続かない。練習中はその型の問題だけ）
+  function nextQuiz() {
+    const p = st.p4, f = ui.focus;
+    let pool = QUIZ.map((q, i) => i).filter(i => !f || QUIZ[i].ch.some(c => c[1] === f));
+    let rest = pool.filter(i => !p.done.includes(i) && i !== p.qi);
+    if (!rest.length) { p.done = []; rest = pool.filter(i => i !== p.qi); }
+    if (!rest.length) rest = pool;
+    p.qi = rest[Math.floor(Math.random() * rest.length)]; p.pick = null;
+  }
+  function renderQuiz() {
+    const p = st.p4, el = $('quizCard'); if (!el) return;
+    if (p.qi < 0) nextQuiz();
+    const q = QUIZ[p.qi], ans = q.ch.findIndex(c => !c[1]);
+    el.innerHTML = `<h2>❓ 次はどっち？ クイズ <span class="small">（${p.done.length} / ${QUIZ.length} 問 正解）</span></h2>
+      <div class="q-text">${q.q}</div>
+      <div class="choices">${q.ch.map((c, j) => `<button class="choice ${p.pick != null && j === ans ? 'ok' : ''} ${p.pick === j && j !== ans ? 'ng' : ''}" data-ch="${j}" ${p.pick != null ? 'disabled' : ''}>${String.fromCharCode(65 + j)}. ${c[0]}</button>`).join('')}</div>
+      <div class="msg ${p.pick == null ? '' : p.pick === ans ? 'ok' : 'ng'}" id="qMsg">${p.pick == null ? '' : (p.pick === ans ? '⭕ 正解！ ' : `<span class="bad">✕ ${TRIPS[q.ch[p.pick][1]].name}</span><br>`) + q.exp}</div>
+      <div class="tools">${p.pick != null ? '<button class="op-btn action" id="btnNextQ">➡ 次の問題</button>' : ''}${p.pick != null && p.pick !== ans ? '<button class="op-btn" id="btnFig4">👀 実験で確かめる</button>' : ''}</div>`;
+  }
+  function answer4(j) {
+    const p = st.p4, q = QUIZ[p.qi]; if (p.pick != null) return;
+    pushHist(); p.pick = j;
+    const tr = q.ch[j][1];
+    if (!tr) { sndOK(); if (!p.done.includes(p.qi)) p.done.push(p.qi); bumpClear(4); }
+    else { sndNG(); addTrip(tr); }
+    renderQuiz();
+  }
+  function click4(b) {
+    const p = st.p4;
+    if (b.dataset.st === 'k') { const v = Math.max(1, Math.min(8, p.k + +b.dataset.d)); if (v !== p.k) { pushHist(); p.k = v; build4(); } return; }
+    if (b.id === 'btnSim') { pushHist(); p.sim = true; renderSim(); return; }
+    if (b.id === 'btnSimNew') { pushHist(); p.seed = newSeed(); p.sim = true; renderSim(); return; }
+    if (b.dataset.ch != null) { answer4(+b.dataset.ch); return; }
+    if (b.id === 'btnNextQ') { pushHist(); nextQuiz(); renderQuiz(); return; }
+    if (b.id === 'btnFig4') { const q = QUIZ[p.qi]; showFig(q.ch[p.pick][1]); return; }
+    if (b.id === 'btnRec4') {
+      const r = sim4();
+      Worksheet.addRecord({ exp: `コイン：表が${p.k}回続いたあとの表`, n: String(r.m), k: String(r.h), rf: r.m ? rf3(r.h, r.m) : '—', p: '1/2' });
+      Worksheet.open(); setMsg('＋ ワークシートに記録しました。', 'ok');
+    }
+  }
+  function change4(t) {
+    const p = st.p4;
+    if (t.dataset.in === 'k') { const v = Math.round(+t.value); if (v >= 1 && v <= 8 && v !== p.k) { pushHist(); p.k = v; } build4(); }
+    else if (t.id === 'selN') { pushHist(); p.N = +t.value; renderSim(); }
+  }
+
+  /* =====================================================================
+     10. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(p) { bumpRec(r => r.clear[p] = (r.clear[p] || 0) + 1); }
+  function addTrip(type) { ui.sessTrips[type] = (ui.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); renderTrips(); renderTeacher(); }
+  function renderTrips() {
+    const keys = Object.keys(ui.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${ui.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><div class="tools left"><button class="op-btn" data-prac="${k}">🔁 この型を練習（クイズ）</button><button class="op-btn" data-fig="${k}">👀 実験で確かめる</button></div></div>`).join('')
+      : '<div class="small">まだ ありません。②の予想や ④のクイズでまちがえると、まちがえ方の型がここに出るよ。</div>';
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = `この端末のきろく：② 予想が合った ${c[2] || 0}回　④ クイズ正解 ${c[4] || 0}回`;
+  }
+  $('tripList').addEventListener('click', e => {
+    const b = e.target.closest('[data-prac],[data-fig]');
+    if (!b || ui.busy) return;
+    if (b.dataset.prac) practice(b.dataset.prac); else showFig(b.dataset.fig);
+  });
+  function practice(type) {
+    stopRun();
+    ui.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { ui.focus = null; $('focusBar').hidden = true; });
+    st.part = 4; nextQuiz(); buildAll();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  // 元の図・実験にもどす：その型が見える場面を出す
+  function showFig(type) {
+    stopRun(); pushHist();
+    const lab = (e, cfg, n, msg) => {
+      st.part = 1; st.exp = e; Object.assign(st.cfg[e], cfg); st.ghosts = []; st.seed = newSeed(); st.n = n; st.xlog = n >= 1000;
+      buildAll(); setMsg('👀 ' + msg, 'info');
+    };
+    if (type === 'gambler' || type === 'streak') { st.part = 4; Object.assign(st.p4, { k: 5, N: 100000, sim: true }); buildAll(); setMsg('👀 表が5回続いたあとの1回を、10万回の中から調べた。次の表の割合は 0.5 くらいのまま。', 'info'); }
+    else if (type === 'sure') lab('die', { t: 0 }, 6, 'サイコロを6回ふった。1 の目は何回？「⟲ もういちど」→「1回」を6回… と何度かやると、0回や2回のこともある。');
+    else if (type === 'fewN') lab('coin', { t: 0 }, 10, 'コインを10回だけ投げた。「⟲ もういちど」→「10回」を何度かやって、相対度数をくらべよう。');
+    else if (type === 'countdiff') lab('coin', { t: 0 }, 10000, '1万回投げた。グラフの下の「回数のずれ」と「相対度数のずれ」を見よう。「🔢 回数と相対度数」の表も見てみよう。');
+    else if (type === 'equal') lab('sum', { t: 5 }, 3600, 'サイコロ2個の和を 3600回。和7 は約 600回、和2 は約 100回。11通りは同じ程度には起こらない。びんのふたも ためしてみよう。');
+    else if (type === 'spread') { st.part = 2; buildAll(); click2({ id: 'btnAll', dataset: {} }); setMsg('👀 3つとも30人分の実験をした。点のちらばり（範囲）をくらべよう。', 'info'); }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     11. 先生モード
+     ===================================================================== */
+  function answerText() {
+    if (st.part === 4) { const q = QUIZ[st.p4.qi]; return q ? `答え：${String.fromCharCode(65 + q.ch.findIndex(c => !c[1]))}. ${q.ch.find(c => !c[1])[0]}` : ''; }
+    const c = C(), th = theoNow();
+    const cap = st.exp === 'cap' ? `（先生用：この教材で決めた上向きの割合は ${CAPS[c.k].p}。下向きは ${(1 - CAPS[c.k].p).toFixed(2)}）` : '';
+    if (st.part === 2) return '答え：回数が少ないほど ちらばりが大きい。10回の範囲は、1000回の範囲よりずっと大きい（1000回は確率の近くに集まる）。' + cap;
+    return `★ ${outsNow()[c.t].label} の確率：${th ? fstr(th[0], th[1]) + '（' + (th[0] / th[1]).toFixed(3) + '）' : '理論ではわからない'}${cap}`;
+  }
+  const TALK = [null,
+    '発問の例：「10回で相対度数が 0.5 にならなかった。このコインは おかしい？」「10回を何回かやると、毎回同じ？」「1000回、1万回では？ グラフの線は どうなっていく？」「回数のずれは大きくなるのに、相対度数のずれは？」',
+    '発問の例：「10回の人たちと 1000回の人たち、0.5 に近い人が多いのは？」「範囲をくらべると？」「確率を実験で調べるとき、何に気をつける？」',
+    '発問の例：「1人 100回でも、30人分を合わせると何回？」「合算の線は、1人分の点とくらべて どう動く？」「種を黒板に書いて、全員が同じ実験をしたら？」',
+    '発問の例：「ルーレットで赤が5回続いた。次は黒にかけるべき？」「コインに記憶はある？」「本当に 0.5 くらいか、実験で確かめよう」',
+  ];
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText();
+    $('tTalk').innerHTML = TALK[st.part];
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  // 自動で1ステップ：パートの流れを1つずつ進める
+  function teacherStep() {
+    if (ui.busy) return;
+    if (st.part === 1) {
+      const n = st.n;
+      if (n >= 10000) { again1(false); return; }
+      runN(n < 10 ? 10 - n : n < 100 ? 100 - n : n < 1000 ? 1000 - n : 10000 - n);
+      setTimeout(renderTeacher, 50); return;
+    }
+    if (st.part === 2) {
+      const p = st.p2;
+      if (!p.pred) { click2({ dataset: { pred: '10' } }); return; }
+      const N = NS.find(v => p.rows[v].length < 30);
+      if (N) { click2({ dataset: { add: String(N), m: '10' } }); return; }
+      setMsg('3つとも 30人分そろいました。範囲をくらべよう。', 'info'); return;
+    }
+    if (st.part === 3) { click3({ dataset: { auto: '1' } }); return; }
+    const p = st.p4;
+    if (!p.sim) { click4({ dataset: {}, id: 'btnSim' }); return; }
+    if (p.pick == null) { answer4(QUIZ[p.qi].ch.findIndex(c => !c[1])); renderTeacher(); return; }
+    click4({ dataset: {}, id: 'btnNextQ' }); renderTeacher();
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？（合算のデータは消えません）')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     12. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3, 4].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnUndo').addEventListener('click', () => { stopRun(); undo(); });
+  // もういちど：パートごとに はじめから
+  $('btnReset').addEventListener('click', () => {
+    if (ui.busy) return;
+    if (st.part === 1) { again1(false); return; }
+    if (st.part === 2) { pushHist(); Object.assign(st.p2, { rows: { 10: [], 100: [], 1000: [] }, pred: null, judged: false, base: newSeed() }); build2(); setMsg('⟲ はじめから。', 'info'); return; }
+    if (st.part === 3) { click3({ id: 'btnClr3', dataset: {} }); return; }
+    pushHist(); Object.assign(st.p4, { sim: false, seed: newSeed(), qi: -1, pick: null, done: [] }); build4(); setMsg('⟲ はじめから。', 'info');
+  });
+  $('btnWs').addEventListener('click', () => {
+    if (ui.busy) return;
+    stopRun(); pushHist();
+    st.part = 1; st.exp = 'coin'; st.cfg.coin.t = 0; st.ghosts = []; st.seed = newSeed(); st.n = 0; st.xlog = false;
+    buildAll();
+    if (window.Worksheet) Worksheet.open();
+    setMsg('📄 ワークシートの問題：① に予想を書こう。<br>「10回」→ 記録 →「⟲ もういちど」→「10回」→ 記録 … を3回。つぎに「1000回」で同じように3回記録して、10回と1000回の相対度数のばらつきをくらべよう。②でまとめて確かめられる。', 'info');
+  });
+  $('links').innerHTML =
+    `<a class="op-btn" href="割合.html">⬅ 小5 割合</a>` +
+    `<a class="op-btn" href="区切って数えて ヒストグラム.html">📊 中1 相対度数（ヒストグラム）</a>` +
+    `<a class="op-btn" href="サイコロ1万回ふってみた.html">🎲 サイコロ1万回ふってみた</a>` +
+    `<a class="op-btn" href="樹形図で確率.html">➡ 樹形図で確率</a>` +
+    `<a class="op-btn" href="確率ドリル.html">🎯 場合の数と確率ドリル</a>`;
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) {
+    Worksheet.init({
+      title: '確率の実験室',
+      question: 'コインを投げて表が出る相対度数は、10回のときと1000回のときで、どうちがうだろうか？',
+      predictions: ['10回でも1000回でも、だいたい 0.5 になる', '10回ではばらつくが、1000回では 0.5 に近くなる', '何回投げても、ばらばらで決まらない', 'わからない'],
+      operationNote: '① で実験したら「＋ ワークシートに記録する」。「⟲ もういちど」で何回かくり返し、10回と1000回をくらべよう。② ③ ④ でも記録できる。',
+      open: false,
+      fields: [
+        { key: 'exp', label: '実験・★', math: false },
+        { key: 'n', label: '回数', math: false },
+        { key: 'k', label: '★の回数', math: false },
+        { key: 'rf', label: '相対度数', math: false },
+        { key: 'p', label: '確率（理論）' }
+      ],
+      capture: () => {
+        if (st.part === 1) { if (!st.n) { setMsg('実験してから記録しよう。', 'info'); return null; } return rec1Data(); }
+        setMsg('②〜④ では、画面の「＋ ワークシートに記録する」を使おう。', 'info'); return null;
+      },
+      summaryHint: '「実験の回数が少ないと、相対度数は〜。回数を多くすると、相対度数は〜に近づく。だから確率は〜」の形で書こう。「次の1回」についても書けるとよい。',
+      teacher: {
+        hint: '予想を挙手で集める。① のコインで「10回」を数人にやらせて板書（0.3〜0.7 とばらつく）→「1000回」でも同じように板書 → ② で 30人分を一度に見せる → ③ でクラスの結果を合算 → ④ で「次の1回」を考える。',
+        answer: '10回ではばらつくが、1000回では 0.5 に近くなる。<br>まとめ：実験の回数を多くすると、相対度数はある値（確率）に近づいていく（大数の法則）。確率は1回1回の結果を予言するものではなく、多数回くり返したときの起こりやすさの程度を表す。前に何が出ても、次の1回の確率は変わらない。'
+      }
+    });
+    pools = Worksheet.appData('pools') || {};
+  }
+
+  setupTeacher();
+  const P0 = +PARAMS.get('part');
+  st.part = P0 >= 1 && P0 <= 4 ? P0 : 1;
+  buildAll();
+})();
+</script>
+
+</body>
+</html>
