@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>相似条件ビルダー</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中学の教材とそろえる）：正解・そろった＝緑（○）、まちがい・注意＝赤紫（✖）。
+     この教材では：もとの図形＝オレンジ（ななめ線の模様）、相似な図形＝青（点の模様）。
+     対応する角＝同じ本数の弧（1本・2本・3本）。決めた部品＝太い線、決めていない部品＝点線。色だけにたよらない。 */
+  :root {
+    --ink: #263238; --accent: #3949ab; --soft: #9fa8da;
+    --ok: #2e7d32; --ng: #ad1457;
+    --c1: #e69f00; --c2: #0072b2; --c3: #009e73; --c4: #cc79a7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #eef0fa 0%, #cfd5ee 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #283593; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #1a237e; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .chip.small-chip { min-height: 44px; padding: 4px 12px; font-size: .95rem; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #283593; font-weight: bold; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+    text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.on { background: #fff8e1; border-color: #fbc02d; }
+  .op-btn.link { background: #e3f2fd; border-color: #64b5f6; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 図・パネル（広い画面は 左＝図・右＝パネルの2列） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @container (min-width: 760px) {
+    .board-in { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+    .fig-card { position: sticky; top: 8px; }
+  }
+  .fig-card { padding: 8px; }
+  #fig { width: 100%; max-width: 640px; display: block; margin: 0 auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #fig text { font-family: inherit; font-weight: bold; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+  #fig .glow { animation: glow 0.9s ease-in-out infinite; }
+  @keyframes glow { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  .opt-row { display: flex; gap: 6px 14px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+  .opt-check { font-size: 0.95rem; font-weight: bold; color: #37474f; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+  .opt-check input { width: 22px; height: 22px; }
+  .fig-note { text-align: center; font-size: .9rem; color: #546e7a; margin-top: 2px; line-height: 1.6; }
+
+  /* スライダー＋数の入力 */
+  .slider-row { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0; font-weight: bold; flex-wrap: wrap; }
+  .slider-row .lab { white-space: nowrap; min-width: 4.5em; }
+  .slider-row input[type=range] { flex: 1; min-width: 120px; height: 36px; }
+  .slider-row input[type=number] { width: 86px; font-size: 1.25rem; padding: 6px; border-radius: 10px; border: 2px solid var(--soft); text-align: center; }
+  .slider-row input:disabled { opacity: .5; }
+
+  /* 測定値の表 */
+  .tbl { width: 100%; border-collapse: collapse; text-align: center; margin: 6px 0; }
+  .tbl th { background: #e8eaf6; font-size: .92rem; padding: 4px; border: 2px solid #c5cae9; }
+  .tbl td { border: 2px solid #dfe3f3; padding: 3px 4px; font-size: 21px; font-weight: bold; height: 42px; }
+  .tbl td.eq { background: #e8f5e9; }
+  .tbl td.ne { background: #fce4ec; }
+  .tbl td.o { color: #b26a00; } .tbl td.b { color: #0063a0; }
+  .big-eq { text-align: center; font-size: 28px; font-weight: bold; line-height: 1.6; margin: 6px 0; }
+  .big-eq .ok { color: var(--ok); }
+  .big-eq .ng { color: var(--ng); }
+  .eq-note { text-align: center; font-size: .95rem; line-height: 1.7; color: #37474f; margin: 2px 0 6px; }
+  .why { background: #f5f5f5; border-radius: 12px; padding: 8px 12px; font-size: 1rem; line-height: 1.8; margin: 6px 0; }
+  .why b { color: #1a237e; }
+  .verdict { border-radius: 14px; padding: 8px 12px; font-size: 1.05rem; line-height: 1.7; margin: 6px 0; font-weight: bold; }
+  .verdict.ok { background: #e8f5e9; border: 3px solid #66bb6a; color: #1b5e20; }
+  .verdict.ng { background: #fce4ec; border: 3px solid #f48fb1; color: #4a148c; }
+  .verdict.mid { background: #fffde7; border: 3px solid #ffe082; color: #5d4037; }
+
+  /* 部品のボタン（パート②） */
+  .parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0; }
+  .pt-btn { min-height: 56px; border: 3px solid #b0bec5; background: #fff; border-radius: 12px; font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation; line-height: 1.3; padding: 4px; color: var(--ink); }
+  .pt-btn small { display: block; font-size: .8rem; color: #607d8b; font-weight: normal; }
+  .pt-btn.on { border-color: #d55e00; background: #fff3e0; box-shadow: inset 0 -4px 0 #d55e00; }
+  .pt-btn.on.ang { border-color: #0072b2; background: #e3f2fd; box-shadow: inset 0 -4px 0 #0072b2; }
+  .pt-btn.on::before { content: "✔ "; }
+
+  /* 答える欄 */
+  .ask { border-top: 2px dashed #c5cae9; padding-top: 8px; margin-top: 6px; }
+  .ask-q { text-align: center; font-weight: bold; margin-bottom: 6px; line-height: 1.7; font-size: 1.08rem; }
+  .ask-q .stmt { display: inline-block; font-size: 26px; background: #e8eaf6; border-radius: 10px; padding: 0 12px; margin: 2px 0; }
+  .choices { display: flex; flex-direction: column; gap: 6px; }
+  .choice {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px; min-height: 48px; padding: 8px 12px;
+    font-size: 1.08rem; font-weight: bold; text-align: left; cursor: pointer; touch-action: manipulation; color: var(--ink);
+  }
+  .choice.right { border-color: var(--ok); background: #e8f5e9; }
+  .choice.right::before { content: "○ "; color: var(--ok); }
+  .choice.wrong { border-color: var(--ng); background: #fce4ec; }
+  .choice.wrong::before { content: "✖ "; color: var(--ng); }
+  .choice:disabled { cursor: default; }
+  .go {
+    width: 100%; margin-top: 8px; min-height: 54px; border: none; border-radius: 14px; background: var(--accent); color: #fff;
+    font-size: 1.2rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+
+  /* ===== 証明パズル（パート④）：証明パズル.html の形を引きつぐ ===== */
+  .given { border-left: 8px solid #78909c; background: #eceff1; border-radius: 10px; padding: 6px 10px; margin-bottom: 6px; }
+  .given h3, .goal h3 { margin: 0 0 2px; font-size: .92rem; }
+  .given .f, .goal .f { font-size: 22px; font-weight: bold; line-height: 1.5; }
+  .goal { border-left: 8px solid #5d4037; background: #efebe9; border-radius: 10px; padding: 6px 10px; margin-bottom: 8px; }
+  .goal .f::before { content: "★ "; color: #5d4037; font-size: .8em; }
+  .story { background: #fffde7; border: 3px solid #ffe082; border-radius: 14px; padding: 6px 12px; line-height: 1.8; margin-bottom: 6px; font-size: 1rem; }
+  .flow { display: flex; gap: 0; margin-bottom: 8px; }
+  .flow span { flex: 1; text-align: center; font-size: .82rem; font-weight: 900; padding: 6px 2px 6px 10px; background: #eceff1; color: #546e7a;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%); }
+  .flow span:first-child { clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%); padding-left: 4px; }
+  .flow span.done { background: #c8e6c9; color: #1b5e20; }
+  .flow span.now { background: var(--accent); color: #fff; }
+  .proof { display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; align-items: stretch; gap: 6px; min-height: 54px; }
+  .row .no { flex: none; width: 30px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #90a4ae; font-size: .9rem; }
+  .row .slot { flex: 1; border: 3px dashed #b0bec5; border-radius: 12px; background: #fafafa; display: flex; align-items: center; padding: 4px 8px; min-width: 0; }
+  .row .slot.over { background: #e8eaf6; border-color: var(--accent); }
+  .row .slot.filled { border-style: solid; background: #fff; padding: 0; border-color: transparent; }
+  .row .tagno { flex: none; width: 40px; white-space: nowrap; display: flex; align-items: center; font-weight: 900; font-size: 1.1rem; }
+  .row.t1 .tagno { color: #e65100; } .row.t2 .tagno { color: #1565c0; } .row.t3 .tagno { color: #6a1b9a; }
+  .slot .ph { color: #b0bec5; font-size: .88rem; }
+  .pool { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 80px; padding: 4px; }
+  .pc { display: block; width: 100%; text-align: left; border-radius: 12px; border: 3px solid #90a4ae; background: #fff; padding: 7px 10px; font-size: 19px; font-weight: bold; line-height: 1.45;
+    cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+  .pool .pc { width: auto; max-width: 100%; transform: rotate(var(--rot, 0deg)); }
+  .pc.k-start { border-color: #00897b; background: #e0f2f1; }
+  .pc.k-cond { border-color: #ffb74d; background: #fff8e1; }
+  .pc.k-sim { border-color: #7986cb; background: #e8eaf6; }
+  .pc.k-concl { border-color: #a1887f; background: #efebe9; }
+  .slot .pc { box-shadow: none; cursor: pointer; }
+  .pc .pre { color: #455a64; }
+  .pc.shake { animation: shake .45s; }
+  @keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+  .pc.ghost { position: fixed; z-index: 1000; pointer-events: none; opacity: .92; transform: rotate(-2deg) scale(1.03); box-shadow: 0 10px 24px rgba(0,0,0,.25); max-width: 420px; }
+  .kinds { font-size: .8rem; color: #607d8b; display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 8px 0 2px; }
+  .kinds b { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 2px solid; vertical-align: -2px; margin-right: 3px; }
+  .probs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 6px; }
+  .prob { min-height: 48px; border: 3px solid var(--soft); background: #fff; border-radius: 12px; font-size: .95rem; font-weight: bold; cursor: pointer; touch-action: manipulation; padding: 4px; line-height: 1.3; color: var(--ink); }
+  .prob.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .hintOut div { background: #f1f8e9; border: 2px solid #9ccc65; border-radius: 10px; padding: 4px 10px; margin-top: 4px; line-height: 1.7; font-size: 1rem; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  @media (max-width: 520px) {
+    .tbl td { font-size: 17px; padding: 2px; }
+    .big-eq { font-size: 23px; }
+    .parts { grid-template-columns: repeat(2, 1fr); }
+    .pc { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🔍 相似条件ビルダー</h1>
+<p class="subtitle">部品をつないで、2つの三角形が相似になる条件を見つけよう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+
+  <!-- パート：① 相似な図形 ② 条件をつくる ③ 条件のクイズ ④ 証明パズル ⑤ 平行線と相似 -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">✏️ 練習問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <div class="board"><div class="board-in">
+    <div class="card fig-card">
+      <!-- 図で使う模様（色だけでなく模様でも区別する） -->
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect width="20" height="20" fill="#fff"/><path d="M20 0 L0 0 L0 20" fill="none" stroke="#e3e8eb" stroke-width="1"/></pattern>
+        <pattern id="ptO" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="12" height="12" fill="#ffe0b2"/><line x1="0" y1="0" x2="0" y2="12" stroke="#ffb74d" stroke-width="3"/></pattern>
+        <pattern id="ptB" width="12" height="12" patternUnits="userSpaceOnUse">
+          <rect width="12" height="12" fill="#bbdefb"/><circle cx="6" cy="6" r="2.2" fill="#64b5f6"/></pattern>
+        <pattern id="ptG" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+          <rect width="12" height="12" fill="#c8e6c9"/><line x1="0" y1="0" x2="0" y2="12" stroke="#81c784" stroke-width="3"/></pattern>
+      </defs></svg>
+      <svg id="fig" viewBox="0 0 560 420" aria-label="三角形の図"></svg>
+      <div class="opt-row" id="figOpts">
+        <label class="opt-check"><input type="checkbox" id="optSnap" checked> すいつく（方眼・きりのよい数）</label>
+      </div>
+      <div class="fig-note" id="figNote"></div>
+    </div>
+    <div class="card">
+      <h2 id="rTitle"></h2>
+      <div id="ctrl"></div>
+      <div id="side"></div>
+      <div class="ask" id="ask" hidden></div>
+      <div class="msg" id="msg" aria-live="polite"></div>
+    </div>
+  </div></div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 自動で1ステップ進める</button></div>
+    <div class="small" id="tTalk"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>相似</b>：1つの図形を拡大または縮小した図形と合同な図形は、もとの図形と<b>相似</b>である。記号 <b>∽</b>（「そうじ」と読む）を使って <b>△ABC∽△DEF</b> と書く。このとき、<b>対応する頂点を同じ順にならべて</b>書く。</li>
+      <li>相似な図形では、<b>対応する辺の比はすべて等しく</b>、<b>対応する角の大きさはそれぞれ等しい</b>。対応する辺の比を<b>相似比</b>という。</li>
+      <li><b>三角形の相似条件</b>：①<b>3組の辺の比</b>がすべて等しい　②<b>2組の辺の比とその間の角</b>がそれぞれ等しい　③<b>2組の角</b>がそれぞれ等しい。（合同条件とちがって、相似は辺の「長さ」ではなく「比」。③ には辺がいらない。）</li>
+      <li>① <b>相似な図形</b>：● をドラッグして形を変える。「何倍」「回転」「裏返す」で相似な図形をつくり、「📐 角を重ねる」で角が等しいことを見る。</li>
+      <li>② <b>条件をつくる</b>：△DEF の部品（辺・角）をえらぶと、その部品を守ってできる三角形をかく。形が1つに決まれば相似、いくつもできれば「相似とはかぎらない」。</li>
+      <li>③ <b>条件のクイズ</b>　④ <b>証明パズル</b>（カードをならべる）　⑤ <b>平行線と相似</b>（タテ型・砂時計型）。</li>
+      <li>「✏️ 練習問題」：答えると、まちがえ方から「あなたのつまずき」がわかる。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：方眼の1目もりを 1cm としています（画面の大きさは実物とはちがいます）。長さは 0.1cm、比は小数第2位、角は 1° の位までの四捨五入です。② のもとの三角形（AB＝4cm、BC＝6cm、CA＝5cm）の角は、ぴったりの整数ではないので「約」をつけています。③ のクイズの図は、書いてある長さや角の大きさのとおりにかいていますが、画面に合わせて縮めています（角は 1° の位までの四捨五入）。<br>
+    つながる教材：<a href="のばして ちぢめて 拡大図と縮図.html">小6 のばして ちぢめて 拡大図と縮図</a>　／　<a href="合同・相似パズル.html">合同・相似パズル</a>　／　<a href="証明パズル.html">中2 証明の組み立てパズル（合同）</a>　／　<a href="平行線と角.html">中2 平行線と角</a></p>
+  </div>
+
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード、?part=3 で ③ から始める、?debug=1 で window.__dbg（動作確認用）
+  const PARAMS = new URLSearchParams(location.search);
+  const TEACHER = PARAMS.get('teacher') === '1';
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const rint = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+
+  /* =====================================================================
+     1. 図形の計算（画面の点は [x, y]。SVG の向きなので y は下向き。
+        「cm の点」は算数の向き（y は上向き）で持ち、かくときに画面の点になおす）
+     ===================================================================== */
+  const W = 560, H = 420, G = 20;            // 図の大きさと方眼の1目もり（px）＝ 1cm とする
+  const D2R = Math.PI / 180;
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  const mul = (a, k) => [a[0] * k, a[1] * k];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+  const len = (a) => Math.hypot(a[0], a[1]);
+  const dist = (a, b) => len(sub(a, b));
+  const unit = (a) => { const l = len(a) || 1; return [a[0] / l, a[1] / l]; };
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
+  const lerp = (a, b, u) => add(mul(a, 1 - u), mul(b, u));
+  // V にできる角 ∠PVQ（0〜180°）
+  const angAt = (V, P, Q) => { const u = sub(P, V), w = sub(Q, V); return Math.acos(clamp(dot(u, w) / (len(u) * len(w)), -1, 1)) / D2R; };
+  // 画面の向きで、見た目が左回りに deg 度まわす
+  const rotV = (v, d) => { const c = Math.cos(d * D2R), s = Math.sin(d * D2R); return [v[0] * c + v[1] * s, -v[0] * s + v[1] * c]; };
+  // 算数の向き（y 上向き）で、左回りに rad ラジアンまわす
+  const rotM = (v, r) => { const c = Math.cos(r), s = Math.sin(r); return [v[0] * c - v[1] * s, v[0] * s + v[1] * c]; };
+  const snapG = (p) => [Math.round(p[0] / G) * G, Math.round(p[1] / G) * G];
+  const inBox = (pts, m) => pts.every(p => p[0] >= (m || 14) && p[0] <= W - (m || 14) && p[1] >= (m || 14) && p[1] <= H - (m || 14));
+  const centroid = (pts) => mul(pts.reduce((s, p) => add(s, p), [0, 0]), 1 / pts.length);
+  const VS = ['A', 'B', 'C'];
+  const others = (v) => VS.filter(x => x !== v);
+  const SIDES = [['A', 'B'], ['B', 'C'], ['C', 'A']];
+
+  // 数の見せ方
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const fmt = (v) => String(Math.round(v * 100) / 100);           // 小数第2位まで（いらない 0 は出さない）
+  const fmt2 = (v) => (Math.round(v * 100) / 100).toFixed(2);     // 比は小数第2位までそろえて見せる
+  const cmS = (px) => r1(px / G).toFixed(1);                        // px → 「○.○」
+  const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a; };
+  // a：b を いちばん簡単な整数の比に（a、b は小数第2位まで）
+  function ratioStr(a, b) { const x = Math.round(a * 100), y = Math.round(b * 100), g = gcd(x, y) || 1; return `${x / g}：${y / g}`; }
+  // 分数 n/d を約分して文字に（整数ならそのまま）
+  function fracStr(n, d) { const g = gcd(n, d) || 1; n /= g; d /= g; if (d < 0) { n = -n; d = -d; } return d === 1 ? String(n) : `${n}/${d}`; }
+
+  // 3辺（AB, BC, CA）から三角形をつくる（cm、y 上向き。B を原点、C を x 軸の上）
+  function triSides(ab, bc, ca) {
+    const x = (ab * ab - ca * ca + bc * bc) / (2 * bc), y = Math.sqrt(Math.max(ab * ab - x * x, 0));
+    return { A: [x, y], B: [0, 0], C: [bc, 0] };
+  }
+  // 3つの角（∠A, ∠B, ∠C）と BC の長さから三角形をつくる
+  function triAngles(a, b, c, bc) {
+    const ab = bc * Math.sin(c * D2R) / Math.sin(a * D2R);
+    return { A: [ab * Math.cos(b * D2R), ab * Math.sin(b * D2R)], B: [0, 0], C: [bc, 0] };
+  }
+  const triAng = (T, v) => { const o = others(v); return angAt(T[v], T[o[0]], T[o[1]]); };
+  const triLen = (T, a, b) => dist(T[a], T[b]);
+  // cm の三角形を、裏返し・回転して、画面の中心 cen に倍率 sc でおく
+  function placeTri(T, rot, flip, sc, cen) {
+    const q = {};
+    for (const v of Object.keys(T)) { let p = T[v]; if (flip) p = [-p[0], p[1]]; q[v] = rotM(p, rot * D2R); }
+    const xs = Object.values(q).map(p => p[0]), ys = Object.values(q).map(p => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const out = {};
+    for (const v of Object.keys(q)) out[v] = [cen[0] + (q[v][0] - cx) * sc, cen[1] - (q[v][1] - cy) * sc];
+    return out;
+  }
+  function bboxCm(T, rot, flip) {
+    const ps = Object.values(T).map(p => rotM(flip ? [-p[0], p[1]] : p, rot * D2R));
+    const xs = ps.map(p => p[0]), ys = ps.map(p => p[1]);
+    return [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
+  }
+
+  /* =====================================================================
+     2. SVG をかく小さな道具（文字列で組み立てる）
+     ===================================================================== */
+  const f1 = (v) => Math.round(v * 10) / 10;
+  const P2 = (p) => f1(p[0]) + ',' + f1(p[1]);
+  function seg(a, b, col, w, dash, extra) { return `<line x1="${f1(a[0])}" y1="${f1(a[1])}" x2="${f1(b[0])}" y2="${f1(b[1])}" stroke="${col}" stroke-width="${w || 3}" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash}"` : ''} ${extra || ''}/>`; }
+  function poly(pts, fill, stroke, w, dash, extra) { return `<polygon points="${pts.map(P2).join(' ')}" fill="${fill}" stroke="${stroke || 'none'}" stroke-width="${w || 3}" stroke-linejoin="round"${dash ? ` stroke-dasharray="${dash}"` : ''} ${extra || ''}/>`; }
+  // 等しい辺のしるし（n 本の短い線）
+  function ticks(a, b, n, col) {
+    const m = mid(a, b), d = unit(sub(b, a)), nn = [-d[1], d[0]]; let s = '';
+    for (let i = 0; i < n; i++) { const c = add(m, mul(d, (i - (n - 1) / 2) * 7)); s += seg(add(c, mul(nn, 9)), add(c, mul(nn, -9)), col, 3); }
+    return s;
+  }
+  // 角のしるし（k 本の弧。fill があれば扇形をぬる）
+  function arc(V, P, Q, r, col, k, fill, extra) {
+    const u = unit(sub(P, V)), v = unit(sub(Q, V)), sw = cross(u, v) > 0 ? 1 : 0; let s = '';
+    if (fill) { const a = add(V, mul(u, r)), b = add(V, mul(v, r)); s += `<path d="M${P2(V)} L${P2(a)} A${r} ${r} 0 0 ${sw} ${P2(b)} Z" fill="${fill}" stroke="none" ${extra || ''}/>`; }
+    for (let i = 0; i < (k || 1); i++) { const rr = r + i * 6, a = add(V, mul(u, rr)), b = add(V, mul(v, rr)); s += `<path d="M${P2(a)} A${rr} ${rr} 0 0 ${sw} ${P2(b)}" fill="none" stroke="${col}" stroke-width="2.6" ${extra || ''}/>`; }
+    return s;
+  }
+  // 直角のしるし
+  function rightMk(V, P, Q, s, col) { const u = unit(sub(P, V)), v = unit(sub(Q, V)), a = add(V, mul(u, s)), b = add(V, mul(v, s)), c = add(a, mul(v, s)); return `<path d="M${P2(a)} L${P2(c)} L${P2(b)}" fill="none" stroke="${col || '#37474f'}" stroke-width="2.5"/>`; }
+  // 平行のしるし（矢じり n 個）
+  function parArrow(a, b, col, n) {
+    const m = mid(a, b), d = unit(sub(b, a)), nn = [-d[1], d[0]]; let s = '';
+    for (let i = 0; i < (n || 1); i++) {
+      const c = add(m, mul(d, (i - ((n || 1) - 1) / 2) * 10));
+      s += `<path d="M${P2(add(add(c, mul(d, -6)), mul(nn, 7)))} L${P2(add(c, mul(d, 4)))} L${P2(add(add(c, mul(d, -6)), mul(nn, -7)))}" fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round"/>`;
+    }
+    return s;
+  }
+  function txt(p, t, col, size, anchor) { return `<text x="${f1(p[0])}" y="${f1(p[1])}" fill="${col || '#263238'}" font-size="${size || 22}" text-anchor="${anchor || 'middle'}" dominant-baseline="central">${t}</text>`; }
+  // 頂点の名前（重心から外向きにずらす）
+  function vName(V, cen, t, col) { return txt(add(V, mul(unit(sub(V, cen)), 22)), t, col || '#263238', 23); }
+  // 角の大きさの数（角の内側）
+  function angTxt(V, P, Q, t, col, off) { const b = unit(add(unit(sub(P, V)), unit(sub(Q, V)))); return txt(add(V, mul(b, off || 46)), t, col, 17); }
+  // 辺の長さ（辺の外がわ）
+  function sideTxt(a, b, cen, t, col, size) {
+    const m = mid(a, b), d = unit(sub(b, a)); let nn = [-d[1], d[0]];
+    if (dot(nn, sub(m, cen)) < 0) nn = mul(nn, -1);
+    return txt(add(m, mul(nn, 17)), t, col || '#37474f', size || 18);
+  }
+  function handle(p, col) { return `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="11" fill="#fff" stroke="${col || '#37474f'}" stroke-width="4" style="cursor:grab"/>`; }
+  const dotP = (p, col, r) => `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="${r || 5}" fill="${col || '#263238'}"/>`;
+  function fullLine(P, Q, ext) { const d = unit(sub(Q, P)); return [add(P, mul(d, -(ext || 900))), add(Q, mul(d, ext || 900))]; }
+  const ARC_COL = ['#d55e00', '#0072b2', '#009e73'];   // 対応する角：A↔ 1本・B↔ 2本・C↔ 3本
+
+  /* =====================================================================
+     3. パートとつまずきの型
+     ===================================================================== */
+  const PARTS = [null,
+    { name: '① 相似な図形', title: '🔍 拡大・縮小して重ねる', note: '何倍にしても、回しても、裏返しても、対応する角は等しく、辺の比はそろう？' },
+    { name: '② 条件をつくる', title: '🧱 部品をえらんで三角形をつくる', note: 'どの部品をそろえれば、形が1つに決まって相似になる？' },
+    { name: '③ 条件のクイズ', title: '❓ 相似？ どの条件？', note: '印や数を見て、相似かどうか、どの相似条件かを答えよう。' },
+    { name: '④ 証明パズル', title: '🧩 相似の証明をならべる', note: 'カードをならべて「△…と△…で → 根拠 → 相似条件 → ∽」の証明をつくろう。' },
+    { name: '⑤ 平行線と相似', title: '📏 平行な線でできる相似', note: '三角形の1辺に平行な線をひくと、どんな三角形ができる？ 辺の比は？' },
+  ];
+  // つまずきの型（名前・説明・練習するパート）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    order:       { name: '対応する頂点の順序のまちがい', part: 1,
+                   exp: '△ABC∽△DEF と書いたら、<b>A↔D、B↔E、C↔F</b>（同じ順番どうし）が対応する。図の位置や向きではなく、<b>等しい角</b>どうしを対応させて、同じ順にならべる。' },
+    ratioOrder:  { name: '相似比の向きのまちがい', part: 1,
+                   exp: '「△ABC と △DEF の相似比」は、<b>△ABC の辺：△DEF の辺</b>の順。AB＝4、DE＝6 なら 4：6＝<b>2：3</b>（3：2 ではない）。' },
+    addDiff:     { name: '比ではなく差で考えた', part: 1,
+                   exp: '相似な図形では、辺は<b>同じ数をかけて</b>のびる（4→6 は ×1.5）。「＋2 だから 6→8」のように<b>たし算</b>で考えるのはまちがい。6×1.5＝9。' },
+    notEnough:   { name: '条件が足りないのに相似とした', part: 2,
+                   exp: '辺の比が2組だけ・角が1つだけ では、<b>形がいくつもできる</b>。② で部品をえらんで、ほかの形ができないか確かめよう。' },
+    sizeNeed:    { name: '大きさがちがうと相似でないと考えた', part: 2,
+                   exp: '相似は「<b>形が同じ</b>」。大きさはちがってよい。<b>2組の角</b>が等しければ、辺の長さがわからなくても相似。' },
+    notIncluded: { name: '「間の角」でない角を使った', part: 3,
+                   exp: '2組の辺の比と<b>その間の角</b>（2つの辺にはさまれた角）でなければ相似条件にならない。間でない角だと、形が2通りできることがある。' },
+    thirdAngle:  { name: '残りの角を求めわすれた', part: 3,
+                   exp: '三角形の内角の和は <b>180°</b>。2つの角がわかれば、3つめの角も求められる。それから等しい角の組をさがそう。' },
+    congMix:     { name: '合同条件と相似条件の混同', part: 3,
+                   exp: '<b>合同条件</b>：3組の辺／2組の辺とその間の角／1組の辺とその両端の角（長さが等しい）。<b>相似条件</b>：3組の辺の<b>比</b>／2組の辺の<b>比</b>とその間の角／<b>2組の角</b>（辺はいらない）。≡ と ∽ も区別しよう。' },
+    whichCond:   { name: '相似条件のえらびまちがい', part: 3,
+                   exp: 'わかっているのが<b>辺の比</b>か<b>角</b>か、いくつあるか、角は2辺の<b>間</b>かを確かめてから、相似条件をえらぶ。' },
+    reason:      { name: '根拠の理由のまちがい', part: 4,
+                   exp: '平行線の<b>同位角</b>（F の形）・<b>錯角</b>（Z の形）、交わる2直線の<b>対頂角</b>、2つの三角形が<b>共通</b>に使う角、を区別しよう。' },
+    noBasis:     { name: '根拠のないことを使った', part: 4,
+                   exp: '仮定にない・まだ証明していないこと（結論や、相似から分かること）は根拠に使えない。図で等しく見えるだけでもだめ。' },
+    flow:        { name: '証明の順序のまちがい', part: 4,
+                   exp: '証明は「<b>△…と△…で</b> → 根拠（等しい角・辺の比）→ <b>相似条件から ∽</b> → 結論」の順。' },
+    ratioPart:   { name: '平行線の比で、辺のとりちがえ', part: 5,
+                   exp: 'DE∥BC のとき、<b>AD：AB＝AE：AC＝DE：BC</b>。DE：BC に AD：<b>DB</b> を使うのはまちがい（DB は △ADE の辺ではない）。' },
+    calc:        { name: '計算まちがい', part: 0,
+                   exp: '考え方は合っているかもしれない。比の計算（かけ算・わり算）をもう一度ていねいに。' },
+  };
+
+  /* =====================================================================
+     4. 状態（パートごとに持つ。ひとつもどす で写しやすいよう、数と文字だけで持つ）
+     ===================================================================== */
+  const st = { part: 1, Ps: {}, hists: { 1: [], 2: [], 3: [], 4: [], 5: [] }, sessTrips: {}, focus: null, hintLv: 0, timer: null, drag: null, handles: [], tStep: 0 };
+  const P = () => st.Ps[st.part];
+  const NM2 = { A: 'D', B: 'E', C: 'F' };
+  function defaults(part) {
+    if (part === 1) return { A: [100, 220], B: [60, 340], C: [200, 340], k: 1.5, rot: 0, flip: false, mode: 'move', Dp: [340, 160], O: [40, 400], u: 0, nm: NM2, q: null };
+    if (part === 2) { const p = { k: 1.5, sel: {}, samples: [], cur: 0, q: null }; regen2(p); return p; }
+    if (part === 3) return { q: null, align: false };
+    if (part === 4) return { pi: 0, rows: [], order: [], rot: {}, hint: 0, miss: 0, done: false, split: false, glow: -1, q: null };
+    return { type: 'tate', A: [270, 40], B: [70, 390], C: [500, 390], t: 0.4, u: 0, q: null };
+  }
+  function pushHist() { const h = st.hists[st.part]; h.push(clone(P())); if (h.length > 80) h.shift(); }
+  function undo() {
+    const h = st.hists[st.part];
+    if (!h.length) { setMsg('もどせる操作は ありません。'); return; }
+    stopTimer(); st.Ps[st.part] = h.pop();
+    setMsg('↶ ひとつもどしました。'); buildCtrl(); render();
+  }
+  function resetPart() {
+    stopTimer(); pushHist();
+    st.Ps[st.part] = defaults(st.part);
+    if (st.part === 4) loadProb(0);
+    if (st.part === 3) newQ();
+    st.hintLv = 0;
+    setMsg('⟲ はじめにもどしました。'); buildCtrl(); render();
+  }
+  function stopTimer() { if (st.timer) { clearInterval(st.timer); st.timer = null; } }
+  const snapOn = () => $('optSnap').checked;
+  const qActive = () => { const q = P().q; return !!(q && !q.done); };
+  // 0→1 のアニメ（fn(u) を何回もよぶ）
+  function animate(ms, fn, done) {
+    stopTimer(); const t0 = performance.now();
+    st.timer = setInterval(() => {
+      const u = Math.min((performance.now() - t0) / ms, 1);
+      fn(u < 1 ? (1 - Math.cos(u * Math.PI)) / 2 : 1); render();
+      if (u >= 1) { stopTimer(); if (done) done(); }
+    }, 30);
+  }
+
+  /* =====================================================================
+     5. パート① 相似な図形（拡大・縮小して重ねる）
+        もとの △ABC（● でドラッグ）を k 倍・回転・裏返し して △DEF をつくる。
+        「相似の位置」では、点 O を中心に k 倍する（O と対応する点が一直線）。
+     ===================================================================== */
+  function copyPts1(p) {
+    const u = p.u || 0, k = p.k, out = {};
+    for (const v of VS) {
+      const Pv = p[v];
+      if (p.mode === 'homo') {
+        const h = add(p.O, mul(sub(Pv, p.O), k)), a = add(p.A, mul(sub(Pv, p.A), k));
+        out[v] = lerp(h, a, u);
+      } else {
+        let w = mul(sub(Pv, p.A), k);
+        const s = p.flip ? (-1 + 2 * u) : 1;         // 裏返し（重ねるときは、だんだん表にもどす）
+        w = rotV([w[0], w[1] * s], p.rot * (1 - u));
+        out[v] = add(lerp(p.Dp, p.A, u), w);
+      }
+    }
+    return out;   // もとの頂点 A, B, C に対応する点
+  }
+  // 相似な図形が画面からはみ出さないように、D の位置をずらす
+  function fitCopy(p) {
+    if (p.mode !== 'move') return;
+    const I = copyPts1(Object.assign({}, p, { u: 0 })), xs = VS.map(v => I[v][0]), ys = VS.map(v => I[v][1]), m = 26;
+    let dx = 0, dy = 0;
+    if (Math.min(...xs) < m) dx = m - Math.min(...xs); else if (Math.max(...xs) > W - m) dx = W - m - Math.max(...xs);
+    if (Math.min(...ys) < m) dy = m - Math.min(...ys); else if (Math.max(...ys) > H - m) dy = H - m - Math.max(...ys);
+    p.Dp = add(p.Dp, [dx, dy]);
+  }
+  const kRatio = (k) => ratioStr(1, k);   // k 倍 → 相似比「1：k」を整数の比に
+  function ctrl1() {
+    return `
+      <div class="chip-row" style="margin-bottom:6px">
+        <button class="chip small-chip" data-m="move">🔁 動かして重ねる</button>
+        <button class="chip small-chip" data-m="homo">🎯 相似の位置（中心 O）</button>
+      </div>
+      <div class="slider-row"><span class="lab">何倍</span><input type="range" id="kR" min="0.5" max="3" step="0.1"><input type="number" id="kN" min="0.5" max="3" step="0.1"> 倍</div>
+      <div class="slider-row" id="rotRow"><span class="lab">回転</span><input type="range" id="rotR" min="0" max="355" step="5"><input type="number" id="rotN" min="0" max="359" step="1"> °</div>
+      <div class="tools">
+        <button class="op-btn" id="b1Flip">↔ 裏返す</button>
+        <button class="op-btn" id="b1Over">📐 角を重ねる</button>
+      </div>`;
+  }
+  function wire1() {
+    const p = () => P();
+    const lock = () => !!p().q || st.timer;
+    document.querySelectorAll('#ctrl [data-m]').forEach(b => b.addEventListener('click', () => { if (lock()) return; pushHist(); p().mode = b.dataset.m; p().u = 0; fitCopy(p()); buildCtrl(); render(); }));
+    const setK = (v) => { if (lock() || isNaN(v)) return; p().k = clamp(Math.round(v * 10) / 10, 0.5, 3); p().u = 0; fitCopy(p()); render(); };
+    $('kR').addEventListener('pointerdown', () => pushHist());
+    $('kR').addEventListener('input', e => setK(+e.target.value));
+    $('kN').addEventListener('change', e => { pushHist(); setK(+e.target.value); });
+    const setRot = (v) => { if (lock() || isNaN(v)) return; p().rot = ((Math.round(v) % 360) + 360) % 360; p().u = 0; fitCopy(p()); render(); };
+    $('rotR').addEventListener('pointerdown', () => pushHist());
+    $('rotR').addEventListener('input', e => setRot(+e.target.value));
+    $('rotN').addEventListener('change', e => { pushHist(); setRot(+e.target.value); });
+    $('b1Flip').addEventListener('click', () => { if (lock()) return; pushHist(); p().flip = !p().flip; p().u = 0; fitCopy(p()); render(); });
+    $('b1Over').addEventListener('click', () => {
+      if (st.timer) return;
+      const q = p(); pushHist();
+      const from = q.u, to = q.u > 0.5 ? 0 : 1;
+      animate(1300, u => { q.u = from + (to - from) * u; }, () => {
+        setMsg(to === 1 ? '📐 頂点 A と、それに対応する頂点を重ねた。角がぴったり重なる → <b>対応する角は等しい</b>。向かいの辺は<b>平行</b>になっている。' : '');
+      });
+    });
+  }
+  function drag1(p, id, pt) {
+    const q = snapOn() ? snapG(pt) : pt;
+    if (id === 'D') { p.Dp = q; return; }
+    if (id === 'O') { if (inBox([q], 16)) p.O = q; return; }
+    const old = p[id]; p[id] = q;
+    const T = [p.A, p.B, p.C], area = Math.abs(cross(sub(p.B, p.A), sub(p.C, p.A))) / 2;
+    if (!inBox(T, 16) || area < 1500 || VS.some(v => triAngP(p, v) < 12)) { p[id] = old; return; }
+    fitCopy(p);
+  }
+  const triAngP = (p, v) => { const o = others(v); return angAt(p[v], p[o[0]], p[o[1]]); };
+  function render1() {
+    const p = P(), q = p.q, I = copyPts1(p), nm = p.nm;
+    const T1 = [p.A, p.B, p.C], T2 = [I.A, I.B, I.C], c1 = centroid(T1), c2 = centroid(T2);
+    let s = '';
+    if (p.mode === 'homo' && !q) {
+      for (const v of VS) { const far = dist(p.O, I[v]) > dist(p.O, p[v]) ? I[v] : p[v]; s += seg(p.O, add(far, mul(unit(sub(far, p.O)), 16)), '#9e9e9e', 2, '6 6'); }
+    }
+    s += poly(T1, 'url(#ptO)', '#b26a00', 3, '', 'fill-opacity=".6"');
+    s += poly(T2, 'url(#ptB)', '#0063a0', 3, p.u > 0 && p.u < 1 ? '8 5' : '', 'fill-opacity=".55"');
+    const arcs = !q || q.type === 'writeSim';
+    if (arcs) VS.forEach((v, i) => { const o = others(v); s += arc(p[v], p[o[0]], p[o[1]], 18, ARC_COL[i], i + 1) + arc(I[v], I[o[0]], I[o[1]], 18, ARC_COL[i], i + 1); });
+    if (!q && p.u === 0) VS.forEach(v => { const o = others(v), a = Math.round(triAngP(p, v)) + '°'; s += angTxt(p[v], p[o[0]], p[o[1]], a, '#8a4b00', 48) + angTxt(I[v], I[o[0]], I[o[1]], a, '#004a7a', 48); });
+    if (q && q.lab) for (const L of q.lab) { const A2 = L.tri === 1 ? p : I, cc = L.tri === 1 ? c1 : c2; s += sideTxt(A2[L.s[0]], A2[L.s[1]], cc, L.t, L.t === 'x' ? '#ad1457' : (L.tri === 1 ? '#8a4b00' : '#004a7a'), 19); }
+    VS.forEach(v => {
+      // 角を重ねたとき、A とそれに対応する頂点は同じ場所 → 名前を1つにまとめる
+      if (v === 'A' && p.u > 0.95) { s += vName(p.A, c1, 'A・' + nm.A, '#263238'); return; }
+      s += vName(p[v], c1, v, '#8a4b00') + vName(I[v], c2, nm[v], '#004a7a');
+    });
+    if (p.mode === 'homo' && !q) s += dotP(p.O, '#263238', 6) + txt(add(p.O, [14, -14]), 'O', '#263238', 22);
+    st.handles = (q || st.timer || p.u > 0) ? [] : VS.map(v => ({ id: v, p: p[v] })).concat(p.mode === 'homo' ? [{ id: 'O', p: p.O }] : [{ id: 'D', p: I.A }]);
+    return s + st.handles.map(h => handle(h.p, h.id === 'D' ? '#0063a0' : h.id === 'O' ? '#263238' : '#b26a00')).join('');
+  }
+  function side1() {
+    const p = P(), I = copyPts1(Object.assign({}, p, { u: 0 })), nm = p.nm;
+    const cmP = (px) => r1(px / (p.unit || G)).toFixed(1);   // 練習問題のときは、問題の長さに合わせた倍率
+    const rows = SIDES.map(([a, b]) => `<tr><td class="o">${a}${b}</td><td>${cmP(dist(p[a], p[b]))}</td><td class="b">${nm[a]}${nm[b]}</td><td>${cmP(dist(I[a], I[b]))}</td><td class="eq">×${fmt(p.k)}</td></tr>`).join('');
+    const angs = VS.map(v => `<tr><td class="o">∠${v}</td><td>${Math.round(triAngP(p, v))}°</td><td class="b">∠${nm[v]}</td><td>${Math.round(triAngP(p, v))}°</td><td class="eq">＝</td></tr>`).join('');
+    let h = `<table class="tbl"><tr><th>△ABC</th><th>長さ(cm)</th><th>△${nm.A}${nm.B}${nm.C}</th><th>長さ(cm)</th><th>くらべる</th></tr>${rows}${angs}</table>`;
+    h += `<div class="big-eq">△ABC ∽ △${nm.A}${nm.B}${nm.C}</div>`;
+    h += `<div class="eq-note">読み方：「三角形 ABC <b>そうじ</b> 三角形 ${nm.A}${nm.B}${nm.C}」<br>対応する頂点を<b>同じ順</b>に：A↔${nm.A}、B↔${nm.B}、C↔${nm.C}</div>`;
+    const rs = kRatio(p.k), r0 = `1：${fmt(p.k)}`;
+    h += `<div class="why">相似比 AB：${nm.A}${nm.B} ＝ ${r0 === rs ? '' : r0 + ' ＝ '}<b>${rs}</b>${p.mode === 'homo' ? `<br>O${nm.A}÷OA ＝ O${nm.B}÷OB ＝ O${nm.C}÷OC ＝ ${fmt(p.k)}（<b>相似の位置</b>にある。O を<b>相似の中心</b>という）` : `<br><span class="small">${p.flip ? '裏返した図形も相似（合同のときと同じ）。' : '回しても、ずらしても、裏返しても相似のまま。'}</span>`}</div>`;
+    return h;
+  }
+
+  // ① の練習問題
+  function setupQ1(p) {
+    const T = triSides(4, 6, 5);             // AB＝4cm、BC＝6cm、CA＝5cm
+    p.k = pick([1.5, 2, 0.5]);
+    // 1cm を何 px でかくか（大きいほうの三角形が 230px くらいに入るように）
+    const sc = Math.min(36, 230 / (6 * Math.max(p.k, 1))); p.unit = sc;
+    VS.forEach(v => { p[v] = [140 - 3 * sc + T[v][0] * sc, 210 + 1.65 * sc - T[v][1] * sc]; }); p.rot = pick([0, 45, 90, 135, 180, 225, 270, 315]); p.flip = Math.random() < 0.5; p.mode = 'move'; p.u = 0;
+    p.Dp = [0, 0]; const I = copyPts1(p), c = centroid([I.A, I.B, I.C]); p.Dp = sub([400, 200], c);
+    const perm = shuffle(['D', 'E', 'F']); p.nm = { A: perm[0], B: perm[1], C: perm[2] };
+  }
+  const LEN0 = { AB: 4, BC: 6, CA: 5 };
+  function genQ1(type) {
+    const p = P(); setupQ1(p);
+    const nm = p.nm, k = p.k, T2 = `△${nm.A}${nm.B}${nm.C}`, stmt = `<span class="stmt">△ABC ∽ ${T2}</span>`;
+    type = type || pick(['corrSide', 'corrAng', 'writeSim', 'ratio', 'len']);
+    const sideNm = (s) => nm[s[0]] + nm[s[1]];
+    if (type === 'corrSide') {
+      const X = pick(SIDES);
+      return { type, text: `${stmt}<br>のとき、辺 <b>${X[0]}${X[1]}</b> に対応する辺は？`, choices: shuffle(SIDES.map(s => ({ t: '辺 ' + sideNm(s), ok: s === X, trip: 'order' }))),
+        expl: `△ABC∽${T2} の書き方から、A↔${nm.A}、B↔${nm.B}、C↔${nm.C}。だから ${X[0]}${X[1]} ↔ <b>${sideNm(X)}</b>。` };
+    }
+    if (type === 'corrAng') {
+      const X = pick(VS);
+      return { type, text: `${stmt}<br>のとき、<b>∠${X}</b> に対応する角は？`, choices: shuffle(VS.map(v => ({ t: '∠' + nm[v], ok: v === X, trip: 'order' }))),
+        expl: `同じ順番どうしが対応する。${X} は △ABC の ${VS.indexOf(X) + 1} 番目 → ${T2} の ${VS.indexOf(X) + 1} 番目の <b>${nm[X]}</b>。` };
+    }
+    if (type === 'writeSim') {
+      const right = nm.A + nm.B + nm.C;
+      const perms = shuffle(['DEF', 'DFE', 'EDF', 'EFD', 'FDE', 'FED'].filter(x => x !== right)).slice(0, 3);
+      return { type, text: '図の2つの三角形は相似。同じ本数の弧の角が等しい。<br>記号 ∽ を使って正しく書いたものは？', choices: shuffle([right].concat(perms).map(x => ({ t: `△ABC ∽ △${x}`, ok: x === right, trip: 'order' }))),
+        expl: `弧1本の角 A↔${nm.A}、弧2本 B↔${nm.B}、弧3本 C↔${nm.C}。この順にならべて <b>△ABC∽△${right}</b>。` };
+    }
+    if (type === 'ratio') {
+      const X = pick(SIDES), a = LEN0[X.join('')], right = ratioStr(a, a * k), rev = ratioStr(a * k, a);
+      const pool = shuffle(['1：2', '2：1', '2：3', '3：2', '1：3', '3：4', '4：3', '1：1'].filter(x => x !== right && x !== rev)).slice(0, 2);
+      return { type, text: `${stmt}<br>△ABC と ${T2} の<b>相似比</b>は？`, lab: [{ tri: 1, s: X, t: a + 'cm' }, { tri: 2, s: X, t: fmt(a * k) + 'cm' }],
+        choices: shuffle([{ t: right, ok: true }, { t: rev, trip: 'ratioOrder' }].concat(pool.map(t => ({ t, trip: 'calc' })))),
+        expl: `相似比は 対応する辺の比。${X[0]}${X[1]}：${sideNm(X)} ＝ ${a}：${fmt(a * k)} ＝ <b>${right}</b>（△ABC の辺を先に書く）。` };
+    }
+    // len：対応する辺の長さ
+    const [X, Y] = shuffle(SIDES).slice(0, 2), a = LEN0[X.join('')], b = LEN0[Y.join('')];
+    const right = b * k, cands = [{ v: right, ok: true }, { v: b + (a * k - a), trip: 'addDiff' }, { v: b / k, trip: 'ratioOrder' }, { v: a * k + 1, trip: 'calc' }, { v: right + 1, trip: 'calc' }];
+    const seen = new Set(), ch = [];
+    for (const c of cands) { const key = fmt(c.v); if (c.v > 0 && !seen.has(key) && ch.length < 4) { seen.add(key); ch.push({ t: key + ' cm', ok: !!c.ok, trip: c.trip }); } }
+    return { type: 'len', text: `${stmt}<br>辺 <b>${sideNm(Y)}</b>（図の x）の長さは？`, lab: [{ tri: 1, s: X, t: a + 'cm' }, { tri: 2, s: X, t: fmt(a * k) + 'cm' }, { tri: 1, s: Y, t: b + 'cm' }, { tri: 2, s: Y, t: 'x' }],
+      choices: shuffle(ch), expl: `${X[0]}${X[1]} → ${sideNm(X)} は ${a} → ${fmt(a * k)} で <b>×${fmt(k)}</b>。だから ${sideNm(Y)} ＝ ${b} × ${fmt(k)} ＝ <b>${fmt(right)}cm</b>。` };
+  }
+
+  /* =====================================================================
+     6. パート② 条件をつくる（部品をえらんで、できる三角形を見る）
+        もとの △ABC は AB＝4、BC＝6、CA＝5（cm）。△DEF は D↔A、E↔B、F↔C。
+        えらんだ辺は「もとの辺 × 相似比」の長さ、えらんだ角は「もとの角と同じ大きさ」に固定する。
+     ===================================================================== */
+  const T0 = triSides(4, 6, 5);
+  const ANG0 = { A: triAng(T0, 'A'), B: triAng(T0, 'B'), C: triAng(T0, 'C') };
+  const CORR = { D: 'A', E: 'B', F: 'C' };
+  const SID2 = { DE: 'AB', EF: 'BC', FD: 'CA' };
+  const P2LIST = ['DE', 'EF', 'FD', 'D', 'E', 'F'];
+  const isSideId = (id) => id.length === 2;
+  const sideLen2 = (id, k) => k * LEN0[SID2[id]];
+  const angT = (v) => ANG0[CORR[v]];
+  const sideOf = (x, y) => ['DE', 'EF', 'FD'].find(id => id.includes(x) && id.includes(y));
+  const COND_NAME = { SSS: '3組の辺の比がすべて等しい', SAS: '2組の辺の比とその間の角がそれぞれ等しい', AA: '2組の角がそれぞれ等しい' };
+
+  // えらんだ部品から「形が決まるか」を調べる
+  function analyze2(sel) {
+    const s = ['DE', 'EF', 'FD'].filter(x => sel[x]), a = ['D', 'E', 'F'].filter(x => sel[x]);
+    if (a.length >= 2) return { kind: s.length ? 'fix' : 'scale', cond: 'AA', s, a };
+    if (s.length === 3) return { kind: 'fix', cond: 'SSS', s, a };
+    if (s.length === 2 && a.length === 1) {
+      const V = [...s[0]].find(ch => s[1].includes(ch));
+      if (a[0] === V) return { kind: 'fix', cond: 'SAS', s, a };
+      return { kind: 'ssa', cond: null, s, a, V };
+    }
+    return { kind: 'free', cond: null, s, a };
+  }
+  // D を原点、E を x 軸の正の向き、F を上がわにそろえる
+  function normalize(T) {
+    const d = sub(T.E, T.D), th = Math.atan2(d[1], d[0]), out = {};
+    for (const v of ['D', 'E', 'F']) out[v] = rotM(sub(T[v], T.D), -th);
+    if (out.F[1] < 0) for (const v of ['D', 'E', 'F']) out[v] = [out[v][0], -out[v][1]];
+    return out;
+  }
+  function okTri(T) {
+    const A = (v) => { const o = ['D', 'E', 'F'].filter(x => x !== v); return angAt(T[v], T[o[0]], T[o[1]]); };
+    return ['D', 'E', 'F'].every(v => A(v) >= 10) && T.E[0] <= 16.5 && T.F[0] >= -1.5 && T.F[0] <= 16.5 && T.F[1] <= 17.5;
+  }
+  const scaled0 = (k) => ({ D: mul(T0.A, k), E: mul(T0.B, k), F: mul(T0.C, k) });
+  function genFree(an, k) {
+    const s = an.s, a = an.a, R = () => 2 + Math.random() * 9, RA = () => 25 + Math.random() * 105;
+    for (let tries = 0; tries < 400; tries++) {
+      let T = {};
+      if (s.length === 1 && a.length === 1 && !s[0].includes(a[0])) {
+        // 辺と、それに向かい合う角 → 向かいの頂点は、円の弧の上（円周角）のどこでもよい
+        const X = a[0], [Y, Z] = [...s[0]], Lc = sideLen2(s[0], k), al = angT(X) * D2R;
+        const R0 = Lc / (2 * Math.sin(al)), cy = Lc / (2 * Math.tan(al)), ph = Math.random() * 2 * Math.PI;
+        T[Y] = [0, 0]; T[Z] = [Lc, 0]; T[X] = [Lc / 2 + R0 * Math.cos(ph), cy + R0 * Math.sin(ph)];
+        if (T[X][1] < 0.3 || Math.abs(angAt(T[X], T[Y], T[Z]) - angT(X)) > 0.3) continue;
+      } else {
+        // 支点 X：角があればその頂点、辺が2本ならその共通の頂点、辺が1本ならそのはし
+        let X = 'D';
+        if (a.length) X = a[0]; else if (s.length === 2) X = [...s[0]].find(ch => s[1].includes(ch)); else if (s.length === 1) X = s[0][0];
+        const [Y, Z] = ['D', 'E', 'F'].filter(v => v !== X), sY = sideOf(X, Y), sZ = sideOf(X, Z);
+        const lY = s.includes(sY) ? sideLen2(sY, k) : R(), lZ = s.includes(sZ) ? sideLen2(sZ, k) : R(), th = (a.includes(X) ? angT(X) : RA()) * D2R;
+        T[X] = [0, 0]; T[Y] = [lY, 0]; T[Z] = [lZ * Math.cos(th), lZ * Math.sin(th)];
+      }
+      T = normalize(T);
+      if (okTri(T)) return T;
+    }
+    return null;
+  }
+  // 2辺と「間でない角」：できる三角形は 0〜2 通り
+  function genSSA(an, k) {
+    const W0 = an.a[0], V = an.V, s1 = an.s.find(x => x.includes(W0)), s2 = an.s.find(x => x !== s1), U = [...s2].find(ch => ch !== V);
+    const L1 = sideLen2(s1, k), L2 = sideLen2(s2, k), c = Math.cos(angT(W0) * D2R), disc = (L1 * c) ** 2 - (L1 * L1 - L2 * L2);
+    if (disc < 0) return [];
+    const ts = [L1 * c + Math.sqrt(disc), L1 * c - Math.sqrt(disc)].filter(t => t > 0.05);
+    const out = [];
+    for (const t of ts) { const T = {}; T[W0] = [0, 0]; T[V] = [L1, 0]; T[U] = [t * Math.cos(angT(W0) * D2R), t * Math.sin(angT(W0) * D2R)]; const N = normalize(T); if (okTri(N)) out.push(N); }
+    if (out.length === 2 && Math.abs(dist(out[0].D, out[0].F) - dist(out[1].D, out[1].F)) < 0.01) out.pop();
+    return out.sort((x, y) => isSim2(y, k) - isSim2(x, k));
+  }
+  // △DEF が △ABC と（D↔A、E↔B、F↔C で）相似か
+  function isSim2(T) {
+    const r = [dist(T.D, T.E) / 4, dist(T.E, T.F) / 6, dist(T.F, T.D) / 5];
+    return Math.max(...r) - Math.min(...r) < 0.004 * Math.max(...r);
+  }
+  function regen2(p) {
+    const an = analyze2(p.sel);
+    if (an.kind === 'fix') p.samples = [normalize(scaled0(p.k))];
+    else if (an.kind === 'scale') p.samples = shuffle([0.5, 1, 1.5, 2, 2.5]).map(sc => normalize(scaled0(sc))).filter(okTri).slice(0, 4);
+    else if (an.kind === 'ssa') p.samples = genSSA(an, p.k);
+    else { p.samples = []; for (let i = 0; i < 4; i++) { const T = genFree(an, p.k); if (T) p.samples.push(T); } }
+    p.cur = 0;
+  }
+  // あと1つ足すと形が決まって相似になる部品
+  function addOne(sel) { return P2LIST.filter(id => !sel[id] && analyze2(Object.assign({}, sel, { [id]: true })).cond); }
+  const partName = (id) => isSideId(id) ? '辺 ' + id : '∠' + id;
+  const selList = (sel) => P2LIST.filter(id => sel[id]);
+
+  function ctrl2() {
+    const p = P(), k = p.k;
+    const btn = (id) => isSideId(id)
+      ? `<button class="pt-btn" data-pt="${id}">辺 ${id}<small>${SID2[id]}×${fmt(k)}＝${fmt(sideLen2(id, k))}cm</small></button>`
+      : `<button class="pt-btn ang" data-pt="${id}">∠${id}<small>＝∠${CORR[id]}（約${Math.round(angT(id))}°）</small></button>`;
+    return `
+      <div class="chip-row"><span class="small">相似比</span>
+        <button class="chip small-chip" data-k="1.5">2：3（1.5倍）</button>
+        <button class="chip small-chip" data-k="2">1：2（2倍）</button></div>
+      <div class="parts">${P2LIST.map(btn).join('')}</div>
+      <div class="tools">
+        <button class="op-btn" id="b2Next">🎲 ほかの形</button>
+        <button class="op-btn" id="b2Clear">🧹 ぜんぶはずす</button>
+      </div>
+      <div class="chip-row" style="margin-top:6px"><span class="small">ためす：</span>
+        <button class="chip small-chip" data-set="DE,EF,FD">3組の辺</button>
+        <button class="chip small-chip" data-set="DE,EF,E">2組の辺と間の角</button>
+        <button class="chip small-chip" data-set="D,E">2組の角</button>
+        <button class="chip small-chip" data-set="DE,EF,F">2組の辺と間でない角</button></div>`;
+  }
+  function wire2() {
+    const p = () => P();
+    document.querySelectorAll('#ctrl [data-pt]').forEach(b => b.addEventListener('click', () => {
+      if (qActive()) { setMsg('練習問題に答えてから、部品をえらぼう。'); return; }
+      pushHist(); const q = p(); q.sel[b.dataset.pt] = !q.sel[b.dataset.pt]; regen2(q); msg2(); render();
+    }));
+    document.querySelectorAll('#ctrl [data-k]').forEach(b => b.addEventListener('click', () => { pushHist(); p().k = +b.dataset.k; regen2(p()); buildCtrl(); render(); }));
+    document.querySelectorAll('#ctrl [data-set]').forEach(b => b.addEventListener('click', () => {
+      if (qActive()) return; pushHist(); const q = p(); q.sel = {}; b.dataset.set.split(',').forEach(id => q.sel[id] = true); regen2(q); msg2(); render();
+    }));
+    $('b2Next').addEventListener('click', () => {
+      const q = p(), an = analyze2(q.sel); pushHist();
+      if (an.kind === 'free') { const T = genFree(an, q.k); if (T) { q.samples.push(T); if (q.samples.length > 7) q.samples.shift(); q.cur = q.samples.length - 1; } }
+      else if (q.samples.length) q.cur = (q.cur + 1) % q.samples.length;
+      if (an.kind === 'fix') setMsg('形は1つに決まっているので、何回おしても同じ三角形。');
+      render();
+    });
+    $('b2Clear').addEventListener('click', () => { if (qActive()) return; pushHist(); p().sel = {}; regen2(p()); setMsg(''); render(); });
+  }
+  function msg2() {
+    const p = P(), an = analyze2(p.sel), sl = selList(p.sel);
+    if (an.cond === 'AA' && an.s.length) setMsg('合同条件「1組の辺とその両端の角」に似ているね。でも相似なら<b>辺はいらない</b>。辺をはずしても相似のまま（大きさが自由になるだけ）。');
+    else if (an.kind === 'ssa') setMsg(p.samples.length > 1 ? '⚠ 形が<b>2通り</b>できた！ 片方は相似、もう片方は相似ではない。「🎲 ほかの形」で見くらべよう。' : '2辺と「間でない角」では、三角形によっては形が2通りできる。');
+    else if (an.kind === 'free' && sl.length) setMsg('形がいくつもできる。「🎲 ほかの形」で、ちがう形をさがしてみよう。');
+    else setMsg('');
+  }
+  function render2() {
+    const p = P(), an = analyze2(p.sel), sel = p.sel;
+    let s = '';
+    // もとの △ABC（左上）
+    const o1 = [26, 140], A1 = {}; VS.forEach(v => A1[v] = [o1[0] + T0[v][0] * G, o1[1] - T0[v][1] * G]);
+    const c1 = centroid([A1.A, A1.B, A1.C]);
+    s += `<rect x="6" y="6" width="176" height="176" rx="12" fill="#fff8e1" stroke="#ffe082" stroke-width="2"/>` + txt([94, 22], 'もとの △ABC', '#8a4b00', 15);
+    s += poly([A1.A, A1.B, A1.C], 'url(#ptO)', '#b26a00', 2.5, '', 'fill-opacity=".6"');
+    const inv = { A: 'D', B: 'E', C: 'F' };
+    SIDES.forEach(([a, b]) => { const id = sideOf(inv[a], inv[b]); if (sel[id]) s += seg(A1[a], A1[b], '#d55e00', 6); s += sideTxt(A1[a], A1[b], c1, LEN0[a + b], '#8a4b00', 15); });
+    VS.forEach((v, i) => { const o = others(v); if (sel[inv[v]]) s += arc(A1[v], A1[o[0]], A1[o[1]], 14, '#0072b2', i + 1, 'rgba(0,114,178,.25)'); s += vName(A1[v], c1, v, '#8a4b00'); });
+    // できた △DEF（D を原点、E を右へ）
+    const oD = [214, 396], toS = (pt) => [oD[0] + pt[0] * G, oD[1] - pt[1] * G];
+    const draw = (T, faint) => {
+      const S = { D: toS(T.D), E: toS(T.E), F: toS(T.F) }, cc = centroid([S.D, S.E, S.F]);
+      if (faint) return poly([S.D, S.E, S.F], 'none', '#78909c', 1.6, '5 5', 'opacity=".7"');
+      let h = poly([S.D, S.E, S.F], 'url(#ptB)', 'none', 0, '', 'fill-opacity=".5"');
+      [['D', 'E'], ['E', 'F'], ['F', 'D']].forEach(([a, b]) => {
+        const id = sideOf(a, b);
+        h += sel[id] ? seg(S[a], S[b], '#d55e00', 6) : seg(S[a], S[b], '#0063a0', 2.5, '9 6');
+        h += sideTxt(S[a], S[b], cc, cmS(dist(S[a], S[b])) + (sel[id] ? '' : '?'), sel[id] ? '#b34700' : '#455a64', 16);
+      });
+      ['D', 'E', 'F'].forEach((v, i) => {
+        const o = ['D', 'E', 'F'].filter(x => x !== v), a = angAt(S[v], S[o[0]], S[o[1]]);
+        if (sel[v]) h += arc(S[v], S[o[0]], S[o[1]], 18, '#0072b2', i + 1, 'rgba(0,114,178,.25)');
+        h += angTxt(S[v], S[o[0]], S[o[1]], Math.round(a) + '°', sel[v] ? '#004a7a' : '#607d8b', 42) + vName(S[v], cc, v, '#004a7a');
+      });
+      return h;
+    };
+    p.samples.forEach((T, i) => { if (i !== p.cur) s += draw(T, true); });
+    if (p.samples[p.cur]) s += draw(p.samples[p.cur], false);
+    else s += txt([380, 220], 'この部品の組み合わせでは', '#ad1457', 18) + txt([380, 248], '三角形ができない', '#ad1457', 18);
+    if (p.samples.length > 1) s += txt([548, 20], `形 ${p.cur + 1}／${p.samples.length}`, '#455a64', 15, 'end');
+    st.handles = [];
+    return s;
+  }
+  function side2() {
+    const p = P(), an = analyze2(p.sel), T = p.samples[p.cur], sl = selList(p.sel);
+    if (!T) return '<div class="verdict ng">✖ 三角形ができない部品の組み合わせ。部品を変えよう。</div>';
+    const sim = isSim2(T);
+    const rows = [['D', 'E'], ['E', 'F'], ['F', 'D']].map(([a, b]) => {
+      const id = a + b, L = dist(T[a], T[b]), o = LEN0[SID2[id]], r = L / o, eq = Math.abs(r - dist(T.D, T.E) / 4) < 0.02 && sim;
+      return `<tr><td class="b">${id}</td><td>${r1(L).toFixed(1)}</td><td class="o">${SID2[id]}</td><td>${o}</td><td class="${sim ? 'eq' : ''}">${fmt2(r)}</td></tr>`;
+    }).join('');
+    const angRows = ['D', 'E', 'F'].map(v => {
+      const o = ['D', 'E', 'F'].filter(x => x !== v), a = Math.round(angAt(T[v], T[o[0]], T[o[1]])), b = Math.round(angT(v));
+      return `<tr><td class="b">∠${v}</td><td>${a}°</td><td class="o">∠${CORR[v]}</td><td>約${b}°</td><td class="${a === b ? 'eq' : 'ne'}">${a === b ? '＝' : '≠'}</td></tr>`;
+    }).join('');
+    let h = `<table class="tbl"><tr><th>△DEF</th><th>(cm)</th><th>△ABC</th><th>(cm)</th><th>△DEF÷△ABC</th></tr>${rows}${angRows}</table>`;
+    h += `<div class="eq-note">えらんだ部品：<b>${sl.length ? sl.map(partName).join('・') : 'なし'}</b>　／　この形は ${sim ? '<span class="mark-ok" style="color:var(--ok)">○ 相似</span>' : '<span style="color:var(--ng)">✖ 相似ではない</span>'}</div>`;
+    if (an.cond) {
+      h += an.kind === 'scale'
+        ? `<div class="verdict ok">○ 大きさはいろいろ。でも形はどれも同じ → <b>いつでも相似</b>！<br>相似条件：<b>${COND_NAME.AA}</b>（辺の長さはいらない）</div>`
+        : `<div class="verdict ok">○ 形が1つに決まる → <b>いつでも相似</b>（相似比 ${kRatio(p.k)}）<br>相似条件：<b>${COND_NAME[an.cond]}</b></div>`;
+    } else if (an.kind === 'ssa') {
+      h += `<div class="verdict ng">✖ 2組の辺の比と、<b>間でない角</b>。${p.samples.length > 1 ? '形が<b>2通り</b>できる' : 'この三角形ではたまたま1つでも、ほかの三角形では2通りできることがある'} → <b>相似とはかぎらない</b>。</div>`;
+    } else {
+      const more = addOne(p.sel);
+      h += `<div class="verdict mid">△ 形が<b>いくつも</b>できる → <b>相似とはかぎらない</b>。${more.length ? `<br>あと1つ足すなら：${more.map(partName).join('、')}` : ''}</div>`;
+    }
+    return h;
+  }
+
+  // ② の練習問題（ことばで書いた条件 → 相似？）
+  const Q2 = [
+    { t: 'AB：DE＝BC：EF＝CA：FD', ans: 'SSS', sel: 'DE,EF,FD' },
+    { t: 'AB：DE＝BC：EF、∠B＝∠E', ans: 'SAS', sel: 'DE,EF,E' },
+    { t: 'AB：DE＝CA：FD、∠A＝∠D', ans: 'SAS', sel: 'DE,FD,D' },
+    { t: 'AB：DE＝BC：EF、∠C＝∠F', ans: 'NONE', sel: 'DE,EF,F', trip: 'notIncluded' },
+    { t: '∠A＝∠D、∠B＝∠E', ans: 'AA', sel: 'D,E', tripNone: 'sizeNeed' },
+    { t: '∠B＝∠E、∠C＝∠F', ans: 'AA', sel: 'E,F', tripNone: 'sizeNeed' },
+    { t: 'AB：DE＝BC：EF', ans: 'NONE', sel: 'DE,EF' },
+    { t: '∠A＝∠D、AB：DE＝2：3', ans: 'NONE', sel: 'DE,D' },
+    { t: 'BC：EF＝2：3、∠B＝∠E、∠C＝∠F', ans: 'AA', sel: 'EF,E,F', tripNone: 'sizeNeed' },
+  ];
+  const CH5 = [
+    { k: 'SSS', t: '3組の辺の比がすべて等しい' },
+    { k: 'SAS', t: '2組の辺の比とその間の角がそれぞれ等しい' },
+    { k: 'AA', t: '2組の角がそれぞれ等しい' },
+    { k: 'CONG', t: '1組の辺とその両端の角がそれぞれ等しい' },
+    { k: 'NONE', t: '相似とはいえない' },
+  ];
+  // えらんだ答えから、つまずきの型を決める
+  function tripOf(ans, k, q) {
+    if (k === 'CONG') return 'congMix';
+    if (ans === 'NONE') return q.trip || 'notEnough';
+    if (k === 'NONE') return q.tripNone || 'whichCond';
+    return 'whichCond';
+  }
+  function genQ2(focus) {
+    let list = Q2;
+    if (focus === 'sizeNeed') list = Q2.filter(x => x.ans === 'AA');
+    if (focus === 'notEnough') list = Q2.filter(x => x.ans === 'NONE');
+    let d; do { d = pick(list); } while (list.length > 1 && P().lastQ === d.t);
+    P().lastQ = d.t;
+    return { type: 'cond', sel: d.sel, text: `△ABC と △DEF で、<br><span class="stmt">${d.t}</span><br>のとき、△ABC∽△DEF といえる？ いえるなら、どの相似条件？`,
+      choices: CH5.map(c => ({ t: c.t, ok: c.k === d.ans, trip: tripOf(d.ans, c.k, d) })),
+      expl: d.ans === 'NONE' ? 'この部品だけでは、形がいくつもできる（または2通りできる）。下の「🧱 部品でたしかめる」で見てみよう。' : `相似条件「<b>${COND_NAME[d.ans]}</b>」に当てはまる。`, after: 'sel2' };
+  }
+
+  /* =====================================================================
+     7. パート③ 条件のクイズ（図の印から、相似か・どの条件かを答える）
+     ===================================================================== */
+  const SH = [[4, 6, 5], [4, 6, 8], [5, 6, 8], [3, 5, 7], [6, 8, 5], [4, 7, 6]];     // AB, BC, CA
+  const AN = [[50, 60, 70], [40, 60, 80], [30, 70, 80], [45, 60, 75], [35, 65, 80], [55, 50, 75]];   // ∠A, ∠B, ∠C
+  const KS = [1.5, 2, 0.5, 2.5, 3];
+  const sideKey = (a, b) => (SIDES.find(s => s.includes(a) && s.includes(b)) || [a, b]).join('');
+  // 2辺と「間でない角」で、形が2通りできる組をさがす
+  function ssaCombos(sh) {
+    const L = { AB: sh[0], BC: sh[1], CA: sh[2] }, T = triSides(...sh), out = [];
+    for (const W0 of VS) for (const V of others(W0)) {
+      const U = VS.find(x => x !== W0 && x !== V), s1 = L[sideKey(W0, V)], s2 = L[sideKey(V, U)], c = Math.cos(triAng(T, W0) * D2R);
+      const t = triLen(T, W0, U), t2 = 2 * s1 * c - t;
+      if (t2 > 0.8 && Math.abs(t2 - t) > 0.8) out.push({ W0, V, U, s1, s2, t2 });
+    }
+    return out;
+  }
+  function genQ3(type) {
+    type = type || pick(['SSS', 'SSSno', 'SAS', 'SSA', 'AA', 'AA3', 'AAno', 'ASA']);
+    const k = pick(KS), perm = shuffle(['D', 'E', 'F']), nm = { A: perm[0], B: perm[1], C: perm[2] };
+    const q = { type, k, nm, rot: pick([0, 40, 90, 150, 200, 250, 300]), flip: Math.random() < 0.5, lab1: [], lab2: [] };
+    const sLab = (T, a, b) => fmt(triLen(T, a, b)) + 'cm', aLab = (v, val) => ({ a: v, t: Math.round(val) + '°' });
+    if (type === 'SSS' || type === 'SSSno' || type === 'SAS') {
+      const sh = pick(SH); q.t1 = triSides(...sh);
+      let sh2 = sh.map(x => x * k);
+      if (type === 'SSSno') { for (let i = 0; i < 20; i++) { const j = rint(0, 2), d = pick([1, -1]); const t = sh2.slice(); t[j] += d; if (t[0] + t[1] > t[2] + 0.5 && t[1] + t[2] > t[0] + 0.5 && t[2] + t[0] > t[1] + 0.5) { sh2 = t; break; } } }
+      q.t2 = triSides(...sh2);
+      if (type === 'SAS') {
+        const V = pick(VS), [a, b] = others(V);
+        for (const T of [1, 2]) { const TT = q['t' + T], L = q['lab' + T]; L.push({ s: V + a, t: sLab(TT, V, a) }, { s: V + b, t: sLab(TT, V, b) }, aLab(V, triAng(q.t1, V))); }
+        q.ans = 'SAS';
+      } else {
+        SIDES.forEach(([a, b]) => { q.lab1.push({ s: a + b, t: sLab(q.t1, a, b) }); q.lab2.push({ s: a + b, t: sLab(q.t2, a, b) }); });
+        q.ans = type === 'SSS' ? 'SSS' : 'NONE';
+      }
+    } else if (type === 'SSA') {
+      let sh, cs; do { sh = pick(SH); cs = ssaCombos(sh); } while (!cs.length);
+      const c = pick(cs); q.t1 = triSides(...sh);
+      // もう1つの三角形：同じ2辺（×k）と同じ角だが、もう1つの答え（相似ではない）
+      const L2 = {}; L2[sideKey(c.W0, c.V)] = c.s1 * k; L2[sideKey(c.V, c.U)] = c.s2 * k; L2[sideKey(c.W0, c.U)] = c.t2 * k;
+      q.t2 = triSides(L2.AB, L2.BC, L2.CA);
+      for (const T of [1, 2]) { const TT = q['t' + T], L = q['lab' + T]; L.push({ s: c.W0 + c.V, t: sLab(TT, c.W0, c.V) }, { s: c.V + c.U, t: sLab(TT, c.V, c.U) }, aLab(c.W0, triAng(q.t1, c.W0))); }
+      q.ans = 'NONE'; q.trip = 'notIncluded';
+    } else {
+      const an = pick(AN), [a, b, c] = an;
+      q.t1 = triAngles(a, b, c, 5);
+      if (type === 'AAno') { const d = pick([5, -5, 10, -10]); q.t2 = triAngles(a, b + d, c - d, 5 * k); q.lab1.push(aLab('A', a), aLab('B', b)); q.lab2.push(aLab('A', a), aLab('B', b + d)); q.ans = 'NONE'; }
+      else {
+        q.t2 = triAngles(a, b, c, 5 * k);
+        if (type === 'AA') { q.lab1.push(aLab('A', a), aLab('B', b)); q.lab2.push(aLab('A', a), aLab('B', b)); q.tripNone = 'sizeNeed'; }
+        else if (type === 'AA3') { q.lab1.push(aLab('A', a), aLab('B', b)); q.lab2.push(aLab('B', b), aLab('C', c)); q.tripNone = 'thirdAngle'; }
+        else { q.lab1.push({ s: 'BC', t: '5cm' }, aLab('B', b), aLab('C', c)); q.lab2.push({ s: 'BC', t: fmt(5 * k) + 'cm' }, aLab('B', b), aLab('C', c)); q.tripNone = 'sizeNeed'; }
+        q.ans = 'AA';
+      }
+    }
+    const T2 = `△${nm.A}${nm.B}${nm.C}`;
+    const nmv = (s) => s.length === 2 ? nm[s[0]] + nm[s[1]] : nm[s];
+    q.text = `△ABC と △${['D', 'E', 'F'].join('')} は相似といえる？ いえるなら、どの相似条件？`;
+    q.choices = CH5.map(c => ({ t: c.t, ok: c.k === q.ans, trip: tripOf(q.ans, c.k, q) }));
+    const why = {
+      SSS: `3組の辺の比が ${ratioStr(1, k)} で、すべて等しい。`,
+      SSSno: '辺の比を3つとも計算すると、1つだけ ちがう。だから相似とはいえない。',
+      SAS: `2組の辺の比が ${ratioStr(1, k)} で、その<b>間の角</b>も等しい。`,
+      SSA: '辺の比は等しいけれど、等しい角が2つの辺の<b>間の角ではない</b>。この形のように、相似でない三角形もできてしまう。',
+      AA: '2組の角が等しい（大きさがちがっても相似）。',
+      AA3: `△ABC の ∠C＝180°−${q.t1 && Math.round(triAng(q.t1, 'A'))}°−${Math.round(triAng(q.t1, 'B'))}°＝${Math.round(triAng(q.t1, 'C'))}°。だから ∠B と ∠C の2組が等しい。`,
+      AAno: '角の大きさが1組しか等しくない（もう1組はちがう）。',
+      ASA: '2組の角が等しい。辺の長さ（比）はなくても相似条件になる（「1組の辺とその両端の角」は<b>合同</b>条件）。',
+    }[type];
+    q.expl = why;
+    // 相似なら、つぎに ∽ の書き方をきく
+    if (q.ans !== 'NONE') {
+      const right = nm.A + nm.B + nm.C, perms = shuffle(['DEF', 'DFE', 'EDF', 'EFD', 'FDE', 'FED'].filter(x => x !== right)).slice(0, 3);
+      q.then = { text: `では、記号 ∽ を使って正しく書くと？<br><span class="small">（等しい角どうしが対応する。図の位置や向きにまどわされないで）</span>`,
+        choices: shuffle([right].concat(perms).map(x => ({ t: `△ABC ∽ △${x}`, ok: x === right, trip: 'order' }))),
+        expl: `A↔${nm.A}、B↔${nm.B}、C↔${nm.C} が対応する。<b>△ABC∽${T2}</b>。` };
+    }
+    q.nmv = null;
+    return q;
+  }
+  function render3() {
+    const p = P(), q = p.q;
+    if (!q) return txt([280, 210], '「✏️ 練習問題」で問題を出そう', '#607d8b', 20);
+    const rot = p.align ? 0 : q.rot, flip = p.align ? false : q.flip;
+    const b1 = bboxCm(q.t1, 0, false), b2 = bboxCm(q.t2, rot, flip);
+    const sc = Math.min(225 / Math.max(b1[0], b2[0]), 300 / Math.max(b1[1], b2[1]), 40);
+    const A1 = placeTri(q.t1, 0, false, sc, [140, 215]), A2 = placeTri(q.t2, rot, flip, sc, [415, 215]);
+    let s = seg([280, 30], [280, 400], '#cfd8dc', 2, '4 6');
+    const drawT = (A, labs, isTwo) => {
+      const pts = [A.A, A.B, A.C], cc = centroid(pts), nmF = (v) => isTwo ? q.nm[v] : v, col = isTwo ? '#004a7a' : '#8a4b00';
+      let h = poly(pts, isTwo ? 'url(#ptB)' : 'url(#ptO)', isTwo ? '#0063a0' : '#b26a00', 3, '', 'fill-opacity=".5"');
+      for (const L of labs) {
+        if (L.s) h += sideTxt(A[L.s[0]], A[L.s[1]], cc, L.t, col, 18);
+        else {
+          // 弧はみな同じ色（色で対応がわかってしまわないように）。小さい三角形では数を角に近づける
+          const o = others(L.a), off = Math.min(44, 0.42 * Math.min(dist(A[L.a], A[o[0]]), dist(A[L.a], A[o[1]])));
+          h += arc(A[L.a], A[o[0]], A[o[1]], Math.min(18, off * 0.6), '#6d4c41', 1) + angTxt(A[L.a], A[o[0]], A[o[1]], L.t, col, Math.max(off, 26));
+        }
+      }
+      VS.forEach(v => { h += vName(A[v], cc, nmF(v), col); });
+      return h;
+    };
+    s += drawT(A1, q.lab1, false) + drawT(A2, q.lab2, true);
+    st.handles = [];
+    return s;
+  }
+  function side3() {
+    const p = P(), q = p.q;
+    let h = '<div class="eq-note">左が △ABC、右が △DEF（頂点の名前の順番はばらばら）。書いてある長さ・角だけを使って考えよう。</div>';
+    if (q && q.done) h += `<div class="tools"><button class="op-btn${p.align ? ' on' : ''}" id="b3Align">🔄 向きをそろえて見る</button></div>`;
+    return h;
+  }
+
+  /* =====================================================================
+     8. パート④ 証明パズル（証明パズル.html の型を引きつぐ）
+        行の役割：はじめ（△…と△…で）→ 根拠（n 行）→ 相似（〜から、△…∽△…）→（結論）
+        カードの el（根拠が、1つめの三角形のどこか）：'r:AB'＝辺 AB の比、'a:A'＝頂点 A の角。相似条件の判定に使う。
+        marks（図で光らせるところ）：'s:AB'＝辺 AB、'a:BAC'＝∠BAC（まん中の文字が頂点）。
+     ===================================================================== */
+  const SIMC = (cond, pair, ok) => ({ k: 'sim', cond, t: COND_NAME[cond] + 'から、' + pair, ok });
+  const PROBS = [
+    { id: 'tate', name: '① 平行線（タテ型）', nCond: 2, T1: 'ABC', T2: 'ADE', cond: 'AA',
+      story: '△ABC の辺 AB、AC 上に点 D、E があり、<b>DE∥BC</b> のとき、△ABC∽△ADE を証明しよう。',
+      hyp: ['DE∥BC'], goal: ['△ABC∽△ADE', 'AB：AD＝BC：DE'],
+      geo: () => { const A = [280, 40], B = [80, 380], C = [490, 380], t = 0.45; return { A, B, C, D: lerp(A, B, t), E: lerp(A, C, t) }; },
+      edges: ['AB', 'AC', 'BC', 'DE'], given: ['p:DE', 'p:BC'],
+      sol: ['s1', 'c1', 'c2', 'g1', 'e1'],
+      hint1: 'DE∥BC だから、平行線と直線 AB でできる<b>同位角</b>（F の形）が等しい。∠A は2つの三角形が<b>共通</b>に使っている。',
+      hint2: '使う相似条件は「<b>2組の角</b>がそれぞれ等しい」。',
+      cards: [
+        { id: 's1', k: 'start', t: '△ABC と △ADE で', ok: true },
+        { id: 's2', k: 'start', t: '△ABC と △AED で', bad: { type: 'order', msg: 'B と D、C と E が対応する（DE∥BC の同位角の位置）。△ABC に対応するのは △ADE。' } },
+        { id: 'c1', k: 'cond', t: '∠BAC＝∠DAE（共通）', ok: true, el: 'a:A', marks: ['a:BAC', 'a:DAE'] },
+        { id: 'c2', k: 'cond', t: 'DE∥BC より、同位角は等しいから、∠ABC＝∠ADE', ok: true, el: 'a:B', marks: ['a:ABC', 'a:ADE'] },
+        { id: 'c3', k: 'cond', t: 'DE∥BC より、同位角は等しいから、∠ACB＝∠AED', ok: true, el: 'a:C', marks: ['a:ACB', 'a:AED'] },
+        { id: 'c4', k: 'cond', t: 'DE∥BC より、錯角は等しいから、∠ABC＝∠ADE', bad: { type: 'reason', msg: '∠ABC と ∠ADE は、平行線 DE・BC に直線 AB が交わってできる <b>F の形</b>の位置。錯角ではなく「<b>同位角</b>」。' } },
+        { id: 'c5', k: 'cond', t: 'AD＝AB（共通）', bad: { type: 'noBasis', msg: 'AD と AB は長さのちがう別の辺。「共通」なのは、2つの三角形が<b>いっしょに使っている</b>角 ∠A。' } },
+        { id: 'c6', k: 'cond', t: 'AB：AD＝BC：DE（仮定）', bad: { type: 'noBasis', msg: 'AB：AD＝BC：DE は、これから示したい<b>結論</b>。仮定は DE∥BC だけ。' } },
+        Object.assign({ id: 'g1' }, SIMC('AA', '△ABC∽△ADE', true)),
+        Object.assign({ id: 'g2' }, SIMC('SAS', '△ABC∽△ADE')),
+        { id: 'g3', k: 'sim', cond: 'AA', t: COND_NAME.AA + 'から、△ABC∽△AED', bad: { type: 'order', msg: '∽ の両がわは、<b>対応する頂点の順</b>に書く。A↔A、B↔D、C↔E だから △ABC∽△ADE。' } },
+        { id: 'g4', k: 'sim', cond: 'CONG', t: '1組の辺とその両端の角がそれぞれ等しいから、△ABC≡△ADE', bad: { type: 'congMix', msg: '大きさがちがうので<b>合同</b>（≡）ではない。角が2組等しいことから<b>相似</b>（∽）がいえる。' } },
+        { id: 'e1', k: 'concl', t: '相似な図形では、対応する辺の比は等しいから、AB：AD＝BC：DE', ok: true, marks: ['s:AB', 's:AD', 's:BC', 's:DE'] },
+        { id: 'e2', k: 'concl', t: '相似な図形では、対応する辺の比は等しいから、DB：AD＝BC：DE', bad: { type: 'ratioPart', msg: 'DB は △ADE の辺ではない。BC に対応するのは DE、AB に対応するのは AD。だから AB：AD＝BC：DE。' } },
+      ] },
+    { id: 'suna', name: '② 平行線（砂時計型）', nCond: 2, T1: 'OAB', T2: 'ODC', cond: 'AA',
+      story: '線分 AD と BC が点 O で交わり、<b>AB∥CD</b> のとき、△OAB∽△ODC を証明しよう。',
+      hyp: ['AB∥CD'], goal: ['△OAB∽△ODC'],
+      geo: () => { const O = [300, 175], A = [130, 50], B = [360, 50], s = 1.25; return { O, A, B, D: add(O, mul(sub(O, A), s)), C: add(O, mul(sub(O, B), s)) }; },
+      edges: ['AB', 'CD', 'AD', 'BC'], given: ['p:AB', 'p:CD'],
+      sol: ['s1', 'c1', 'c2', 'g1'],
+      hint1: 'AB∥CD だから、平行線と直線 AD でできる<b>錯角</b>（Z の形）が等しい。O のところの2つの角は<b>対頂角</b>。',
+      hint2: '使う相似条件は「<b>2組の角</b>がそれぞれ等しい」。',
+      cards: [
+        { id: 's1', k: 'start', t: '△OAB と △ODC で', ok: true },
+        { id: 's2', k: 'start', t: '△OAB と △OCD で', bad: { type: 'order', msg: 'A と D、B と C が対応する（AB∥CD の錯角の位置）。△OAB に対応するのは △ODC。' } },
+        { id: 'c1', k: 'cond', t: '対頂角は等しいから、∠AOB＝∠DOC', ok: true, el: 'a:O', marks: ['a:AOB', 'a:DOC'] },
+        { id: 'c2', k: 'cond', t: 'AB∥CD より、錯角は等しいから、∠OAB＝∠ODC', ok: true, el: 'a:A', marks: ['a:OAB', 'a:ODC'] },
+        { id: 'c3', k: 'cond', t: 'AB∥CD より、錯角は等しいから、∠OBA＝∠OCD', ok: true, el: 'a:B', marks: ['a:OBA', 'a:OCD'] },
+        { id: 'c4', k: 'cond', t: 'AB∥CD より、同位角は等しいから、∠OAB＝∠ODC', bad: { type: 'reason', msg: '∠OAB と ∠ODC は、平行線 AB・CD に直線 AD が交わってできる <b>Z の形</b>の位置。同位角ではなく「<b>錯角</b>」。' } },
+        { id: 'c5', k: 'cond', t: '∠AOB＝∠DOC（共通）', bad: { type: 'reason', msg: '∠AOB と ∠DOC は別の角（向かい合っている）。理由は「共通」ではなく「<b>対頂角</b>は等しい」。' } },
+        { id: 'c6', k: 'cond', t: 'OA＝OD（仮定）', bad: { type: 'noBasis', msg: 'OA＝OD は仮定にない（長さはちがう）。仮定は AB∥CD だけ。' } },
+        Object.assign({ id: 'g1' }, SIMC('AA', '△OAB∽△ODC', true)),
+        Object.assign({ id: 'g2' }, SIMC('SSS', '△OAB∽△ODC')),
+        { id: 'g3', k: 'sim', cond: 'AA', t: COND_NAME.AA + 'から、△OAB∽△OCD', bad: { type: 'order', msg: '∽ の両がわは、<b>対応する頂点の順</b>に書く。O↔O、A↔D、B↔C だから △OAB∽△ODC。' } },
+        { id: 'g4', k: 'sim', cond: 'CONG', t: '1組の辺とその両端の角がそれぞれ等しいから、△OAB≡△ODC', bad: { type: 'congMix', msg: '等しい辺は見つかっていない。角が2組等しいことからいえるのは<b>相似</b>（∽）。' } },
+      ] },
+    { id: 'sas', name: '③ 辺の比と間の角', nCond: 3, T1: 'ABC', T2: 'ADE', cond: 'SAS',
+      story: '△ABC で、辺 AB 上に点 E、辺 AC 上に点 D がある。AB＝8cm、AC＝6cm、AE＝3cm、AD＝4cm のとき、△ABC∽△ADE を証明しよう。',
+      hyp: ['AB＝8cm、AC＝6cm', 'AE＝3cm、AD＝4cm'], goal: ['△ABC∽△ADE'],
+      geo: () => { const A = [300, 30], uB = [-0.55, 0.835], uC = [0.62, 0.785], s = 42; const B = add(A, mul(unit(uB), 8 * s)), C = add(A, mul(unit(uC), 6 * s)); return { A, B, C, E: add(A, mul(unit(uB), 3 * s)), D: add(A, mul(unit(uC), 4 * s)) }; },
+      edges: ['AB', 'AC', 'BC', 'DE'], given: [], lens: [['A', 'E', '3'], ['E', 'B', '5'], ['A', 'D', '4'], ['D', 'C', '2']],
+      sol: ['s1', 'c1', 'c2', 'c3', 'g1'],
+      hint1: 'AB は 8cm、AC は 6cm。小さい三角形の辺は AD＝4cm、AE＝3cm。<b>8 と 4</b>、<b>6 と 3</b> の比が等しい。だから B↔D、C↔E が対応する（E は AB 上にあるけれど、対応するのは C）。',
+      hint2: '使う相似条件は「<b>2組の辺の比とその間の角</b>がそれぞれ等しい」。間の角は ∠A（共通）。',
+      cards: [
+        { id: 's1', k: 'start', t: '△ABC と △ADE で', ok: true },
+        { id: 's2', k: 'start', t: '△ABC と △AED で', bad: { type: 'order', msg: 'AB＝8 と AE＝3、AC＝6 と AD＝4 では比が等しくならない。AB：AD＝AC：AE＝2：1 だから、B↔D、C↔E。△ABC に対応するのは △ADE。' } },
+        { id: 'c1', k: 'cond', t: 'AB：AD＝8：4＝2：1', ok: true, el: 'r:AB', marks: ['s:AB', 's:AD'] },
+        { id: 'c2', k: 'cond', t: 'AC：AE＝6：3＝2：1', ok: true, el: 'r:AC', marks: ['s:AC', 's:AE'] },
+        { id: 'c3', k: 'cond', t: '∠BAC＝∠DAE（共通）', ok: true, el: 'a:A', marks: ['a:BAC', 'a:DAE'] },
+        { id: 'c4', k: 'cond', t: 'AB：AE＝8：3', bad: { type: 'order', msg: 'AB と AE は対応する辺ではない（8：3 と 6：4 は等しくない）。対応する辺は、比が等しくなる組 AB と AD、AC と AE。' } },
+        { id: 'c5', k: 'cond', t: 'BC：DE＝2：1（仮定）', bad: { type: 'noBasis', msg: 'BC と DE の長さは問題に書いていない。仮定にないことは使えない（これは相似から分かること）。' } },
+        { id: 'c6', k: 'cond', t: 'DE∥BC より、同位角は等しいから、∠ABC＝∠ADE', bad: { type: 'noBasis', msg: 'DE と BC が平行だとは、どこにも書いていない（じっさい、この図では平行ではない）。' } },
+        Object.assign({ id: 'g1' }, SIMC('SAS', '△ABC∽△ADE', true)),
+        Object.assign({ id: 'g2' }, SIMC('SSS', '△ABC∽△ADE')),
+        Object.assign({ id: 'g3' }, SIMC('AA', '△ABC∽△ADE')),
+        { id: 'g4', k: 'sim', cond: 'CONG', t: '2組の辺とその間の角がそれぞれ等しいから、△ABC≡△ADE', bad: { type: 'congMix', msg: '辺の<b>長さ</b>は等しくない（8 と 4）。等しいのは辺の<b>比</b>。相似条件は「2組の辺の<b>比</b>とその間の角」、記号は ∽。' } },
+      ] },
+    { id: 'right', name: '④ 直角三角形と高さ', nCond: 2, T1: 'ABC', T2: 'HBA', cond: 'AA',
+      story: '∠BAC＝90° の直角三角形 ABC で、頂点 A から辺 BC に垂線 AH をひく。このとき、△ABC∽△HBA を証明しよう。',
+      hyp: ['∠BAC＝90°', 'AH⊥BC'], goal: ['△ABC∽△HBA'],
+      geo: () => { const B = [60, 360], C = [510, 360], H = [200, 360], h = Math.sqrt((H[0] - B[0]) * (C[0] - H[0])); return { A: [200, 360 - h], B, C, H }; },
+      edges: ['AB', 'AC', 'BC', 'AH'], given: ['r:BAC', 'r:AHB'],
+      sol: ['s1', 'c1', 'c2', 'g1'],
+      hint1: '∠BAC と ∠BHA は、どちらも<b>直角</b>（90°）。∠B は2つの三角形が<b>共通</b>に使っている。',
+      hint2: '使う相似条件は「<b>2組の角</b>がそれぞれ等しい」。直角の頂点 A と H が対応する。',
+      cards: [
+        { id: 's1', k: 'start', t: '△ABC と △HBA で', ok: true },
+        { id: 's2', k: 'start', t: '△ABC と △HAB で', bad: { type: 'order', msg: '直角の頂点どうし A↔H、共通の角 B↔B が対応する。△ABC に対応するのは △HBA。' } },
+        { id: 'c1', k: 'cond', t: '∠BAC＝∠BHA＝90°（仮定）', ok: true, el: 'a:A', marks: ['a:BAC', 'a:BHA'] },
+        { id: 'c2', k: 'cond', t: '∠ABC＝∠HBA（共通）', ok: true, el: 'a:B', marks: ['a:ABC', 'a:HBA'] },
+        { id: 'c3', k: 'cond', t: '∠ACB＝∠HAB（仮定）', bad: { type: 'noBasis', msg: '∠ACB＝∠HAB は仮定に書いていない（内角の和から導けるが、ここでは使わなくても証明できる）。' } },
+        { id: 'c4', k: 'cond', t: '∠BAC＝∠BHA（共通）', bad: { type: 'reason', msg: '∠BAC と ∠BHA は場所のちがう角。理由は「共通」ではなく「どちらも 90°（<b>仮定</b>）」。' } },
+        { id: 'c5', k: 'cond', t: 'AB：HB＝BC：BA', bad: { type: 'noBasis', msg: 'これは相似がいえたあとで分かること（<b>結論</b>のほう）。根拠には使えない。' } },
+        Object.assign({ id: 'g1' }, SIMC('AA', '△ABC∽△HBA', true)),
+        Object.assign({ id: 'g2' }, SIMC('SAS', '△ABC∽△HBA')),
+        { id: 'g3', k: 'sim', cond: 'AA', t: COND_NAME.AA + 'から、△ABC∽△HAB', bad: { type: 'order', msg: '対応する頂点の順に書く。A↔H、B↔B、C↔A だから △ABC∽△HBA。' } },
+        { id: 'g4', k: 'sim', cond: 'CONG', t: '直角三角形の斜辺と1つの鋭角がそれぞれ等しいから、△ABC≡△HBA', bad: { type: 'congMix', msg: '斜辺 BC と斜辺 BA は長さがちがう。これは<b>合同</b>条件。ここでいえるのは<b>相似</b>（2組の角）。' } },
+      ] },
+  ];
+  const prob = () => PROBS[P().pi];
+  const cardOf = (id) => prob().cards.find(c => c.id === id);
+  const roles = () => ['start'].concat(Array(prob().nCond).fill('cond'), ['sim'], prob().cards.some(c => c.k === 'concl') ? ['concl'] : []);
+  const SIM_ROW = () => prob().nCond + 1;
+  const ROWSTY = [null, { c: '#e65100', n: 1, lab: '①' }, { c: '#1565c0', n: 2, lab: '②' }, { c: '#6a1b9a', n: 3, lab: '③' }];
+  function loadProb(i) {
+    const p = P(); p.pi = i; p.rows = Array(roles().length).fill(null); p.hint = 0; p.miss = 0; p.done = false; p.glow = -1;
+    p.order = shuffle(prob().cards.map(c => c.id)); p.rot = {}; p.order.forEach(id => { p.rot[id] = (Math.random() * 4 - 2).toFixed(1); });
+  }
+  // 根拠の el から、相似条件を決める（'SSS'・'SAS'・'AA'、当てはまらなければ 'SSA'・'?'）
+  function classify(els) {
+    const rs = els.filter(e => e[0] === 'r').map(e => e.slice(2)), as = els.filter(e => e[0] === 'a').map(e => e.slice(2));
+    if (as.length >= 2) return 'AA';
+    if (rs.length >= 3) return 'SSS';
+    if (rs.length === 2 && as.length === 1) { const v = [...rs[0]].find(ch => rs[1].includes(ch)); return v === as[0] ? 'SAS' : 'SSA'; }
+    return '?';
+  }
+  const condCards = () => { const p = P(); return p.rows.slice(1, SIM_ROW()).filter(Boolean).map(cardOf); };
+  function orderMsg(c, role) {
+    if (c.k === 'start') return '「△…と△…で」は、どの三角形とどの三角形で考えるのかを宣言する行。<b>いちばん最初</b>に書く。';
+    if (role === 'start') return 'まず「<b>どの三角形とどの三角形で</b>」考えるのかを書いてから、根拠をならべよう。';
+    if (c.k === 'sim') return '相似だといえるのは、根拠（等しい角・辺の比）を<b>ならべたあと</b>。根拠の行より下に置こう。';
+    if (c.k === 'concl') return '結論は<b>最後</b>。相似だと分かってから、対応する辺の比が等しいといえる。';
+    if (c.k === 'cond' && role === 'sim') return 'この行は、上の根拠をまとめて「相似」をいう行。根拠のカードは、上の行へ。';
+    return 'この行には置けない。';
+  }
+  function tryPlace(c, r) {
+    const role = roles()[r], p = P(), pr = prob();
+    if (c.k !== role) return { type: 'flow', msg: orderMsg(c, role) };
+    if (c.bad) return c.bad;
+    if (role === 'sim') {
+      const placed = condCards();
+      if (placed.length < pr.nCond) return { type: 'notEnough', msg: `相似をいうには、根拠が<b>${pr.nCond}つ</b>必要。今は ${placed.length} つしかない。` };
+      const cls = classify(placed.map(x => x.el));
+      if (!COND_NAME[cls]) return { type: 'notIncluded', msg: '根拠の組み合わせが、どの相似条件にも当てはまらない。' };
+      if (cls !== c.cond) return { type: 'whichCond', msg: `根拠で使ったのは「${placed.map(x => x.el[0] === 'r' ? '辺の比' : '角').join('・')}」。それに当てはまる相似条件は「<b>${COND_NAME[cls]}</b>」。` };
+    }
+    if (role === 'concl' && !p.rows[SIM_ROW()]) return { type: 'flow', msg: '結論は、相似を示してから。' };
+    return null;
+  }
+  function place(id, r) {
+    const p = P();
+    if (p.done || p.rows[r]) { if (p.rows[r]) setMsg('その行には、もうカードがある。カードをタップするともどせる。', 'ng'); return; }
+    const c = cardOf(id), err = tryPlace(c, r);
+    if (err) {
+      p.miss++; addTrip(err.type); sndNG();
+      setMsg(`✖ <b>${TRIPS[err.type] ? TRIPS[err.type].name : ''}</b><br>${err.msg}`, 'ng');
+      render();
+      const el = document.querySelector(`#side .pool [data-cid="${id}"]`);
+      if (el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+      return;
+    }
+    pushHist(); p.rows[r] = id; p.glow = r; sndOK();
+    if (c.k === 'start') setMsg('どの三角形で考えるかが決まった（図にうすく色がついた）。次は、根拠をならべよう。', 'ok');
+    else if (c.k === 'cond') setMsg(`${ROWSTY[r] ? ROWSTY[r].lab : ''} として置いた。図で光っているところを見よう。`, 'ok');
+    else if (c.k === 'sim') setMsg('相似がいえた！ 根拠が相似条件にぴったり当てはまった。', 'ok');
+    else setMsg('結論までたどりついた！', 'ok');
+    if (p.rows.every(Boolean)) {
+      p.done = true; bumpRec(r2 => { r2.done4 = r2.done4 || {}; r2.done4[prob().id] = true; r2.clear[4] = (r2.clear[4] || 0) + 1; });
+      setMsg(`🎉 証明が完成した！ <b>仮定 → 根拠 → 相似条件 → ∽</b> の流れができた。${p.miss ? `（まちがい ${p.miss} 回）` : '（まちがいなし！）'}`, 'ok');
+    }
+    render();
+  }
+  function unplace(r) {
+    const p = P(); if (p.done || !p.rows[r]) return;
+    pushHist(); p.rows[r] = null;
+    if (r < SIM_ROW() && p.rows[SIM_ROW()]) { p.rows[SIM_ROW()] = null; if (p.rows[SIM_ROW() + 1]) p.rows[SIM_ROW() + 1] = null; setMsg('根拠をもどしたので、相似・結論の行も外した。'); }
+    render();
+  }
+  // カードのドラッグ（pointer events。マウスでもタッチでも）
+  let cd = null;
+  document.addEventListener('pointerdown', e => {
+    if (st.part !== 4) return;
+    const placed = e.target.closest('#side .slot .pc');
+    if (placed) { unplace(+placed.dataset.placed); return; }
+    const el = e.target.closest('#side .pool .pc'); if (!el || P().done) return;
+    cd = { el, id: el.dataset.cid, x0: e.clientX, y0: e.clientY, moved: false, ghost: null, over: null };
+    e.preventDefault();
+  });
+  document.addEventListener('pointermove', e => {
+    if (!cd) return;
+    if (!cd.moved && Math.hypot(e.clientX - cd.x0, e.clientY - cd.y0) > 8) {
+      cd.moved = true; cd.ghost = cd.el.cloneNode(true); cd.ghost.classList.add('ghost');
+      cd.ghost.style.width = Math.min(cd.el.offsetWidth, 420) + 'px'; document.body.appendChild(cd.ghost); cd.el.style.opacity = .3;
+    }
+    if (!cd.moved) return;
+    cd.ghost.style.left = (e.clientX - 30) + 'px'; cd.ghost.style.top = (e.clientY - 24) + 'px';
+    const t = document.elementFromPoint(e.clientX, e.clientY), slot = t && t.closest('.slot');
+    if (cd.over && cd.over !== slot) cd.over.classList.remove('over');
+    if (slot && !slot.classList.contains('filled')) { slot.classList.add('over'); cd.over = slot; } else cd.over = null;
+  });
+  function endCardDrag(e, cancel) {
+    if (!cd) return;
+    const c = cd; cd = null;
+    if (c.ghost) c.ghost.remove();
+    c.el.style.opacity = '';
+    if (c.over) c.over.classList.remove('over');
+    if (cancel) return;
+    if (!c.moved) { const r = P().rows.findIndex(x => !x); if (r >= 0) place(c.id, r); return; }
+    const t = document.elementFromPoint(e.clientX, e.clientY), row = t && t.closest('[data-row]');
+    if (row) place(c.id, +row.dataset.row);
+  }
+  document.addEventListener('pointerup', e => endCardDrag(e, false));
+  document.addEventListener('pointercancel', e => endCardDrag(e, true));
+
+  function ctrl4() {
+    return `<div class="probs" id="probs"></div>
+      <div class="tools"><button class="op-btn" id="b4Split">🔄 2つを取り出して向きをそろえる</button></div>`;
+  }
+  function wire4() {
+    const done = (getRec().done4) || {};
+    $('probs').innerHTML = PROBS.map((pr, i) => `<button class="prob ${i === P().pi ? 'on' : ''}" data-pi="${i}">${done[pr.id] ? '✅ ' : ''}${pr.name}</button>`).join('');
+    document.querySelectorAll('#probs [data-pi]').forEach(b => b.addEventListener('click', () => { pushHist(); loadProb(+b.dataset.pi); P().split = false; st.hintLv = 0; setMsg(''); buildCtrl(); render(); }));
+    $('b4Split').addEventListener('click', () => { pushHist(); P().split = !P().split; render(); });
+  }
+  // 図の点を、名前でさがす（取り出したときは、三角形ごとに別の点）
+  function render4() {
+    const p = P(), pr = prob(), Q = pr.geo();
+    let s = '';
+    const marksOn = [];
+    p.rows.forEach((id, r) => { const c = id && cardOf(id); if (c && c.marks) marksOn.push({ r, marks: c.marks, k: c.k }); });
+    const started = !!p.rows[0];
+    const drawMark = (dict, m, sty, glow) => {
+      const [kd, nmS] = m.split(':'), ex = glow ? 'class="glow"' : '';
+      if (kd === 's') { const a = dict[nmS[0]], b = dict[nmS[1]]; return seg(a, b, sty.c, 6, '', `opacity=".75" ${ex}`) + ticks(a, b, sty.n, sty.c); }
+      if (kd === 'a') { const V = dict[nmS[1]], A = dict[nmS[0]], B = dict[nmS[2]]; return arc(V, A, B, 24, sty.c, sty.n, sty.c + '33', ex); }
+      return '';
+    };
+    const has = (dict, nmS) => [...nmS].every(ch => dict[ch]);
+    if (!p.split) {
+      if (started) {
+        s += poly([...pr.T1].map(v => Q[v]), 'url(#ptO)', 'none', 0, '', 'fill-opacity=".45"');
+        s += poly([...pr.T2].map(v => Q[v]), 'url(#ptB)', 'none', 0, '', 'fill-opacity=".55"');
+      }
+      for (const e of pr.edges) s += seg(Q[e[0]], Q[e[1]], '#263238', 3);
+      // 仮定の印
+      for (const g of pr.given) {
+        const [kd, nmS] = g.split(':');
+        if (kd === 'p') s += parArrow(Q[nmS[0]], Q[nmS[1]], '#455a64', 2);
+        if (kd === 'r') s += rightMk(Q[nmS[1]], Q[nmS[0]], Q[nmS[2]], 16, '#455a64');
+      }
+      if (pr.lens) { const cc = centroid(Object.values(Q)); for (const [a, b, t] of pr.lens) s += sideTxt(Q[a], Q[b], cc, t + 'cm', '#37474f', 18); }
+      for (const m of marksOn) { const sty = m.k === 'cond' ? ROWSTY[m.r] : { c: '#5d4037', n: 1 }; for (const mk of m.marks) s += drawMark(Q, mk, sty, p.glow === m.r); }
+      const cc = centroid(Object.values(Q));
+      for (const v of Object.keys(Q)) s += dotP(Q[v], '#263238', 4) + vName(Q[v], v === 'O' ? add(Q[v], [0, 1]) : cc, v);
+    } else {
+      // 2つの三角形を取り出して、向きをそろえてならべる（T2 は T1 と同じ向きの縮小・拡大）
+      const T1 = [...pr.T1], T2 = [...pr.T2], k = dist(Q[T2[0]], Q[T2[1]]) / dist(Q[T1[0]], Q[T1[1]]);
+      const c1 = centroid(T1.map(v => Q[v])), w1 = {}, w2 = {};
+      const big = Math.max(...T1.map(v => dist(Q[v], c1)));
+      const sc = Math.min(1, 115 / big, 115 / (big * k));   // 大きいほうの三角形も、半分の幅に入るように
+      T1.forEach(v => { w1[v] = add([150, 215], mul(sub(Q[v], c1), sc)); });
+      T1.forEach((v, i) => { w2[T2[i]] = add([420, 215], mul(sub(Q[v], c1), sc * k)); });
+      s += poly(T1.map(v => w1[v]), 'url(#ptO)', '#b26a00', 3, '', 'fill-opacity=".5"') + poly(T2.map(v => w2[v]), 'url(#ptB)', '#0063a0', 3, '', 'fill-opacity=".5"');
+      // 印の文字がぜんぶ1つめの三角形にあれば左、なければ右にかく
+      for (const m of marksOn) { const sty = m.k === 'cond' ? ROWSTY[m.r] : { c: '#5d4037', n: 1 }; for (const mk of m.marks) { const nmS = mk.split(':')[1]; if (has(w1, nmS)) s += drawMark(w1, mk, sty, p.glow === m.r); else if (has(w2, nmS)) s += drawMark(w2, mk, sty, p.glow === m.r); } }
+      const cA = centroid(T1.map(v => w1[v])), cB = centroid(T2.map(v => w2[v]));
+      T1.forEach(v => { s += vName(w1[v], cA, v, '#8a4b00'); });
+      T2.forEach(v => { s += vName(w2[v], cB, v, '#004a7a'); });
+      s += txt([150, 405], '△' + pr.T1, '#8a4b00', 18) + txt([420, 405], '△' + pr.T2, '#004a7a', 18);
+    }
+    st.handles = [];
+    return s;
+  }
+  function side4() {
+    const p = P(), pr = prob(), rs = roles();
+    const n = condCards().length;
+    const stage = !p.rows[0] ? 0 : n < pr.nCond ? 1 : !p.rows[SIM_ROW()] ? 2 : (rs.length > SIM_ROW() + 1 && !p.rows[SIM_ROW() + 1]) ? 3 : 4;
+    const names = ['はじめ', '根拠', '相似', '結論'];
+    let h = `<div class="story">${pr.story}</div>`;
+    h += `<div class="given"><h3>仮定（わかっていること）</h3>${pr.hyp.map(x => `<div class="f">${esc(x)}</div>`).join('')}</div>`;
+    h += `<div class="goal"><h3>結論（証明したいこと）</h3>${pr.goal.map(x => `<div class="f">${esc(x)}</div>`).join('')}</div>`;
+    h += `<div class="flow">${names.map((x, i) => `<span class="${stage > i ? 'done' : stage === i ? 'now' : ''}">${stage > i ? '✓ ' : ''}${x}</span>`).join('')}</div>`;
+    h += '<div class="proof">' + rs.map((role, r) => {
+      const id = p.rows[r], c = id && cardOf(id), tag = role === 'cond' ? ROWSTY[r].lab : '';
+      const pre = c && c.k === 'sim' ? `<span class="pre">${Array.from({ length: pr.nCond }, (_, i) => ROWSTY[i + 1].lab).join('、')}より、</span>` : '';
+      return `<div class="row ${role === 'cond' ? 't' + r : ''}" data-row="${r}"><div class="no">${r + 1}</div>
+        <div class="slot ${c ? 'filled' : ''}">${c ? `<div class="pc k-${c.k}" data-placed="${r}">${pre}${esc(c.t)}</div>` : `<span class="ph">${{ start: 'はじめ：△…と△…で', cond: '根拠', sim: '相似条件から、△…∽△…', concl: '結論' }[role]}</span>`}</div>
+        <div class="tagno">${c && tag ? '…' + tag : ''}</div></div>`;
+    }).join('') + '</div>';
+    h += `<div class="kinds"><span><b style="border-color:#00897b;background:#e0f2f1"></b>はじめ</span><span><b style="border-color:#ffb74d;background:#fff8e1"></b>根拠</span><span><b style="border-color:#7986cb;background:#e8eaf6"></b>相似</span><span><b style="border-color:#a1887f;background:#efebe9"></b>結論</span></div>`;
+    const used = new Set(p.rows.filter(Boolean));
+    h += `<div class="pool">${p.order.filter(id => !used.has(id)).map(id => { const c = cardOf(id); return `<div class="pc k-${c.k}" data-cid="${id}" style="--rot:${p.rot[id]}deg">${esc(c.t)}</div>`; }).join('') || '<span class="small">カードはぜんぶ置いた。</span>'}</div>`;
+    h += '<p class="small">カードを左の行（上の行）へドラッグ。タップすると、あいている行のいちばん上に入る。置いたカードをタップすると、もどせる。使わないカードもまざっている。</p>';
+    if (p.hint) h += `<div class="hintOut"><div>💡 ${pr.hint1}</div>${p.hint >= 2 ? `<div>💡 ${pr.hint2}</div>` : ''}</div>`;
+    return h;
+  }
+
+  /* =====================================================================
+     9. パート⑤ 平行線と相似（タテ型・砂時計型）
+        タテ型：D＝A＋t(B−A)、E＝A＋t(C−A)（0＜t＜1）。砂時計型：D＝A−t(B−A)、E＝A−t(C−A)。
+        どちらも DE∥BC で、△ADE∽△ABC（相似比 t：1）。
+     ===================================================================== */
+  const DEF5 = { tate: { A: [270, 40], B: [70, 390], C: [500, 390], t: 0.4 }, suna: { A: [290, 200], B: [120, 395], C: [450, 395], t: 0.7 } };
+  const tRange = (type) => type === 'tate' ? [0.1, 0.9] : [0.2, 1];
+  function geo5(p) {
+    const sg = p.type === 'tate' ? 1 : -1;
+    return { A: p.A, B: p.B, C: p.C, D: add(p.A, mul(sub(p.B, p.A), sg * p.t)), E: add(p.A, mul(sub(p.C, p.A), sg * p.t)) };
+  }
+  function ctrl5() {
+    const p = P(), [lo, hi] = tRange(p.type);
+    return `
+      <div class="chip-row" style="margin-bottom:6px">
+        <button class="chip small-chip" data-ty="tate">🔺 タテ型（ピラミッド型）</button>
+        <button class="chip small-chip" data-ty="suna">⏳ 砂時計型（ちょうちょ型）</button>
+      </div>
+      <div class="slider-row"><span class="lab">AD÷AB</span><input type="range" id="tR" min="${lo}" max="${hi}" step="0.05"><input type="number" id="tN" min="${lo}" max="${hi}" step="0.05"></div>
+      <div class="tools"><button class="op-btn" id="b5Over">🔍 △ADE を重ねる</button></div>`;
+  }
+  function wire5() {
+    const p = () => P(), lock = () => !!p().q || st.timer;
+    document.querySelectorAll('#ctrl [data-ty]').forEach(b => b.addEventListener('click', () => { if (lock()) return; pushHist(); const q = p(); q.type = b.dataset.ty; Object.assign(q, clone(DEF5[q.type])); q.u = 0; buildCtrl(); render(); }));
+    const setT = (v) => { if (lock() || isNaN(v)) return; const [lo, hi] = tRange(p().type); p().t = clamp(Math.round(v * 100) / 100, lo, hi); p().u = 0; render(); };
+    $('tR').addEventListener('pointerdown', () => pushHist());
+    $('tR').addEventListener('input', e => setT(+e.target.value));
+    $('tN').addEventListener('change', e => { pushHist(); setT(+e.target.value); });
+    $('b5Over').addEventListener('click', () => {
+      if (st.timer) return; const q = p(); pushHist();
+      const from = q.u, to = q.u > 0.5 ? 0 : 1;
+      animate(1400, u => { q.u = from + (to - from) * u; }, () => { setMsg(to === 1 ? `△ADE を A を中心に ${fmt(1 / q.t)} 倍${q.type === 'suna' ? 'して 180° 回す' : 'する'}と、△ABC にぴったり重なる → <b>△ADE∽△ABC</b>。` : ''); });
+    });
+  }
+  function drag5(p, id, pt) {
+    const q = snapOn() ? snapG(pt) : pt;
+    if (id === 'D') {
+      const sg = p.type === 'tate' ? 1 : -1, d = sub(p.B, p.A), [lo, hi] = tRange(p.type);
+      let t = sg * dot(sub(pt, p.A), d) / dot(d, d); t = clamp(t, lo, hi);
+      if (snapOn()) t = Math.round(t * 20) / 20;
+      p.t = t; return;
+    }
+    const old = p[id]; p[id] = q;
+    const g = geo5(p), area = Math.abs(cross(sub(p.B, p.A), sub(p.C, p.A))) / 2;
+    if (!inBox([g.A, g.B, g.C, g.D, g.E], 12) || area < 3000) p[id] = old;
+  }
+  function render5() {
+    const p = P(), g = geo5(p), q = p.q;
+    let s = '';
+    s += poly([g.A, g.B, g.C], 'url(#ptB)', '#0063a0', 3, '', 'fill-opacity=".4"');
+    s += poly([g.A, g.D, g.E], 'url(#ptO)', '#b26a00', 3, '', 'fill-opacity=".6"');
+    if (p.type === 'suna') s += seg(g.D, g.B, '#263238', 2.5) + seg(g.E, g.C, '#263238', 2.5);
+    // 平行のしるしは、辺のまん中（長さの数を書く場所）をさけて、少し左にかく
+    s += parArrow(lerp(g.D, g.E, 0.12), lerp(g.D, g.E, 0.44), '#455a64', 2) + parArrow(lerp(g.B, g.C, 0.12), lerp(g.B, g.C, 0.44), '#455a64', 2);
+    // 対応する角（A は共通または対頂角、D↔B、E↔C）
+    s += arc(g.D, g.A, g.E, 18, ARC_COL[1], 2) + arc(g.B, g.A, g.C, 18, ARC_COL[1], 2);
+    s += arc(g.E, g.D, g.A, 18, ARC_COL[2], 3) + arc(g.C, g.B, g.A, 18, ARC_COL[2], 3);
+    if (p.u > 0) {
+      // △ADE を A を中心に (1/t) 倍（砂時計型は 180° 回しながら）
+      const u = p.u, kk = Math.pow(1 / p.t, u), th = p.type === 'suna' ? 180 * u : 0;
+      const img = (X) => add(g.A, rotV(mul(sub(X, g.A), kk), th));
+      s += poly([g.A, img(g.D), img(g.E)], 'none', '#b26a00', 3, '8 5');
+    }
+    const cc = centroid([g.A, g.B, g.C]);
+    if (q && q.lab) for (const L of q.lab) s += sideTxt(g[L[0]], g[L[1]], cc, L[2], L[2] === 'x' ? '#ad1457' : '#37474f', L[2] === 'x' ? 26 : 19);
+    const nmAt = (v) => p.type === 'suna' && (v === 'D' || v === 'E') ? add(g[v], mul(unit(sub(g[v], g.A)), 22)) : add(g[v], mul(unit(sub(g[v], cc)), 22));
+    for (const v of ['A', 'B', 'C', 'D', 'E']) s += txt(p.type === 'suna' && v === 'A' ? add(g.A, [24, 0]) : nmAt(v), v, '#263238', 23);
+    st.handles = (q || st.timer || p.u > 0) ? [] : [{ id: 'A', p: g.A }, { id: 'B', p: g.B }, { id: 'C', p: g.C }, { id: 'D', p: g.D }];
+    return s + st.handles.map(h => handle(h.p, h.id === 'D' ? '#b26a00' : '#0063a0')).join('');
+  }
+  function side5() {
+    const p = P(), g = geo5(p), t = p.t, L = (a, b) => dist(g[a], g[b]);
+    const rows = [['AD', 'AB'], ['AE', 'AC'], ['DE', 'BC']].map(([a, b]) => `<tr><td class="o">${a}</td><td>${cmS(L(a[0], a[1]))}</td><td class="b">${b}</td><td>${cmS(L(b[0], b[1]))}</td><td class="eq">${fmt2(t)}</td></tr>`).join('');
+    let h = `<table class="tbl"><tr><th>△ADE</th><th>(cm)</th><th>△ABC</th><th>(cm)</th><th>わり算</th></tr>${rows}</table>`;
+    h += `<div class="big-eq" style="font-size:24px">AD：AB ＝ AE：AC ＝ DE：BC</div>`;
+    if (p.type === 'tate') {
+      const db = L('D', 'B'), ec = L('E', 'C');
+      h += `<div class="why">AD÷DB ＝ ${fmt2(t / (1 - t))}、AE÷EC ＝ ${fmt2(t / (1 - t))} → <b>AD：DB ＝ AE：EC</b> もなりたつ。<br><span class="bad">⚠ でも DE÷BC ＝ ${fmt2(t)} は AD÷DB とはちがう！</span> DE：BC には、AD：<b>AB</b>（三角形の辺どうし）を使う。</div>`;
+      h += `<div class="why"><b>わけ</b>：△ADE と △ABC で、∠A は<b>共通</b>。DE∥BC より<b>同位角</b>は等しいから ∠ADE＝∠ABC。<br>2組の角がそれぞれ等しいから、△ADE∽△ABC。<button class="op-btn link" id="b5Proof" style="margin-left:6px">🧩 証明パズルへ</button></div>`;
+    } else {
+      h += `<div class="why"><b>わけ</b>：△ADE と △ABC で、A のところの角は<b>対頂角</b>なので等しい。DE∥BC より<b>錯角</b>は等しいから ∠ADE＝∠ABC。<br>2組の角がそれぞれ等しいから、△ADE∽△ABC（向きは逆さま）。<button class="op-btn link" id="b5Proof" style="margin-left:6px">🧩 証明パズルへ</button></div>`;
+    }
+    return h;
+  }
+  // ⑤ の練習問題（答えが整数になるように、先に答えを決めてから数をつくる）
+  function genQ5(type) {
+    const p = P();
+    type = type || pick(['tate', 'tate', 'suna']);
+    p.type = type; Object.assign(p, clone(DEF5[type])); p.u = 0;
+    if (type === 'tate') {
+      let a, b, c, x;
+      do { a = rint(2, 6); b = rint(1, 5); const n = (a + b) / gcd(a, a + b); c = n * rint(1, Math.max(1, Math.floor(20 / n))); x = c * a / (a + b); } while (a === b || c < 4 || c > 20 || !Number.isInteger(x));
+      p.t = a / (a + b);
+      const cands = [{ n: c * a, d: a + b, ok: true }, { n: c * a, d: b, trip: 'ratioPart' }, { n: c * b, d: a + b, trip: 'ratioOrder' }, { n: c * (a + b), d: a, trip: 'ratioOrder' }, { n: x + 1, d: 1, trip: 'calc' }];
+      return { type: 'tate', text: `DE∥BC のとき、<b>x</b>（DE の長さ）は？`, lab: [['A', 'D', a + 'cm'], ['D', 'B', b + 'cm'], ['B', 'C', c + 'cm'], ['D', 'E', 'x', true]],
+        choices: uniqFrac(cands), expl: `AD：AB ＝ DE：BC だから ${a}：${a + b} ＝ x：${c}。x ＝ ${c}×${a}÷${a + b} ＝ <b>${x}cm</b>。（AB ＝ AD＋DB ＝ ${a + b}）` };
+    }
+    let a, b, c, x;
+    do { a = rint(2, 6); b = rint(2, 8); const n = b / gcd(a, b); c = n * rint(1, Math.max(1, Math.floor(18 / n))); x = c * a / b; } while (a === b || c < 3 || c > 18 || !Number.isInteger(x) || a / b < 0.25 || a / b > 1);
+    p.t = a / b;
+    const cands = [{ n: c * a, d: b, ok: true }, { n: c * a, d: a + b, trip: 'ratioPart' }, { n: c * b, d: a, trip: 'ratioOrder' }, { n: c - (b - a), d: 1, trip: 'calc' }, { n: x + 2, d: 1, trip: 'calc' }];
+    return { type: 'suna', text: `DE∥BC のとき、<b>x</b>（DE の長さ）は？`, lab: [['A', 'D', a + 'cm'], ['A', 'B', b + 'cm'], ['B', 'C', c + 'cm'], ['D', 'E', 'x', true]],
+      choices: uniqFrac(cands), expl: `△ADE∽△ABC（砂時計型）。AD：AB ＝ DE：BC だから ${a}：${b} ＝ x：${c}。x ＝ ${c}×${a}÷${b} ＝ <b>${x}cm</b>。` };
+  }
+  function uniqFrac(cands) {
+    const seen = new Set(), out = [];
+    for (const c of cands) { if (c.n <= 0) continue; const t = fracStr(c.n, c.d); if (seen.has(t) || out.length >= 4) continue; seen.add(t); out.push({ t: t + ' cm', ok: !!c.ok, trip: c.trip }); }
+    return shuffle(out);
+  }
+
+  /* =====================================================================
+     10. 練習問題（えらんで答える）
+     ===================================================================== */
+  function newQ(focus) {
+    stopTimer();
+    const p = P(); pushHist();
+    if (st.part === 4) { const n = (p.pi + 1) % PROBS.length; loadProb(focus === 'order' ? 2 : focus === 'reason' ? 1 : focus === 'congMix' ? 3 : n); p.split = false; st.hintLv = 0; setMsg('つぎの証明にちょうせん！'); buildCtrl(); render(); return; }
+    let q;
+    if (st.part === 1) q = genQ1({ order: pick(['corrSide', 'corrAng', 'writeSim']), ratioOrder: 'ratio', addDiff: 'len', calc: 'len' }[focus]);
+    else if (st.part === 2) q = genQ2(focus);
+    else if (st.part === 3) { q = genQ3({ notIncluded: 'SSA', thirdAngle: 'AA3', congMix: 'ASA', sizeNeed: 'AA', notEnough: pick(['SSSno', 'AAno']), order: pick(['SSS', 'AA', 'SAS']) }[focus]); p.align = false; }
+    else q = genQ5();
+    q.tried = []; q.done = false; q.stage = 1; q.firstTry = true;
+    p.q = q;
+    setMsg(''); buildCtrl(); render();
+  }
+  function askHTML() {
+    const q = P().q, cur = q.stage === 2 ? q.then : q;
+    let h = `<div class="ask-q">${cur.text}</div><div class="choices">`;
+    h += cur.choices.map((c, i) => `<button class="choice ${q.tried.includes(i) ? 'wrong' : ''} ${q.done && c.ok ? 'right' : ''}" data-ch="${i}" ${q.done || q.tried.includes(i) ? 'disabled' : ''}>${c.t}</button>`).join('');
+    h += '</div>';
+    if (q.done) {
+      h += `<div class="tools" style="margin-top:8px">`;
+      if (q.after === 'sel2') h += '<button class="op-btn link" id="qSel2">🧱 部品でたしかめる</button>';
+      h += '<button class="op-btn" id="qEnd">✋ 問題をおわる</button>';
+      h += '</div><button class="go" id="qNext">つぎの問題 ▶</button>';
+    }
+    return h;
+  }
+  function wireAsk() {
+    document.querySelectorAll('#ask [data-ch]').forEach(b => b.addEventListener('click', () => answer(+b.dataset.ch)));
+    if ($('qNext')) $('qNext').addEventListener('click', () => newQ(st.focus));
+    // 問題をおわって、自由に動かす図にもどる
+    if ($('qEnd')) $('qEnd').addEventListener('click', () => {
+      const p = P(); pushHist();
+      if (st.part === 1) st.Ps[1] = defaults(1);
+      else if (st.part === 5) { const ty = p.type; Object.assign(p, clone(DEF5[ty]), { q: null, u: 0 }); }
+      else p.q = null;
+      setMsg(''); buildCtrl(); render();
+    });
+    if ($('qSel2')) $('qSel2').addEventListener('click', () => { const p = P(); pushHist(); p.sel = {}; p.q.sel.split(',').forEach(id => p.sel[id] = true); p.q = null; regen2(p); buildCtrl(); render(); msg2(); });
+  }
+  function answer(i) {
+    const p = P(), q = p.q, cur = q.stage === 2 ? q.then : q, c = cur.choices[i];
+    if (!q || q.done) return;
+    if (c.ok) {
+      sndOK();
+      if (q.stage === 1 && q.then) { q.stage = 2; q.tried = []; setMsg('○ 正解！ ' + q.expl, 'ok'); render(); return; }
+      q.done = true; q.tried = [];
+      if (q.firstTry) bumpRec(r => r.clear[st.part] = (r.clear[st.part] || 0) + 1);
+      setMsg('○ 正解！ ' + cur.expl, 'ok');
+    } else {
+      sndNG(); q.tried.push(i); q.firstTry = false;
+      const tp = c.trip || 'calc'; addTrip(tp);
+      setMsg(`✖ <b>${TRIPS[tp].name}</b>かも。<br>${TRIPS[tp].exp}`, 'ng');
+      if (cur.choices.filter((x, j) => !x.ok && !q.tried.includes(j)).length === 0) { q.done = true; setMsg(`答えは「${cur.choices.find(x => x.ok).t}」。${cur.expl}`, 'ng'); }
+    }
+    render();
+  }
+
+  /* =====================================================================
+     11. 図のドラッグ（pointer events：マウスでもタッチでも動く）
+     ===================================================================== */
+  const fig = $('fig');
+  function svgPt(e) { const pt = fig.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; const r = pt.matrixTransform(fig.getScreenCTM().inverse()); return [r.x, r.y]; }
+  fig.addEventListener('pointerdown', e => {
+    const pt = svgPt(e); let best = null, bd = 30;
+    for (const h of st.handles) { const d = dist(pt, h.p); if (d < bd) { bd = d; best = h; } }
+    if (!best) return;
+    stopTimer(); pushHist(); st.drag = best.id;
+    try { fig.setPointerCapture(e.pointerId); } catch (err) { /* 指がもう離れているときは何もしない */ }
+    e.preventDefault();
+  });
+  fig.addEventListener('pointermove', e => {
+    if (!st.drag) return;
+    const p = P(), pt = svgPt(e);
+    if (st.part === 1) drag1(p, st.drag, pt); else if (st.part === 5) drag5(p, st.drag, pt);
+    render();
+  });
+  const endDrag = () => { if (st.drag) { st.drag = null; render(); } };
+  fig.addEventListener('pointerup', endDrag);
+  fig.addEventListener('pointercancel', endDrag);
+
+  /* =====================================================================
+     12. 画面をかきなおす
+     ===================================================================== */
+  function setMsg(html, kind) { const m = $('msg'); m.innerHTML = html || ''; m.className = 'msg' + (kind ? ' ' + kind : ''); }
+  function buildCtrl() {
+    $('ctrl').innerHTML = [null, ctrl1, ctrl2, () => '', ctrl4, ctrl5][st.part]();
+    [null, wire1, wire2, () => {}, wire4, wire5][st.part]();
+  }
+  function render() {
+    const p = P();
+    const body = [null, render1, render2, render3, render4, render5][st.part]();
+    fig.innerHTML = `<rect width="${W}" height="${H}" fill="url(#grid)"/>` + body;
+    $('rTitle').textContent = PARTS[st.part].title;
+    $('side').innerHTML = ((st.part === 1 && p.q && !p.q.done) || (st.part === 5 && p.q)) ? '<div class="eq-note">（練習問題のあいだは、表をかくしています）</div>' : [null, side1, side2, side3, side4, side5][st.part]();
+    $('ask').hidden = !p.q || st.part === 4;
+    if (p.q && st.part !== 4) { $('ask').innerHTML = askHTML(); wireAsk(); }
+    // コントロールの値をそろえる
+    const lock = !!p.q;
+    if (st.part === 1) {
+      $('kR').value = p.k; $('kN').value = p.k; $('rotR').value = p.rot; $('rotN').value = p.rot;
+      document.querySelectorAll('#ctrl [data-m]').forEach(b => { b.classList.toggle('active', b.dataset.m === p.mode); b.disabled = lock; });
+      ['kR', 'kN', 'rotR', 'rotN', 'b1Flip', 'b1Over'].forEach(id => $(id).disabled = lock);
+      $('rotRow').hidden = p.mode === 'homo'; $('b1Flip').hidden = p.mode === 'homo';
+      $('b1Flip').classList.toggle('on', p.flip);
+      $('b1Over').textContent = p.u > 0.5 ? '↩ はなす' : '📐 角を重ねる';
+    }
+    if (st.part === 2) {
+      document.querySelectorAll('#ctrl [data-pt]').forEach(b => { b.classList.toggle('on', !!p.sel[b.dataset.pt]); b.disabled = qActive(); });
+      document.querySelectorAll('#ctrl [data-k]').forEach(b => b.classList.toggle('active', +b.dataset.k === p.k));
+    }
+    if (st.part === 3 && $('b3Align')) $('b3Align').addEventListener('click', () => { P().align = !P().align; render(); });
+    if (st.part === 5) {
+      $('tR').value = p.t; $('tN').value = p.t;
+      document.querySelectorAll('#ctrl [data-ty]').forEach(b => { b.classList.toggle('active', b.dataset.ty === p.type); b.disabled = lock; });
+      ['tR', 'tN', 'b5Over'].forEach(id => $(id).disabled = lock);
+      $('b5Over').textContent = p.u > 0.5 ? '↩ もどす' : '🔍 △ADE を重ねる';
+      if ($('b5Proof')) $('b5Proof').addEventListener('click', () => { const ty = p.type; setPart(4); pushHist(); loadProb(ty === 'tate' ? 0 : 1); buildCtrl(); render(); });
+    }
+    if (st.part === 4) { const b = $('b4Split'); if (b) b.classList.toggle('on', p.split); }
+    $('optSnap').parentElement.hidden = !(st.part === 1 || st.part === 5);
+    $('figNote').innerHTML = [null,
+      p.q ? '' : (p.mode === 'homo' ? '● A・B・C と 点 O をドラッグ。O と対応する点は一直線にならぶ。' : '● A・B・C で形を変える。青い ● で相似な図形をずらせる。弧の本数が同じ角が対応する角。'),
+      '左上がもとの △ABC。太いオレンジの辺・青い弧が、えらんで固定した部品。点線の辺は自由に変わる。',
+      '弧は、角の大きさを書いた印。図は、書いてある長さ・角のとおりにかいている（画面に合わせて縮めている）。',
+      p.split ? '2つの三角形を取り出して、対応する頂点が同じ位置にくるように向きをそろえた。' : '根拠を置くと、その角・辺が行の色（①オレンジ・②青・③むらさき）と本数で光る。',
+      p.q ? '' : '● A・B・C で形を変える。オレンジの ● D をドラッグすると DE が平行のまま動く。'][st.part];
+    renderTrips(); renderTeacher();
+  }
+  function setPart(n, opt) {
+    stopTimer();
+    st.part = n;
+    if (!st.Ps[n]) { st.Ps[n] = defaults(n); if (n === 4) loadProb(0); }
+    if (!(opt && opt.keepFocus)) { st.focus = null; $('focusBar').hidden = true; }
+    st.hintLv = 0; st.tStep = 0;
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === n));
+    $('partNote').textContent = PARTS[n].note;
+    $('btnNew').textContent = n === 4 ? '✏️ つぎの証明' : '✏️ 練習問題';
+    setMsg('');
+    buildCtrl();
+    if (n === 3 && !P().q) newQ(); else render();
+  }
+
+  /* =====================================================================
+     13. ヒント
+     ===================================================================== */
+  function hint() {
+    const p = P(), q = qActive() ? p.q : null;
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    st.hintLv++;
+    if (st.part === 4) {
+      if (p.done) { setMsg('💡 もう完成している。「✏️ つぎの証明」へ進もう。'); return; }
+      p.hint = Math.min(st.hintLv, 3);
+      if (st.hintLv >= 3 && !p.rows[0]) { place(prob().sol[0], 0); setMsg('💡 最初の行を置いた。つづきを考えよう。'); return; }
+      setMsg('💡 ヒントを下に出した。'); render(); return;
+    }
+    const H = {
+      corrSide: ['∽ の左と右で、同じ順番の文字どうしが対応する。', '1番目↔1番目、2番目↔2番目、3番目↔3番目。'],
+      corrAng: ['∽ の左と右で、同じ順番の文字どうしが対応する。'],
+      writeSim: ['同じ本数の弧の角をさがそう。', '弧1本・2本・3本の順に、右の三角形の頂点をならべる。'],
+      ratio: ['相似比は「対応する辺の比」。', '△ABC の辺を先に書いて、いちばん簡単な整数の比に。'],
+      len: ['対応する辺は何倍になっている？', 'ひき算（差）ではなく、わり算で何倍かを出そう。'],
+      cond: ['わかっているのは「辺の比」？「角」？ いくつ？', '角は、2つの辺の「間」にある？', '迷ったら、答えたあとに「🧱 部品でたしかめる」。'],
+      tate: ['DE と BC は、どちらの三角形の辺？', 'AB ＝ AD ＋ DB。DE：BC ＝ AD：AB。'],
+      suna: ['△ADE と △ABC は相似（逆さまの向き）。', 'DE：BC ＝ AD：AB。'],
+    };
+    let t;
+    if (q) {
+      const key = q.type in H ? q.type : st.part === 3 ? 'cond' : 'cond', arr = q.stage === 2 ? ['等しい角どうしが対応する。∠A と同じ大きさの角は、右の三角形のどれ？'] : (H[key] || ['図をよく見よう。']);
+      t = arr[Math.min(st.hintLv, arr.length) - 1];
+    } else {
+      const arr = [null,
+        ['「何倍」を変えても、角の大きさは変わる？', '「📐 角を重ねる」で、対応する角が重なるか見よう。', '「🎯 相似の位置」で、O から対応する点までの長さの比を見よう。'],
+        ['まず「辺 DE」「辺 EF」の2つだけえらんで「🎲 ほかの形」。形は決まる？', '∠D と ∠E の2つだけでは？ 大きさは決まらないけど、形は？', '「2組の辺と間でない角」をためすと、形が2つできるよ。'],
+        ['書いてある数だけを使う。見た目で決めない。', '角が2つわかったら、3つめも求められる。'],
+        [],
+        ['D を動かしても、3つのわり算はそろう？', 'タテ型の AD÷DB と DE÷BC をくらべよう。'],
+      ][st.part];
+      t = arr[(st.hintLv - 1) % arr.length];
+    }
+    setMsg('💡 ' + t);
+    renderTrips();
+  }
+
+  /* =====================================================================
+     14. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function addTrip(type) { if (!TRIPS[type]) type = 'calc'; st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => { const pt = TRIPS[k].part || st.part; return `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><div class="tools" style="justify-content:flex-start"><button class="op-btn" data-prac="${k}">🔁 この型を練習（${PARTS[pt].name}）</button><button class="op-btn" data-fig="${k}">👀 元の図で確かめる</button></div></div>`; }).join('')
+      : '<div class="small">まだ ありません。練習問題や証明パズルでまちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    $('tripList').querySelectorAll('[data-fig]').forEach(b => b.addEventListener('click', () => showFig(b.dataset.fig)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = `この端末のきろく：正解 ① ${c[1] || 0}　② ${c[2] || 0}　③ ${c[3] || 0}　④ ${c[4] || 0}　⑤ ${c[5] || 0}　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    const pt = TRIPS[type].part || st.part;
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    setPart(pt, { keepFocus: true });
+    newQ(type);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  // 元の図にもどす：その型が見える場面を出す
+  function showFig(type) {
+    const pt = TRIPS[type].part || st.part;
+    setPart(pt);
+    const p = P(); pushHist(); p.q = null;
+    if (pt === 1) { Object.assign(p, defaults(1)); p.rot = 120; p.flip = true; fitCopy(p); buildCtrl(); render(); setMsg('回して裏返しても、弧の本数が同じ角が対応する。△ABC∽△DEF なら A↔D、B↔E、C↔F。辺は「×何倍」でそろう（たし算ではない）。'); }
+    else if (pt === 2) { p.sel = type === 'sizeNeed' ? { D: true, E: true } : { DE: true, EF: true }; regen2(p); buildCtrl(); render(); setMsg(type === 'sizeNeed' ? '∠D と ∠E だけ。「🎲 ほかの形」で大きさが変わっても、形はいつも同じ → 相似。' : '辺 DE と EF だけ。「🎲 ほかの形」で、形がいくつもできることを確かめよう。'); }
+    else if (pt === 3) { newQ(type); }
+    else if (pt === 4) { loadProb(type === 'reason' ? 1 : 0); buildCtrl(); render(); setMsg('「🔄 2つを取り出して向きをそろえる」で、対応する頂点を確かめよう。'); }
+    else { Object.assign(p, clone(DEF5.tate), { type: 'tate', u: 0 }); buildCtrl(); render(); setMsg('表を見よう。DE÷BC は AD÷AB と同じで、AD÷DB とはちがう。'); }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     15. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const p = P(), q = p.q;
+    if (st.part === 4) return '答え：' + prob().sol.map(id => cardOf(id).t).join(' → ');
+    if (q && !q.done) { const cur = q.stage === 2 ? q.then : q; return '答え：' + cur.choices.find(c => c.ok).t; }
+    return ['', '（▶ 自動：何倍を変える → 回す・裏返す → 角を重ねる → 練習問題）', '（▶ 自動：辺2つ → 2組の角 → 2組の辺と間でない角 → 練習問題）', '（▶ 自動：答える → つぎの問題）', '', '（▶ 自動：D を動かす → 重ねる → 砂時計型 → 練習問題）'][st.part];
+  }
+  const TALK = [null,
+    '発問の例：「2倍に拡大すると、角の大きさも2倍？」「回したり裏返したりしても相似？」「△ABC∽△DEF と △ABC∽△EDF は同じ意味？」「相似比 2：3 と 3：2 のちがいは？」',
+    '発問の例：「合同条件は3つ。相似条件はどうなりそう？」「角が2つ等しいだけで、なぜ相似といえる？（3つめの角も決まる）」「辺の長さがないと大きさは決まらないけど、相似といえる？」「2辺と間でない角では？」',
+    '発問の例：「どこを見て判断した？」「書いてない角を求められないか？」「合同条件とどこがちがう？」',
+    '発問の例：「どの三角形とどの三角形で考える？」「平行線があると、どんな角が等しい？」「なぜ △AED ではいけない？」「相似から、どんな辺の比がいえる？」',
+    '発問の例：「D を動かしても DE÷BC は AD÷AB と同じ？」「AD：DB と DE：BC はなぜちがう？」「砂時計型も相似といえるわけは？」',
+  ];
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText();
+    $('tTalk').innerHTML = TALK[st.part];
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function teacherStep() {
+    const p = P(), q = p.q;
+    if (st.part === 4) {
+      if (p.done) { newQ(); return; }
+      const r = p.rows.findIndex(x => !x), sol = prob().sol, next = sol.find(id => !p.rows.includes(id));
+      if (r >= 0 && next) place(next, r); return;
+    }
+    if (q && !q.done) { const cur = q.stage === 2 ? q.then : q; answer(cur.choices.findIndex(c => c.ok)); return; }
+    if (q && q.done) { newQ(); return; }
+    const k = st.tStep++;
+    if (st.part === 1) {
+      if (k === 0) { pushHist(); p.k = 2; fitCopy(p); render(); setMsg('2倍にしても、角の大きさは変わらない。辺はすべて2倍。'); return; }
+      if (k === 1) { pushHist(); p.rot = 135; p.flip = true; fitCopy(p); render(); setMsg('回して裏返しても相似。弧の本数で対応する角を見る。'); return; }
+      if (k === 2) { $('b1Over').click(); return; }
+      newQ(); return;
+    }
+    if (st.part === 2) {
+      const sets = ['DE,EF', 'D,E', 'DE,EF,F'];
+      if (k < 3) { pushHist(); p.sel = {}; sets[k].split(',').forEach(id => p.sel[id] = true); regen2(p); render(); msg2(); return; }
+      newQ(); return;
+    }
+    if (st.part === 5) {
+      if (k === 0) { pushHist(); p.t = 0.6; render(); setMsg('D を動かしても、3つのわり算はそろったまま。'); return; }
+      if (k === 1) { $('b5Over').click(); return; }
+      if (k === 2) { pushHist(); p.type = 'suna'; Object.assign(p, clone(DEF5.suna)); p.u = 0; buildCtrl(); render(); return; }
+      newQ(); return;
+    }
+    newQ();
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     16. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3, 4, 5].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnNew').addEventListener('click', () => newQ(st.focus));
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetPart);
+  $('btnHint').addEventListener('click', hint);
+  $('optSnap').addEventListener('change', () => render());
+  $('btnWs').addEventListener('click', () => {
+    setPart(2);
+    const p = P(); pushHist();
+    p.q = null; p.sel = { D: true, E: true }; regen2(p);
+    buildCtrl(); render();
+    setMsg('📄 ワークシートの問題：まず ① に「2つの角が等しければ、辺の比は？」を予想しよう。∠D と ∠E だけをえらんだ。「🎲 ほかの形」で形を変えながら「＋ 記録する」。辺 DE・EF だけのときとも、くらべてみよう。');
+  });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '相似条件ビルダー',
+    question: '2つの三角形で、2組の角がそれぞれ等しいとき、対応する辺の比は どうなるだろうか？',
+    predictions: ['いつも等しくなる（相似になる）', '等しくなるとはかぎらない', '辺も1組等しくないと決まらない', 'わからない'],
+    operationNote: '② で部品をえらび、「🎲 ほかの形」で形を変えながら「＋ 記録する」。① や ⑤ でも記録できる。',
+    fields: [
+      { key: 'parts', label: 'えらんだ部品', math: false },
+      { key: 'r1', label: 'DE÷AB' },
+      { key: 'r2', label: 'EF÷BC' },
+      { key: 'r3', label: 'FD÷CA' },
+      { key: 'sim', label: '相似？', math: false }
+    ],
+    capture: () => {
+      const p = P();
+      if (qActive()) { setMsg('練習問題に答えてから記録しよう。'); return null; }
+      if (st.part === 2) {
+        const T = p.samples[p.cur]; if (!T) { setMsg('三角形ができていない。'); return null; }
+        const sl = selList(p.sel);
+        return { parts: sl.length ? sl.map(partName).join('・') : 'なし', r1: fmt2(dist(T.D, T.E) / 4), r2: fmt2(dist(T.E, T.F) / 6), r3: fmt2(dist(T.F, T.D) / 5), sim: isSim2(T) ? '○ 相似' : '✖' };
+      }
+      if (st.part === 1) return { parts: `${fmt(p.k)}倍${p.mode === 'move' ? `・${p.rot}°回転${p.flip ? '・裏返し' : ''}` : '・相似の位置'}`, r1: fmt2(p.k), r2: fmt2(p.k), r3: fmt2(p.k), sim: '○ 相似' };
+      if (st.part === 5) return { parts: `${p.type === 'tate' ? 'タテ型' : '砂時計型'}（AD÷AB＝${fmt2(p.t)}）`, r1: fmt2(p.t), r2: fmt2(p.t), r3: fmt2(p.t), sim: '○ 相似（∠2組）' };
+      setMsg('記録は ①・②・⑤ でできるよ。'); return null;
+    },
+    summaryHint: '「2組の角が等しい三角形は、大きさが〜でも、辺の比は〜。だから〜。合同条件とのちがいは〜」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める。② で ∠D と ∠E だけをえらばせ、「🎲 ほかの形」で大きさを変えながら記録させる。3つのわり算が毎回そろうことに気づかせ、辺 DE・EF だけ（形がいくつもできる）とくらべさせる。合同条件の「1組の辺とその両端の角」とのちがい（辺がいらない）を話し合う。',
+      answer: 'いつも等しくなる（相似になる）。<br>2組の角が等しければ、3つめの角も 180° からひいて等しくなり、形が1つに決まる。大きさは自由だが、どの大きさでも対応する辺の比はすべて等しい。<br>まとめ：三角形の相似条件は「3組の辺の比がすべて等しい」「2組の辺の比とその間の角がそれぞれ等しい」「2組の角がそれぞれ等しい」。'
+    }
+  });
+
+  setupTeacher();
+  if (PARAMS.get('debug') === '1') window.__dbg = { st, P, PROBS, analyze2, regen2, genSSA, isSim2, genQ1, genQ3, genQ5, ssaCombos, place, newQ, answer, setPart };
+  { const n = +PARAMS.get('part'); setPart(n >= 1 && n <= 5 ? n : 1); }
+})();
+</script>
+
+</body>
+</html>
