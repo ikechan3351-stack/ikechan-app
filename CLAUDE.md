@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## ユーザーについて
 
-- 元教員・現在は学校ICT支援員
+- 元教員
 - 学校では先生方のICT支援、プログラム開発を目指している
 - 初心者のため、専門用語は分かりやすく説明すること
 
