@@ -4,319 +4,977 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>円周角シミュレーター</title>
+<link rel="stylesheet" href="worksheet.css">
 <style>
+  /* 色のきまり（中学の教材とそろえる）：正解・そろった＝緑（○）、まちがい・注意＝赤紫（✖）。
+     この教材では：円周角＝オレンジ（実線）、中心角＝紫（太い弧）、もう1つの円周角 ∠AQB＝青緑（点線）。
+     円の内側＝「大きくなる」（▲・ななめ線）、円周上＝「同じ」（●・緑）、円の外側＝「小さくなる」（▼・点の模様）。色だけにたよらない。 */
+  :root {
+    --ink: #263238; --accent: #7b1fa2; --soft: #ce93d8;
+    --ok: #2e7d32; --ng: #ad1457;
+    --ins: #e65100; --cen: #7b1fa2; --q: #00838f;
+  }
   * { box-sizing: border-box; }
-  :root { --ins: #ef6c00; --cen: #7b1fa2; }
   body {
-    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
     background: linear-gradient(160deg, #fff3e0 0%, #f3e5f5 100%);
-    margin: 0;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-    color: #333;
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
   }
-  .back-link { align-self: flex-start; font-size: 0.85rem; color: #7b1fa2; text-decoration: none; margin-bottom: 4px; }
-  h1 { margin: 2px 0; font-size: 1.5rem; color: #4a148c; text-align: center; }
-  .subtitle { margin: 0 0 12px; font-size: 0.9rem; color: #7b1fa2; text-align: center; line-height: 1.8; }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #6a1b9a; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #4a148c; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .panel { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 10px; }
 
-  .main {
-    width: 100%; max-width: 1120px;
-    display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; align-items: start;
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #333;
+    cursor: pointer; touch-action: manipulation;
   }
-  @media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
-  .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .card {
-    background: #fff; border-radius: 16px; padding: 12px 14px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-  }
-  .card h2 { font-size: 1rem; margin: 0 0 8px; color: #4a148c; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .chip.small-chip { min-height: 44px; padding: 4px 12px; font-size: .95rem; }
+  .part-note { text-align: center; font-size: 0.95rem; color: #6a1b9a; font-weight: bold; }
 
-  #circle { width: 100%; height: auto; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
-  .handle { cursor: grab; }
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #263238;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+    text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.35; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.on { background: #fff8e1; border-color: #fbc02d; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+
+  /* ===== 図・パネル（広い画面は 左＝図・右＝パネルの2列） ===== */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @container (min-width: 760px) {
+    .board-in { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+    .fig-card { position: sticky; top: 8px; }
+  }
+  .fig-card { padding: 8px; }
+  #fig { width: 100%; max-width: 600px; display: block; margin: 0 auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #fig text { font-family: inherit; font-weight: bold; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+  .opt-row { display: flex; gap: 6px 14px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+  .opt-check { font-size: 0.95rem; font-weight: bold; color: #37474f; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+  .opt-check input { width: 22px; height: 22px; }
+  .fig-note { text-align: center; font-size: .9rem; color: #546e7a; margin-top: 2px; line-height: 1.6; }
 
   /* 角度の大きな表示 */
-  .readout { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .rbox { border-radius: 14px; padding: 8px 10px; text-align: center; }
+  .readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 4px 0 6px; }
+  .rbox { border-radius: 14px; padding: 6px 8px; text-align: center; border: 3px solid transparent; }
   .rbox .lbl { font-size: 0.95rem; font-weight: bold; }
-  .rbox .num { font-size: 2.8rem; font-weight: bold; line-height: 1.15; font-variant-numeric: tabular-nums; }
-  .rbox.ins { background: #fff3e0; color: var(--ins); }
-  .rbox.cen { background: #f3e5f5; color: var(--cen); }
-  .relation {
-    margin-top: 10px; text-align: center; font-size: 1.35rem; font-weight: bold; line-height: 1.7;
-    background: #fafafa; border-radius: 12px; padding: 8px;
-  }
-  .ins-t { color: var(--ins); } .cen-t { color: var(--cen); }
-  .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; font-size: 0.85em; margin: 0 2px; }
+  .rbox .num { font-size: 2.5rem; font-weight: bold; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .rbox.ins { background: #fff3e0; color: var(--ins); border-color: #ffcc80; }
+  .rbox.cen { background: #f3e5f5; color: var(--cen); border-color: #e1bee7; }
+  .rbox.qq { background: #e0f7fa; color: var(--q); border-color: #80deea; border-style: dashed; }
+  .ins-t { color: var(--ins); font-weight: bold; } .cen-t { color: var(--cen); font-weight: bold; } .q-t { color: var(--q); font-weight: bold; }
+  .big-eq { text-align: center; font-size: 25px; font-weight: bold; line-height: 1.6; margin: 6px 0; background: #fafafa; border-radius: 12px; padding: 4px 8px; }
+  .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; font-size: 0.8em; margin: 0 2px; }
   .frac span { line-height: 1.1; padding: 0 3px; }
   .frac span:first-child { border-bottom: 2px solid currentColor; }
+  .why { background: #f5f5f5; border-radius: 12px; padding: 8px 12px; font-size: 1rem; line-height: 1.8; margin: 6px 0; }
+  .why b { color: #4a148c; }
+  .tag { display: inline-block; border-radius: 8px; padding: 0 8px; font-weight: bold; }
+  .verdict { border-radius: 14px; padding: 8px 12px; font-size: 1.05rem; line-height: 1.7; margin: 6px 0; font-weight: bold; }
+  .verdict.ok { background: #e8f5e9; border: 3px solid #66bb6a; color: #1b5e20; }
+  .verdict.in { background: #fff3e0; border: 3px solid #ffb74d; color: #8d3c00; }
+  .verdict.out { background: #e3f2fd; border: 3px solid #64b5f6; color: #0d47a1; }
+  .legend { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; font-size: .92rem; font-weight: bold; margin: 4px 0; }
+  .legend span { border-radius: 8px; padding: 2px 8px; }
+  .lg-in { background: #ffe0b2; color: #8d3c00; } .lg-on { background: #c8e6c9; color: #1b5e20; } .lg-out { background: #bbdefb; color: #0d47a1; }
 
-  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
-  .btn {
-    border: none; border-radius: 12px; padding: 10px 16px; font-size: 1rem; font-weight: bold;
-    cursor: pointer; touch-action: manipulation; font-family: inherit; background: #f3e5f5; color: #4a148c;
+  /* 答える欄 */
+  .ask { border-top: 2px dashed #e1bee7; padding-top: 8px; margin-top: 6px; }
+  .ask-q { text-align: center; font-weight: bold; margin-bottom: 6px; line-height: 1.7; font-size: 1.08rem; }
+  .ask-q .stmt { display: inline-block; font-size: 24px; background: #f3e5f5; border-radius: 10px; padding: 0 12px; margin: 2px 0; }
+  .choices { display: flex; flex-direction: column; gap: 6px; }
+  .choices.grid2 { display: grid; grid-template-columns: 1fr 1fr; }
+  .choice {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px; min-height: 48px; padding: 8px 12px;
+    font-size: 1.1rem; font-weight: bold; text-align: left; cursor: pointer; touch-action: manipulation; color: var(--ink);
   }
-  .btn.blind { background: #4a148c; color: #fff; font-size: 1.1rem; }
-  .btn.on { background: #ef6c00; color: #fff; }
-
-  .info { font-size: 1rem; line-height: 1.8; }
-  .info .tag { display: inline-block; border-radius: 8px; padding: 0 8px; font-weight: bold; }
-  .special { margin-top: 8px; background: #e8f5e9; color: #2e7d32; border-radius: 12px; padding: 8px 12px; font-weight: bold; display: none; }
-  .special.on { display: block; }
-  .quiz { background: #fffde7; border-radius: 12px; padding: 10px 12px; font-weight: bold; font-size: 1.1rem; color: #6d4c41; display: none; text-align: center; }
-  .quiz.on { display: block; }
-
-  .help {
-    width: 100%; max-width: 1120px; margin-top: 12px;
-    background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.86rem;
-    color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  .choices.grid2 .choice { text-align: center; font-size: 1.4rem; }
+  .choice.right { border-color: var(--ok); background: #e8f5e9; }
+  .choice.right::before { content: "○ "; color: var(--ok); }
+  .choice.wrong { border-color: var(--ng); background: #fce4ec; }
+  .choice.wrong::before { content: "✖ "; color: var(--ng); }
+  .choice:disabled { cursor: default; }
+  .go {
+    width: 100%; margin-top: 8px; min-height: 54px; border: none; border-radius: 14px; background: var(--accent); color: #fff;
+    font-size: 1.2rem; font-weight: bold; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 rgba(0,0,0,0.2);
   }
-  .help h2 { font-size: 0.98rem; margin: 0 0 6px; color: #4a148c; }
+  .stage { display: inline-block; background: #ede7f6; border-radius: 999px; padding: 0 10px; font-size: .9rem; color: #4a148c; margin-bottom: 4px; }
+
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; min-height: 2.4rem; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .small { font-size: 0.85rem; color: #607d8b; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.95rem; color: #444; line-height: 1.7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.02rem; margin: 0 0 6px; color: #263238; }
   .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.85rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  @media (max-width: 520px) {
+    .rbox .num { font-size: 2rem; }
+    .big-eq { font-size: 21px; }
+  }
 </style>
 </head>
 <body>
+
 <a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
-<h1>⭕ <ruby>円周角<rt>えんしゅうかく</rt></ruby>シミュレーター</h1>
-<p class="subtitle">点Pを円周の上で動かすと、<span class="ins-t" style="font-weight:bold">円周角 ∠APB</span> はどうなるかな？
-  <span class="cen-t" style="font-weight:bold"><ruby>中心角<rt>ちゅうしんかく</rt></ruby></span>とくらべてみよう。</p>
+<h1>⭕ 円周角シミュレーター</h1>
+<p class="subtitle">点Pを動かすと、円周角 ∠APB はどうなる？ 中心角とくらべてみよう</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
 
-<div class="main">
-  <div class="col">
-    <div class="card">
-      <svg id="circle" viewBox="0 0 560 560" aria-label="円と点A・B・P">
-        <g id="g"></g>
-      </svg>
+<div class="panel">
+
+  <!-- パート：① 円周角と中心角（このあと ② 逆 ③ 半円と直角 ④ 発展 ⑤ 証明 ⑥ まとめの練習 を足す） -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="tools">
+      <button class="op-btn action" id="btnNew">✏️ 練習問題</button>
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnHint">💡 ヒント</button>
+      <button class="op-btn" id="btnBlind">🙈 数値をかくす</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
     </div>
   </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
 
-  <div class="col">
-    <div class="card">
-      <div class="quiz" id="quiz">❓ 点Pを動かすと、∠APB の大きさはどうなるかな？</div>
-      <div class="readout" id="readout">
-        <div class="rbox ins"><div class="lbl">円周角 ∠APB</div><div class="num" id="insNum"></div></div>
-        <div class="rbox cen"><div class="lbl" id="cenLbl">中心角 ∠AOB</div><div class="num" id="cenNum"></div></div>
+  <div class="board"><div class="board-in">
+    <div class="card fig-card">
+      <!-- 図で使う模様（色だけでなく模様でも区別する） -->
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <pattern id="ptIn" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="14" height="14" fill="#fff3e0"/><line x1="0" y1="0" x2="0" y2="14" stroke="#ffcc80" stroke-width="4"/></pattern>
+        <pattern id="ptOut" width="14" height="14" patternUnits="userSpaceOnUse">
+          <rect width="14" height="14" fill="#f1f8fe"/><circle cx="7" cy="7" r="2.2" fill="#90caf9"/></pattern>
+      </defs></svg>
+      <svg id="fig" viewBox="0 0 560 520" aria-label="円と点A・B・P"></svg>
+      <div class="opt-row" id="figOpts">
+        <label class="opt-check"><input type="checkbox" id="optSnap" checked> すいつく（A・B は 2°ごと、P は円周に）</label>
       </div>
-      <div class="relation" id="relation"></div>
+      <div class="fig-note" id="figNote"></div>
     </div>
-
     <div class="card">
-      <div class="btn-row">
-        <button class="btn blind" id="blindBtn">🙈 数値を隠す</button>
-        <button class="btn" id="autoBtn">▶ 点Pを自動で動かす</button>
-        <button class="btn" id="resetBtn">↺ 最初の位置</button>
-      </div>
+      <h2 id="rTitle"></h2>
+      <div id="ctrl"></div>
+      <div id="side"></div>
+      <div class="ask" id="ask" hidden></div>
+      <div class="msg" id="msg" aria-live="polite"></div>
     </div>
+  </div></div>
 
-    <div class="card">
-      <h2>🔍 いま、どうなっている？</h2>
-      <div class="info" id="info"></div>
-      <div class="special" id="special"></div>
-    </div>
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 自動で1ステップ進める</button></div>
+    <div class="small" id="tTalk"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
   </div>
+
+  <!-- あなたのつまずき・きろく -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>円周角の定理</b>：1つの弧に対する円周角の大きさは、その弧に対する中心角の<b>半分</b>。<b>同じ弧に対する円周角は等しい</b>。</li>
+      <li><b>弧</b>：円周の一部分。2点 A、B で円周は2つに分かれる。小さいほうを<b>劣弧</b>（れっこ）、大きいほうを<b>優弧</b>（ゆうこ）という。点Pに対応する弧は、<b>Pをふくまないほう</b>の弧 AB（図の紫の太い弧）。</li>
+      <li>● A・B・P はドラッグで動く。「⭕ 円周の上」では P は円周の上だけを動く。「🧭 円の外にも出す」では P を円の内側・外側にも動かせて、あしあとの色と形（▲ 大きい／● 同じ／▼ 小さい）で、∠APB の変わり方が見える。</li>
+      <li>「＋ 点Q」で、同じ弧に対するもう1つの円周角 ∠AQB（青緑の点線）が出る。</li>
+      <li>「🙈 数値をかくす」で角度が「？」になる。授業のはじめのクイズに使える。</li>
+      <li>「✏️ 練習問題」：角度を求めたあと、使った定理もえらぶ。まちがえ方から「あなたのつまずき」がわかる。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：A・B は「すいつく」がオンのとき 2°ごと（円周角がちょうど整数になる）、オフのとき 1°ごとに動きます。P を円の外にも出すときの角度は、小数第1位までの四捨五入です。「すいつく」がオンのとき、円周の近くの P は円周の上にすいつきます。</p>
+    <p class="note">つながる教材：<a href="円とコンパス.html">小3 円とコンパス</a>　／　<a href="おうぎ形の弧と面積.html">中1 おうぎ形の弧と面積</a>　／　<a href="証明パズル.html">中2 証明の組み立てパズル</a></p>
+  </div>
+
 </div>
 
-<div class="help">
-  <h2>📝 使いかた</h2>
-  <ul>
-    <li><b>点P</b>をドラッグすると、円周の上を動きます。点A・点Bもドラッグで動かせます（弧ABの大きさが変わります）。</li>
-    <li><span class="ins-t"><b>オレンジ</b></span>が円周角、<span class="cen-t"><b>紫</b></span>が中心角とその弧です。色は図と数字でそろえています。</li>
-    <li>「🙈 数値を隠す」で角度が「？」になります。授業のはじめのクイズに使えます。</li>
-    <li>点Pが点A・Bをこえて反対側に行くと、点Pに対応する弧も反対側に切りかわります（紫の太い弧）。</li>
-  </ul>
-</div>
-
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
 <script>
 (() => {
-  const $ = id => document.getElementById(id);
-  const CX = 280, CY = 280, R = 200;
-  const ORANGE = '#ef6c00', PURPLE = '#7b1fa2';
-  const rad = d => d * Math.PI / 180;
-  const norm = d => ((d % 360) + 360) % 360;
-  // 数学の向き（反時計回りが＋、0°が右）で円周上の点
-  const pt = deg => [CX + R * Math.cos(rad(deg)), CY - R * Math.sin(rad(deg))];
-  const at = (cx, cy, r, deg) => [cx + r * Math.cos(rad(deg)), cy - r * Math.sin(rad(deg))];
+  const $ = (id) => document.getElementById(id);
+  // ?teacher=1 で先生モード、?part=1 でパートを選んで始める、?debug=1 で window.__dbg（動作確認用）
+  const PARAMS = new URLSearchParams(location.search);
+  const TEACHER = PARAMS.get('teacher') === '1';
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const rint = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-  const START = { A: 210, B: 330, P: 100 };
-  let ang = { ...START };
-  let blind = false;
-
-  // A・B は 2° きざみ（中心角が偶数→円周角が整数になる）
-  const snapAB = d => Math.round(norm(d) / 2) * 2 % 360;
-  const MIN_GAP = 4; // P が A・B に重なりすぎないように
-
-  // P に対応する弧（P をふくまない弧 AB）：始まりの角度と大きさ（反時計回り）
-  function arcInfo() {
-    const span = norm(ang.B - ang.A);           // A から反時計回りに B まで
-    const pOnIt = norm(ang.P - ang.A) < span;  // P がその弧の上にあるか
-    return pOnIt ? { start: ang.B, span: 360 - span } : { start: ang.A, span };
-  }
-
-  const fmt = v => (blind ? '？' : (Math.round(v * 10) / 10).toString().replace(/\.0$/, '') + '°');
-  const arcPath = (cx, cy, r, start, span) => {
-    const [x1, y1] = at(cx, cy, r, start), [x2, y2] = at(cx, cy, r, start + span);
-    return `M${x1},${y1} A${r},${r} 0 ${span > 180 ? 1 : 0} 0 ${x2},${y2}`;
-  };
-  const txt = (x, y, s, color, size = 18, extra = '') =>
-    `<text x="${x}" y="${y}" font-size="${size}" font-weight="bold" fill="${color}" text-anchor="middle" dominant-baseline="central" stroke="#fff" stroke-width="5" paint-order="stroke" ${extra}>${s}</text>`;
-  const handle = (name, [x, y], color) =>
-    `<g class="handle" data-h="${name}" transform="translate(${x},${y})"><circle r="24" fill="transparent"/><circle r="10" fill="${color}" stroke="#fff" stroke-width="3"/></g>`;
-
-  function render() {
-    const { start, span } = arcInfo();
-    const cen = span, ins = span / 2;
-    const A = pt(ang.A), B = pt(ang.B), P = pt(ang.P);
-    let h = '';
-
-    // 円
-    h += `<circle cx="${CX}" cy="${CY}" r="${R}" fill="#fff" stroke="#90a4ae" stroke-width="3"/>`;
-    // 中心角の扇形（うすい紫）
-    const sr = 58;
-    const [s1x, s1y] = at(CX, CY, sr, start);
-    const [s2x, s2y] = at(CX, CY, sr, start + span);
-    h += `<path d="M${CX},${CY} L${s1x},${s1y} A${sr},${sr} 0 ${span > 180 ? 1 : 0} 0 ${s2x},${s2y} Z" fill="${PURPLE}" fill-opacity="0.22" stroke="${PURPLE}" stroke-width="2"/>`;
-    // P に対応する弧（太い紫）
-    h += `<path d="${arcPath(CX, CY, R, start, span)}" fill="none" stroke="${PURPLE}" stroke-width="9" stroke-linecap="round" opacity="0.75"/>`;
-    // OA・OB
-    h += `<line x1="${CX}" y1="${CY}" x2="${A[0]}" y2="${A[1]}" stroke="${PURPLE}" stroke-width="3"/>`;
-    h += `<line x1="${CX}" y1="${CY}" x2="${B[0]}" y2="${B[1]}" stroke="${PURPLE}" stroke-width="3"/>`;
-    // 円周角のくさび形（オレンジ）
-    const a1 = Math.atan2(A[1] - P[1], A[0] - P[0]), a2 = Math.atan2(B[1] - P[1], B[0] - P[0]);
-    let d = a2 - a1;
-    while (d > Math.PI) d -= 2 * Math.PI;
-    while (d <= -Math.PI) d += 2 * Math.PI;
-    const wr = 46;
-    const w1 = [P[0] + wr * Math.cos(a1), P[1] + wr * Math.sin(a1)], w2 = [P[0] + wr * Math.cos(a1 + d), P[1] + wr * Math.sin(a1 + d)];
-    h += `<path d="M${P[0]},${P[1]} L${w1[0]},${w1[1]} A${wr},${wr} 0 0 ${d > 0 ? 1 : 0} ${w2[0]},${w2[1]} Z" fill="${ORANGE}" fill-opacity="0.3" stroke="${ORANGE}" stroke-width="2"/>`;
-    // PA・PB
-    h += `<line x1="${P[0]}" y1="${P[1]}" x2="${A[0]}" y2="${A[1]}" stroke="${ORANGE}" stroke-width="4" stroke-linecap="round"/>`;
-    h += `<line x1="${P[0]}" y1="${P[1]}" x2="${B[0]}" y2="${B[1]}" stroke="${ORANGE}" stroke-width="4" stroke-linecap="round"/>`;
-
-    // 角度の数字
-    const mid = a1 + d / 2;
-    h += txt(P[0] + 76 * Math.cos(mid), P[1] + 76 * Math.sin(mid), fmt(ins), ORANGE, 22);
-    const [cxl, cyl] = at(CX, CY, span > 300 ? 34 : 88, start + span / 2);
-    h += txt(cxl, cyl, fmt(cen), PURPLE, 22);
-
-    // 中心 O
-    h += `<circle cx="${CX}" cy="${CY}" r="5" fill="#263238"/>`;
-    const [ox, oy] = at(CX, CY, 22, start + span / 2 + 180);
-    h += txt(ox, oy, 'O', '#263238', 19);
-
-    // 点とラベル
-    const lab = (deg, s, color) => { const [x, y] = at(CX, CY, R + 26, deg); return txt(x, y, s, color, 22); };
-    h += lab(ang.A, 'A', '#37474f') + lab(ang.B, 'B', '#37474f') + lab(ang.P, 'P', ORANGE);
-    h += handle('A', A, '#37474f') + handle('B', B, '#37474f') + handle('P', P, ORANGE);
-    $('g').innerHTML = h;
-
-    // パネル
-    $('insNum').textContent = fmt(ins);
-    $('cenNum').textContent = fmt(cen);
-    $('cenLbl').textContent = span > 180 ? '中心角（180°より大きい）' : '中心角 ∠AOB';
-    $('relation').innerHTML = blind
-      ? `<span class="ins-t">円周角</span> と <span class="cen-t">中心角</span> には、どんな関係がある？`
-      : `<span class="ins-t">${fmt(ins)}</span> × 2 ＝ <span class="cen-t">${fmt(cen)}</span><br>
-         <span class="ins-t">円周角</span> ＝ <span class="cen-t">中心角</span> の <span class="frac"><span>1</span><span>2</span></span>`;
-
-    const big = norm(ang.B - ang.A) > 180;
-    const pOnCcw = norm(ang.P - ang.A) < norm(ang.B - ang.A);
-    // P がのっている弧が大きいほう（優弧）か
-    const pOnMajor = pOnCcw ? big : !big;
-    const half = Math.abs(span - 180) < 0.01;
-    $('info').innerHTML = half
-      ? `点Pは <b>半円</b> の上にあります。対応する弧ABも <span class="cen-t"><b>半円</b></span>（ABは直径）です。`
-      : `点Pは弧ABの <span class="tag" style="background:#fff3e0;color:${ORANGE}">${pOnMajor ? '大きいほう（<ruby>優弧<rt>ゆうこ</rt></ruby>）' : '小さいほう（<ruby>劣弧<rt>れっこ</rt></ruby>）'}</span> の上にあります。<br>
-         点Pに対応する弧は、Pをふくまない <span class="tag" style="background:#f3e5f5;color:${PURPLE}">${pOnMajor ? '小さいほう（劣弧）AB' : '大きいほう（優弧）AB'}</span>（紫の太い弧）です。`;
-    const sp = $('special');
-    if (half) {
-      sp.innerHTML = blind ? '✨ ABが直径になっているよ！円周角は何度かな？' : '✨ ABが直径！半円の弧に対する円周角は、いつも 90°。';
-      sp.classList.add('on');
-    } else sp.classList.remove('on');
-  }
-
-  // ---- ドラッグ ----
-  const svg = $('circle');
-  let drag = null;
-  function angleOf(e) {
-    const p = svg.createSVGPoint();
-    p.x = e.clientX; p.y = e.clientY;
-    const q = p.matrixTransform(svg.getScreenCTM().inverse());
-    return norm(Math.atan2(CY - q.y, q.x - CX) * 180 / Math.PI);
-  }
-  const gap = (a, b) => { const d = norm(a - b); return Math.min(d, 360 - d); };
-  // P を A・B から少しはなす
-  function keepAway(p) {
-    for (const k of ['A', 'B']) {
-      if (gap(p, ang[k]) < MIN_GAP) {
-        const side = norm(p - ang[k]) < 180 ? 1 : -1;
-        p = norm(ang[k] + side * MIN_GAP);
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
       }
-    }
-    return p;
+    } catch (e) { /* 音が出せないときは何もしない */ }
   }
-  svg.addEventListener('pointerdown', e => {
-    const h = e.target.closest('.handle');
-    if (!h) return;
-    e.preventDefault();
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+
+  /* =====================================================================
+     1. 図形の計算（点は [x, y]。SVG の向きなので y は下向き）
+        円周上の点は「角度（度）」で持つ。数学の向き（反時計回りが＋、0°が右）。
+     ===================================================================== */
+  const W = 560, H = 520, CX = 280, CY = 260, R = 175, O = [CX, CY];
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  const mul = (a, k) => [a[0] * k, a[1] * k];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+  const len = (a) => Math.hypot(a[0], a[1]);
+  const dist = (a, b) => len(sub(a, b));
+  const unit = (a) => { const l = len(a) || 1; return [a[0] / l, a[1] / l]; };
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
+  const rad = (d) => d * Math.PI / 180;
+  const norm = (d) => ((d % 360) + 360) % 360;
+  const at = (c, r, deg) => [c[0] + r * Math.cos(rad(deg)), c[1] - r * Math.sin(rad(deg))];
+  const pt = (deg) => at(O, R, deg);                                   // 円周上の点
+  const degOf = (p) => norm(Math.atan2(O[1] - p[1], p[0] - O[0]) * 180 / Math.PI);
+  const gapDeg = (a, b) => { const d = norm(a - b); return Math.min(d, 360 - d); };
+  // 頂点 V で、V→P1 と V→P2 がつくる角（度、0〜180）
+  function angAt(V, P1, P2) { const u = unit(sub(P1, V)), v = unit(sub(P2, V)); return Math.acos(clamp(dot(u, v), -1, 1)) * 180 / Math.PI; }
+  // 点 p（角度）に対応する弧＝p をふくまない弧 AB。{ start, span }（start から反時計回りに span 度）
+  function arcFor(A, B, p) {
+    const span = norm(B - A);
+    return norm(p - A) < span ? { start: B, span: 360 - span } : { start: A, span };
+  }
+
+  // 数の見せ方：整数ならそのまま、ちがえば小数第1位まで
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const degS = (v) => String(r1(v)) + '°';
+
+  /* =====================================================================
+     2. SVG をかく小さな道具（文字列で組み立てる）
+     ===================================================================== */
+  const f1 = (v) => Math.round(v * 10) / 10;
+  const P2 = (p) => f1(p[0]) + ',' + f1(p[1]);
+  function seg(a, b, col, w, dash, extra) { return `<line x1="${f1(a[0])}" y1="${f1(a[1])}" x2="${f1(b[0])}" y2="${f1(b[1])}" stroke="${col}" stroke-width="${w || 3}" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash}"` : ''} ${extra || ''}/>`; }
+  function txt(p, t, col, size, anchor) { return `<text x="${f1(p[0])}" y="${f1(p[1])}" fill="${col || '#263238'}" font-size="${size || 22}" text-anchor="${anchor || 'middle'}" dominant-baseline="central">${t}</text>`; }
+  // 円周上の弧（start から反時計回りに span 度）
+  function arcPath(c, r, start, span) {
+    const a = at(c, r, start), b = at(c, r, start + span);
+    return `M${P2(a)} A${r} ${r} 0 ${span > 180 ? 1 : 0} 0 ${P2(b)}`;
+  }
+  // 頂点 V の角（V→P1 と V→P2 の間。180°未満）をくさび形でかき、角度の文字を置く
+  function wedge(V, P1, P2_, r, col, label, opt) {
+    opt = opt || {};
+    const u = unit(sub(P1, V)), v = unit(sub(P2_, V)), sw = cross(u, v) > 0 ? 1 : 0;
+    const a = add(V, mul(u, r)), b = add(V, mul(v, r));
+    let s = `<path d="M${P2(V)} L${P2(a)} A${r} ${r} 0 0 ${sw} ${P2(b)} Z" fill="${col}" fill-opacity="${opt.op == null ? 0.22 : opt.op}" stroke="${col}" stroke-width="2.5"${opt.dash ? ` stroke-dasharray="${opt.dash}"` : ''}/>`;
+    if (label != null) {
+      const m = unit(add(u, v)), lr = opt.lr || r + 26;
+      s += txt(add(V, mul(m, lr)), label, col, opt.size || 22);
+    }
+    return s;
+  }
+  // 中心角（O のまわり。start から反時計回りに span 度。180°をこえてもかける）
+  function cenWedge(start, span, r, col, label) {
+    const a = at(O, r, start), b = at(O, r, start + span);
+    let s = `<path d="M${P2(O)} L${P2(a)} A${r} ${r} 0 ${span > 180 ? 1 : 0} 0 ${P2(b)} Z" fill="${col}" fill-opacity="0.2" stroke="${col}" stroke-width="2"/>`;
+    if (label != null) s += txt(at(O, span > 300 ? r * 0.55 : r + 24, start + span / 2), label, col, 21);
+    return s;
+  }
+  function handle(p, col) { return `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="12" fill="#fff" stroke="${col || '#37474f'}" stroke-width="4" style="cursor:grab"/>`; }
+  const dotP = (p, col, r) => `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="${r || 5}" fill="${col || '#263238'}"/>`;
+  // 円周上の点の名前（円の外がわに置く）
+  const lab = (deg, s, col) => txt(at(O, R + 26, deg), s, col || '#37474f', 23);
+  // あしあとの印（色だけにたよらず形も変える：▲ 大きい／● 同じ／▼ 小さい）
+  function mark(p, kind) {
+    const [x, y] = p;
+    if (kind === 'on') return `<circle cx="${f1(x)}" cy="${f1(y)}" r="5.5" fill="#2e7d32" stroke="#fff" stroke-width="1.5"/>`;
+    if (kind === 'in') return `<path d="M${f1(x)},${f1(y - 7)} L${f1(x + 6.5)},${f1(y + 5)} L${f1(x - 6.5)},${f1(y + 5)} Z" fill="#ef6c00" stroke="#fff" stroke-width="1.5"/>`;
+    return `<path d="M${f1(x)},${f1(y + 7)} L${f1(x + 6.5)},${f1(y - 5)} L${f1(x - 6.5)},${f1(y - 5)} Z" fill="#1565c0" stroke="#fff" stroke-width="1.5"/>`;
+  }
+  const ORANGE = '#e65100', PURPLE = '#7b1fa2', TEAL = '#00838f', GREEN = '#2e7d32', BLUE = '#1565c0';
+
+  /* =====================================================================
+     3. パートとつまずきの型
+        ready:false のパートは、まだボタンを出さない（作ったら true にする）
+     ===================================================================== */
+  const PARTS = [null,
+    { name: '① 円周角と中心角', title: '⭕ 円周角と中心角', ready: true,
+      note: 'P を円周の上で動かすと、∠APB はどうなる？ 円の外に出すと？' },
+    { name: '② 定理の逆', title: '🔁 4点が同じ円周上にある？', ready: false, note: '' },
+    { name: '③ 半円と直角', title: '📐 半円の弧と直角', ready: false, note: '' },
+    { name: '④ 発展', title: '🌱 内接四角形と接線（発展）', ready: false, note: '' },
+    { name: '⑤ 証明', title: '🧩 円周角の定理の証明', ready: false, note: '' },
+    { name: '⑥ まとめの練習', title: '🎯 まとめの練習', ready: false, note: '' },
+  ];
+  const READY = [1, 2, 3, 4, 5, 6].filter(n => PARTS[n].ready);
+  // 練習問題の2問目「使った定理」の選択肢（あとのパートで使う定理も、ここに足す）
+  const THMS = {
+    half: '円周角は、同じ弧に対する中心角の半分',
+    same: '同じ弧に対する円周角は等しい',
+    semi: '半円の弧に対する円周角は 90°',
+    cyc:  '円に内接する四角形の対角の和は 180°（発展）',
+  };
+  // つまずきの型（名前・説明・練習するパート）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    half:     { name: '半分と2倍のとりちがえ', part: 1,
+                exp: '<b>円周角 ＝ 中心角 × ½</b>、<b>中心角 ＝ 円周角 × 2</b>。中心 O の角のほうが大きい。どちらを求めているか確かめよう。' },
+    same:     { name: '円周角と中心角を同じと考えた', part: 1,
+                exp: '頂点が<b>円周の上</b>にあるのが円周角、<b>中心 O</b> にあるのが中心角。同じ弧に対しても、大きさは2倍ちがう。' },
+    otherArc: { name: '対応する弧のとりちがえ', part: 1,
+                exp: '点Pに対応する弧は、<b>Pをふくまないほう</b>の弧。P がのっている弧ではない。反対側の弧の円周角とは、たすと 180° になる。' },
+    reflex:   { name: '180°より大きい中心角の見落とし', part: 1,
+                exp: 'P が小さいほうの弧（劣弧）にあると、対応する弧は大きいほう（優弧）。その中心角は <b>360° − （小さいほうの中心角）</b> で、180° より大きい。' },
+    whichThm: { name: '使った定理のえらびまちがい', part: 1,
+                exp: '中心角と円周角をくらべた → 「中心角の半分」。円周角どうしをくらべた → 「同じ弧に対する円周角は等しい」。' },
+    calc:     { name: '計算まちがい', part: 0,
+                exp: '考え方は合っているかもしれない。× 2、÷ 2、360° や 180° からひく計算を、もう一度ていねいに。' },
+  };
+
+  /* =====================================================================
+     4. 状態（パートごとに持つ。ひとつもどす で写しやすいよう、数と文字だけで持つ）
+     ===================================================================== */
+  const st = { part: 1, Ps: {}, hists: { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }, sessTrips: {}, focus: null, hintLv: 0, drag: null, handles: [], tStep: 0, blind: false, raf: 0 };
+  const P = () => st.Ps[st.part];
+  function defaults(part) {
+    // free：P を円の外にも出すか。FP：そのときの P の位置。trail：あしあと [x, y, 'in'|'on'|'out']
+    if (part === 1) return { A: 210, B: 330, P: 100, Q: 50, showQ: false, free: false, FP: pt(100), trail: [], q: null };
+    return { q: null };
+  }
+  function pushHist() { const h = st.hists[st.part]; h.push(clone(P())); if (h.length > 80) h.shift(); }
+  function undo() {
     stopAuto();
-    drag = h.dataset.h;
-    try { svg.setPointerCapture(e.pointerId); } catch (_) { /* 捕まえられなくても続ける */ }
-  });
-  svg.addEventListener('pointermove', e => {
-    if (!drag) return;
-    let a = angleOf(e);
-    if (drag === 'P') {
-      ang.P = keepAway(a);
+    const h = st.hists[st.part];
+    if (!h.length) { setMsg('もどせる操作は ありません。'); return; }
+    st.Ps[st.part] = h.pop();
+    setMsg('↶ ひとつもどしました。'); buildCtrl(); render();
+  }
+  function resetPart() {
+    stopAuto();
+    pushHist(); st.Ps[st.part] = defaults(st.part); st.hintLv = 0;
+    setMsg('⟲ はじめにもどしました。'); buildCtrl(); render();
+  }
+  const snapOn = () => $('optSnap').checked;
+  const qActive = () => { const q = P().q; return !!(q && !q.done); };
+  const hide = (s) => st.blind ? '？' : s;
+
+  /* =====================================================================
+     5. パート① 円周角と中心角
+     ===================================================================== */
+  // 円の外にも出すとき：P の場所（円の内側・円周上・外側）と、くらべる円周角
+  function geoFree(p) {
+    const A = pt(p.A), B = pt(p.B), FP = p.FP;
+    const d = dist(FP, O), onC = Math.abs(d - R) < 1.5;
+    const where = onC ? 'on' : d < R ? 'in' : 'out';
+    // P と同じ側にある弧の点から見た円周角（＝P に対応する弧の中心角の半分）
+    const s = norm(p.B - p.A), m1 = pt(p.A + s / 2);
+    const side = cross(sub(B, A), sub(FP, A)), side1 = cross(sub(B, A), sub(m1, A));
+    const onLine = Math.abs(side) < 1e-6;
+    const arc = side * side1 > 0 ? { start: p.B, span: 360 - s } : { start: p.A, span: s };
+    return { A, B, FP, where, onLine, arc, ref: arc.span / 2, ang: onLine ? 0 : angAt(FP, A, B) };
+  }
+  function ctrl1() {
+    return `
+      <div class="chip-row">
+        <button class="chip small-chip" data-mode="0">⭕ 円周の上</button>
+        <button class="chip small-chip" data-mode="1">🧭 円の外にも出す</button>
+      </div>
+      <div class="tools" style="margin-top:6px">
+        <button class="op-btn" id="b1Q">＋ 点Q（同じ弧のもう1つの円周角）</button>
+        <button class="op-btn" id="b1Auto">▶ P を自動で動かす</button>
+        <button class="op-btn" id="b1Dia">⌒ AB を直径にする</button>
+        <button class="op-btn" id="b1Clear">🧹 あしあとを消す</button>
+      </div>`;
+  }
+  function wire1() {
+    const lock = () => qActive();
+    document.querySelectorAll('#ctrl [data-mode]').forEach(b => b.addEventListener('click', () => {
+      if (lock()) return; stopAuto();
+      const p = P(), f = b.dataset.mode === '1';
+      if (p.free === f) return;
+      pushHist(); p.free = f;
+      if (f) { p.FP = pt(p.P); p.trail = []; setMsg('P をドラッグして、円の内側・外側に動かしてみよう。あしあとが残るよ。'); }
+      else { p.P = keepAway(p, degOf(p.FP)); setMsg(''); }
+      render();
+    }));
+    $('b1Q').addEventListener('click', () => {
+      if (lock()) return; const p = P(); pushHist(); p.showQ = !p.showQ;
+      if (p.showQ) {
+        // Q は P と同じ側の弧の上で、P からいちばんはなれた所に置く
+        const a = arcFor(p.A, p.B, p.P), cand = [0.2, 0.5, 0.8].map(k => norm(a.start + a.span + (360 - a.span) * k));
+        p.Q = keepAway(p, cand.reduce((b, c) => gapDeg(c, p.P) > gapDeg(b, p.P) ? c : b));
+      }
+      render();
+    });
+    $('b1Auto').addEventListener('click', () => { if (lock()) return; if (st.raf) stopAuto(); else startAuto(); });
+    $('b1Dia').addEventListener('click', () => {
+      if (lock()) return; stopAuto(); const p = P(); pushHist();
+      p.B = norm(p.A + 180);
+      p.P = keepAway(p, p.P); p.Q = keepAway(p, p.Q);
+      if (p.free) p.FP = pt(p.P);
+      setMsg('AB が直径になった。P をどこに動かしても ∠APB は？'); render();
+    });
+    $('b1Clear').addEventListener('click', () => { if (lock()) return; const p = P(); pushHist(); p.trail = []; render(); });
+  }
+  // P・Q を A・B から少しはなす（重なると角ができない）
+  const MIN_GAP = 4;
+  function keepAway(p, d) {
+    for (const k of ['A', 'B']) if (gapDeg(d, p[k]) < MIN_GAP) d = norm(p[k] + (norm(d - p[k]) < 180 ? 1 : -1) * MIN_GAP);
+    return d;
+  }
+  function render1() {
+    const p = P();
+    const A = pt(p.A), B = pt(p.B);
+    let s = '';
+    st.handles = [];
+    if (!p.free) {
+      // ----- 円周の上 -----
+      const a = arcFor(p.A, p.B, p.P), Pp = pt(p.P);
+      s += `<circle cx="${CX}" cy="${CY}" r="${R}" fill="#fff" stroke="#90a4ae" stroke-width="3"/>`;
+      // P がのっている弧（どこでも同じ角になる）を緑の点線で
+      s += `<path d="${arcPath(O, R, a.start + a.span, 360 - a.span)}" fill="none" stroke="${GREEN}" stroke-width="5" stroke-dasharray="2 9" stroke-linecap="round" opacity="0.8"/>`;
+      // 中心角と、P に対応する弧（紫の太い弧）
+      s += cenWedge(a.start, a.span, 54, PURPLE, hide(degS(a.span)));
+      s += `<path d="${arcPath(O, R, a.start, a.span)}" fill="none" stroke="${PURPLE}" stroke-width="9" stroke-linecap="round" opacity="0.75"/>`;
+      s += seg(O, A, PURPLE, 3) + seg(O, B, PURPLE, 3);
+      // 点Q（同じ弧なら同じ角／反対側の弧なら 180° − ∠APB）
+      if (p.showQ) {
+        const Qp = pt(p.Q), aq = arcFor(p.A, p.B, p.Q);
+        s += wedge(Qp, A, B, 38, TEAL, hide(degS(aq.span / 2)), { dash: '5 4', op: 0.15, lr: 62 });
+        s += seg(Qp, A, TEAL, 3.5, '9 6') + seg(Qp, B, TEAL, 3.5, '9 6');
+      }
+      s += wedge(Pp, A, B, 44, ORANGE, hide(degS(a.span / 2)), { lr: 72 });
+      s += seg(Pp, A, ORANGE, 4) + seg(Pp, B, ORANGE, 4);
+      s += dotP(O, '#263238', 5) + txt(at(O, 22, a.start + a.span / 2 + 180), 'O', '#263238', 20);
+      s += lab(p.A, 'A') + lab(p.B, 'B') + lab(p.P, 'P', ORANGE);
+      if (p.showQ) s += lab(p.Q, 'Q', TEAL);
+      if (!qActive()) {
+        s += handle(A) + handle(B) + handle(Pp, ORANGE);
+        st.handles.push({ id: 'A', p: A }, { id: 'B', p: B }, { id: 'P', p: Pp });
+        if (p.showQ) { const Qp = pt(p.Q); s += handle(Qp, TEAL); st.handles.push({ id: 'Q', p: Qp }); }
+      }
+      return s;
+    }
+    // ----- 円の外にも出す：内側＝大きくなる／円周上＝同じ／外側＝小さくなる を模様で -----
+    const g = geoFree(p);
+    s += `<rect width="${W}" height="${H}" fill="url(#ptOut)"/>`;
+    s += `<circle cx="${CX}" cy="${CY}" r="${R}" fill="url(#ptIn)" stroke="${GREEN}" stroke-width="6"/>`;
+    s += seg(A, B, '#78909c', 2, '6 6');
+    s += cenWedge(g.arc.start, g.arc.span, 50, PURPLE, hide(degS(g.arc.span)));
+    s += `<path d="${arcPath(O, R, g.arc.start, g.arc.span)}" fill="none" stroke="${PURPLE}" stroke-width="9" stroke-linecap="round" opacity="0.6"/>`;
+    s += seg(O, A, PURPLE, 2.5) + seg(O, B, PURPLE, 2.5);
+    for (const t of p.trail) s += mark([t[0], t[1]], t[2]);
+    if (!g.onLine) s += wedge(g.FP, A, B, 40, ORANGE, hide(degS(g.ang)), { lr: 66 });
+    s += seg(g.FP, A, ORANGE, 4) + seg(g.FP, B, ORANGE, 4);
+    s += dotP(O, '#263238', 5) + txt(at(O, 22, g.arc.start + g.arc.span / 2 + 180), 'O', '#263238', 20);
+    s += lab(p.A, 'A') + lab(p.B, 'B');
+    s += txt(add(g.FP, mul(unit(sub(g.FP, O)), 26)), 'P', ORANGE, 23);
+    if (!qActive()) {
+      s += handle(A) + handle(B) + handle(g.FP, ORANGE);
+      st.handles.push({ id: 'A', p: A }, { id: 'B', p: B }, { id: 'P', p: g.FP });
+    }
+    return s;
+  }
+  function side1() {
+    const p = P();
+    if (!p.free) {
+      const a = arcFor(p.A, p.B, p.P), ins = a.span / 2, cen = a.span;
+      const big = norm(p.B - p.A) > 180, pOnCcw = norm(p.P - p.A) < norm(p.B - p.A);
+      const pOnMajor = pOnCcw ? big : !big, semi = Math.abs(a.span - 180) < 1e-9;
+      let h = `<div class="readout">
+        <div class="rbox ins"><div class="lbl">円周角 ∠APB</div><div class="num">${hide(degS(ins))}</div></div>
+        <div class="rbox cen"><div class="lbl">${cen > 180 ? '中心角（180°より大）' : '中心角 ∠AOB'}</div><div class="num">${hide(degS(cen))}</div></div>`;
+      if (p.showQ) { const aq = arcFor(p.A, p.B, p.Q); h += `<div class="rbox qq"><div class="lbl">円周角 ∠AQB</div><div class="num">${hide(degS(aq.span / 2))}</div></div>`; }
+      h += '</div>';
+      h += st.blind
+        ? `<div class="big-eq"><span class="ins-t">円周角</span> と <span class="cen-t">中心角</span> には、どんな関係がある？</div>`
+        : `<div class="big-eq"><span class="ins-t">${degS(ins)}</span> × 2 ＝ <span class="cen-t">${degS(cen)}</span><br><span class="ins-t">円周角</span> ＝ <span class="cen-t">中心角</span> × <span class="frac"><span>1</span><span>2</span></span></div>`;
+      h += '<div class="why">';
+      h += semi
+        ? `AB は<b>直径</b>。P がどちらの半円にあっても、対応する弧は半円（中心角 180°）。`
+        : `P は弧 AB の <span class="tag" style="background:#fff3e0;color:${ORANGE}">${pOnMajor ? '大きいほう（優弧）' : '小さいほう（劣弧）'}</span> の上（緑の点線）。<br>P に対応する弧は、P をふくまない <span class="tag" style="background:#f3e5f5;color:${PURPLE}">${pOnMajor ? '小さいほう（劣弧）' : '大きいほう（優弧）'}</span>（紫の太い弧）。`;
+      if (p.showQ) {
+        const sameArc = (norm(p.Q - p.A) < norm(p.B - p.A)) === pOnCcw;
+        h += sameArc
+          ? `<br>Q も P と<b>同じ側の弧</b>にある → <b>同じ弧に対する円周角</b>なので、∠AQB ＝ ∠APB。`
+          : `<br>Q は P と<b>反対側の弧</b>にある → 対応する弧がちがう。∠APB ＋ ∠AQB ＝ ${hide('180°')}（発展：円に内接する四角形 APBQ の対角）。`;
+      }
+      h += '</div>';
+      if (semi) h += `<div class="verdict ok">✨ ${st.blind ? 'AB が直径！ 円周角は何度かな？' : 'AB が直径！ 半円の弧に対する円周角は、いつも 90°。'}</div>`;
+      return h;
+    }
+    const g = geoFree(p);
+    let h = `<div class="readout">
+      <div class="rbox ins"><div class="lbl">∠APB</div><div class="num">${g.onLine ? '―' : hide(degS(g.ang))}</div></div>
+      <div class="rbox cen"><div class="lbl">円周上なら</div><div class="num">${hide(degS(g.ref))}</div></div></div>`;
+    h += `<div class="legend"><span class="lg-in">▲ 円の内側：大きくなる</span><span class="lg-on">● 円周上：同じ</span><span class="lg-out">▼ 円の外側：小さくなる</span></div>`;
+    if (g.onLine) h += `<div class="why">P が直線 AB の上にあると、三角形ができないので ∠APB はない。</div>`;
+    else if (g.where === 'on') h += `<div class="verdict ok">● P は<b>円周上</b>。∠APB ＝ ${hide(degS(g.ref))}（同じ弧に対する円周角）。</div>`;
+    else if (g.where === 'in') h += `<div class="verdict in">▲ P は<b>円の内側</b>。∠APB は ${hide(degS(g.ref))} より<b>大きい</b>。</div>`;
+    else h += `<div class="verdict out">▼ P は<b>円の外側</b>。∠APB は ${hide(degS(g.ref))} より<b>小さい</b>。</div>`;
+    h += `<div class="why">∠APB が ${hide(degS(g.ref))} になる点は、<b>円周の上</b>（直線 AB の P と同じ側）だけ。<br>逆に、∠APB ＝ ${hide(degS(g.ref))} なら P は円周の上にある → ② 円周角の定理の逆 へ。</div>`;
+    return h;
+  }
+  function drag1(p, id, q) {
+    if (id === 'P' && p.free) {
+      // 図の中だけ。A・B に重ならない。円周の近くは円周にすいつく
+      let F = [clamp(q[0], 14, W - 14), clamp(q[1], 14, H - 14)];
+      if (snapOn() && Math.abs(dist(F, O) - R) < 9) F = pt(degOf(F));
+      if (dist(F, pt(p.A)) < 14 || dist(F, pt(p.B)) < 14) return;
+      // 円周をまたいだら、またいだところに「● 同じ」の印を置く（速く動かしても見落とさない）
+      const d0 = dist(p.FP, O) - R, d1 = dist(F, O) - R;
+      if (d0 * d1 < 0) { const C = pt(degOf(add(p.FP, mul(sub(F, p.FP), d0 / (d0 - d1))))); p.trail.push([f1(C[0]), f1(C[1]), 'on']); }
+      p.FP = F;
+      const last = p.trail[p.trail.length - 1];
+      if (!last || dist(F, last) > 16) {
+        const g = geoFree(p);
+        if (!g.onLine) { p.trail.push([f1(F[0]), f1(F[1]), g.where]); if (p.trail.length > 160) p.trail.shift(); }
+      }
+      return;
+    }
+    let a = degOf(q);
+    if (id === 'P' || id === 'Q') { p[id] = keepAway(p, a); return; }
+    const step = snapOn() ? 2 : 1;
+    a = norm(Math.round(a / step) * step);
+    const other = id === 'A' ? p.B : p.A;
+    if (gapDeg(a, other) < 10) return;
+    if (!p.free && (gapDeg(a, p.P) < MIN_GAP || (p.showQ && gapDeg(a, p.Q) < MIN_GAP))) return;
+    if (p.free && dist(pt(a), p.FP) < 14) return;
+    p[id] = a;
+  }
+  // P を自動で円周の上を回す
+  function startAuto() {
+    const p = P();
+    if (p.free) { pushHist(); p.free = false; p.P = keepAway(p, degOf(p.FP)); }
+    let last = performance.now();
+    const tick = (t) => {
+      const dt = Math.min(0.05, (t - last) / 1000); last = t;
+      const q = P(); let d = norm(q.P + 30 * dt);
+      for (const k of ['A', 'B']) if (gapDeg(d, q[k]) < MIN_GAP) d = norm(q[k] + MIN_GAP);
+      q.P = d; render();
+      st.raf = requestAnimationFrame(tick);
+    };
+    st.raf = requestAnimationFrame(tick);
+    render();
+  }
+  function stopAuto() { if (st.raf) { cancelAnimationFrame(st.raf); st.raf = 0; if ($('b1Auto')) render(); } }
+
+  /* =====================================================================
+     6. 練習問題（答えを先に決めてから図と選択肢をつくる）
+        q = { text, fig, choices:[{ t, ok, trip }], expl, thm }
+        正解すると、2問目「使った定理は？」（q.stage = 2）に進む
+     ===================================================================== */
+  // 選択肢：正解と、まちがいの型つきの値。同じ値・ありえない値は除く
+  function mkChoices(ans, wrongs) {
+    const seen = new Set([ans]), out = [{ t: ans + '°', ok: true, v: ans }];
+    // 型つきのまちがいが重なって3つに足りないときは、計算まちがいの値でうめる
+    for (const w of wrongs.concat([10, -10, 20, -20].map(d => ({ v: ans + d, trip: 'calc' })))) {
+      if (out.length >= 4) break;
+      if (!(w.v > 0 && w.v < 360) || Math.abs(w.v - Math.round(w.v)) > 1e-9 || seen.has(w.v)) continue;
+      seen.add(w.v); out.push({ t: w.v + '°', v: w.v, trip: w.trip });
+    }
+    return shuffle(out);
+  }
+  // 図の点を、全体を少し回してから置く（毎回同じ向きにならないように）
+  function rot(fig, r) { for (const k in fig.pts) fig.pts[k] = norm(fig.pts[k] + r); return fig; }
+  const GEN = [null, (focus) => {
+    const types = {
+      c2i:    ['half', 'same', 'otherArc'],
+      i2c:    ['half', 'same', 'reflex'],
+      same:   ['half', 'otherArc'],
+      reflex: ['reflex', 'otherArc', 'half'],
+    };
+    let ks = Object.keys(types);
+    if (focus === 'whichThm') ks = ['c2i', 'same'];
+    else if (focus && TRIPS[focus]) { const f = ks.filter(k => types[k].includes(focus)); if (f.length) ks = f; }
+    const type = pick(ks), r = rint(-35, 35);
+    if (type === 'c2i') {
+      // 中心角 2x → 円周角 x
+      const x = pick([20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]);
+      const fig = rot({ pts: { A: 270 - x, B: 270 + x, P: rint(70, 110) }, O: true,
+        segs: [['P', 'A', ORANGE], ['P', 'B', ORANGE], ['O', 'A', PURPLE], ['O', 'B', PURPLE]],
+        angs: [{ v: 'P', lab: '<tspan font-style="italic">x</tspan>', col: ORANGE }], cen: { lab: (2 * x) + '°' } }, r);
+      return { type, fig, text: `∠AOB ＝ ${2 * x}° のとき、<i>x</i>（∠APB）は何度？`, thm: 'half',
+        choices: mkChoices(x, [{ v: 4 * x, trip: 'half' }, { v: 2 * x, trip: 'same' }, { v: 180 - x, trip: 'otherArc' }, { v: x + 10, trip: 'calc' }]),
+        expl: `円周角は、同じ弧 AB に対する中心角の半分。${2 * x}° ÷ 2 ＝ ${x}°。` };
+    }
+    if (type === 'i2c') {
+      // 円周角 x → 中心角 2x
+      const x = pick([25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]);
+      const fig = rot({ pts: { A: 270 - x, B: 270 + x, P: rint(70, 110) }, O: true,
+        segs: [['P', 'A', ORANGE], ['P', 'B', ORANGE], ['O', 'A', PURPLE], ['O', 'B', PURPLE]],
+        angs: [{ v: 'P', lab: x + '°', col: ORANGE }], cen: { lab: '<tspan font-style="italic">x</tspan>' } }, r);
+      return { type, fig, text: `∠APB ＝ ${x}° のとき、<i>x</i>（∠AOB）は何度？`, thm: 'half',
+        choices: mkChoices(2 * x, [{ v: x / 2, trip: 'half' }, { v: x, trip: 'same' }, { v: 360 - 2 * x, trip: 'reflex' }, { v: 180 - x, trip: 'otherArc' }]),
+        expl: `中心角は、同じ弧 AB に対する円周角の2倍。${x}° × 2 ＝ ${2 * x}°。` };
+    }
+    if (type === 'same') {
+      // 同じ弧に対する円周角
+      const x = pick([24, 28, 32, 36, 40, 44, 48, 52, 56, 62, 66, 72]);
+      const pp = rint(60, 85), qq = rint(105, 125);
+      const fig = rot({ pts: { A: 270 - x, B: 270 + x, P: pp, Q: qq }, O: false,
+        segs: [['P', 'A', ORANGE], ['P', 'B', ORANGE], ['Q', 'A', TEAL], ['Q', 'B', TEAL]],
+        angs: [{ v: 'P', lab: x + '°', col: ORANGE }, { v: 'Q', lab: '<tspan font-style="italic">x</tspan>', col: TEAL }] }, r);
+      return { type, fig, text: `∠APB ＝ ${x}° のとき、<i>x</i>（∠AQB）は何度？`, thm: 'same',
+        choices: mkChoices(x, [{ v: 2 * x, trip: 'half' }, { v: x / 2, trip: 'half' }, { v: 180 - x, trip: 'otherArc' }]),
+        expl: `P と Q は同じ側の弧の上。同じ弧 AB に対する円周角は等しいので、∠AQB ＝ ∠APB ＝ ${x}°。` };
+    }
+    // reflex：P が劣弧の上 → 対応する弧は優弧。中心角（小さいほう）2y、∠APB ＝ 180 − y
+    const y = pick([25, 30, 35, 40, 45, 50, 55, 60, 65, 70]);
+    const fig = rot({ pts: { A: 90 + y, B: 90 - y, P: 270 + rint(-12, 12) }, O: true,
+      segs: [['P', 'A', ORANGE], ['P', 'B', ORANGE], ['O', 'A', PURPLE], ['O', 'B', PURPLE]],
+      angs: [{ v: 'P', lab: '<tspan font-style="italic">x</tspan>', col: ORANGE }], cen: { lab: (2 * y) + '°' } }, r);
+    return { type, fig, text: `∠AOB ＝ ${2 * y}°（図の小さいほうの中心角）のとき、<i>x</i>（∠APB）は何度？`, thm: 'half',
+      choices: mkChoices(180 - y, [{ v: y, trip: 'otherArc' }, { v: 360 - 2 * y, trip: 'half' }, { v: 2 * y, trip: 'same' }]),
+      expl: `P に対応する弧は、P をふくまない大きいほうの弧。その中心角は 360° − ${2 * y}° ＝ ${360 - 2 * y}°。円周角はその半分で ${180 - y}°。` };
+  }];
+  // 練習問題の図をかく
+  function drawQ(f) {
+    const P_ = (k) => k === 'O' ? O : pt(f.pts[k]);
+    let s = `<circle cx="${CX}" cy="${CY}" r="${R}" fill="#fff" stroke="#90a4ae" stroke-width="3"/>`;
+    if (f.cen) {
+      // 中心角：A から B へ、図の点をふくまない側（小さいほう）にかく
+      const a = norm(f.pts.B - f.pts.A) <= 180 ? { start: f.pts.A, span: norm(f.pts.B - f.pts.A) } : { start: f.pts.B, span: norm(f.pts.A - f.pts.B) };
+      s += cenWedge(a.start, a.span, 50, PURPLE, f.cen.lab);
+    }
+    for (const g of f.angs) {
+      const V = P_(g.v);
+      s += wedge(V, P_('A'), P_('B'), 40, g.col, g.lab, { lr: 66, dash: g.col === TEAL ? '5 4' : null });
+    }
+    for (const [a, b, col] of f.segs) s += seg(P_(a), P_(b), col, col === TEAL ? 3.5 : 4, col === TEAL ? '9 6' : null);
+    if (f.O) s += dotP(O, '#263238', 5) + txt(add(O, [0, -22]), 'O', '#263238', 20);
+    for (const k in f.pts) s += dotP(pt(f.pts[k]), '#263238', 4) + lab(f.pts[k], k);
+    return s;
+  }
+
+  function newQ(focus) {
+    stopAuto();
+    const p = P(); pushHist();
+    let q, tries = 0;
+    do { q = GEN[st.part](focus); tries++; } while (tries < 10 && p.lastQ === q.text);
+    p.lastQ = q.text;
+    q.tried = []; q.done = false; q.firstTry = true; q.stage = 1;
+    p.q = q;
+    setMsg(''); buildCtrl(); render();
+  }
+  function askHTML() {
+    const q = P().q;
+    let h;
+    if (q.stage === 1) {
+      h = `<div class="ask-q"><span class="stage">1 角度を求める</span><br>${q.text}</div><div class="choices grid2">`;
+      h += q.choices.map((c, i) => `<button class="choice ${q.tried.includes(i) ? 'wrong' : ''} ${q.done && c.ok ? 'right' : ''}" data-ch="${i}" ${q.done || q.tried.includes(i) ? 'disabled' : ''}>${c.t}</button>`).join('');
     } else {
-      a = snapAB(a);
-      const other = drag === 'A' ? ang.B : ang.A;
-      if (gap(a, other) < 10 || gap(a, ang.P) < MIN_GAP) return; // 重なりそうなら動かさない
-      ang[drag] = a;
+      h = `<div class="ask-q"><span class="stage">2 使った定理</span><br>いまの問題で使ったことは、どれ？</div><div class="choices">`;
+      h += q.thmChoices.map((k, i) => `<button class="choice ${q.thTried.includes(i) ? 'wrong' : ''} ${q.done && k === q.thm ? 'right' : ''}" data-th="${i}" ${q.done || q.thTried.includes(i) ? 'disabled' : ''}>${THMS[k]}</button>`).join('');
+    }
+    h += '</div>';
+    if (q.done) h += '<div class="tools" style="margin-top:8px"><button class="op-btn" id="qEnd">✋ 問題をおわる</button></div><button class="go" id="qNext">つぎの問題 ▶</button>';
+    return h;
+  }
+  function wireAsk() {
+    document.querySelectorAll('#ask [data-ch]').forEach(b => b.addEventListener('click', () => answer(+b.dataset.ch)));
+    document.querySelectorAll('#ask [data-th]').forEach(b => b.addEventListener('click', () => answerThm(+b.dataset.th)));
+    if ($('qNext')) $('qNext').addEventListener('click', () => newQ(st.focus));
+    if ($('qEnd')) $('qEnd').addEventListener('click', () => { pushHist(); P().q = null; setMsg(''); buildCtrl(); render(); });
+  }
+  function answer(i) {
+    const p = P(), q = p.q; if (!q || q.done || q.stage !== 1) return;
+    const c = q.choices[i];
+    if (c.ok) {
+      sndOK();
+      setMsg('○ 正解！ ' + q.expl + '<br>つぎは、使った定理をえらぼう。', 'ok');
+      // 2問目へ（あとのパートの定理は、そのパートができてから選択肢に入れる）
+      q.stage = 2; q.thTried = [];
+      q.thmChoices = shuffle(['half', 'same', 'semi', 'cyc']);
+    } else {
+      sndNG(); q.tried.push(i); q.firstTry = false;
+      const tp = c.trip || 'calc'; addTrip(tp);
+      setMsg(`✖ <b>${TRIPS[tp].name}</b>かも。<br>${TRIPS[tp].exp}`, 'ng');
+      if (q.choices.filter((x, j) => !x.ok && !q.tried.includes(j)).length === 0) { q.done = true; setMsg(`答えは「${q.choices.find(x => x.ok).t}」。${q.expl}`, 'ng'); }
     }
     render();
-  });
-  const end = () => { drag = null; };
-  svg.addEventListener('pointerup', end);
-  svg.addEventListener('pointercancel', end);
-
-  // ---- 自動で動かす ----
-  let raf = 0, lastT = 0;
-  function tick(t) {
-    const dt = Math.min(0.05, (t - lastT) / 1000);
-    lastT = t;
-    let p = norm(ang.P + 30 * dt);
-    // A・B のところは飛びこえる
-    for (const k of ['A', 'B']) if (gap(p, ang[k]) < MIN_GAP) p = norm(ang[k] + MIN_GAP);
-    ang.P = p;
+  }
+  function answerThm(i) {
+    const p = P(), q = p.q; if (!q || q.done || q.stage !== 2) return;
+    const k = q.thmChoices[i];
+    if (k === q.thm) {
+      sndOK(); q.done = true;
+      if (q.firstTry) bumpRec(r => r.clear[st.part] = (r.clear[st.part] || 0) + 1);
+      setMsg(`○ 正解！「${THMS[k]}」を使った。`, 'ok');
+    } else {
+      sndNG(); q.thTried.push(i); q.firstTry = false; addTrip('whichThm');
+      setMsg(`✖ <b>${TRIPS.whichThm.name}</b>かも。<br>${TRIPS.whichThm.exp}`, 'ng');
+    }
     render();
-    raf = requestAnimationFrame(tick);
   }
-  function stopAuto() {
-    if (!raf) return;
-    cancelAnimationFrame(raf); raf = 0;
-    $('autoBtn').textContent = '▶ 点Pを自動で動かす';
-    $('autoBtn').classList.remove('on');
-  }
-  $('autoBtn').addEventListener('click', () => {
-    if (raf) { stopAuto(); return; }
-    lastT = performance.now();
-    raf = requestAnimationFrame(tick);
-    $('autoBtn').textContent = '⏸ 止める';
-    $('autoBtn').classList.add('on');
-  });
 
-  $('blindBtn').addEventListener('click', () => {
-    blind = !blind;
-    $('blindBtn').textContent = blind ? '👀 数値を表示する' : '🙈 数値を隠す';
-    $('quiz').classList.toggle('on', blind);
+  /* =====================================================================
+     7. 図のドラッグ（pointer events：マウスでもタッチでも動く）
+     ===================================================================== */
+  const fig = $('fig');
+  function svgPt(e) { const p = fig.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const r = p.matrixTransform(fig.getScreenCTM().inverse()); return [r.x, r.y]; }
+  fig.addEventListener('pointerdown', e => {
+    if (P().q) return;
+    const q = svgPt(e); let best = null, bd = 32;
+    for (const h of st.handles) { const d = dist(q, h.p); if (d < bd) { bd = d; best = h; } }
+    if (!best) return;
+    stopAuto();
+    pushHist(); st.drag = best.id;
+    try { fig.setPointerCapture(e.pointerId); } catch (err) { /* 指がもう離れているときは何もしない */ }
+    e.preventDefault();
+  });
+  fig.addEventListener('pointermove', e => {
+    if (!st.drag) return;
+    [null, drag1][st.part](P(), st.drag, svgPt(e));
     render();
   });
-  $('resetBtn').addEventListener('click', () => { stopAuto(); ang = { ...START }; render(); });
+  const endDrag = () => { if (st.drag) { st.drag = null; render(); } };
+  fig.addEventListener('pointerup', endDrag);
+  fig.addEventListener('pointercancel', endDrag);
 
-  render();
+  /* =====================================================================
+     8. 画面をかきなおす
+     ===================================================================== */
+  function setMsg(html, kind) { const m = $('msg'); m.innerHTML = html || ''; m.className = 'msg' + (kind ? ' ' + kind : ''); }
+  function buildCtrl() {
+    $('ctrl').innerHTML = [null, ctrl1][st.part]();
+    [null, wire1][st.part]();
+  }
+  function render() {
+    const p = P(), q = p.q;
+    fig.innerHTML = q && q.fig ? (st.handles = [], drawQ(q.fig)) : [null, render1][st.part]();
+    $('rTitle').textContent = PARTS[st.part].title;
+    $('side').innerHTML = q && q.fig ? '<div class="small" style="text-align:center">（練習問題のあいだは、角度の表示をかくしています。「✋ 問題をおわる」で図にもどる）</div>' : [null, side1][st.part]();
+    $('ask').hidden = !q;
+    if (q) { $('ask').innerHTML = askHTML(); wireAsk(); }
+    const lock = !!q;
+    document.querySelectorAll('#ctrl button').forEach(el => el.disabled = lock);
+    if (st.part === 1) {
+      document.querySelectorAll('#ctrl [data-mode]').forEach(b => b.classList.toggle('active', (b.dataset.mode === '1') === p.free));
+      $('b1Q').hidden = p.free; $('b1Clear').hidden = !p.free;
+      $('b1Q').classList.toggle('on', p.showQ);
+      $('b1Q').textContent = p.showQ ? '－ 点Q をけす' : '＋ 点Q（同じ弧のもう1つの円周角）';
+      $('b1Auto').textContent = st.raf ? '⏸ とめる' : '▶ P を自動で動かす';
+      $('b1Auto').classList.toggle('on', !!st.raf);
+    }
+    $('btnBlind').textContent = st.blind ? '👀 数値を出す' : '🙈 数値をかくす';
+    $('btnBlind').classList.toggle('on', st.blind);
+    $('figOpts').hidden = !!q;
+    $('figNote').innerHTML = q && q.fig ? '図は、問題の角度に合わせてかいている。' : [null,
+      p.free ? '● P をドラッグすると、通ったところに印が残る（▲ 大きい／● 同じ／▼ 小さい）。● A・B も動かせる。' : '● P・A・B をドラッグ。紫の太い弧が P に対応する弧、緑の点線は P を動かしても角が同じになる弧。'][st.part];
+    renderTrips(); renderTeacher();
+  }
+  function setPart(n, opt) {
+    stopAuto();
+    st.part = n;
+    if (!st.Ps[n]) st.Ps[n] = defaults(n);
+    if (!(opt && opt.keepFocus)) { st.focus = null; $('focusBar').hidden = true; }
+    st.hintLv = 0; st.tStep = 0;
+    document.querySelectorAll('#partRow .chip').forEach(b => b.classList.toggle('active', +b.dataset.p === n));
+    $('partNote').textContent = PARTS[n].note;
+    setMsg('');
+    buildCtrl(); render();
+  }
+
+  /* =====================================================================
+     9. ヒント
+     ===================================================================== */
+  function hint() {
+    const p = P(), q = qActive() ? p.q : null;
+    bumpRec(r => r.hint = (r.hint || 0) + 1);
+    st.hintLv++;
+    let arr;
+    if (q && q.stage === 2) arr = ['中心 O の角を使った？ それとも、円周上の2つの角をくらべた？'];
+    else if (q) arr = {
+      c2i: ['頂点が中心 O にあるのが中心角、円周上にあるのが円周角。', '円周角は中心角の半分。'],
+      i2c: ['中心角は円周角の何倍？', '中心角 ＝ 円周角 × 2。'],
+      same: ['P と Q は、弧 AB の同じ側にある？', '同じ弧に対する円周角は等しい。'],
+      reflex: ['P に対応する弧は、P をふくまないほうの弧。', 'その弧の中心角は 360° − ∠AOB。'],
+    }[q.type];
+    else arr = [null,
+      ['P を円周の上でいろいろ動かそう。∠APB は変わる？', '中心角とくらべると何倍？', '「＋ 点Q」を出して、P と Q の角をくらべよう。', '「🧭 円の外にも出す」で、円の内側・外側に動かそう。'],
+    ][st.part];
+    setMsg('💡 ' + arr[(st.hintLv - 1) % arr.length]);
+  }
+
+  /* =====================================================================
+     10. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function addTrip(type) { if (!TRIPS[type]) type = 'calc'; st.sessTrips[type] = (st.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); }
+  function renderTrips() {
+    const keys = Object.keys(st.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${st.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><div class="tools" style="justify-content:flex-start"><button class="op-btn" data-prac="${k}">🔁 この型の類題</button>${k === 'calc' ? '' : `<button class="op-btn" data-fig="${k}">🖼 元の図で見る</button>`}</div></div>`).join('')
+      : '<div class="small">まだ ありません。練習問題でまちがえると、まちがえ方の型がここに出るよ。</div>';
+    $('tripList').querySelectorAll('[data-prac]').forEach(b => b.addEventListener('click', () => practice(b.dataset.prac)));
+    $('tripList').querySelectorAll('[data-fig]').forEach(b => b.addEventListener('click', () => showFig(b.dataset.fig)));
+    const r = getRec(), c = r.clear;
+    $('recLine').textContent = 'この端末のきろく：正解 ' + READY.map(n => `${'①②③④⑤⑥'[n - 1]} ${c[n] || 0}`).join('　') + `　／ ヒント ${r.hint || 0}回`;
+  }
+  function practice(type) {
+    const pt_ = TRIPS[type].part || st.part;
+    st.focus = type;
+    $('focusBar').hidden = false;
+    $('focusBar').innerHTML = `🔁 練習中：${TRIPS[type].name}　<button class="op-btn" id="focusOff">おわる</button>`;
+    $('focusOff').addEventListener('click', () => { st.focus = null; $('focusBar').hidden = true; });
+    setPart(pt_, { keepFocus: true });
+    newQ(type);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  // 元の図にもどす：その型が見える場面を出す
+  function showFig(type) {
+    setPart(1);
+    const p = P(); pushHist(); p.q = null; Object.assign(p, defaults(1));
+    if (type === 'half' || type === 'same') { p.A = 220; p.B = 320; p.P = 95; setMsg('紫（中心角 100°）とオレンジ（円周角 50°）をくらべよう。中心角は円周角の2倍。'); }
+    else if (type === 'otherArc') { p.A = 220; p.B = 320; p.P = 95; p.showQ = true; p.Q = 270; setMsg('Q を P と反対側の弧に置いた。対応する弧がちがうので、∠AQB ＝ 180° − ∠APB。'); }
+    else if (type === 'reflex') { p.A = 220; p.B = 320; p.P = 270; setMsg('P が小さいほうの弧にあると、対応する弧（紫）は大きいほう。中心角は 180° より大きい。'); }
+    else { p.A = 220; p.B = 320; p.P = 95; p.showQ = true; p.Q = 140; setMsg('中心角とくらべる → 半分。円周角どうし（P と Q）をくらべる → 等しい。'); }
+    buildCtrl(); render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     11. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const q = P().q;
+    if (q && !q.done) return '答え：' + (q.stage === 1 ? q.choices.find(c => c.ok).t : THMS[q.thm]);
+    return ['', '（▶ 自動：P を動かす → 点Q → 直径 → 円の外に出す → 練習問題）'][st.part];
+  }
+  const TALK = [null,
+    '発問の例：「P を動かすと ∠APB は変わる？」「中心角とくらべると？」「P を A・B の反対側に動かすと？（対応する弧が変わる）」「P を円の内側に入れると、角は大きくなる？ 小さくなる？」',
+  ];
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText();
+    $('tTalk').innerHTML = TALK[st.part];
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function teacherStep() {
+    const p = P(), q = p.q;
+    if (q && !q.done) { if (q.stage === 1) answer(q.choices.findIndex(c => c.ok)); else answerThm(q.thmChoices.indexOf(q.thm)); return; }
+    if (q && q.done) { newQ(); return; }
+    const k = st.tStep++;
+    if (st.part === 1) {
+      stopAuto();
+      if (k === 0) { pushHist(); p.free = false; p.P = 60; render(); setMsg('P を動かしても、同じ側の弧の上なら ∠APB は変わらない。中心角の半分。'); return; }
+      if (k === 1) { pushHist(); p.showQ = true; p.Q = 140; render(); setMsg('同じ弧に対する円周角 ∠APB と ∠AQB は等しい。'); return; }
+      if (k === 2) { $('b1Dia').click(); setMsg('AB が直径 → 円周角はいつも 90°。'); return; }
+      if (k === 3) {
+        pushHist(); p.free = true; p.trail = [];
+        // 円の内側・円周上・外側に、あしあとを自動で置く
+        for (let i = 0; i <= 12; i++) { const r = R * (0.55 + i * 0.07), F = at(O, r, 90 + (i - 6) * 3); p.FP = F; const g = geoFree(p); p.trail.push([f1(F[0]), f1(F[1]), Math.abs(r - R) < 1.5 ? 'on' : g.where]); }
+        p.FP = at(O, R * 0.7, 100); render(); setMsg('円の内側では大きく、外側では小さくなる。同じになるのは円周上だけ。'); return;
+      }
+      newQ(); return;
+    }
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+  }
+
+  /* =====================================================================
+     12. はじめの準備
+     ===================================================================== */
+  // 作ったパートだけボタンを出す（1つだけのときは帯ごとかくす）
+  $('partRow').innerHTML = READY.map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').hidden = READY.length < 2;
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnNew').addEventListener('click', () => newQ(st.focus));
+  $('btnUndo').addEventListener('click', undo);
+  $('btnReset').addEventListener('click', resetPart);
+  $('btnHint').addEventListener('click', hint);
+  $('btnBlind').addEventListener('click', () => { st.blind = !st.blind; render(); setMsg(st.blind ? '❓ P を動かすと、∠APB の大きさはどうなるかな？' : ''); });
+  $('optSnap').addEventListener('change', () => render());
+  $('btnWs').addEventListener('click', () => {
+    setPart(1);
+    const p = P(); pushHist(); p.q = null;
+    Object.assign(p, defaults(1));
+    buildCtrl(); render();
+    setMsg('📄 ワークシートの問題：まず ① に「P を円周の上で動かすと ∠APB はどうなる？」を予想しよう。P を3か所以上に動かして「＋ 記録する」。「🧭 円の外にも出す」で、円の内側・外側でも記録しよう。');
+  });
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) Worksheet.init({
+    title: '円周角と中心角',
+    question: '点P を円周の上で動かすと、∠APB の大きさはどうなるだろうか？ 中心角 ∠AOB とどんな関係があるだろうか？',
+    predictions: ['いつも同じ', 'P の場所で変わる', 'A・B に近いほど小さい', 'わからない'],
+    operationNote: 'P を円周の上の3か所以上で「＋ 記録する」。「🧭 円の外にも出す」で、円の内側・外側でも記録する。',
+    fields: [
+      { key: 'where', label: 'P の場所', math: false },
+      { key: 'ins', label: '∠APB', math: false },
+      { key: 'cen', label: '中心角', math: false },
+      { key: 'rate', label: '∠APB÷中心角', math: false }
+    ],
+    capture: () => {
+      const p = P();
+      if (st.part !== 1) { setMsg('記録は ① でできるよ。'); return null; }
+      if (p.q) { setMsg('練習問題をおわってから記録しよう。'); return null; }
+      if (!p.free) {
+        const a = arcFor(p.A, p.B, p.P), big = norm(p.B - p.A) > 180, pOnCcw = norm(p.P - p.A) < norm(p.B - p.A);
+        const where = Math.abs(a.span - 180) < 1e-9 ? '円周上（半円）' : '円周上（' + ((pOnCcw ? big : !big) ? '優弧' : '劣弧') + '）';
+        return { where, ins: degS(a.span / 2), cen: degS(a.span), rate: '0.50' };
+      }
+      const g = geoFree(p);
+      if (g.onLine) { setMsg('P が直線 AB の上だと角ができないよ。'); return null; }
+      return { where: { in: '円の内側', on: '円周上', out: '円の外側' }[g.where], ins: degS(g.ang), cen: degS(g.arc.span), rate: (Math.round(g.ang / g.arc.span * 100) / 100).toFixed(2) };
+    },
+    summaryHint: '「同じ弧に対する円周角は〜。円周角は中心角の〜。P が円の内側だと〜、外側だと〜」の形で書こう。',
+    teacher: {
+      hint: '予想を挙手で集める。P を円周上のいろいろな場所に動かして記録させ、∠APB がいつも同じで、中心角のちょうど半分（0.5）であることに気づかせる。円の内側・外側の記録とくらべ、「同じになるのは円周上だけ」→ ② 円周角の定理の逆 へつなぐ。',
+      answer: 'いつも同じ（P が弧 AB の同じ側にあるとき）。<br>∠APB は中心角 ∠AOB の半分。<br>まとめ：1つの弧に対する円周角の大きさは一定で、その弧に対する中心角の半分である。同じ弧に対する円周角は等しい。P が円の内側なら大きく、外側なら小さくなる。'
+    }
+  });
+
+  setupTeacher();
+  if (PARAMS.get('debug') === '1') window.__dbg = { st, P, GEN, newQ, answer, answerThm, setPart, geoFree, arcFor, drag1, render };
+  { const n = +PARAMS.get('part'); setPart(READY.includes(n) ? n : 1); }
 })();
 </script>
+
 </body>
 </html>
