@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>標本調査シミュレーター</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり（中学の教材とそろえる）：正解・本当の値＝緑（点線・✓）、まちがい・注意＝赤紫（×）、
+     今の結果・平均＝オレンジ（▲・太い線）。赤玉は「赤」の字、白玉はふちどり。色だけでなく 記号・形でも区別する。 */
+  :root {
+    --ink: #263238; --accent: #2e7d32; --soft: #a5d6a7;
+    --ok: #2e7d32; --ng: #ad1457; --gold: #f9a825; --org: #e65100; --blu: #1565c0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 18px;
+    background: linear-gradient(160deg, #e8f5e9 0%, #fffde7 100%);
+    margin: 0; padding: 12px 16px 28px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  button, input, select { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .back-link { align-self: flex-start; font-size: 0.9rem; color: #2e7d32; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: #1b5e20; text-align: center; }
+  .subtitle { margin: 0 0 10px; font-size: 0.95rem; color: #2e7d32; text-align: center; line-height: 1.7; }
+  .panel { width: 100%; max-width: 1180px; display: flex; flex-direction: column; gap: 10px; }
+
+  .chip-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .chip-row.left { justify-content: flex-start; }
+  .chip {
+    border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    min-height: 48px; padding: 6px 16px; font-size: 1.02rem; font-weight: bold; color: #1b5e20;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .part-note { text-align: center; font-size: 0.98rem; color: #1b5e20; font-weight: bold; line-height: 1.6; }
+
+  .card { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.08rem; color: #1b5e20; }
+  .card h3 { margin: 10px 0 4px; font-size: 1rem; color: #1b5e20; }
+
+  .op-btn {
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    min-height: 46px; padding: 8px 14px; font-size: 1.02rem; font-weight: bold; color: #1b5e20;
+    cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.12); text-decoration: none;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .op-btn:active { transform: translateY(1px); box-shadow: none; }
+  .op-btn:disabled { opacity: 0.4; cursor: default; }
+  .op-btn.action { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .op-btn.warm { background: #ef6c00; border-color: #ef6c00; color: #fff; }
+  .op-btn.on { background: #fff8e1; border-color: #fbc02d; }
+  .tools { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+  .tools.left { justify-content: flex-start; }
+  .focus-bar { text-align: center; background: #fffde7; border: 2px dashed #fbc02d; border-radius: 12px; padding: 6px 10px; font-weight: bold; }
+  .msg { text-align: center; font-size: 1.02rem; line-height: 1.7; padding: 6px 8px; border-radius: 12px; margin-top: 8px; }
+  .msg:empty { display: none; }
+  .msg.ng { color: #4a148c; background: #fce4ec; }
+  .msg.ok { color: #1b5e20; background: #e8f5e9; }
+  .msg.info { color: #37474f; background: #fffde7; }
+  .small { font-size: 0.88rem; color: #546e7a; line-height: 1.6; }
+  .bad { color: var(--ng); font-weight: bold; }
+  .good { color: var(--ok); font-weight: bold; }
+  .hint-box { font-size: .88rem; color: #455a64; background: #f1f8e9; border-radius: 10px; padding: 6px 10px; line-height: 1.65; margin-top: 8px; }
+
+  /* 広い画面は2列 */
+  .board { container-type: inline-size; width: 100%; }
+  .board-in { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  @container (min-width: 820px) { .board-in { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+  /* ステッパー（− 数 ＋） */
+  .set-row { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-weight: bold; justify-content: center; }
+  .stepper { display: inline-flex; align-items: center; gap: 4px; font-weight: bold; }
+  .stepper button { width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--soft); background: #fff; font-size: 1.3rem; font-weight: bold; cursor: pointer; color: #1b5e20; touch-action: manipulation; }
+  .stepper input { width: 70px; height: 44px; font-size: 1.25rem; text-align: center; border-radius: 10px; border: 2px solid var(--soft); font-weight: bold; }
+  input[type=range] { width: 160px; accent-color: #2e7d32; }
+
+  /* 壺・池の図 */
+  .cv-wrap { position: relative; width: 100%; touch-action: manipulation; }
+  canvas.jar { display: block; width: 100%; }
+  svg.fig { width: 100%; display: block; }
+  svg.fig text, svg.dots text { font-family: inherit; }
+  .jar-note { text-align: center; font-weight: bold; color: #455a64; margin-top: 4px; }
+
+  /* 取り出した玉のならび */
+  .tray { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; background: #efebe9; border: 3px solid #a1887f; border-radius: 14px; padding: 8px; min-height: 52px; margin-top: 8px; }
+  .ball { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: .78rem; border: 3px solid; }
+  .ball.r { background: #e53935; border-color: #8e0000; color: #fff; }
+  .ball.w { background: #fff; border-color: #78909c; color: #78909c; }
+  .tray.mini .ball { width: 16px; height: 16px; border-width: 2px; font-size: 0; }
+  .fishy { display: inline-flex; flex-direction: column; align-items: center; font-size: .7rem; font-weight: bold; }
+
+  .result-line { text-align: center; font-weight: bold; font-size: 1.1rem; line-height: 1.8; margin-top: 8px; }
+  .result-line .big { font-size: 1.9rem; color: var(--org); font-variant-numeric: tabular-nums; }
+  .ask-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; font-weight: bold; margin-top: 8px; }
+  .ask-row input { width: 110px; height: 46px; font-size: 1.3rem; text-align: center; border-radius: 10px; border: 2px solid var(--soft); font-weight: bold; }
+  .calc { margin-top: 8px; background: #fffde7; border-radius: 12px; padding: 8px 12px; font-size: 1.15rem; line-height: 1.9; text-align: center; font-weight: bold; }
+  .calc .eq { font-size: 1.35rem; }
+  .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; font-weight: bold; line-height: 1.1; }
+  .frac span { padding: 0 5px; }
+  .frac span:first-child { border-bottom: 2px solid currentColor; }
+
+  /* ヒストグラム */
+  svg.dots { width: 100%; display: block; }
+  .tbl-wrap { overflow-x: auto; }
+  table.res { border-collapse: collapse; width: 100%; text-align: center; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  table.res th, table.res td { border: 2px solid #c8e6c9; padding: 4px 6px; }
+  table.res th { background: #f1f8e9; font-size: .92rem; }
+  .concl { margin-top: 10px; background: #e8f5e9; border-left: 6px solid var(--ok); border-radius: 10px; padding: 8px 12px; line-height: 1.75; }
+  .concl.warn { background: #fce4ec; border-left-color: var(--ng); }
+  .pred-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-weight: bold; }
+
+  /* ① クイズ */
+  .scene { font-size: 1.3rem; font-weight: bold; line-height: 1.7; text-align: center; padding: 10px; background: #f1f8e9; border-radius: 12px; }
+  .scene .emo { font-size: 2.4rem; display: block; }
+  .two-btn { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .two-btn .choice { text-align: center; }
+  .q-text { font-size: 1.12rem; font-weight: bold; line-height: 1.75; }
+  .choices { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .choice { text-align: left; border: 3px solid #cfd8dc; background: #fff; border-radius: 14px; min-height: 52px; padding: 8px 14px; font-size: 1.05rem; font-weight: bold; color: var(--ink); cursor: pointer; touch-action: manipulation; }
+  .choice.ok { border-color: var(--ok); background: #e8f5e9; }
+  .choice.ok::before { content: '✓ '; color: var(--ok); }
+  .choice.ng { border-color: var(--ng); background: #fce4ec; }
+  .choice.ng::before { content: '× '; color: var(--ng); }
+  .choice:disabled { cursor: default; }
+  .sort-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .sort-cols > div { border: 2px dashed #c8e6c9; border-radius: 12px; padding: 6px 8px; min-height: 60px; font-size: .95rem; line-height: 1.7; }
+  .sort-cols b { display: block; color: #1b5e20; }
+  .terms { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: .98rem; line-height: 1.6; margin-top: 8px; }
+  .terms dt { font-weight: bold; color: #1b5e20; white-space: nowrap; }
+  .terms dd { margin: 0; }
+
+  /* ③ 乱数表 */
+  .rt-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .rt-grid button { min-height: 34px; padding: 0; border: 2px solid #e0e0e0; border-radius: 6px; background: #fff; font-family: "Menlo", "Consolas", monospace; font-size: 1rem; font-weight: bold; color: #37474f; cursor: pointer; touch-action: manipulation; }
+  .rt-grid button.rd { background: #eceff1; color: #90a4ae; }
+  .rt-grid button.ch { background: #e8f5e9; border-color: var(--ok); color: #1b5e20; }
+  .rt-grid button.sk { text-decoration: line-through; color: var(--ng); background: #fce4ec; }
+  .rt-grid button.nx { outline: 3px solid var(--org); outline-offset: 1px; }
+  .chosen-row { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 6px; min-height: 36px; }
+  .numball { min-width: 38px; height: 34px; border-radius: 17px; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid; font-variant-numeric: tabular-nums; }
+  .numball.r { background: #e53935; border-color: #8e0000; color: #fff; }
+  .numball.w { background: #fff; border-color: #78909c; color: #455a64; }
+  .numball.q { background: #fff; border-color: #cfd8dc; color: #90a4ae; }
+
+  /* ④ 池・練習問題 */
+  .steps { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .steps .op-btn { justify-content: flex-start; }
+  .steps .op-btn.done::after { content: ' ✓'; color: var(--ok); }
+  .ratio-bars { margin-top: 8px; }
+  .q-card { border: 3px solid #c8e6c9; }
+
+  .trip-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px dashed #cfd8dc; }
+  .help { background: #fff; border-radius: 12px; padding: 12px 18px; font-size: 0.98rem; color: #444; line-height: 1.75; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .help h2 { font-size: 1.05rem; margin: 0 0 6px; color: #1b5e20; }
+  .help ul { margin: 0; padding-left: 20px; }
+  .note { font-size: 0.88rem; color: #607d8b; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
+  .teacher-card { border: 3px solid #ffb74d; display: flex; flex-direction: column; gap: 8px; }
+  .t-ans { text-align: center; font-weight: bold; color: #37474f; background: #fffde7; border-radius: 10px; padding: 6px; }
+  .hatsu { display: inline-block; background: #ede7f6; color: #4527a0; border-radius: 999px; padding: 0 10px; font-size: .85rem; font-weight: bold; margin-left: 4px; }
+  @media (max-width: 480px) {
+    body { padding: 10px 8px 24px; }
+    .two-btn { grid-template-columns: 1fr; }
+    .rt-grid button { font-size: .85rem; min-height: 32px; }
+    .result-line .big { font-size: 1.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+<h1>🫙 標本調査シミュレーター</h1>
+<p class="subtitle">全部を調べなくても、一部を取り出して全体のようすを推定できる？<br>母集団（調べたい全体）から 標本（一部）を 無作為に 取り出して考えよう。</p>
+<div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+<div class="panel">
+  <!-- パート：① 全数と標本 ② 壺の中の玉 ③ 無作為とかたより ④ 推定する ⑤ 統計の判断（発展） -->
+  <div class="chip-row" id="partRow"></div>
+  <div class="part-note" id="partNote"></div>
+
+  <div class="card">
+    <div class="tools" style="margin-top:0">
+      <button class="op-btn" id="btnUndo">↶ ひとつもどす</button>
+      <button class="op-btn" id="btnReset">⟲ もういちど</button>
+      <button class="op-btn" id="btnWs">📄 ワークシートの問題</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+  <div class="focus-bar" id="focusBar" hidden></div>
+
+  <!-- パートごとの画面（JS で作る） -->
+  <div id="view"></div>
+
+  <!-- つながる教材 -->
+  <div class="card">
+    <h2>🔗 つながる教材</h2>
+    <div class="tools left" id="links"></div>
+  </div>
+
+  <!-- 先生モード（?teacher=1 のときだけ出る） -->
+  <div class="card teacher-card" id="teacherCard" hidden>
+    <h2>👩‍🏫 先生モード</h2>
+    <div class="t-ans" id="tAns"></div>
+    <div id="tSet"></div>
+    <div class="tools"><button class="op-btn action" id="tStep">⏭ 自動で1ステップ進める</button></div>
+    <div class="small" id="tTalk"></div>
+    <div class="small" id="tTotal"></div>
+    <div class="tools"><button class="op-btn" id="tClear">🗑 この端末のきろくを消す</button></div>
+  </div>
+
+  <!-- あなたのつまずき -->
+  <div class="card">
+    <h2>🔎 あなたのつまずき</h2>
+    <div id="tripList"></div>
+    <div class="small" id="recLine" style="margin-top:6px"></div>
+  </div>
+
+  <div class="help">
+    <h2>つかい方</h2>
+    <ul>
+      <li><b>① 全数調査と標本調査</b>：場面を読んで、全部を調べる（全数調査）か、一部を調べる（標本調査）かを選ぶ。答えると、右の表に仕分けられる。</li>
+      <li><b>② 壺の中の玉</b>：玉 1000個の壺から、標本の大きさ（取り出す数）を決めて取り出す。赤の割合から、壺全体の赤玉の数を推定する。何回もくり返すと、推定した割合のちらばりがヒストグラムになる。10個・30個・100個でくらべよう。「👀 壺の中を見る」で答え合わせ。</li>
+      <li><b>③ 無作為とかたより</b>：赤玉があとから上に入った壺。「上の方から取る」と「よく混ぜて取る」をくらべる。乱数表で番号を選ぶ方法もためせる。</li>
+      <li><b>④ 推定する</b>：池の魚の数を、印をつけた魚の割合から推定する（標識再捕法）。練習問題もある。</li>
+      <li><b>⑤ 統計の判断（発展）</b>：世論調査の結果を「誤差の目安」をつけて読む。</li>
+      <li><b>ことば</b>：<b>母集団</b>＝調べたい集団全体。<b>標本</b>＝母集団から取り出した一部。<b>標本の大きさ</b>＝標本にふくまれるものの数。<b>無作為に抽出する</b>＝かたよりなく、どれも同じ程度に選ばれるように取り出すこと。</li>
+    </ul>
+    <p class="note">※じっさいとのちがい：取り出し方はコンピューターの計算（乱数）で決めています。② の壺では、1回調べるごとに玉を壺にもどして、よく混ぜてから次を取り出すものとしています。④ の池は、魚が出入りせず、印つきの魚もそうでない魚も同じようにつかまるものとしています（じっさいの池では、魚がふえたりへったり、つかまりやすさがちがったりします）。⑤ の「誤差の目安 ±100÷√（調べた人数）ポイント」は、割合が半分くらいのときの、おおよその目安です（本当の世論調査は、もっとくわしい計算や取り出し方をしています）。登場する町・調査は架空のものです。</p>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const PARAMS = new URLSearchParams(location.search);
+  // ?teacher=1 で先生モード（答え・自動で進める・発問の例・かくした値の設定・この端末のきろく）
+  const TEACHER = PARAMS.get('teacher') === '1';
+
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const OK = '#2e7d32', NG = '#ad1457', ORG = '#e65100', BLU = '#1565c0';
+  const fmt = (x) => x.toLocaleString('ja-JP');
+  // 分数 a/b を約分した文字（"3/10"）と、縦の形の HTML
+  function fstr(a, b) { if (a === 0) return '0'; const g = gcd(a, b) || 1; return b / g === 1 ? String(a / g) : `${a / g}/${b / g}`; }
+  function fracHTML(a, b) { const s = fstr(a, b); if (!s.includes('/')) return s; const [x, y] = s.split('/'); return `<span class="frac"><span>${x}</span><span>${y}</span></span>`; }
+  // a/b を小数第 d 位まで（四捨五入。整数だけで計算するので小数の誤差が出ない）
+  function dec(a, b, d = 3) { if (!b) return '—'; const p = Math.pow(10, d); const m = Math.floor((2 * p * a + b) / (2 * b)); return (m / p).toFixed(d); }
+  // a/b を整数に四捨五入
+  const roundQ = (a, b) => Math.floor((2 * a + b) / (2 * b));
+  // a/b が整数ならその数、ちがえば「約 ○」
+  const qText = (a, b) => (a % b === 0 ? fmt(a / b) : '約 ' + fmt(roundQ(a, b)));
+
+  // ===== 効果音 =====
+  let audioCtx = null;
+  function beep(seq) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      for (const [freq, start, len, type, vol] of seq) {
+        const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+        o.type = type || 'sine'; o.frequency.value = freq;
+        gn.gain.setValueAtTime(vol || 0.12, t0 + start);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+        o.connect(gn).connect(audioCtx.destination);
+        o.start(t0 + start); o.stop(t0 + start + len);
+      }
+    } catch (e) { /* 音が出せないときは何もしない */ }
+  }
+  const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+  const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+  const sndTick = () => beep([[660, 0, 0.05, 'triangle', 0.06]]);
+
+  /* =====================================================================
+     1. 乱数
+     ・図の玉や魚のならびは「種」から決める（同じ種なら同じならび。ひとつもどす で写しやすい）。
+     ・取り出しの結果は Math.random で決め、結果の数を状態に入れておく。
+     ===================================================================== */
+  function mulberry(seed) {
+    let a = seed >>> 0;
+    return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const newSeed = () => 1 + Math.floor(Math.random() * 999999);
+  const ri = (n) => Math.floor(Math.random() * n);
+  // 0〜N−1 から、ちがう番号を n 個えらぶ
+  function pickDistinct(N, n, rand = Math.random) {
+    const a = Array.from({ length: N }, (_, i) => i);
+    for (let i = 0; i < n; i++) { const j = i + Math.floor(rand() * (N - i)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a.slice(0, n);
+  }
+  function shuffled(arr, rand) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  /* =====================================================================
+     2. パートとつまずきの型
+     ===================================================================== */
+  const PARTS = [null,
+    { name: '① 全数と標本', note: '全部を調べる？ 一部だけ調べる？ 場面ごとに考えよう。' },
+    { name: '② 壺の中の玉', note: '取り出す玉を 10個・30個・100個 とかえると、推定のちらばりはどうなる？' },
+    { name: '③ 無作為とかたより', note: '上の方からだけ取ると、どうなる？ よく混ぜて取るのとくらべよう。' },
+    { name: '④ 推定する', note: '池の魚は何匹？ 全部はつかまえられない。印をつけた魚の割合で推定しよう。' },
+    { name: '⑤ 統計の判断（発展）', note: '世論調査の「○%」は、どれくらい信用できる？ 誤差の目安をつけて読もう。' },
+  ];
+  // つまずきの型（名前・説明・練習するパート）。ここに足せば「あなたのつまずき」に出る
+  const TRIPS = {
+    ratioCount: { name: '標本の割合や個数を、そのまま全体の「個数」にした', part: 4,
+      exp: '標本で 10個中3個（割合 0.3）なら、全体 1000個の赤玉は 3個でも 30個でもなく、1000 × 0.3 ＝ 300個 と推定する。割合（0.3 や 30%）は「全体の何倍」を表す数で、個数ではない。全体の数に割合をかけて個数にする。' },
+    smallSure: { name: '標本が少ないのに、全体を断定した', part: 5,
+      exp: '標本が小さいと、取り出すたびに割合が大きくばらつく。5人に聞いた結果や、差が誤差の範囲くらいしかない結果から「全体は ちょうど ○%」「こちらが多い」とは言い切れない。標本を大きくすると、推定のちらばりは小さくなる。' },
+    which: { name: '全数調査と標本調査のえらびまちがい', part: 1,
+      exp: '一人ひとり・1つずつの結果が必要なとき（健康診断・入学試験など）は全数調査。調べるとこわれる・使えなくなるとき、数が多すぎて時間や費用がかかりすぎるときは標本調査。' },
+    bias: { name: 'かたよった取り出し方でも、全体を表すと考えた', part: 3,
+      exp: '上の方からだけ取る・答えたい人だけが答える、などの取り出し方では、標本が母集団のようすを表さない（かたよりがある）。標本の大きさを大きくしても、かたよりはなくならない。無作為に取り出すことが大切。' },
+    inverse: { name: '比をさかさまに使った（標識再捕法）', part: 4,
+      exp: 'つかまえた魚の中の印つきの割合（印つき ÷ つかまえた数）が、池全体の中の印つきの割合（放した印つき ÷ 池の魚の数）と等しいと考える。池の魚の数 ＝ 放した印つき ÷（印つきの割合）。' },
+    forgotSub: { name: 'あとから入れた分を ひきわすれた', part: 4,
+      exp: '黒い碁石を入れてから推定したのは「白と黒をあわせた全体」の数。もとの白い碁石の数は、そこから入れた黒の数をひく。' },
+  };
+
+  /* =====================================================================
+     3. 状態（ひとつもどす で写しやすいよう、数と文字だけで持つ）
+     ===================================================================== */
+  const N2 = 1000;                      // ② の壺の玉の数
+  const SIZES = [10, 30, 100];          // ② でくらべる標本の大きさ
+  const P5N = [100, 400, 1000, 2500];   // ⑤ の調べる人数
+  const pickR = () => 150 + 10 * ri(31);      // 赤玉の数（150〜450）
+  const pickPond = () => 240 + 20 * ri(19);   // 池の魚の数（240〜600）
+  const pickP5 = () => 30 + ri(31);           // 賛成の割合（30〜60%）
+  const st = {
+    part: 1,
+    p1: { qi: -1, pick: null, done: [], miss: [] },
+    p2: { R: pickR(), seed: newSeed(), n: 10, last: null, trials: {}, pred: null, open: false, est: null, judged: false },
+    p3: { pred: null, judged: false, A: [], B: [], cN: 0, last: null, rt: { seed: newSeed(), cur: -1, read: [], chosen: [], done: false } },
+    p4: { N: pickPond(), seed: newSeed(), M: 50, n: 30, step: 0, caught: [], k: 0, ests: [], open: false, est: null, q: null, qa: null, qDone: 0 },
+    p5: { p: pickP5(), n: 1000, polls: [], open: false, qi: -1, ord: null, pick: null, done: [] },
+  };
+  const ui = { hist: [], sessTrips: {}, focus: null, busy: false, qFocus: null };
+  // ?red=300 で ② の赤玉の数を決められる（150〜450 にかぎらず 1〜999）
+  if (/^\d{1,3}$/.test(PARAMS.get('red') || '') && +PARAMS.get('red') >= 1 && +PARAMS.get('red') <= 999) st.p2.R = +PARAMS.get('red');
+
+  function snap() { return clone({ part: st.part, p1: st.p1, p2: st.p2, p3: st.p3, p4: st.p4, p5: st.p5 }); }
+  function pushHist() { ui.hist.push(snap()); if (ui.hist.length > 60) ui.hist.shift(); }
+  function undo() {
+    if (ui.busy) return;
+    if (!ui.hist.length) { setMsg('もどせる操作は ありません。'); return; }
+    Object.assign(st, ui.hist.pop());
+    buildAll(); setMsg('↶ ひとつもどしました。', 'info');
+  }
+  function setMsg(html, kind) { const m = $('msg'); m.innerHTML = html || ''; m.className = 'msg ' + (kind || 'info'); }
+
+  /* =====================================================================
+     4. 画面全体
+     ===================================================================== */
+  function buildAll() {
+    $('partRow').querySelectorAll('.chip').forEach(b => b.classList.toggle('active', +b.dataset.p === st.part));
+    $('partNote').textContent = PARTS[st.part].note;
+    [null, build1, build2, build3, build4, build5][st.part]();
+    renderTrips(); renderTeacher();
+  }
+  function setPart(p) { if (ui.busy) return; st.part = p; buildAll(); setMsg(''); }
+
+  function stepperHTML(key, label, val, min, max, unit) {
+    return `<span class="stepper">${label}<button data-st="${key}" data-d="-1" aria-label="${label}をへらす">−</button><input type="number" data-in="${key}" value="${val}" min="${min}" max="${max}"><button data-st="${key}" data-d="1" aria-label="${label}をふやす">＋</button>${unit || ''}</span>`;
+  }
+
+  /* ---------------------------------------------------------------------
+     ヒストグラム（ドットの積み上げ）
+     rows: [{ label, vals: [[k, n], …], shape: 'c'（まる）| 's'（四角）, color }]
+     割合 k/n を 0.1 きざみの区間（0, 0.1, …, 1。まん中の値で四捨五入）に入れる。
+     o.scale：下に「約 ○個」の目もり（② は 1000）。o.trueP：本当の割合（緑の点線）。
+     --------------------------------------------------------------------- */
+  const binOf = (k, n) => Math.floor((20 * k + n) / (2 * n));   // 10k/n を四捨五入（0〜10）
+  function rowStat(vals) {
+    if (!vals.length) return null;
+    let lo = vals[0], hi = vals[0], sk = 0, sn = 0;
+    vals.forEach(v => { if (v[0] * lo[1] < lo[0] * v[1]) lo = v; if (v[0] * hi[1] > hi[0] * v[1]) hi = v; sk += v[0]; sn += v[1]; });
+    return { m: vals.length, lo, hi, sk, sn };
+  }
+  function histSVG(rows, o = {}) {
+    const W = 600, rowH = 130, L = 10, R = 10, top = 4, axisH = o.scale ? 46 : 30;
+    const H = top + rows.length * rowH + axisH;
+    const bw = (W - L - R) / 11, X = (v) => L + bw * (v * 10 + 0.5);
+    let s = `<svg class="dots" viewBox="0 0 ${W} ${H}" role="img" aria-label="推定した割合のヒストグラム">`;
+    rows.forEach((row, i) => {
+      const y0 = top + i * rowH, base = y0 + rowH - 6;
+      const cnt = new Array(11).fill(0);
+      row.vals.forEach(([k, n]) => cnt[binOf(k, n)]++);
+      const mx = Math.max(1, ...cnt), avail = rowH - 34;
+      const r = Math.min(bw * 0.42, 9, avail / (2 * mx));
+      s += `<rect x="${L}" y="${y0}" width="${W - L - R}" height="${rowH - 4}" rx="8" fill="${i % 2 ? '#fafafa' : '#f6fbf6'}"/>`;
+      s += `<text x="${L + 8}" y="${y0 + 18}" font-size="15" font-weight="bold" fill="#37474f">${row.label}（${row.vals.length}回）</text>`;
+      cnt.forEach((c, j) => {
+        if (!c) return;
+        const cx = L + bw * (j + 0.5);
+        if (r >= 3.5) {
+          for (let q = 0; q < c; q++) {
+            const cy = base - r - q * 2 * r;
+            s += row.shape === 's'
+              ? `<rect x="${cx - r * 0.9}" y="${cy - r * 0.9}" width="${r * 1.8}" height="${r * 1.8}" fill="${row.color}" stroke="#fff" stroke-width="1"/>`
+              : `<circle cx="${cx}" cy="${cy}" r="${r * 0.92}" fill="${row.color}" stroke="#fff" stroke-width="1"/>`;
+          }
+        } else {
+          const h = c / mx * avail;
+          s += `<rect x="${cx - bw * 0.38}" y="${base - h}" width="${bw * 0.76}" height="${h}" fill="${row.color}"/>`;
+        }
+        s += `<text x="${cx}" y="${Math.max(y0 + 34, base - (r >= 3.5 ? c * 2 * r : c / mx * avail) - 3)}" font-size="11" text-anchor="middle" fill="#546e7a">${c}</text>`;
+      });
+      // 平均の ▲（オレンジ）
+      const S = rowStat(row.vals);
+      if (S) { const mxp = X(S.sk / S.sn); s += `<path d="M${mxp} ${base - 1} l-7 9 h14 z" fill="${ORG}"/>`; }
+      s += `<line x1="${L}" y1="${base}" x2="${W - R}" y2="${base}" stroke="#90a4ae" stroke-width="1.5"/>`;
+    });
+    const yA = top + rows.length * rowH;
+    for (let j = 0; j <= 10; j++) {
+      const x = L + bw * (j + 0.5);
+      s += `<text x="${x}" y="${yA + 14}" font-size="13" text-anchor="middle" fill="#37474f">${j === 0 ? '0' : j === 10 ? '1' : '0.' + j}</text>`;
+      if (o.scale) s += `<text x="${x}" y="${yA + 30}" font-size="11" text-anchor="middle" fill="#6d4c41">${fmt(o.scale * j / 10)}</text>`;
+    }
+    s += `<text x="${W - R}" y="${yA + (o.scale ? 44 : 28)}" font-size="11" text-anchor="end" fill="#546e7a">${o.scale ? '上：赤の割合　下：全体の赤玉の推定（個）' : '赤の割合'}</text>`;
+    if (o.trueP != null) {
+      const x = X(o.trueP);
+      s += `<line x1="${x}" y1="${top}" x2="${x}" y2="${yA}" stroke="${OK}" stroke-width="3" stroke-dasharray="8 5"/>`;
+      s += `<rect x="${Math.min(W - 128, x + 3)}" y="${yA - 22}" width="122" height="18" rx="4" fill="#fff" opacity="0.85"/><text x="${Math.min(W - 124, x + 6)}" y="${yA - 8}" font-size="13" font-weight="bold" fill="${OK}">本当の割合 ${o.trueLabel || ''}</text>`;
+    }
+    return s + '</svg>';
+  }
+  // ちらばりの表
+  function statTable(rows, scale) {
+    let t = `<tr><th>標本</th><th>回数</th><th>平均</th><th>最小〜最大</th><th>範囲</th>${scale ? '<th>全体の推定（個）</th>' : ''}</tr>`;
+    rows.forEach(r => {
+      const S = rowStat(r.vals);
+      if (!S) { t += `<tr><td>${r.label}</td><td>0</td><td colspan="${scale ? 4 : 3}" class="small">まだ</td></tr>`; return; }
+      const lo = S.lo[0] / S.lo[1], hi = S.hi[0] / S.hi[1];
+      t += `<tr><td>${r.label}</td><td>${S.m}</td><td>${dec(S.sk, S.sn)}</td><td>${dec(S.lo[0], S.lo[1], 2)}〜${dec(S.hi[0], S.hi[1], 2)}</td><td><b>${(hi - lo).toFixed(2)}</b></td>` +
+        (scale ? `<td>${qText(scale * S.lo[0], S.lo[1])}〜${qText(scale * S.hi[0], S.hi[1]).replace('約 ', '')}</td>` : '') + '</tr>';
+    });
+    return t;
+  }
+  // 割合の帯図：標本（n 個中 k 個）と全体（T 個中 ?）を、同じ割合でならべる
+  function ratioBarsSVG(k, n, T, labS, labT, unit, q) {
+    const W = 460, x0 = 96, w = W - x0 - 14, f = k / n;
+    const bar = (y, lab, tot, fill, txt) => `<text x="${x0 - 8}" y="${y + 21}" font-size="17" text-anchor="end" font-weight="bold" fill="#37474f">${lab}</text>` +
+      `<rect x="${x0}" y="${y}" width="${w}" height="30" rx="4" fill="#fff" stroke="#78909c" stroke-width="2"/>` +
+      `<rect x="${x0}" y="${y}" width="${w * f}" height="30" rx="4" fill="${fill}" stroke="#78909c" stroke-width="2"/>` +
+      // 文字が色の部分に入りきらないときは、右の白い部分に書く
+      (txt.length * 15 + 10 > w * f
+        ? `<text x="${x0 + w * f + 6}" y="${y + 21}" font-size="16" font-weight="bold" fill="#b71c1c">${txt}</text>`
+        : `<text x="${x0 + w * f / 2}" y="${y + 21}" font-size="16" font-weight="bold" text-anchor="middle" fill="#fff">${txt}</text>`) +
+      `<text x="${x0 + w}" y="${y - 4}" font-size="14" text-anchor="end" fill="#546e7a">${tot}</text>`;
+    return `<svg class="fig ratio-bars" viewBox="0 0 ${W} 120" role="img" aria-label="割合の帯図">` +
+      bar(18, labS, `${fmt(n)}${unit}`, '#e53935', `${fmt(k)}${unit}`) +
+      bar(78, labT, `${typeof T === 'number' ? fmt(T) + unit : T}`, '#ef9a9a', q) +
+      `<line x1="${x0 + w * f}" y1="48" x2="${x0 + w * f}" y2="78" stroke="${ORG}" stroke-width="3" stroke-dasharray="5 4"/>` +
+      `<text x="${x0 + w * f + (f > 0.6 ? -6 : 6)}" y="68" font-size="14" font-weight="bold" text-anchor="${f > 0.6 ? 'end' : 'start'}" fill="${ORG}">同じ割合 ${fracHTMLtxt(k, n)}</text></svg>`;
+  }
+  const fracHTMLtxt = (a, b) => fstr(a, b);
+
+  /* =====================================================================
+     5. ① 全数調査と標本調査
+     ===================================================================== */
+  // 場面（a：'all' 全数／'smp' 標本、why：理由）。ここに足せば問題がふえる
+  const SCENES = [
+    { emo: '🩺', t: '学校の健康診断', a: 'all', why: '一人ひとりの健康のようすを知る必要があるので、全員を調べる。' },
+    { emo: '👓', t: '学校の視力検査', a: 'all', why: '一人ひとりの視力が必要（座席や眼鏡の相談に使う）なので、全員を調べる。' },
+    { emo: '🥫', t: '工場で作った缶詰の、中身の品質検査', a: 'smp', why: '缶を開けると売れなくなる。全部調べると売る物がなくなるので、一部を取り出して調べる。' },
+    { emo: '🗳️', t: '新聞社が行う世論調査（選挙の予想など）', a: 'smp', why: '有権者は何千万人もいて、全員に聞くと時間も費用もかかりすぎる。一部の人を無作為に選んで聞く。' },
+    { emo: '💡', t: '工場で作った電球の寿命（何時間もつか）', a: 'smp', why: '寿命を調べるには切れるまで使う必要がある。全部調べると売る電球がなくなる。' },
+    { emo: '🏠', t: '国が日本に住むすべての人と世帯を調べる国勢調査', a: 'all', why: '国のすべての人と世帯のようすを正確に知るための調査なので、全部を調べる（全数調査）。' },
+    { emo: '📺', t: 'テレビ番組の視聴率調査', a: 'smp', why: 'すべての家庭を調べるのは大変なので、一部の家庭を選んで調べる。' },
+    { emo: '📝', t: '高校の入学試験', a: 'all', why: '一人ひとりの合否を決めるので、受けた人全員の答案を採点する。' },
+    { emo: '🏞️', t: '川の水のよごれ（水質）の調査', a: 'smp', why: '川の水を全部調べることはできないので、いくつかの場所で水をくんで調べる。' },
+    { emo: '🚌', t: 'クラスの修学旅行の参加希望の調査', a: 'all', why: '一人ひとりが参加するかどうかが必要で、人数も少ないので全員に聞く。' },
+    { emo: '🍚', t: '今年とれたお米の味や成分の検査', a: 'smp', why: '食べたり成分を調べたりすると、そのお米はなくなる。一部を取り出して調べる。' },
+    { emo: '🧳', t: '空港での手荷物検査', a: 'all', why: '1つでも危ない物を見のがせないので、すべての荷物を調べる。' },
+  ];
+  function build1() {
+    $('view').innerHTML = `
+    <div class="board"><div class="board-in">
+      <div class="col">
+        <div class="card">
+          <h2>📚 全数調査と標本調査</h2>
+          ${termsFig()}
+          <dl class="terms">
+            <dt>全数調査</dt><dd>集団の すべて を調べる。</dd>
+            <dt>標本調査</dt><dd>集団の 一部 を調べて、全体のようすを推定する。</dd>
+            <dt>母集団</dt><dd>調べたい集団全体。</dd>
+            <dt>標本</dt><dd>母集団から取り出した一部。</dd>
+            <dt>標本の大きさ</dt><dd>標本にふくまれるものの数（例：100人に聞いたら 100）。</dd>
+            <dt>無作為に抽出</dt><dd>かたよりなく、どれも同じ程度に選ばれるように取り出すこと。</dd>
+          </dl>
+          <div class="hint-box">標本調査にするのは、ふつう次のようなとき：<br>🔨 調べると こわれる・使えなくなる　⏰ 数が多すぎて 時間や費用がかかりすぎる</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card" id="quizCard1"></div>
+        <div class="card">
+          <h2>🗂 仕分けた場面</h2>
+          <div class="sort-cols" id="sortCols"></div>
+        </div>
+      </div>
+    </div></div>`;
+    renderQuiz1();
+  }
+  // 母集団 → 標本 → 推定 の図
+  function termsFig() {
+    const r = mulberry(7);
+    let dots = '';
+    for (let i = 0; i < 70; i++) {
+      const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 62;
+      dots += `<circle cx="${95 + Math.cos(a) * d * 1.15}" cy="${78 + Math.sin(a) * d * 0.85}" r="4.5" fill="${r() < 0.3 ? '#e53935' : '#fff'}" stroke="#78909c" stroke-width="1.5"/>`;
+    }
+    let sm = '';
+    [[0, 0, 1], [14, 4, 0], [-12, 8, 0], [4, -14, 0], [-6, -6, 0], [10, 16, 1], [-16, -8, 0]].forEach(([x, y, c]) => sm += `<circle cx="${400 + x}" cy="${78 + y}" r="4.5" fill="${c ? '#e53935' : '#fff'}" stroke="#78909c" stroke-width="1.5"/>`);
+    return `<svg class="fig" viewBox="0 0 500 170" role="img" aria-label="母集団から標本を取り出して、全体を推定する図">
+      <ellipse cx="95" cy="78" rx="84" ry="66" fill="#f1f8e9" stroke="#2e7d32" stroke-width="3"/>${dots}
+      <text x="95" y="162" text-anchor="middle" font-size="15" font-weight="bold" fill="#1b5e20">母集団（全体）</text>
+      <circle cx="400" cy="78" r="34" fill="#fffde7" stroke="${ORG}" stroke-width="3"/>${sm}
+      <text x="400" y="162" text-anchor="middle" font-size="15" font-weight="bold" fill="${ORG}">標本（一部）</text>
+      <path d="M190 58 Q 280 22 358 58" fill="none" stroke="#37474f" stroke-width="3" marker-end="url(#ah)"/>
+      <text x="275" y="30" text-anchor="middle" font-size="14" font-weight="bold" fill="#37474f">無作為に取り出す</text>
+      <path d="M358 104 Q 280 140 190 104" fill="none" stroke="${BLU}" stroke-width="3" stroke-dasharray="7 5" marker-end="url(#ah2)"/>
+      <text x="275" y="140" text-anchor="middle" font-size="14" font-weight="bold" fill="${BLU}">全体を推定する</text>
+      <defs><marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#37474f"/></marker>
+      <marker id="ah2" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="${BLU}"/></marker></defs></svg>`;
+  }
+  function nextQuiz1() {
+    const p = st.p1;
+    let rest = SCENES.map((s, i) => i).filter(i => !p.done.includes(i) && i !== p.qi);
+    if (!rest.length) { p.done = []; rest = SCENES.map((s, i) => i).filter(i => i !== p.qi); }
+    p.qi = rest[ri(rest.length)]; p.pick = null;
+  }
+  function renderQuiz1() {
+    const p = st.p1, el = $('quizCard1'); if (!el) return;
+    if (p.qi < 0) nextQuiz1();
+    const s = SCENES[p.qi], ok = p.pick === s.a;
+    const btn = (v, lab) => `<button class="choice ${p.pick != null && v === s.a ? 'ok' : ''} ${p.pick === v && v !== s.a ? 'ng' : ''}" data-a1="${v}" ${p.pick != null ? 'disabled' : ''}>${lab}</button>`;
+    el.innerHTML = `<h2>❓ どちらを使う？ <span class="small">（${p.done.length} / ${SCENES.length} 場面 正解）</span></h2>
+      <div class="scene"><span class="emo">${s.emo}</span>${s.t}</div>
+      <div class="two-btn">${btn('all', '🧑‍🤝‍🧑 全数調査<br><span class="small">すべてを調べる</span>')}${btn('smp', '🥄 標本調査<br><span class="small">一部を調べる</span>')}</div>
+      <div class="msg ${p.pick == null ? '' : ok ? 'ok' : 'ng'}">${p.pick == null ? '' : (ok ? '⭕ 正解！ ' : `<span class="bad">✕ ${s.a === 'all' ? '全数調査' : '標本調査'}が合う。</span><br>`) + s.why}</div>
+      <div class="tools">${p.pick != null ? '<button class="op-btn action" id="btnNext1">➡ 次の場面</button>' : ''}</div>`;
+    // 仕分けた場面（正解した場面と、まちがえた場面）
+    const shown = [...new Set([...p.done, ...p.miss])];
+    const col = (a) => shown.filter(i => SCENES[i].a === a).map(i => `${SCENES[i].emo} ${SCENES[i].t}${p.miss.includes(i) && !p.done.includes(i) ? ' <span class="bad">×</span>' : ''}`).join('<br>') || '<span class="small">まだ</span>';
+    $('sortCols').innerHTML = `<div><b>🧑‍🤝‍🧑 全数調査</b>${col('all')}</div><div><b>🥄 標本調査</b>${col('smp')}</div>`;
+  }
+  function click1(b) {
+    const p = st.p1;
+    if (b.dataset.a1) {
+      if (p.pick != null) return;
+      pushHist(); p.pick = b.dataset.a1;
+      if (p.pick === SCENES[p.qi].a) { sndOK(); if (!p.done.includes(p.qi)) p.done.push(p.qi); bumpClear(1); }
+      else { sndNG(); if (!p.miss.includes(p.qi)) p.miss.push(p.qi); addTrip('which'); }
+      renderQuiz1(); renderTeacher(); return;
+    }
+    if (b.id === 'btnNext1') { pushHist(); nextQuiz1(); renderQuiz1(); renderTeacher(); }
+  }
+
+  /* =====================================================================
+     6. ② 壺の中の玉（母集団 1000個。赤玉の数 R は先生がかくして決める）
+     ===================================================================== */
+  // 壺の中のならび（1＝赤、0＝白）。種と R から決める
+  let arrCache = { key: '', arr: null };
+  function jarArr() {
+    const key = st.p2.seed + ':' + st.p2.R;
+    if (arrCache.key !== key) {
+      const a = new Array(N2).fill(0); for (let i = 0; i < st.p2.R; i++) a[i] = 1;
+      arrCache = { key, arr: shuffled(a, mulberry(st.p2.seed)) };
+    }
+    return arrCache.arr;
+  }
+  // 1回取り出す：n 個をえらんで、赤の数を数える
+  function draw2(n) {
+    const arr = jarArr(), idx = pickDistinct(N2, n);
+    let k = 0; idx.forEach(i => k += arr[i]);
+    return { n, idx, k };
+  }
+  const rows2 = () => {
+    const p = st.p2, ns = [...new Set([...SIZES, ...Object.keys(p.trials).map(Number).filter(n => p.trials[n].length)])].sort((a, b) => a - b);
+    const COL = { 10: '#ef6c00', 30: '#7b1fa2', 100: '#1565c0' };
+    return ns.map((n, i) => ({ n, label: `${n}個の標本`, vals: (p.trials[n] || []).map(k => [k, n]), shape: i % 2 ? 's' : 'c', color: COL[n] || '#00897b' }));
+  };
+  function build2() {
+    const p = st.p2;
+    $('view').innerHTML = `
+    <div class="board"><div class="board-in">
+      <div class="col">
+        <div class="card">
+          <h2>🫙 壺（玉が ${fmt(N2)}個。赤玉と白玉が入っている）</h2>
+          <div class="cv-wrap"><canvas class="jar" id="jar"></canvas></div>
+          <div class="jar-note" id="jarNote"></div>
+          <div class="tools"><button class="op-btn ${p.open ? 'on' : ''}" id="btnOpen2">${p.open ? '🙈 壺の中をかくす' : '👀 壺の中を見る（答え合わせ）'}</button></div>
+        </div>
+        <div class="card">
+          <h2>🥄 標本を取り出す</h2>
+          <div class="set-row">
+            <span>標本の大きさ：</span>
+            ${SIZES.map(n => `<button class="chip ${p.n === n ? 'active' : ''}" data-n2="${n}">${n}個</button>`).join('')}
+          </div>
+          <div class="set-row" style="margin-top:6px">
+            <input type="range" id="rgN2" min="5" max="200" step="1" value="${p.n}" aria-label="標本の大きさ">
+            ${stepperHTML('n2', '', p.n, 5, 200, '個')}
+          </div>
+          <div class="tools">
+            <button class="op-btn action" data-run2="1">🥄 1回 取り出す</button>
+            <button class="op-btn" data-run2="10">🔁 10回 くり返す</button>
+            <button class="op-btn" data-run2="50">🔁 50回</button>
+          </div>
+          <div class="small" style="text-align:center">1回調べたら、玉は壺にもどして よく混ぜてから 次を取り出す。</div>
+          <div id="last2"></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card" id="pred2"></div>
+        <div class="card">
+          <h2>📊 推定した割合のちらばり（ヒストグラム）</h2>
+          <div class="small">1回取り出すごとに、赤の割合を1つの点にする。▲ は平均。</div>
+          <div id="hist2"></div>
+          <div class="tbl-wrap"><table class="res" id="stat2"></table></div>
+          <div id="concl2"></div>
+          <div class="tools"><button class="op-btn action" id="btnRec2">＋ ワークシートに記録する</button></div>
+        </div>
+      </div>
+    </div></div>`;
+    update2();
+  }
+  function update2() {
+    if (st.part !== 2 || !$('jar')) return;
+    const p = st.p2;
+    drawJar2();
+    $('jarNote').innerHTML = p.open
+      ? `赤玉 <b>${fmt(p.R)}</b>個・白玉 ${fmt(N2 - p.R)}個（赤の割合 ${dec(p.R, N2, 2)}）`
+      : '壺の中は見えない（灰色）。赤玉は何個あるかな？';
+    const bo = $('btnOpen2'); bo.classList.toggle('on', p.open); bo.textContent = p.open ? '🙈 壺の中をかくす' : '👀 壺の中を見る（答え合わせ）';
+    renderLast2(); renderPred2();
+    const rows = rows2();
+    $('hist2').innerHTML = histSVG(rows, { scale: N2, trueP: p.open ? p.R / N2 : null, trueLabel: dec(p.R, N2, 2) });
+    $('stat2').innerHTML = statTable(rows, N2);
+    renderConcl2();
+  }
+  // 壺の絵（Canvas）。玉 1000個を 40×25 にならべる
+  function drawJar2() {
+    const cv = $('jar'); if (!cv) return;
+    const p = st.p2, W = cv.clientWidth || 420, H = Math.round(Math.min(W * 0.72, 360)), dpr = window.devicePixelRatio || 1;
+    cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+    const cell = Math.min((W * 0.8) / 40, (H * 0.78) / 25), bw = cell * 40, bh = cell * 25;
+    const x0 = (W - bw) / 2, y0 = H * 0.16;
+    // 壺の形
+    g.fillStyle = '#efebe9'; g.strokeStyle = '#8d6e63'; g.lineWidth = 4;
+    g.beginPath();
+    g.moveTo(W / 2 - bw * 0.22, 6); g.lineTo(W / 2 + bw * 0.22, 6);
+    g.lineTo(W / 2 + bw * 0.22, y0 - 10); g.quadraticCurveTo(x0 + bw + 12, y0 - 8, x0 + bw + 10, y0 + 20);
+    g.lineTo(x0 + bw + 10, y0 + bh - 6); g.quadraticCurveTo(x0 + bw + 10, y0 + bh + 10, x0 + bw - 16, y0 + bh + 10);
+    g.lineTo(x0 + 16, y0 + bh + 10); g.quadraticCurveTo(x0 - 10, y0 + bh + 10, x0 - 10, y0 + bh - 6);
+    g.lineTo(x0 - 10, y0 + 20); g.quadraticCurveTo(x0 - 12, y0 - 8, W / 2 - bw * 0.22, y0 - 10);
+    g.closePath(); g.fill(); g.stroke();
+    const arr = jarArr(), picked = new Set(p.last ? p.last.idx : []), rr = cell * 0.4;
+    for (let i = 0; i < N2; i++) {
+      const cx = x0 + (i % 40 + 0.5) * cell, cy = y0 + (Math.floor(i / 40) + 0.5) * cell;
+      g.beginPath(); g.arc(cx, cy, rr, 0, Math.PI * 2);
+      if (picked.has(i)) { g.fillStyle = '#fff8e1'; g.fill(); g.lineWidth = 2; g.strokeStyle = ORG; g.stroke(); continue; }
+      if (p.open) { g.fillStyle = arr[i] ? '#e53935' : '#ffffff'; g.fill(); g.lineWidth = 1; g.strokeStyle = arr[i] ? '#8e0000' : '#90a4ae'; g.stroke(); }
+      else { g.fillStyle = '#b0bec5'; g.fill(); }
+    }
+    if (!p.open) {
+      g.fillStyle = 'rgba(55,71,79,0.75)'; g.font = `bold ${Math.round(Math.max(14, W / 26))}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('？ 中は見えない ？', W / 2, y0 + bh / 2);
+    }
+  }
+  function renderLast2() {
+    const p = st.p2, L = p.last, el = $('last2'); if (!el) return;
+    if (!L) { el.innerHTML = '<div class="small" style="text-align:center;margin-top:8px">「🥄 1回 取り出す」を押そう。取り出した玉がここに出る。</div>'; return; }
+    const arr = jarArr();
+    const balls = L.idx.map(i => `<span class="ball ${arr[i] ? 'r' : 'w'}">${arr[i] ? '赤' : '白'}</span>`).join('');
+    const exact = (N2 * L.k) % L.n === 0, est = N2 * L.k / L.n;
+    let h = `<div class="tray ${L.n > 40 ? 'mini' : ''}">${balls}</div>
+      <div class="result-line">赤 <span class="big">${L.k}</span> 個 ／ 取り出した ${L.n}個 → 赤の割合 ${fracHTML(L.k, L.n)} ＝ <span class="big">${dec(L.k, L.n)}</span></div>`;
+    const e = p.est;
+    if (!e || e.val == null) {
+      h += `<div class="ask-row">壺全体（${fmt(N2)}個）の赤玉は、およそ何個？ <input type="number" id="in2" inputmode="numeric" min="0" max="${N2}"> 個
+        <button class="op-btn action" id="btnChk2">確かめる</button><button class="op-btn" id="btnShow2">答えを見る</button></div>`;
+    } else if (e.val !== 'show') {
+      h += `<div class="msg ${e.ok ? 'ok' : 'ng'}">${e.ok ? '⭕ そのとおり！' : `<span class="bad">✕ ${e.trip ? TRIPS[e.trip].name : 'もう一度 計算してみよう'}</span>`}（あなたの答え：${e.val} 個）</div>`;
+    }
+    if (e && e.val != null) {
+      h += `<div class="calc">全体の赤玉 ＝ 全体の数 × 標本の赤の割合<br><span class="eq">${fmt(N2)} × ${fracHTML(L.k, L.n)} ＝ ${exact ? fmt(est) : fracHTML(N2 * L.k, L.n) + ' ＝ 約 ' + fmt(roundQ(N2 * L.k, L.n))} 個</span></div>` +
+        ratioBarsSVG(L.k, L.n, N2, '標本', '壺全体', '個', exact ? `約 ${fmt(est)}個` : `約 ${fmt(roundQ(N2 * L.k, L.n))}個`) +
+        `<div class="small" style="text-align:center">これは「推定」。標本が少ないと、取り出すたびに大きく変わる。</div>`;
+    }
+    el.innerHTML = h;
+  }
+  // 推定の答えを調べる（つまずき：標本の個数や割合の数を、そのまま個数にした）
+  function judgeCount(val, k, n, T) {
+    const num = T * k, ok = num % n === 0 ? val === num / n : (val === Math.floor(num / n) || val === Math.ceil(num / n));
+    if (ok) return { ok: true };
+    const pct = roundQ(100 * k, n);
+    if (val === k || val === pct) return { ok: false, trip: 'ratioCount' };
+    return { ok: false, trip: null };
+  }
+  function check2(show) {
+    const p = st.p2, L = p.last; if (!L) return;
+    pushHist();
+    if (show) { p.est = { val: 'show', ok: true }; renderLast2(); return; }
+    const raw = $('in2').value.trim();
+    if (raw === '' || !/^\d+$/.test(raw)) { ui.hist.pop(); setMsg('整数で入れよう（例：300）。', 'info'); return; }
+    const v = +raw, j = judgeCount(v, L.k, L.n, N2);
+    p.est = { val: v, ok: j.ok, trip: j.trip };
+    if (j.ok) { sndOK(); bumpClear(2); } else { sndNG(); if (j.trip) addTrip(j.trip); }
+    renderLast2();
+  }
+  async function run2(m) {
+    if (ui.busy) return;
+    const p = st.p2;
+    pushHist();
+    const add = (r) => { (p.trials[p.n] = p.trials[p.n] || []).push(r.k); p.last = r; };
+    if (m === 1) { add(draw2(p.n)); p.est = null; sndTick(); update2(); afterRun2(); return; }
+    ui.busy = true; lockRun2(true);
+    const steps = m <= 10 ? m : 10, per = Math.ceil(m / steps);
+    let done = 0;
+    while (done < m) { for (let j = 0; j < per && done < m; j++, done++) add(draw2(p.n)); p.est = { val: 'show', ok: true }; update2(); await sleep(m <= 10 ? 120 : 60); }
+    ui.busy = false; lockRun2(false); afterRun2();
+  }
+  function lockRun2(on) { document.querySelectorAll('[data-run2],[data-n2],#rgN2,[data-st="n2"],[data-in="n2"]').forEach(b => b.disabled = on); }
+  function afterRun2() {
+    const p = st.p2, t = (n) => (p.trials[n] || []).length;
+    if (!p.judged && p.pred && t(10) >= 10 && t(100) >= 10) {
+      p.judged = true;
+      if (p.pred === '100') { bumpClear(2); setMsg('⭕ 予想どおり！ 100個の標本のほうが、推定がまとまっている。', 'ok'); }
+      else { addTrip('smallSure'); setMsg('予想とちがった！ ヒストグラムの点のちらばりを、10個と100個でくらべよう。', 'ng'); }
+      update2();
+    }
+  }
+  function renderPred2() {
+    const p = st.p2, el = $('pred2'); if (!el) return;
+    const opt = [['10', '10個の標本のほうが正しそう'], ['100', '100個の標本のほうが正しそう'], ['same', 'どちらも同じくらい']];
+    el.innerHTML = `<h2>🤔 予想：標本の大きさが 10個と100個。どちらの推定が正しそう？</h2>
+      <div class="pred-row">${opt.map(([v, lab]) => `<button class="chip ${p.pred === v ? 'active' : ''}" data-pred2="${v}" ${p.judged ? 'disabled' : ''}>${lab}</button>`).join('')}</div>
+      <div class="small" style="margin-top:4px">${p.pred ? (p.judged ? '予想の答え合わせは、下のまとめを見よう。' : '10個と100個を それぞれ 10回以上 取り出すと、答え合わせができる。') : '予想をえらんでから、取り出してみよう。'}</div>`;
+  }
+  function renderConcl2() {
+    const p = st.p2, el = $('concl2'); if (!el) return;
+    const S10 = rowStat((p.trials[10] || []).map(k => [k, 10])), S100 = rowStat((p.trials[100] || []).map(k => [k, 100]));
+    if (!S10 || !S100 || S10.m < 10 || S100.m < 10) { el.innerHTML = '<div class="small" style="margin-top:6px">10個と100個を それぞれ 10回以上 取り出すと、まとめが出る。</div>'; return; }
+    const r10 = S10.hi[0] / 10 - S10.lo[0] / 10, r100 = S100.hi[0] / 100 - S100.lo[0] / 100;
+    el.innerHTML = `<div class="concl ${p.judged && p.pred !== '100' ? 'warn' : ''}">範囲（ちらばり）：10個 → <b>${r10.toFixed(2)}</b>、100個 → <b>${r100.toFixed(2)}</b>。<br>
+      標本の大きさを大きくすると、推定した割合のちらばりは <b>小さく</b> なり、母集団の割合の近くに集まる。だから、100個の標本の推定のほうが 信用できる。<br>
+      <span class="small">ただし、100個でも「ぴったり」になるとはかぎらない。推定には いつも少しのずれがある。</span></div>`;
+  }
+  function click2(b) {
+    const p = st.p2;
+    if (b.dataset.n2) { setN2(+b.dataset.n2); return; }
+    if (b.dataset.st === 'n2') { setN2(p.n + +b.dataset.d); return; }
+    if (b.dataset.run2) { run2(+b.dataset.run2); return; }
+    if (b.dataset.pred2) { if (p.judged) return; pushHist(); p.pred = b.dataset.pred2; renderPred2(); afterRun2(); renderTeacher(); return; }
+    if (b.id === 'btnOpen2') { pushHist(); p.open = !p.open; update2(); renderTeacher(); return; }
+    if (b.id === 'btnChk2') { check2(false); return; }
+    if (b.id === 'btnShow2') { check2(true); return; }
+    if (b.id === 'btnRec2') {
+      if (!p.last) { setMsg('取り出してから記録しよう。', 'info'); return; }
+      Worksheet.addRecord(rec2Data()); Worksheet.open(); setMsg('＋ ワークシートに記録しました。', 'ok');
+    }
+  }
+  function rec2Data() {
+    const L = st.p2.last;
+    return { n: String(L.n), k: String(L.k), r: dec(L.k, L.n), est: qText(N2 * L.k, L.n) };
+  }
+  function setN2(v) {
+    v = Math.round(+v); if (!Number.isFinite(v)) { build2(); return; }
+    v = Math.max(5, Math.min(200, v));
+    if (v === st.p2.n) { update2Inputs(); return; }
+    pushHist(); st.p2.n = v; update2Inputs();
+  }
+  function update2Inputs() {
+    const n = st.p2.n;
+    document.querySelectorAll('[data-n2]').forEach(b => b.classList.toggle('active', +b.dataset.n2 === n));
+    if ($('rgN2')) $('rgN2').value = n;
+    const inp = document.querySelector('[data-in="n2"]'); if (inp) inp.value = n;
+  }
+
+  /* =====================================================================
+     7. ③ 無作為とかたより（玉 100個。番号 00〜99。赤玉 30個があとから上に入った）
+     ===================================================================== */
+  const N3 = 100, R3 = 30;
+  // 上の段ほど赤が多い（段ごとの赤の数）。ならびは決まった種で作る
+  const LAYER_ROWS = [7, 6, 5, 4, 3, 2, 1, 1, 1, 0];
+  const LAYER = (() => {
+    const r = mulberry(3351), a = [];
+    LAYER_ROWS.forEach(c => { const row = new Array(10).fill(0); pickDistinct(10, c, r).forEach(j => row[j] = 1); a.push(...row); });
+    return a;
+  })();
+  const TOPN = 20;   // 「上の方」＝上の2段（00〜19）
+  function draw3(m) {
+    if (m === 'A') { const picks = pickDistinct(TOPN, 10); return { m, picks, pos: LAYER, k: picks.reduce((s, i) => s + LAYER[i], 0) }; }
+    const pos = shuffled(LAYER, Math.random), picks = pickDistinct(N3, 10);
+    return { m, picks, pos, k: picks.reduce((s, i) => s + pos[i], 0) };
+  }
+  // 乱数表（10行 × 10組。1組は 2けた）
+  function rtTable() { const r = mulberry(st.p3.rt.seed); return Array.from({ length: 100 }, () => Math.floor(r() * 100)); }
+  const two = (v) => String(v).padStart(2, '0');
+
+  function build3() {
+    $('view').innerHTML = `
+    <div class="board"><div class="board-in">
+      <div class="col">
+        <div class="card">
+          <h2>🫙 赤玉をあとから入れた壺（玉 ${N3}個のうち 赤 ${R3}個）</h2>
+          <div class="small">赤玉を 最後に上から入れたので、上の方に赤が多い。玉には 00〜99 の番号がついている。</div>
+          <div id="urn3"></div>
+          <div class="tools">
+            <button class="op-btn warm" data-run3="A1">Ⓐ 上の方から10個 取る</button>
+            <button class="op-btn" data-run3="A20">Ⓐ を20回</button>
+          </div>
+          <div class="tools">
+            <button class="op-btn action" data-run3="B1">Ⓑ よく混ぜて10個 取る</button>
+            <button class="op-btn" data-run3="B20">Ⓑ を20回</button>
+          </div>
+          <div id="last3"></div>
+        </div>
+        <div class="card" id="pred3"></div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h2>📊 Ⓐ と Ⓑ の推定をくらべる（標本の大きさ 10）</h2>
+          <div id="hist3"></div>
+          <div class="tbl-wrap"><table class="res" id="stat3"></table></div>
+          <div id="concl3"></div>
+        </div>
+        <div class="card" id="rtCard"></div>
+      </div>
+    </div></div>`;
+    update3();
+  }
+  function update3() {
+    if (st.part !== 3 || !$('urn3')) return;
+    const p = st.p3, L = p.last, rtOn = p.rt.cur >= 0 && !p.rt.done;
+    // 乱数表で選んでいるとちゅうは、混ぜていない壺に 選んだ番号を出す
+    if (rtOn) $('urn3').innerHTML = urnSVG(LAYER, new Set(p.rt.chosen), false, false);
+    else $('urn3').innerHTML = urnSVG(L ? L.pos : LAYER, new Set(L ? L.picks : []), L && L.m === 'A', L && L.m === 'B');
+    if (!L) $('last3').innerHTML = '<div class="small" style="text-align:center;margin-top:6px">Ⓐ と Ⓑ を何回かやって、右のヒストグラムでくらべよう。</div>';
+    else {
+      const how = { A: 'Ⓐ 上の方から', B: 'Ⓑ よく混ぜて', C: '🔢 乱数表で' }[L.m];
+      $('last3').innerHTML = `<div class="result-line">${how}：赤 <span class="big">${L.k}</span> 個 ／ 10個 → 赤の割合 <span class="big">${dec(L.k, 10, 1)}</span><br><span class="small">（全体の赤の割合は ${dec(R3, N3, 1)}）</span></div>`;
+    }
+    renderPred3();
+    const rows = rows3();
+    $('hist3').innerHTML = histSVG(rows, { trueP: R3 / N3, trueLabel: dec(R3, N3, 1) });
+    $('stat3').innerHTML = statTable(rows);
+    renderConcl3(); renderRT();
+  }
+  const rows3 = () => [
+    { label: 'Ⓐ 上の方から', vals: st.p3.A.map(k => [k, 10]), shape: 's', color: '#ef6c00' },
+    { label: 'Ⓑ 無作為（混ぜる・乱数表）', vals: st.p3.B.map(k => [k, 10]), shape: 'c', color: '#1565c0' },
+  ];
+  // 壺（玉 100個・番号つき）の SVG
+  function urnSVG(pos, picks, hiTop, mixed) {
+    const W = 380, cs = 30, x0 = 40, y0 = 58;
+    let s = `<svg class="fig" viewBox="0 0 ${W} 400" role="img" aria-label="番号のついた玉 100個の壺">
+      <path d="M120 8 H260 V40 Q 352 42 350 74 V360 Q 350 388 322 388 H58 Q 30 388 30 360 V74 Q 28 42 120 40 Z" fill="#efebe9" stroke="#8d6e63" stroke-width="4"/>`;
+    if (hiTop) s += `<rect x="${x0 - 4}" y="${y0 - 4}" width="${cs * 10 + 8}" height="${cs * 2 + 8}" rx="8" fill="none" stroke="${ORG}" stroke-width="3" stroke-dasharray="8 5"/><text x="${W / 2}" y="${y0 - 10}" text-anchor="middle" font-size="13" font-weight="bold" fill="${ORG}">上の方（ここからだけ取る）</text>`;
+    if (mixed) s += `<text x="${W / 2}" y="${y0 - 10}" text-anchor="middle" font-size="13" font-weight="bold" fill="${BLU}">🥄 よく混ぜたあと</text>`;
+    for (let i = 0; i < N3; i++) {
+      const cx = x0 + (i % 10 + 0.5) * cs, cy = y0 + (Math.floor(i / 10) + 0.5) * cs, red = pos[i] === 1, pk = picks.has(i);
+      s += `<circle cx="${cx}" cy="${cy}" r="${pk ? 13.5 : 12}" fill="${red ? '#e53935' : '#fff'}" stroke="${pk ? ORG : red ? '#8e0000' : '#90a4ae'}" stroke-width="${pk ? 4 : 1.5}"/>` +
+        `<text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="11" font-weight="bold" fill="${red ? '#fff' : '#546e7a'}">${two(i)}</text>`;
+    }
+    return s + `<text x="${W / 2}" y="${y0 + cs * 10 + 16}" text-anchor="middle" font-size="12" fill="#6d4c41">オレンジのわく＝取り出した玉</text></svg>`;
+  }
+  function renderPred3() {
+    const p = st.p3, el = $('pred3'); if (!el) return;
+    const opt = [['ok', 'Ⓐ でも全体の割合がわかる'], ['bias', 'Ⓐ は赤が多めに出る（かたよる）'], ['?', 'わからない']];
+    el.innerHTML = `<h2>🤔 予想：Ⓐ「上の方から取る」で、全体の赤の割合（0.3）を推定できる？</h2>
+      <div class="pred-row">${opt.map(([v, lab]) => `<button class="chip ${p.pred === v ? 'active' : ''}" data-pred3="${v}" ${p.judged ? 'disabled' : ''}>${lab}</button>`).join('')}</div>
+      <div class="small" style="margin-top:4px">${p.judged ? '答え合わせは右のまとめを見よう。' : 'Ⓐ と Ⓑ を それぞれ 10回以上 やると、答え合わせができる。'}</div>`;
+  }
+  function renderConcl3() {
+    const p = st.p3, el = $('concl3'); if (!el) return;
+    if (p.A.length < 10 || p.B.length < 10) { el.innerHTML = '<div class="small" style="margin-top:6px">Ⓐ と Ⓑ を それぞれ 10回以上 やると、まとめが出る。</div>'; return; }
+    const SA = rowStat(p.A.map(k => [k, 10])), SB = rowStat(p.B.map(k => [k, 10]));
+    el.innerHTML = `<div class="concl ${p.judged && p.pred === 'ok' ? 'warn' : ''}">平均：Ⓐ <b>${dec(SA.sk, SA.sn, 2)}</b>　Ⓑ <b>${dec(SB.sk, SB.sn, 2)}</b>（全体は 0.30）<br>
+      Ⓐ は何回やっても 0.3 より大きい方に かたよる。上の方は母集団の一部のようすしか表していない。<br>
+      Ⓑ のように<b>無作為に</b>取り出すと、ちらばりはあっても、平均は全体の割合の近くになる。標本は無作為に取り出すことが大切。</div>`;
+  }
+  // 乱数表のカード
+  function renderRT() {
+    const el = $('rtCard'); if (!el) return;
+    const rt = st.p3.rt, tb = rtTable();
+    const readIdx = new Map(rt.read.map(r => [r.i, r.skip ? 'sk' : 'ch']));
+    let g = '';
+    tb.forEach((v, i) => {
+      const cls = readIdx.get(i) || '';
+      g += `<button class="${cls} ${!rt.done && rt.cur === i ? 'nx' : ''}" data-rt="${i}" aria-label="${two(v)}">${two(v)}</button>`;
+    });
+    const chosen = rt.chosen.map(v => `<span class="numball ${LAYER[v] ? 'r' : 'w'}">${two(v)}</span>`).join('') +
+      Array.from({ length: 10 - rt.chosen.length }, () => '<span class="numball q">？</span>').join('');
+    const k = rt.chosen.reduce((s, v) => s + LAYER[v], 0);
+    el.innerHTML = `<h2>🔢 乱数表で 番号を選ぶ（10個）</h2>
+      <div class="small">乱数表は 0〜9 の数字が でたらめに（どれも同じ程度に）ならんだ表。番号で選べば、壺を混ぜなくても 無作為に選べる。<br>
+      ① 始める場所をタップ（目をつぶって指してもよい）→ ② 右へ 2けたずつ読む → ③ 同じ番号が出たら とばす（赤むらさきの線）。<br>
+      ※ 番号が 玉の数より大きいときも とばす（この壺は 00〜99 なので とばさなくてよい）。</div>
+      <div class="rt-grid">${g}</div>
+      <div class="chosen-row">${chosen}</div>
+      ${rt.done ? `<div class="result-line">赤 <span class="big">${k}</span> 個 ／ 10個 → 赤の割合 <span class="big">${dec(k, 10, 1)}</span><br><span class="small">Ⓑ のヒストグラムに入れた。</span></div>` : ''}
+      <div class="tools">
+        <button class="op-btn action" id="btnRtNext" ${rt.cur < 0 || rt.done ? 'disabled' : ''}>▶ 次の2けたを読む</button>
+        <button class="op-btn" id="btnRtAll" ${rt.cur < 0 || rt.done ? 'disabled' : ''}>⏩ のこりを一気に</button>
+        <button class="op-btn" id="btnRtNew">🎲 新しい乱数表</button>
+      </div>
+      <div class="small" style="text-align:center">${rt.cur < 0 ? '表の数字をタップして、始める場所を決めよう。' : rt.done ? '選んだ番号の玉が、左の壺でオレンジのわくになっている。' : `あと ${10 - rt.chosen.length} 個`}</div>`;
+  }
+  function rtRead() {
+    const rt = st.p3.rt, tb = rtTable();
+    if (rt.done || rt.cur < 0) return;
+    const v = tb[rt.cur], skip = rt.chosen.includes(v);
+    rt.read.push({ i: rt.cur, skip });
+    if (!skip) rt.chosen.push(v);
+    rt.cur = (rt.cur + 1) % 100;
+    if (rt.chosen.length === 10) {
+      rt.done = true;
+      const k = rt.chosen.reduce((s, x) => s + LAYER[x], 0);
+      st.p3.B.push(k); st.p3.cN++;
+      st.p3.last = { m: 'C', picks: rt.chosen.slice(), pos: LAYER, k };
+      afterRun3();
+    }
+  }
+  async function run3(code) {
+    if (ui.busy) return;
+    const p = st.p3, m = code[0], times = +code.slice(1);
+    pushHist();
+    if (times === 1) { const r = draw3(m); p[m].push(r.k); p.last = r; sndTick(); update3(); afterRun3(); return; }
+    ui.busy = true;
+    for (let j = 0; j < times; j++) { const r = draw3(m); p[m].push(r.k); p.last = r; if (j % 4 === 3 || j === times - 1) { update3(); await sleep(70); } }
+    ui.busy = false; afterRun3();
+  }
+  function afterRun3() {
+    const p = st.p3;
+    if (!p.judged && p.pred && p.A.length >= 10 && p.B.length >= 10) {
+      p.judged = true;
+      if (p.pred === 'bias') { bumpClear(3); setMsg('⭕ 予想どおり！ Ⓐ は赤が多めに出て、かたよった。', 'ok'); }
+      else if (p.pred === 'ok') { addTrip('bias'); setMsg('予想とちがった！ Ⓐ の平均は 0.3 よりずっと大きい。', 'ng'); }
+      else setMsg('Ⓐ の平均は 0.3 よりずっと大きい。上の方だけでは、全体を表さない。', 'info');
+    }
+    update3();
+  }
+  function click3(b) {
+    const p = st.p3, rt = p.rt;
+    if (b.dataset.run3) { run3(b.dataset.run3); return; }
+    if (b.dataset.pred3) { if (p.judged) return; pushHist(); p.pred = b.dataset.pred3; afterRun3(); renderTeacher(); return; }
+    if (b.dataset.rt != null) {
+      if (rt.cur >= 0 && !rt.done) { setMsg('とちゅうで始める場所は かえない。「🎲 新しい乱数表」で やり直せる。', 'info'); return; }
+      pushHist();
+      Object.assign(rt, { cur: +b.dataset.rt, read: [], chosen: [], done: false });
+      if (p.last && p.last.m === 'C') p.last = null;
+      update3(); setMsg(`${two(rtTable()[rt.cur])} から 右へ読んでいこう。行の終わりまで来たら、次の行の左へ。`, 'info'); return;
+    }
+    if (b.id === 'btnRtNext') { pushHist(); rtRead(); sndTick(); update3(); return; }
+    if (b.id === 'btnRtAll') { pushHist(); let g = 0; while (!rt.done && g++ < 300) rtRead(); update3(); return; }
+    if (b.id === 'btnRtNew') { pushHist(); Object.assign(rt, { seed: newSeed(), cur: -1, read: [], chosen: [], done: false }); if (p.last && p.last.m === 'C') p.last = null; update3(); }
+  }
+
+  /* =====================================================================
+     8. ④ 推定する（池の魚：標識再捕法）と 練習問題
+     ===================================================================== */
+  const PW = 540, PH = 300;
+  // 魚の場所（池の楕円の中）。種から決める
+  function fishPos(seed, N) {
+    const r = mulberry(seed), a = [];
+    while (a.length < N) { const x = r() * 2 - 1, y = r() * 2 - 1; if (x * x + y * y < 0.86) a.push([PW / 2 + x * (PW / 2 - 28), PH / 2 + y * (PH / 2 - 22)]); }
+    return a;
+  }
+  const markedSet = () => new Set(pickDistinct(st.p4.N, st.p4.M, mulberry(st.p4.seed + 1)));
+  function pondSVG() {
+    const p = st.p4, pos = fishPos(p.seed, p.N), mk = markedSet(), caught = new Set(p.step >= 3 ? p.caught : []);
+    // 放したばかりの印つきの魚は、放した場所（左の岸）の近くにいる
+    const rel = mulberry(p.seed + 2);
+    let s = `<svg class="fig" viewBox="0 0 ${PW} ${PH + 26}" role="img" aria-label="池の図">
+      <ellipse cx="${PW / 2}" cy="${PH / 2}" rx="${PW / 2 - 6}" ry="${PH / 2 - 6}" fill="${p.open ? '#b3e5fc' : '#80cbc4'}" stroke="#00796b" stroke-width="5"/>`;
+    if (!p.open) s += `<text x="${PW / 2}" y="${PH - 30}" text-anchor="middle" font-size="20" font-weight="bold" fill="rgba(0,77,64,0.45)">水がにごっていて 魚は見えない</text>`;
+    const fish = (x, y, m, c) => `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)})"><path d="M-6 0 L-11 -4 L-11 4 Z" fill="${m ? '#ef6c00' : '#455a64'}"/><ellipse rx="7" ry="4" fill="${m ? '#ff9800' : '#607d8b'}" stroke="${c ? '#ad1457' : m ? '#bf360c' : 'none'}" stroke-width="${c ? 2.5 : 1}"/>${m ? '<rect x="0" y="-2" width="4" height="4" fill="#fff"/>' : ''}</g>`;
+    for (let i = 0; i < p.N; i++) {
+      const m = p.step >= 1 && mk.has(i);
+      let [x, y] = pos[i];
+      if (m && p.step === 1) { const a = rel() * Math.PI * 2, d = Math.sqrt(rel()) * 40; x = 70 + Math.cos(a) * d; y = PH / 2 + Math.sin(a) * d; }
+      if (!p.open && !m) continue;
+      s += fish(x, y, m, caught.has(i) && p.open);
+    }
+    if (p.step === 1) s += `<text x="70" y="${PH / 2 - 52}" text-anchor="middle" font-size="13" font-weight="bold" fill="#bf360c">ここに放した</text>`;
+    s += `<text x="${PW / 2}" y="${PH + 20}" text-anchor="middle" font-size="13" fill="#455a64">オレンジの魚（白い四角の印）＝印をつけた魚${p.open ? '　灰色＝印のない魚' : ''}</text>`;
+    return s + '</svg>';
+  }
+  function build4() {
+    const p = st.p4;
+    $('view').innerHTML = `
+    <div class="board"><div class="board-in">
+      <div class="col">
+        <div class="card">
+          <h2>🐟 池の魚は何匹？</h2>
+          <div id="pond4"></div>
+          <div class="set-row">${stepperHTML('M', '印をつける数', p.M, 10, 100, '匹')}${stepperHTML('nn', 'あとでつかまえる数', p.n, 10, 100, '匹')}</div>
+          <div class="steps">
+            <button class="op-btn ${p.step >= 1 ? 'done' : 'action'}" data-step4="1" ${p.step !== 0 ? 'disabled' : ''}>① ${p.M}匹つかまえて 印をつけ、池にもどす</button>
+            <button class="op-btn ${p.step >= 2 ? 'done' : p.step === 1 ? 'action' : ''}" data-step4="2" ${p.step !== 1 ? 'disabled' : ''}>② しばらく待って、よく泳がせる（混ざる）</button>
+            <button class="op-btn ${p.step >= 3 ? 'done' : p.step === 2 ? 'action' : ''}" data-step4="3" ${p.step !== 2 ? 'disabled' : ''}>③ ${p.n}匹つかまえて、印つきを数える</button>
+            <button class="op-btn" data-step4="again" ${p.step !== 3 ? 'disabled' : ''}>🔁 ③ をもう一度（つかまえた魚は池にもどして）</button>
+          </div>
+          <div id="catch4"></div>
+          <div class="tools"><button class="op-btn ${p.open ? 'on' : ''}" id="btnOpen4">${p.open ? '🙈 水をにごらせる' : '👀 水をすきとおらせる（答え合わせ）'}</button><button class="op-btn" id="btnNewPond">🆕 新しい池</button></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h2>📖 れい：印つき 50匹、あとで 30匹つかまえたら 印つき 5匹</h2>
+          ${ratioBarsSVG(5, 30, '？匹', 'つかまえた', '池全体', '匹', '印つき 50匹')}
+          <div class="calc">つかまえた魚の中の 印つきの割合 ＝ ${fracHTML(5, 30)} ＝ ${fracHTML(1, 6)}<br>池全体でも 印つきは ${fracHTML(1, 6)} と考えると、<br>
+          <span class="eq">池の魚 ＝ 50 ÷ ${fracHTML(5, 30)} ＝ 50 × ${fracHTML(30, 5)} ＝ 300 匹</span></div>
+          <div class="small">比で書くと　池の魚 x 匹 : 50 ＝ 30 : 5　→　x ＝ 300</div>
+        </div>
+        <div class="card">
+          <h2>📋 この池での推定 <span class="small">（③ をくり返すと ふえる）</span></h2>
+          <div class="tbl-wrap"><table class="res" id="ests4"></table></div>
+        </div>
+        <div class="card q-card" id="qCard4"></div>
+      </div>
+    </div></div>`;
+    update4();
+  }
+  function update4() {
+    if (st.part !== 4 || !$('pond4')) return;
+    const p = st.p4;
+    $('pond4').innerHTML = pondSVG();
+    renderCatch4(); renderEsts4(); renderQ4();
+  }
+  function renderCatch4() {
+    const p = st.p4, el = $('catch4'); if (!el) return;
+    if (p.step < 3) {
+      el.innerHTML = `<div class="small" style="text-align:center;margin-top:6px">${['① で印をつけた魚を池にもどそう。', '印をつけた魚は、まだ放した場所の近くにいる。② で よく泳がせよう。', '印つきの魚が池全体に広がった。③ でつかまえよう。'][p.step]}</div>`;
+      return;
+    }
+    const mk = markedSet();
+    const tray = p.caught.map(i => mk.has(i) ? '<span class="fishy" title="印つき">🐟<span style="color:#bf360c">◆印</span></span>' : '<span class="fishy" style="opacity:.55">🐟<span>　</span></span>').join('');
+    let h = `<div class="tray" style="background:#e0f2f1;border-color:#4db6ac">${tray}</div>
+      <div class="result-line">つかまえた ${p.n}匹のうち、印つき <span class="big">${p.k}</span> 匹</div>`;
+    if (p.k === 0) { el.innerHTML = h + '<div class="msg info">印つきが 0匹 → 割合が 0 なので推定できない。「🔁 ③ をもう一度」か、つかまえる数をふやそう。</div>'; return; }
+    const e = p.est, num = p.M * p.n, exact = num % p.k === 0;
+    if (!e) h += `<div class="ask-row">池の魚は、およそ何匹？ <input type="number" id="in4" inputmode="numeric" min="1"> 匹 <button class="op-btn action" id="btnChk4">確かめる</button><button class="op-btn" id="btnShow4">答えを見る</button></div>`;
+    else {
+      if (e.val !== 'show') h += `<div class="msg ${e.ok ? 'ok' : 'ng'}">${e.ok ? '⭕ そのとおり！' : `<span class="bad">✕ ${e.trip ? TRIPS[e.trip].name : 'もう一度 計算してみよう'}</span>`}（あなたの答え：${e.val} 匹）</div>`;
+      h += `<div class="calc">印つきの割合 ＝ ${fracHTML(p.k, p.n)}<br><span class="eq">池の魚 ＝ ${p.M} ÷ ${fracHTML(p.k, p.n)} ＝ ${p.M} × ${fracHTML(p.n, p.k)} ＝ ${exact ? fmt(num / p.k) : fracHTML(num, p.k) + ' ＝ 約 ' + fmt(roundQ(num, p.k))} 匹</span></div>`;
+      if (p.open) h += `<div class="small" style="text-align:center">本当は <b>${p.N}</b> 匹。推定とのちがい ${fmt(Math.abs(roundQ(num, p.k) - p.N))} 匹。</div>`;
+    }
+    el.innerHTML = h;
+  }
+  function renderEsts4() {
+    const p = st.p4, el = $('ests4'); if (!el) return;
+    let t = `<tr><th>回</th><th>印つき</th><th>つかまえた</th><th>印つき</th><th>推定（匹）</th></tr>`;
+    if (!p.ests.length) t += `<tr><td colspan="5" class="small">③ まで進むと、ここに記録される。</td></tr>`;
+    p.ests.forEach((e, i) => t += `<tr><td>${i + 1}</td><td>${e.M}</td><td>${e.n}</td><td>${e.k}</td><td><b>${e.k ? qText(e.M * e.n, e.k) : '—'}</b></td></tr>`);
+    if (p.open) t += `<tr><td colspan="4">本当の数</td><td class="good">${p.N}</td></tr>`;
+    el.innerHTML = t;
+  }
+  function step4(s) {
+    const p = st.p4;
+    if (s === 'again') { if (p.step !== 3) return; pushHist(); catch4(); update4(); return; }
+    s = +s; if (s !== p.step + 1) return;
+    pushHist();
+    if (s === 3) { catch4(); }
+    else { p.step = s; }
+    update4(); buildSteps4();
+  }
+  function catch4() {
+    const p = st.p4, mk = markedSet();
+    p.caught = pickDistinct(p.N, p.n); p.k = p.caught.filter(i => mk.has(i)).length;
+    p.step = 3; p.est = null; p.ests.push({ M: p.M, n: p.n, k: p.k }); if (p.ests.length > 30) p.ests.shift();
+    sndTick();
+  }
+  function buildSteps4() { const y = window.scrollY; build4(); window.scrollTo(0, y); }
+  function check4(show) {
+    const p = st.p4;
+    pushHist();
+    if (show) { p.est = { val: 'show', ok: true }; renderCatch4(); return; }
+    const raw = $('in4').value.trim();
+    if (!/^\d+$/.test(raw)) { ui.hist.pop(); setMsg('整数で入れよう。', 'info'); return; }
+    const j = judgeMark(+raw, p.M, p.n, p.k);
+    p.est = { val: +raw, ok: j.ok, trip: j.trip };
+    if (j.ok) { sndOK(); bumpClear(4); } else { sndNG(); if (j.trip) addTrip(j.trip); }
+    renderCatch4();
+  }
+  // 標識再捕法の答え：M × n ÷ k（整数でなければ切り捨て・切り上げどちらも○）
+  function judgeMark(v, M, n, k) {
+    const num = M * n, ok = num % k === 0 ? v === num / k : (v === Math.floor(num / k) || v === Math.ceil(num / k));
+    if (ok) return { ok: true };
+    const inv = M * k / n;
+    if (Math.abs(v - inv) <= 1 || v === roundQ(n * k, M) || v === roundQ(100 * k, n) && v !== M) return { ok: false, trip: 'inverse' };
+    return { ok: false, trip: null };
+  }
+
+  // ===== 練習問題（答えを先に決めてから、数を作る）=====
+  // 型：t1 割合→個数（ratioCount を見る）／t2 標識再捕法（inverse）／t3 碁石の白の数（forgotSub）
+  const Q_TYPES = ['t1', 't2', 't3'];
+  const T1CTX = [
+    (N, n, k) => [`ある中学校の生徒 ${N}人から、${n}人を無作為に選んで「朝ごはんを毎日食べるか」を聞いたら、${k}人が「食べない」と答えた。この中学校で「食べない」生徒は、およそ何人と考えられる？`, '人'],
+    (N, n, k) => [`工場で作った製品 ${N}個から、${n}個を無作為に取り出して調べたら、不良品が ${k}個あった。全体の不良品は、およそ何個と考えられる？`, '個'],
+    (N, n, k) => [`袋に赤と白の玉が あわせて ${N}個 入っている。よく混ぜて ${n}個 取り出したら、赤玉が ${k}個 だった。袋の中の赤玉は、およそ何個と考えられる？`, '個'],
+    (N, n, k) => [`図書室の本 ${N}冊から ${n}冊を無作為に選んだら、${k}冊が 物語の本 だった。図書室の物語の本は、およそ何冊と考えられる？`, '冊'],
+  ];
+  function makeQ(type) {
+    const pick = (a) => a[ri(a.length)];
+    for (let g = 0; g < 500; g++) {
+      if (type === 't1') {
+        const N = pick([300, 400, 500, 600, 800, 1000, 1200, 1500, 2000]), n = pick([20, 25, 40, 50, 60]), k = 1 + ri(Math.floor(n * 0.4));
+        if ((N * k) % n) continue;
+        const ans = N * k / n;
+        if (ans === k || ans === roundQ(100 * k, n)) continue;
+        const [text, unit] = pick(T1CTX)(N, n, k);
+        return { type, text, unit, ans, N, n, k, sig: `${type}:${N}:${n}:${k}` };
+      }
+      if (type === 't2') {
+        const N = pick([200, 240, 300, 360, 400, 450, 480, 500, 600, 800]), M = pick([20, 30, 40, 50, 60, 80]), n = pick([20, 24, 25, 30, 40, 50]);
+        if ((M * n) % N) continue;
+        const k = M * n / N; if (k < 2 || k >= n) continue;
+        return { type, text: `池の魚を ${M}匹つかまえて印をつけ、池にもどした。数日後に ${n}匹つかまえたら、印のついた魚が ${k}匹いた。池の魚は、およそ何匹と考えられる？`, unit: '匹', ans: N, M, n, k, sig: `${type}:${M}:${n}:${k}` };
+      }
+      // t3：白い碁石がたくさん入った箱に、黒い碁石を M 個入れる
+      const T = pick([300, 400, 500, 600, 800, 1000]), M = pick([20, 30, 40, 50, 60, 100]), n = pick([20, 25, 30, 40, 50]);
+      if ((M * n) % T || T <= M) continue;
+      const k = M * n / T; if (k < 1 || k >= n) continue;
+      return { type, text: `箱に白い碁石がたくさん入っている。黒い碁石 ${M}個を入れて よく混ぜ、${n}個 取り出したら、黒い碁石が ${k}個 だった。はじめに箱に入っていた白い碁石は、およそ何個と考えられる？`, unit: '個', ans: T - M, T, M, n, k, sig: `${type}:${M}:${n}:${k}` };
+    }
+    return null;
+  }
+  function nextQ4() {
+    const p = st.p4, f = ui.qFocus;
+    const types = f ? [f] : Q_TYPES;
+    let q = null;
+    for (let g = 0; g < 30; g++) { q = makeQ(types[ri(types.length)]); if (!p.q || (q.sig !== p.q.sig && (types.length === 1 || q.type !== p.q.type || ri(3) === 0))) break; }
+    p.q = q; p.qa = null;
+  }
+  function judgeQ(q, v) {
+    if (v === q.ans) return { ok: true };
+    if (q.type === 't1') {
+      if (v === q.k || v === roundQ(100 * q.k, q.n)) return { ok: false, trip: 'ratioCount' };
+      if (Math.abs(v - q.N * q.n / q.k) <= 1) return { ok: false, trip: 'inverse' };
+    }
+    if (q.type === 't2' && (Math.abs(v - q.M * q.k / q.n) <= 1 || v === roundQ(q.n * q.k, q.M))) return { ok: false, trip: 'inverse' };
+    if (q.type === 't3') {
+      if (v === q.T) return { ok: false, trip: 'forgotSub' };
+      if (Math.abs(v - q.M * q.k / q.n) <= 1) return { ok: false, trip: 'inverse' };
+    }
+    return { ok: false, trip: null };
+  }
+  function qSolution(q) {
+    if (q.type === 't1') return `標本の割合 ${fracHTML(q.k, q.n)} を、全体にあてはめる。<br><span class="eq">${fmt(q.N)} × ${fracHTML(q.k, q.n)} ＝ ${fmt(q.ans)} ${q.unit}</span>`;
+    if (q.type === 't2') return `つかまえた魚の中の印つきの割合は ${fracHTML(q.k, q.n)}。池全体でも同じと考える。<br><span class="eq">${q.M} ÷ ${fracHTML(q.k, q.n)} ＝ ${q.M} × ${fracHTML(q.n, q.k)} ＝ ${fmt(q.ans)} 匹</span>`;
+    return `黒の割合 ${fracHTML(q.k, q.n)} から、白と黒をあわせた全体を推定：${q.M} × ${fracHTML(q.n, q.k)} ＝ ${fmt(q.T)} 個。<br>はじめの白は、入れた黒をひいて <span class="eq">${fmt(q.T)} − ${q.M} ＝ ${fmt(q.ans)} 個</span>`;
+  }
+  function renderQ4() {
+    const p = st.p4, el = $('qCard4'); if (!el) return;
+    if (!p.q) nextQ4();
+    const q = p.q, a = p.qa;
+    el.innerHTML = `<h2>✏️ 練習問題 <span class="small">（正解 ${p.qDone} 問）${ui.qFocus ? '　🔁 練習中の型だけ' : ''}</span></h2>
+      <div class="q-text">${q.text}</div>
+      <div class="ask-row">およそ <input type="number" id="inQ4" inputmode="numeric" min="0" ${a ? 'disabled value="' + (a.val === 'show' ? '' : a.val) + '"' : ''}> ${q.unit}
+        <button class="op-btn action" id="btnQ4" ${a ? 'disabled' : ''}>答える</button><button class="op-btn" id="btnQ4show" ${a ? 'disabled' : ''}>答えを見る</button></div>
+      ${a ? `<div class="msg ${a.ok ? 'ok' : 'ng'}">${a.val === 'show' ? '' : a.ok ? '⭕ 正解！' : `<span class="bad">✕ ${a.trip ? TRIPS[a.trip].name : '計算を見直そう'}</span>`}</div>
+        <div class="calc">${qSolution(q)}</div>
+        <div class="tools"><button class="op-btn action" id="btnQ4next">➡ 次の問題</button>${a.trip ? '<button class="op-btn" id="btnQ4fig">👀 図で確かめる</button>' : ''}</div>` : ''}`;
+  }
+  function answerQ4(show) {
+    const p = st.p4; if (p.qa) return;
+    if (show) { pushHist(); p.qa = { val: 'show', ok: false }; renderQ4(); renderTeacher(); return; }
+    const raw = $('inQ4').value.trim();
+    if (!/^\d+$/.test(raw)) { setMsg('整数で入れよう。', 'info'); return; }
+    pushHist();
+    const j = judgeQ(p.q, +raw);
+    p.qa = { val: +raw, ok: j.ok, trip: j.trip };
+    if (j.ok) { sndOK(); p.qDone++; bumpClear(4); } else { sndNG(); if (j.trip) addTrip(j.trip); }
+    renderQ4(); renderTeacher();
+  }
+  function setCfg4(k, v) {
+    const p = st.p4;
+    v = Math.round(+v); if (!Number.isFinite(v)) { buildSteps4(); return; }
+    v = Math.max(10, Math.min(100, v));
+    const key = k === 'M' ? 'M' : 'n';
+    if (v === p[key]) { buildSteps4(); return; }
+    pushHist(); p[key] = v;
+    if (k === 'M' && p.step > 0) { p.step = 0; p.caught = []; p.est = null; setMsg('印をつける数をかえたので、① からやり直し。', 'info'); }
+    else if (k === 'nn' && p.step === 3) { p.step = 2; p.caught = []; p.est = null; }
+    buildSteps4();
+  }
+  function click4(b) {
+    const p = st.p4;
+    if (b.dataset.step4) { step4(b.dataset.step4); return; }
+    if (b.dataset.st === 'M' || b.dataset.st === 'nn') { setCfg4(b.dataset.st, p[b.dataset.st === 'M' ? 'M' : 'n'] + +b.dataset.d * (b.dataset.st === 'M' ? 10 : 5)); return; }
+    if (b.id === 'btnChk4') { check4(false); return; }
+    if (b.id === 'btnShow4') { check4(true); return; }
+    if (b.id === 'btnOpen4') { pushHist(); p.open = !p.open; buildSteps4(); renderTeacher(); return; }
+    if (b.id === 'btnNewPond') { pushHist(); Object.assign(p, { N: pickPond(), seed: newSeed(), step: 0, caught: [], k: 0, ests: [], open: false, est: null }); buildSteps4(); setMsg('🆕 新しい池にした（魚の数がかわった）。', 'info'); renderTeacher(); return; }
+    if (b.id === 'btnQ4') { answerQ4(false); return; }
+    if (b.id === 'btnQ4show') { answerQ4(true); return; }
+    if (b.id === 'btnQ4next') { pushHist(); nextQ4(); renderQ4(); renderTeacher(); return; }
+    if (b.id === 'btnQ4fig') { showFig(p.qa.trip); }
+  }
+
+  /* =====================================================================
+     9. ⑤ 統計の判断（発展）：世論調査の結果を、誤差の目安をつけて読む
+     ===================================================================== */
+  const errOf = (n) => 100 / Math.sqrt(n);                       // 誤差の目安（ポイント）
+  const errText = (n) => { const e = errOf(n); return Number.isInteger(e) ? String(e) : '約' + e.toFixed(1); };
+  function poll(n) { const p = st.p5.p / 100; let k = 0; for (let i = 0; i < n; i++) if (Math.random() < p) k++; return { n, k }; }
+  // クイズ（ch：[選択肢, つまずきの型（正解は ''、型なしのまちがいは 'x'）]）
+  const QUIZ5 = [
+    { q: '1000人に聞いた調査（誤差の目安 ±約3ポイント）で、A案に賛成 52%、反対 48% だった。町全体で 賛成の人の方が多い と言い切れる？',
+      ch: [['言い切れる。52% は 48% より大きいから', 'smallSure'], ['言い切れない。どちらも ±3ポイントくらいずれるので、入れかわることもある', ''], ['反対の人の方が多いと言える', 'x']],
+      exp: '賛成は 49〜55%、反対は 45〜51% くらいのどこか。重なっているので、どちらが多いとは言い切れない。' },
+    { q: 'クラスで 5人に聞いたら 4人が「賛成」だった。クラス全体の 80% が賛成だと言える？',
+      ch: [['言える。4÷5＝0.8 だから', 'smallSure'], ['言えない。標本が小さすぎて、ちらばりが大きい', ''], ['5人の中に反対がいるから、反対が多い', 'x']],
+      exp: '5人の標本では、選ぶ人が変わると 2人にも 5人にもなりうる。全体を推定するには、もっと大きな標本が必要。' },
+    { q: '先月の調査で 32%、今月の調査で 34%（どちらも 1000人、誤差の目安 ±約3ポイント）。支持が 上がった と言い切れる？',
+      ch: [['上がったと言い切れる', 'smallSure'], ['上がったとは言い切れない。差の 2ポイントは誤差の範囲くらい', ''], ['下がったと言える', 'x']],
+      exp: '2ポイントの差は、調査ごとのずれ（±3ポイントくらい）より小さい。本当に変わったかどうかは、この結果だけでは言えない。' },
+    { q: '100人に聞いた調査で 60% だった（誤差の目安 ±10ポイント）。本当の割合について、いちばん正しい考え方は？',
+      ch: [['ちょうど 60% だ', 'smallSure'], ['だいたい 50%〜70% のどこか、と考える', ''], ['100人しか聞いていないので、何もわからない', 'x']],
+      exp: '標本調査の結果は推定。誤差の目安をつけて「50%〜70% くらい」と幅をもって考える。人数をふやすと幅はせまくなる。' },
+    { q: 'ある番組で「この番組のファンですか？」とウェブで答えてもらったら、1万人が答えて 90% が「ファン」だった。国民の 90% がファンだと言える？',
+      ch: [['言える。1万人も答えているから', 'bias'], ['言えない。番組を見ている人やファンが答えやすく、かたよっている', ''], ['1万人では少なすぎるから言えない', 'x']],
+      exp: '答えたい人だけが答える方法は、無作為ではない（かたよりがある）。人数が多くても、かたよりはなくならない。' },
+    { q: '調べる人数を 100人から 400人 にすると、誤差の目安（±100÷√人数）は どうなる？',
+      ch: [['4分の1 になる（±10 → ±2.5）', 'x'], ['半分 になる（±10 → ±5）', ''], ['変わらない', 'smallSure']],
+      exp: '√100 ＝ 10、√400 ＝ 20 なので、100÷10 ＝ 10、100÷20 ＝ 5。人数を 4倍にすると、誤差の目安は 半分。' },
+    { q: '2500人に聞いた調査（誤差の目安 ±2ポイント）で、B案に賛成 58%、反対 42% だった。賛成の方が多いと言える？',
+      ch: [['言える。差が 16ポイントあり、誤差の目安よりずっと大きい', ''], ['言えない。標本調査では何も言えない', 'x'], ['言えない。全員に聞いていないから', 'x']],
+      exp: '賛成は 56〜60%、反対は 40〜44% くらい。重ならないので、賛成が多いと考えてよい。標本調査でも、差が大きければ判断できる。' },
+  ];
+  function build5() {
+    const p = st.p5;
+    $('view').innerHTML = `
+    <div class="board"><div class="board-in">
+      <div class="col">
+        <div class="card">
+          <h2>📰 世論調査シミュレーター <span class="hatsu">発展</span></h2>
+          <div class="small">ある町（架空）の有権者 10万人に「新しい公園に賛成？」と聞く。本当の賛成の割合は かくれている。</div>
+          <div class="set-row" style="margin-top:6px">調べる人数：${P5N.map(n => `<button class="chip ${p.n === n ? 'active' : ''}" data-n5="${n}">${fmt(n)}人</button>`).join('')}</div>
+          <div class="tools">
+            <button class="op-btn action" data-run5="1">📞 1回 調査する</button>
+            <button class="op-btn" data-run5="20">📞 20回</button>
+            <button class="op-btn ${p.open ? 'on' : ''}" id="btnOpen5">${p.open ? '🙈 かくす' : '👀 本当の割合を見る'}</button>
+          </div>
+          <div id="last5"></div>
+          <div id="iv5"></div>
+          <div class="hint-box">誤差の目安 ＝ ±100 ÷ √（調べた人数）ポイント（この教材の目安）。<br>100人 → ±10、400人 → ±5、1000人 → ±約3.2、2500人 → ±2。<br>「結果 ± 誤差の目安」の幅の中に、本当の割合が入ることが多い（だいたい 100回に95回）。</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card" id="quiz5"></div>
+      </div>
+    </div></div>`;
+    update5();
+  }
+  function update5() {
+    if (st.part !== 5 || !$('iv5')) return;
+    const p = st.p5, L = p.polls[p.polls.length - 1];
+    if (!L) $('last5').innerHTML = '<div class="small" style="text-align:center;margin-top:6px">「📞 1回 調査する」を押そう。</div>';
+    else {
+      const x = 100 * L.k / L.n, e = errOf(L.n);
+      $('last5').innerHTML = `<div class="result-line">${fmt(L.n)}人中 ${fmt(L.k)}人が賛成 → 賛成 <span class="big">${x.toFixed(1)}%</span><br>誤差の目安 ±${errText(L.n)} ポイント → 本当の割合は だいたい <b>${Math.max(0, x - e).toFixed(1)}%〜${Math.min(100, x + e).toFixed(1)}%</b> のどこか</div>`;
+    }
+    $('iv5').innerHTML = intervalSVG();
+    renderQuiz5();
+  }
+  // 調査の結果を「結果 ± 誤差の目安」の横線で、新しい順に 30回分ならべる
+  function intervalSVG() {
+    const p = st.p5, list = p.polls.slice(-30).reverse();
+    const W = 560, L = 30, R = 20, rowH = 12, top = 16, H = top + Math.max(6, list.length) * rowH + 34;
+    const X = (v) => L + (v / 100) * (W - L - R);
+    let s = `<svg class="dots" viewBox="0 0 ${W} ${H}" role="img" aria-label="調査の結果と誤差の目安の幅">`;
+    for (let v = 0; v <= 100; v += 10) s += `<line x1="${X(v)}" y1="${top - 4}" x2="${X(v)}" y2="${H - 30}" stroke="#eceff1"/><text x="${X(v)}" y="${H - 16}" font-size="12" text-anchor="middle" fill="#546e7a">${v}%</text>`;
+    let inside = 0;
+    list.forEach((q, i) => {
+      const x = 100 * q.k / q.n, e = errOf(q.n), y = top + i * rowH + rowH / 2, hit = p.open && Math.abs(x - p.p) <= e;
+      if (hit) inside++;
+      const col = !p.open ? '#1565c0' : hit ? OK : NG;
+      s += `<line x1="${X(Math.max(0, x - e))}" y1="${y}" x2="${X(Math.min(100, x + e))}" y2="${y}" stroke="${col}" stroke-width="3" ${p.open && !hit ? 'stroke-dasharray="4 3"' : ''}/>` +
+        `<circle cx="${X(x)}" cy="${y}" r="3.5" fill="${i === 0 ? ORG : col}"/>`;
+    });
+    if (!list.length) s += `<text x="${W / 2}" y="${top + 26}" text-anchor="middle" font-size="14" fill="#90a4ae">調査すると、ここに「結果 ± 誤差の目安」の線がならぶ</text>`;
+    if (p.open) {
+      s += `<line x1="${X(p.p)}" y1="${top - 8}" x2="${X(p.p)}" y2="${H - 30}" stroke="${OK}" stroke-width="3" stroke-dasharray="8 5"/>` +
+        `<text x="${Math.min(W - 90, X(p.p) + 4)}" y="${top - 2}" font-size="12" font-weight="bold" fill="${OK}">本当 ${p.p}%</text>`;
+    }
+    s += `<text x="${W - R}" y="${H - 2}" font-size="11" text-anchor="end" fill="#546e7a">${p.open && list.length ? `本当の割合をふくむ線（緑・実線）：${list.length}回中 ${inside}回` : '上ほど新しい調査（30回分）'}</text>`;
+    return s + '</svg>';
+  }
+  function nextQuiz5() {
+    const p = st.p5, f = ui.focus5;
+    const pool = QUIZ5.map((q, i) => i).filter(i => !f || QUIZ5[i].ch.some(c => c[1] === f));
+    let rest = pool.filter(i => !p.done.includes(i) && i !== p.qi);
+    if (!rest.length) rest = pool.filter(i => i !== p.qi);
+    if (!rest.length) rest = pool;
+    p.qi = rest[ri(rest.length)]; p.pick = null;
+    // 選択肢のならびを毎回かえる（正解の位置をおぼえないように）
+    p.ord = shuffled(QUIZ5[p.qi].ch.map((c, j) => j), Math.random);
+  }
+  function renderQuiz5() {
+    const p = st.p5, el = $('quiz5'); if (!el) return;
+    if (p.qi < 0 || !p.ord) nextQuiz5();
+    const q = QUIZ5[p.qi], ans = q.ch.findIndex(c => !c[1]);
+    const trip = p.pick != null && p.pick !== ans ? q.ch[p.pick][1] : null;
+    el.innerHTML = `<h2>❓ 結果をどう読む？ <span class="hatsu">発展</span> <span class="small">（${p.done.length} / ${QUIZ5.length} 問 正解）</span></h2>
+      <div class="q-text">${q.q}</div>
+      <div class="choices">${p.ord.map((j, d) => { const c = q.ch[j]; return `<button class="choice ${p.pick != null && j === ans ? 'ok' : ''} ${p.pick === j && j !== ans ? 'ng' : ''}" data-ch5="${j}" ${p.pick != null ? 'disabled' : ''}>${String.fromCharCode(65 + d)}. ${c[0]}</button>`; }).join('')}</div>
+      <div class="msg ${p.pick == null ? '' : p.pick === ans ? 'ok' : 'ng'}">${p.pick == null ? '' : (p.pick === ans ? '⭕ 正解！ ' : (trip && TRIPS[trip] ? `<span class="bad">✕ ${TRIPS[trip].name}</span><br>` : '<span class="bad">✕</span> ')) + q.exp}</div>
+      <div class="tools">${p.pick != null ? '<button class="op-btn action" id="btnNext5">➡ 次の問題</button>' : ''}${trip && TRIPS[trip] ? '<button class="op-btn" id="btnFig5">👀 実験で確かめる</button>' : ''}</div>`;
+  }
+  async function run5(m) {
+    if (ui.busy) return;
+    const p = st.p5;
+    pushHist();
+    if (m === 1) { p.polls.push(poll(p.n)); if (p.polls.length > 200) p.polls.shift(); sndTick(); update5(); return; }
+    ui.busy = true;
+    for (let j = 0; j < m; j++) { p.polls.push(poll(p.n)); if (p.polls.length > 200) p.polls.shift(); if (j % 4 === 3) { update5(); await sleep(60); } }
+    ui.busy = false; update5();
+  }
+  function click5(b) {
+    const p = st.p5;
+    if (b.dataset.n5) { const v = +b.dataset.n5; if (v !== p.n) { pushHist(); p.n = v; build5(); } return; }
+    if (b.dataset.run5) { run5(+b.dataset.run5); return; }
+    if (b.id === 'btnOpen5') { pushHist(); p.open = !p.open; build5(); renderTeacher(); return; }
+    if (b.dataset.ch5 != null) {
+      if (p.pick != null) return;
+      pushHist(); p.pick = +b.dataset.ch5;
+      const q = QUIZ5[p.qi], tr = q.ch[p.pick][1];
+      if (!tr) { sndOK(); if (!p.done.includes(p.qi)) p.done.push(p.qi); bumpClear(5); }
+      else { sndNG(); if (TRIPS[tr]) addTrip(tr); }
+      renderQuiz5(); renderTeacher(); return;
+    }
+    if (b.id === 'btnNext5') { pushHist(); nextQuiz5(); renderQuiz5(); renderTeacher(); return; }
+    if (b.id === 'btnFig5') { const q = QUIZ5[p.qi]; showFig(q.ch[p.pick][1]); }
+  }
+
+  /* =====================================================================
+     10. 画面の操作をまとめて受ける
+     ===================================================================== */
+  $('view').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b || b.disabled || ui.busy) return;
+    [null, click1, click2, click3, click4, click5][st.part](b);
+  });
+  $('view').addEventListener('change', e => {
+    const t = e.target;
+    if (st.part === 2 && (t.dataset.in === 'n2' || t.id === 'rgN2')) setN2(t.value);
+    if (st.part === 4 && (t.dataset.in === 'M' || t.dataset.in === 'nn')) setCfg4(t.dataset.in, t.value);
+  });
+  $('view').addEventListener('input', e => {
+    if (st.part === 2 && e.target.id === 'rgN2') { const inp = document.querySelector('[data-in="n2"]'); if (inp) inp.value = e.target.value; }
+  });
+  // Enter で「確かめる」
+  $('view').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const id = e.target.id;
+    if (id === 'in2') check2(false);
+    else if (id === 'in4') check4(false);
+    else if (id === 'inQ4') answerQ4(false);
+  });
+  let rsT = null;
+  window.addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { if (st.part === 2) drawJar2(); }, 120); });
+
+  /* =====================================================================
+     11. つまずきの記録（Worksheet.appData('rec') に入れる）
+     ===================================================================== */
+  let memRec = null;
+  function getRec() { const r = (window.Worksheet ? Worksheet.appData('rec') : memRec) || {}; r.trips = r.trips || {}; r.clear = r.clear || {}; return r; }
+  function setRec(r) { if (window.Worksheet) Worksheet.appData('rec', r); else memRec = r; }
+  function bumpRec(fn) { const r = getRec(); fn(r); setRec(r); }
+  function bumpClear(p) { bumpRec(r => r.clear[p] = (r.clear[p] || 0) + 1); }
+  function addTrip(type) { ui.sessTrips[type] = (ui.sessTrips[type] || 0) + 1; bumpRec(r => r.trips[type] = (r.trips[type] || 0) + 1); renderTrips(); renderTeacher(); }
+  function renderTrips() {
+    const keys = Object.keys(ui.sessTrips);
+    $('tripList').innerHTML = keys.length
+      ? keys.map(k => `<div class="trip-row"><div><span class="bad">${TRIPS[k].name}</span>（${ui.sessTrips[k]}回）</div><div class="small">${TRIPS[k].exp}</div><div class="tools left"><button class="op-btn" data-prac="${k}">🔁 この型を練習</button><button class="op-btn" data-fig="${k}">👀 元の図で確かめる</button></div></div>`).join('')
+      : '<div class="small">まだ ありません。クイズや推定の答え、予想でまちがえると、まちがえ方の型がここに出るよ。</div>';
+    const c = getRec().clear;
+    $('recLine').textContent = `この端末のきろく：① ${c[1] || 0}回　② ${c[2] || 0}回　③ ${c[3] || 0}回　④ ${c[4] || 0}回　⑤ ${c[5] || 0}回 正解`;
+  }
+  $('tripList').addEventListener('click', e => {
+    const b = e.target.closest('[data-prac],[data-fig]');
+    if (!b || ui.busy) return;
+    if (b.dataset.prac) practice(b.dataset.prac); else showFig(b.dataset.fig);
+  });
+  // この型を練習：その型が出る問題だけにする
+  function practice(type) {
+    const bar = (txt) => {
+      $('focusBar').hidden = false;
+      $('focusBar').innerHTML = `🔁 練習中：${txt}　<button class="op-btn" id="focusOff">おわる</button>`;
+      $('focusOff').addEventListener('click', () => { ui.qFocus = null; ui.focus5 = null; $('focusBar').hidden = true; if (st.part === 4) { nextQ4(); renderQ4(); } });
+    };
+    pushHist();
+    if (type === 'which') { st.part = 1; nextQuiz1(); }
+    else if (type === 'smallSure' || type === 'bias') { st.part = 5; ui.focus5 = type; nextQuiz5(); }
+    else { st.part = 4; ui.qFocus = { ratioCount: 't1', inverse: 't2', forgotSub: 't3' }[type]; nextQ4(); }
+    bar(TRIPS[type].name);
+    buildAll();
+    const target = st.part === 4 ? $('qCard4') : null;
+    (target || document.body).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  // 元の図にもどす：その型が見える場面を出す
+  async function showFig(type) {
+    if (ui.busy) return;
+    pushHist();
+    if (type === 'which') { st.part = 1; buildAll(); setMsg('👀 左の「全数調査と標本調査」と、標本調査にする2つの理由（🔨 こわれる・⏰ 時間や費用）を読もう。', 'info'); }
+    else if (type === 'ratioCount') {
+      st.part = 2; const p = st.p2; p.n = 10;
+      const r = draw2(10); (p.trials[10] = p.trials[10] || []).push(r.k); p.last = r; p.est = { val: 'show', ok: true };
+      buildAll(); setMsg(`👀 10個中 ${r.k}個が赤（割合 ${dec(r.k, 10, 1)}）。全体 1000個の赤玉は ${r.k}個 ではなく、1000 × ${dec(r.k, 10, 1)} ＝ ${fmt(100 * r.k)}個 と推定する。帯図を見よう。`, 'info');
+      $('last2') && $('last2').scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+    } else if (type === 'smallSure') {
+      st.part = 2; buildAll(); st.p2.n = 10; update2Inputs();
+      const hp = ui.hist.length; await run2(30); st.p2.n = 100; update2Inputs(); await run2(30); ui.hist.length = hp;
+      setMsg('👀 10個の標本と100個の標本を 30回ずつ取り出した。10個のほうは、推定が大きくちらばっている。', 'info'); return;
+    } else if (type === 'bias') {
+      st.part = 3; buildAll();
+      const hp = ui.hist.length; await run3('A20'); await run3('B20'); ui.hist.length = hp;
+      setMsg('👀 Ⓐ（上の方から）と Ⓑ（よく混ぜて）を 20回ずつ。Ⓐ は 0.3 より大きい方に かたよっている。', 'info'); return;
+    } else { st.part = 4; buildAll(); setMsg('👀 右の「れい」の帯図と計算を見よう。' + (type === 'forgotSub' ? '碁石の問題では、推定した全体から 入れた黒をひく。' : '「つかまえた中の印つきの割合」＝「池全体の中の印つきの割合」。'), 'info'); }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* =====================================================================
+     12. 先生モード
+     ===================================================================== */
+  function answerText() {
+    const p = st.part;
+    if (p === 1) { const s = SCENES[st.p1.qi]; return s ? `答え：${s.a === 'all' ? '全数調査' : '標本調査'}（${s.why}）` : ''; }
+    if (p === 2) return `壺の赤玉：${st.p2.R}個（割合 ${dec(st.p2.R, N2, 2)}）。予想の答え：100個の標本のほうが ちらばりが小さく、信用できる。`;
+    if (p === 3) return 'Ⓐ 上の方から：上の2段（20個）に赤が 13個 → 平均 0.65 くらいに かたよる。Ⓑ・乱数表：平均 0.3 くらい。';
+    if (p === 4) return `池の魚：${st.p4.N}匹。練習問題の答え：${st.p4.q ? fmt(st.p4.q.ans) + ' ' + st.p4.q.unit : ''}`;
+    const q = QUIZ5[st.p5.qi];
+    return `本当の賛成の割合：${st.p5.p}%。` + (q && st.p5.ord ? `クイズの答え：${String.fromCharCode(65 + st.p5.ord.indexOf(q.ch.findIndex(c => !c[1])))}` : '');
+  }
+  const TALK = [null,
+    '発問の例：「缶詰を全部開けて調べたら？」「健康診断を一部の人だけにしたら困るのは？」「標本調査にするのは、どんなとき？」',
+    '発問の例：「10個取り出して 赤が3個。壺の赤玉は何個？ 3個？」「もう1回 10個取り出すと同じになる？」「10個と100個、どちらの推定を信じる？ それはなぜ？」',
+    '発問の例：「上の方から取ったら、どうなりそう？」「標本を大きくすれば、かたよりはなくなる？」「くじ引きやテレビのアンケートでも、かたよりは起こる？」',
+    '発問の例：「池の魚を全部つかまえられる？」「つかまえた中の 印つきの割合と、池全体の 印つきの割合の関係は？」「② の『よく泳がせる』をしないと、どうなる？」',
+    '発問の例：「52% と 48%。賛成が多いと言い切れる？」「人数を4倍にすると、誤差の目安はどうなる？」「ウェブのアンケートは、なぜ かたよる？」',
+  ];
+  function renderTeacher() {
+    if (!TEACHER) return;
+    $('tAns').textContent = answerText();
+    $('tTalk').innerHTML = TALK[st.part];
+    // かくした値の設定（② 赤玉の数／⑤ 賛成の割合）
+    if (st.part === 2) $('tSet').innerHTML = `<div class="set-row">${stepperHTML('tR', '壺の赤玉（1000個中）', st.p2.R, 10, 990, '個')}<button class="op-btn" id="tRrand">🎲 でたらめに決める</button></div><div class="small" style="text-align:center">赤玉の数をかえると、取り出した記録は消える。決めたら、生徒に見せる前にこのカードをとじる（先生モードを消す）か、画面をスクロールしておく。</div>`;
+    else if (st.part === 5) $('tSet').innerHTML = `<div class="set-row">${stepperHTML('tP', '本当の賛成の割合', st.p5.p, 5, 95, '%')}</div>`;
+    else $('tSet').innerHTML = '';
+    const r = getRec(), t = Object.keys(r.trips).filter(k => TRIPS[k]);
+    $('tTotal').innerHTML = 'この端末のつまずきの合計：' + (t.length ? t.map(k => TRIPS[k].name + ' ' + r.trips[k] + '回').join('、') : 'なし');
+  }
+  function setHidden(key, v) {
+    v = Math.round(+v); if (!Number.isFinite(v)) { renderTeacher(); return; }
+    pushHist();
+    if (key === 'tR') { v = Math.max(10, Math.min(990, v)); Object.assign(st.p2, { R: v, trials: {}, last: null, est: null, judged: false, seed: newSeed() }); }
+    else { v = Math.max(5, Math.min(95, v)); Object.assign(st.p5, { p: v, polls: [] }); }
+    buildAll(); setMsg('👩‍🏫 かくした値をかえました（記録は はじめから）。', 'info');
+  }
+  // 自動で1ステップ：パートの流れを1つずつ進める
+  async function teacherStep() {
+    if (ui.busy) return;
+    const P = st.part;
+    if (P === 1) { const p = st.p1; if (p.pick == null) click1({ dataset: { a1: SCENES[p.qi].a } }); else click1({ dataset: {}, id: 'btnNext1' }); return; }
+    if (P === 2) {
+      const p = st.p2, t = (n) => (p.trials[n] || []).length;
+      if (!p.pred) { click2({ dataset: { pred2: '100' } }); return; }
+      if (!p.last) { p.n = 10; update2Inputs(); await run2(1); check2(true); return; }
+      const nx = SIZES.find(n => t(n) < 30);
+      if (nx) { st.p2.n = nx; update2Inputs(); await run2(30 - t(nx)); setMsg(`${nx}個の標本を 30回 そろえた。`, 'info'); return; }
+      if (!p.open) { click2({ dataset: {}, id: 'btnOpen2' }); return; }
+      setMsg('3つの大きさが 30回ずつ そろいました。ちらばりをくらべよう。', 'info'); return;
+    }
+    if (P === 3) {
+      const p = st.p3;
+      if (!p.pred) { click3({ dataset: { pred3: 'bias' } }); return; }
+      if (p.A.length < 20) { await run3('A20'); return; }
+      if (p.B.length < 20) { await run3('B20'); return; }
+      if (p.rt.cur < 0 || p.rt.done) { pushHist(); Object.assign(p.rt, { seed: newSeed(), cur: ri(100), read: [], chosen: [], done: false }); update3(); return; }
+      click3({ dataset: {}, id: 'btnRtAll' }); return;
+    }
+    if (P === 4) {
+      const p = st.p4;
+      if (p.step < 3) { step4(String(p.step + 1)); return; }
+      if (p.k && !p.est) { check4(true); return; }
+      if (!p.qa) { answerQ4(true); return; }
+      click4({ dataset: {}, id: 'btnQ4next' }); return;
+    }
+    const p = st.p5;
+    if (p.polls.length < 20) { await run5(20); return; }
+    if (!p.open) { click5({ dataset: {}, id: 'btnOpen5' }); return; }
+    if (p.pick == null) { click5({ dataset: { ch5: String(QUIZ5[p.qi].ch.findIndex(c => !c[1])) } }); return; }
+    click5({ dataset: {}, id: 'btnNext5' });
+  }
+  function setupTeacher() {
+    if (!TEACHER) return;
+    $('teacherBadge').hidden = false; $('teacherCard').hidden = false;
+    $('tStep').addEventListener('click', teacherStep);
+    $('tClear').addEventListener('click', () => {
+      if (!confirm('この端末のきろく（つまずき・正解の数）を消しますか？')) return;
+      setRec({ trips: {}, clear: {} }); renderTrips(); renderTeacher();
+    });
+    $('tSet').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b || ui.busy) return;
+      if (b.dataset.st === 'tR') setHidden('tR', st.p2.R + 10 * +b.dataset.d);
+      else if (b.dataset.st === 'tP') setHidden('tP', st.p5.p + +b.dataset.d);
+      else if (b.id === 'tRrand') setHidden('tR', pickR());
+    });
+    $('tSet').addEventListener('change', e => { const t = e.target; if (t.dataset.in === 'tR' || t.dataset.in === 'tP') setHidden(t.dataset.in, t.value); });
+  }
+
+  /* =====================================================================
+     13. はじめの準備
+     ===================================================================== */
+  $('partRow').innerHTML = [1, 2, 3, 4, 5].map(n => `<button class="chip" data-p="${n}">${PARTS[n].name}</button>`).join('');
+  $('partRow').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setPart(+b.dataset.p)));
+  $('btnUndo').addEventListener('click', undo);
+  // もういちど：パートごとに はじめから
+  $('btnReset').addEventListener('click', () => {
+    if (ui.busy) return;
+    pushHist();
+    const P = st.part;
+    if (P === 1) Object.assign(st.p1, { qi: -1, pick: null, done: [], miss: [] });
+    else if (P === 2) Object.assign(st.p2, { R: TEACHER ? st.p2.R : pickR(), seed: newSeed(), last: null, trials: {}, pred: null, open: false, est: null, judged: false });
+    else if (P === 3) Object.assign(st.p3, { pred: null, judged: false, A: [], B: [], cN: 0, last: null, rt: { seed: newSeed(), cur: -1, read: [], chosen: [], done: false } });
+    else if (P === 4) Object.assign(st.p4, { N: pickPond(), seed: newSeed(), step: 0, caught: [], k: 0, ests: [], open: false, est: null, q: null, qa: null });
+    else Object.assign(st.p5, { p: TEACHER ? st.p5.p : pickP5(), polls: [], open: false, qi: -1, pick: null, done: [] });
+    buildAll(); setMsg('⟲ このパートを はじめから。' + (P === 2 && !TEACHER ? '壺の赤玉の数も かわったよ。' : ''), 'info');
+  });
+  $('btnWs').addEventListener('click', () => {
+    if (ui.busy) return;
+    pushHist();
+    st.part = 2; Object.assign(st.p2, { n: 10, last: null, trials: {}, pred: null, open: false, est: null, judged: false });
+    buildAll();
+    if (window.Worksheet) Worksheet.open();
+    setMsg('📄 ワークシートの問題：① に予想を書こう。<br>標本の大きさ「10個」で 1回取り出して 推定 → 記録。「100個」でも 1回取り出して 推定 → 記録。そのあと「10回 くり返す」で ヒストグラムのちらばりをくらべて、③ ④ を書こう。', 'info');
+  });
+  $('links').innerHTML =
+    `<a class="op-btn" href="割合.html">⬅ 小5 割合</a>` +
+    `<a class="op-btn" href="区切って数えて ヒストグラム.html">📊 中1 ヒストグラム</a>` +
+    `<a class="op-btn" href="確率の実験室.html">🎲 中2 確率の実験室</a>` +
+    `<a class="op-btn" href="サイコロ1万回ふってみた.html">🎲 サイコロ1万回ふってみた</a>`;
+
+  // ===== ワークシート（①予想 → ②操作 → ③気づき → ④まとめ） =====
+  if (window.Worksheet) {
+    Worksheet.init({
+      title: '標本調査シミュレーター',
+      question: '壺の赤玉の数を推定するとき、10個の標本と100個の標本では、どちらの推定が正しそうだろうか？',
+      predictions: ['10個の標本のほうが正しそう', '100個の標本のほうが正しそう', 'どちらも同じくらい', 'わからない'],
+      operationNote: '② で取り出したら「＋ ワークシートに記録する」。10個と100個の両方を記録し、ヒストグラムのちらばりもくらべよう。',
+      open: false,
+      fields: [
+        { key: 'n', label: '標本の大きさ', math: false },
+        { key: 'k', label: '赤の個数', math: false },
+        { key: 'r', label: '赤の割合', math: false },
+        { key: 'est', label: '全体の赤玉の推定（個）', math: false }
+      ],
+      capture: () => {
+        if (st.part === 2 && st.p2.last) return rec2Data();
+        setMsg('② で取り出してから記録しよう。', 'info'); return null;
+      },
+      summaryHint: '「標本の大きさが小さいと、推定は〜。大きくすると、推定のちらばりは〜。だから〜の標本のほうが信用できる。ただし〜」の形で書こう。',
+      teacher: {
+        hint: '予想を挙手で集める。10個で数人に取り出させて推定を板書（ばらばらになる）→ 100個でも板書 → 「10回 くり返す」でヒストグラムを見せる → 壺の中を見て答え合わせ。',
+        answer: '100個の標本のほうが正しそう。<br>まとめ：標本の大きさが小さいと、取り出すたびに推定が大きくばらつく。標本の大きさを大きくすると、推定のちらばりは小さくなり、母集団の割合に近い値になりやすい。ただし、標本調査の結果は推定なので、ぴったり同じになるとはかぎらない。また、標本は無作為に取り出す必要がある。'
+      }
+    });
+  }
+
+  setupTeacher();
+  const P0 = +PARAMS.get('part');
+  st.part = P0 >= 1 && P0 <= 5 ? P0 : 1;
+  buildAll();
+  // ?debug=1 で確認用の道具
+  if (PARAMS.get('debug') === '1') window.__dbg = { st, ui, makeQ, judgeQ, judgeCount, judgeMark, LAYER, draw2, draw3, rtTable, teacherStep, showFig, practice, buildAll };
+})();
+</script>
+
+</body>
+</html>
