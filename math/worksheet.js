@@ -38,6 +38,8 @@
      open: false   … はじめは、ワークシートをとじておく（URL に ?ws=0 を付けても同じ。?ws=1 でひらく）
      fields の { math: false } … その列は数式にせず、ふつうの文字で出す
      fields の { unit: 'cm' }  … 見出しに単位を付ける
+     kids: true    … 小学生向け。見出しを「よそう → やってみる → わかったこと → まとめ」にし、
+                     まとめの「式で書くと？」を「きまりを みじかく 書くと？」（ふつうの文字）にする
 
    【そのほかの命令】
      Worksheet.addRecord(記録)   … 表に1行足す（値は数・文字・分数 Fraction のどれでもよい）
@@ -55,7 +57,31 @@
   'use strict';
 
   // ワークシートの状態をまとめて入れておく箱
-  const S = { cfg: null, data: null, key: '', teacher: false, el: {}, flash: -1 };
+  const S = { cfg: null, data: null, key: '', teacher: false, el: {}, flash: -1, L: null };
+
+  // 画面に出すことば。中学生向け（ふつう）と、小学生向け（kids: true）
+  const WORDS = {
+    std: {
+      s1: '予想', s2: '操作', s3: '気づき', s4: 'まとめ（きまり）',
+      reason: 'そう考えた理由（ひとこと）', reasonPh: '〜だから、〜になると思う。',
+      opNote: 'アプリを動かして、気になったところで「記録する」を押そう。', rec: '＋ 記録する',
+      warn: '先に ① の予想をしてから操作しよう。',
+      recall: 'あなたの予想：', noPred: '（まだ ① の予想をしていません）',
+      notice: '記録をくらべて、気づいたこと', noticePh: '〜のとき、いつも〜になっている。',
+      formula: '式で書くと？', formulaPh: '例）y = ax + b', formulaMath: true,
+      words: 'ことばで言うと？', wordsPh: '〜は、〜になる。'
+    },
+    kids: {
+      s1: 'よそう', s2: 'やってみる', s3: 'わかったこと', s4: 'まとめ',
+      reason: 'どうして そう 思ったか（ひとこと）', reasonPh: '〜だから、〜に なると 思う。',
+      opNote: 'アプリを うごかして、気に なった ところで「きろくする」を おそう。', rec: '＋ きろくする',
+      warn: '先に ① の よそうを してから やってみよう。',
+      recall: 'あなたの よそう：', noPred: '（まだ ① の よそうを していません）',
+      notice: 'きろくを くらべて、わかったこと', noticePh: '〜の とき、いつも 〜に なって いる。',
+      formula: 'きまりを みじかく 書くと？', formulaPh: '例）〜すると → 〜に なる', formulaMath: false,
+      words: 'ことばで 言うと？', wordsPh: '〜は、〜に なる。'
+    }
+  };
 
   // ===== 小さな道具 =====
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -145,6 +171,7 @@
       fields, teacher,
       predictions: cfg.predictions || cfg.predictionChoices || []
     });
+    S.L = cfg.kids ? WORDS.kids : WORDS.std;
     S.teacher = isTeacher();
     S.key = fileKey(cfg.key);
     S.data = load();
@@ -163,7 +190,7 @@
     // 2回 init されたときは、前のものを消してから作り直す
     ['panel', 'open', 'toast'].forEach(k => S.el[k] && S.el[k].remove());
 
-    const c = S.cfg;
+    const c = S.cfg, L = S.L;
     const teacherBox = (title, html) => S.teacher && html
       ? '<div class="ws-teacher"><div class="ws-teacher-h">' + title + '</div><div>' + html + '</div></div>' : '';
     const choiceBtn = (val, html) =>
@@ -184,44 +211,44 @@
 
       // ① 予想
       '<section class="ws-step" data-step="1">' +
-        '<h3 class="ws-step-h"><span class="ws-num">1</span>予想<span class="ws-done" hidden>✔ できた</span></h3>' +
+        '<h3 class="ws-step-h"><span class="ws-num">1</span>' + L.s1 + '<span class="ws-done" hidden>✔ できた</span></h3>' +
         '<div class="ws-choices" role="group" aria-label="予想の選択肢">' +
           c.predictions.map((t, i) => choiceBtn(i, t)).join('') +
         '</div>' +
-        '<label class="ws-label" for="ws-reason">そう考えた理由（ひとこと）</label>' +
-        '<input type="text" class="ws-input" id="ws-reason" data-f="reason" placeholder="〜だから、〜になると思う。">' +
+        '<label class="ws-label" for="ws-reason">' + L.reason + '</label>' +
+        '<input type="text" class="ws-input" id="ws-reason" data-f="reason" placeholder="' + L.reasonPh + '">' +
         '<div class="ws-print-text ws-print-line" data-p="reason"></div>' +
         teacherBox('💡 先生用：ヒント', c.teacher.hint) +
       '</section>' +
 
       // ② 操作
       '<section class="ws-step" data-step="2">' +
-        '<h3 class="ws-step-h"><span class="ws-num">2</span>操作<span class="ws-done" hidden>✔ できた</span></h3>' +
-        '<p class="ws-note">' + (c.operationNote || 'アプリを動かして、気になったところで「記録する」を押そう。') + '</p>' +
-        (c.capture ? '<button type="button" class="ws-btn ws-main ws-rec ws-noprint" data-act="rec">＋ 記録する</button>' : '') +
-        '<p class="ws-warn" hidden>先に ① の予想をしてから操作しよう。</p>' +
+        '<h3 class="ws-step-h"><span class="ws-num">2</span>' + L.s2 + '<span class="ws-done" hidden>✔ できた</span></h3>' +
+        '<p class="ws-note">' + (c.operationNote || L.opNote) + '</p>' +
+        (c.capture ? '<button type="button" class="ws-btn ws-main ws-rec ws-noprint" data-act="rec">' + L.rec + '</button>' : '') +
+        '<p class="ws-warn" hidden>' + L.warn + '</p>' +
         '<div class="ws-table-wrap"><table class="ws-table"></table></div>' +
       '</section>' +
 
       // ③ 気づき
       '<section class="ws-step" data-step="3">' +
-        '<h3 class="ws-step-h"><span class="ws-num">3</span>気づき<span class="ws-done" hidden>✔ できた</span></h3>' +
+        '<h3 class="ws-step-h"><span class="ws-num">3</span>' + L.s3 + '<span class="ws-done" hidden>✔ できた</span></h3>' +
         '<div data-r="recall"></div>' +
-        '<label class="ws-label" for="ws-notice">記録をくらべて、気づいたこと</label>' +
-        '<textarea class="ws-text" id="ws-notice" data-f="notice" placeholder="〜のとき、いつも〜になっている。"></textarea>' +
+        '<label class="ws-label" for="ws-notice">' + L.notice + '</label>' +
+        '<textarea class="ws-text" id="ws-notice" data-f="notice" placeholder="' + L.noticePh + '"></textarea>' +
         '<div class="ws-print-text" data-p="notice"></div>' +
       '</section>' +
 
       // ④ まとめ
       '<section class="ws-step" data-step="4">' +
-        '<h3 class="ws-step-h"><span class="ws-num">4</span>まとめ（きまり）<span class="ws-done" hidden>✔ できた</span></h3>' +
+        '<h3 class="ws-step-h"><span class="ws-num">4</span>' + L.s4 + '<span class="ws-done" hidden>✔ できた</span></h3>' +
         (c.summaryHint ? '<p class="ws-note ws-hint">' + c.summaryHint + '</p>' : '') +
-        '<label class="ws-label" for="ws-formula">式で書くと？</label>' +
-        '<input type="text" class="ws-input ws-formula" id="ws-formula" data-f="formula" placeholder="例）y = ax + b" autocomplete="off" spellcheck="false">' +
+        '<label class="ws-label" for="ws-formula">' + L.formula + '</label>' +
+        '<input type="text" class="ws-input ws-formula" id="ws-formula" data-f="formula" placeholder="' + L.formulaPh + '" autocomplete="off" spellcheck="false">' +
         '<div class="ws-preview" data-r="preview" aria-live="polite"></div>' +
-        '<p class="ws-keys ws-noprint">分数は 1/2、2乗は x^2、√ は「ルート」と入力しても書けます。</p>' +
-        '<label class="ws-label" for="ws-words">ことばで言うと？</label>' +
-        '<textarea class="ws-text" id="ws-words" data-f="words" placeholder="〜は、〜になる。"></textarea>' +
+        (L.formulaMath ? '<p class="ws-keys ws-noprint">分数は 1/2、2乗は x^2、√ は「ルート」と入力しても書けます。</p>' : '') +
+        '<label class="ws-label" for="ws-words">' + L.words + '</label>' +
+        '<textarea class="ws-text" id="ws-words" data-f="words" placeholder="' + L.wordsPh + '"></textarea>' +
         '<div class="ws-print-text" data-p="words"></div>' +
         teacherBox('📘 先生用：解答例', c.teacher.answer) +
       '</section>' +
@@ -321,8 +348,8 @@
     setValue('[data-f="notice"]', S.data.notice);
     const ch = S.cfg.predictions[S.data.prediction.choice];
     S.el.panel.querySelector('[data-r="recall"]').innerHTML = ch != null
-      ? 'あなたの予想：<b>' + ch + '</b>'
-      : '<span class="ws-gray">（まだ ① の予想をしていません）</span>';
+      ? S.L.recall + '<b>' + ch + '</b>'
+      : '<span class="ws-gray">' + S.L.noPred + '</span>';
   }
   function renderSummary() {
     setValue('[data-f="formula"]', S.data.summary.formula);
@@ -335,6 +362,7 @@
     const v = S.data.summary.formula.trim();
     if (!v) { box.innerHTML = ''; box.hidden = true; return; }
     box.hidden = false;
+    if (!S.L.formulaMath) { box.textContent = v; return; }   // 小学生向けは、ふつうの文字のまま見せる
     const src = v.replace(/ルート/g, '√');
     box.innerHTML = window.MathRender ? window.MathRender.html(src, { size: 'small' }) : esc(src);
   }
@@ -423,28 +451,28 @@
 
   // ===== テキストにする・コピーする =====
   function toText() {
-    const c = S.cfg, d = S.data, L = [];
+    const c = S.cfg, d = S.data, L = [], W = S.L;
     const blank = s => (s && s.trim() ? s.trim() : '（まだ書いていません）');
     L.push('【' + plain(c.title) + '】 ' + today());
     if (c.question) L.push('もんだい：' + plain(c.question));
     L.push('');
-    L.push('① 予想');
+    L.push('① ' + W.s1);
     const ch = c.predictions[d.prediction.choice];
-    L.push('　予想：' + (ch != null ? plain(ch) : '（えらんでいません）'));
+    L.push('　' + W.s1 + '：' + (ch != null ? plain(ch) : '（えらんでいません）'));
     L.push('　理由：' + blank(d.prediction.reason));
     L.push('');
-    L.push('② 操作（記録 ' + d.records.length + ' 回）');
+    L.push('② ' + W.s2 + '（記録 ' + d.records.length + ' 回）');
     if (c.fields.length) {
       L.push('　回\t' + c.fields.map(f => plain(f.label) + (f.unit ? '（' + f.unit + '）' : '')).join('\t'));
       d.records.forEach((r, i) => L.push('　' + (i + 1) + '\t' + c.fields.map(f => str(r[f.key])).join('\t')));
     }
     L.push('');
-    L.push('③ 気づき');
+    L.push('③ ' + W.s3);
     L.push('　' + blank(d.notice).replace(/\n/g, '\n　'));
     L.push('');
-    L.push('④ まとめ');
-    L.push('　式で書くと：' + blank(d.summary.formula));
-    L.push('　ことばで言うと：' + blank(d.summary.words).replace(/\n/g, '\n　'));
+    L.push('④ ' + W.s4);
+    L.push('　' + W.formula.replace(/？$/, '') + '：' + blank(d.summary.formula));
+    L.push('　' + W.words.replace(/？$/, '') + '：' + blank(d.summary.words).replace(/\n/g, '\n　'));
     return L.join('\n');
   }
   function copyText() {
