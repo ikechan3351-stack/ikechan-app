@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ならべて しらべて 変わり方</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  :root {
+    --ink: #263238; --accent: #3949ab; --accent-dark: #283593; --soft: #c5cae9;
+    --warn: #ad1457; --warn-bg: #fce4ec; --good: #2e7d32; --good-bg: #e8f5e9;
+    --ca: #ef6c00; --ca-bg: #fff3e0;     /* ○（かわる 数）＝オレンジ */
+    --cb: #1565c0; --cb-bg: #e3f2fd;     /* □（ならべた 数）＝青 */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink); font-size: 20px;
+    background: linear-gradient(160deg, #f4f5fc 0%, #dfe3f5 100%);
+    min-height: 100vh; padding: 10px 16px 24px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  button, input { font-family: inherit; color: inherit; }
+  .no-ruby rt { display: none; }
+  [hidden] { display: none !important; }
+  .wrap { width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ===== 上の 段 ===== */
+  .topbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .back-link { font-size: 0.85rem; color: var(--accent-dark); text-decoration: none; }
+  .title-box { flex: 1; text-align: center; min-width: 220px; }
+  h1 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.8rem); color: var(--accent-dark); }
+  .subtitle { margin: 0; font-size: 0.8rem; color: #546e7a; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tool-btn {
+    min-height: 48px; min-width: 48px; padding: 4px 12px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 0.9rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 0 12px; font-size: 0.85rem; font-weight: bold; }
+  .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .mode-btn {
+    min-height: 52px; padding: 6px 14px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 14px;
+    font-size: clamp(0.95rem, 2vmin, 1.1rem); font-weight: bold; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation;
+  }
+  .mode-btn.active { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .chip {
+    min-height: 48px; padding: 4px 14px; border: 2px solid var(--soft); background: #fff; border-radius: 999px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.active::before { content: "✔ "; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+
+  /* ===== ひとこと ===== */
+  .say {
+    font-size: clamp(1.05rem, 2.4vmin, 1.35rem); line-height: 1.9; font-weight: bold; text-align: center;
+    background: #fff; border-radius: 14px; padding: 4px 16px; min-height: 2.2em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .say::before { content: "🧩 "; }
+  .say.warn { background: var(--warn-bg); color: var(--warn); }
+  .say.warn::before { content: "⚠️ "; }
+  .say.good { background: var(--good-bg); color: var(--good); }
+  .say.good::before { content: "⭐ "; }
+
+  /* ===== ボタン ===== */
+  .act-btn {
+    min-height: 52px; min-width: 52px; padding: 4px 14px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: clamp(1rem, 2.2vmin, 1.2rem); font-weight: 900; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.12); line-height: 1.25;
+  }
+  .act-btn:active { transform: translateY(2px); box-shadow: none; }
+  .act-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+  .b-reset { background: #f5f5f5; border-color: #cfd8dc; }
+  .b-main { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .b-hint { background: #f3e5f5; border-color: #ce93d8; }
+  .b-teacher { background: #fff3e0; border-color: #ffb74d; }
+  .b-next { background: #fffde7; border-color: #fdd835; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+
+  /* ===== ならび ===== */
+  .stage { display: flex; flex-direction: column; gap: 10px; }
+  .row2 { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+  .card {
+    background: #fff; border-radius: 18px; padding: 8px 12px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  }
+  .card h3 { margin: 0; font-size: clamp(1rem, 2vmin, 1.15rem); color: var(--accent-dark); }
+  .note { margin: 0; font-size: 0.95rem; font-weight: bold; text-align: center; line-height: 1.7; color: #455a64; }
+  .lead { margin: 0; text-align: center; font-weight: 900; font-size: clamp(1.1rem, 2.8vmin, 1.4rem); line-height: 1.8; }
+
+  /* ===== 数を えらぶ 部品（分子・分母・整数） ===== */
+  .pickers { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .fpick { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; border: 3px solid #ffb74d; background: var(--ca-bg); border-radius: 14px; padding: 4px 8px; }
+  .fpick.int { border-color: #64b5f6; background: var(--cb-bg); }
+  .frow { display: flex; gap: 6px; align-items: center; }
+  .fbar { width: 100%; height: 4px; background: var(--ink); border-radius: 2px; }
+  .sb { min-width: 48px; min-height: 48px; border-radius: 12px; border: 2px solid var(--soft); background: #fff; font-size: 1.3rem; font-weight: 900; cursor: pointer; touch-action: manipulation; }
+  .vin { width: 2.6em; min-height: 48px; font-size: 1.5rem; font-weight: 900; text-align: center; border: 2px solid #b0bec5; border-radius: 10px; background: #fff; }
+  .plab { font-size: 0.8rem; font-weight: bold; color: #546e7a; }
+  .opmark { font-size: 2rem; font-weight: 900; }
+
+  /* ===== 図 ===== */
+  .fig { display: block; width: 100%; height: auto; max-height: 52vh; }
+  .fig text { font-family: inherit; font-weight: 900; }
+  .fig .fade { transition: opacity 0.5s; }
+
+  /* ===== 式 ===== */
+  .formula { text-align: center; font-weight: 900; font-size: clamp(1.6rem, 4.6vmin, 2.4rem); line-height: 1.5; margin: 0; display: flex; gap: 0.3em; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .formula .ca { color: var(--ca); }
+  .formula .cb, .log .cb, .frule .cb { color: var(--cb); }
+  .formula .cg, .log .cg, .frule .cg { color: var(--good); }
+  .formula.sub { font-size: clamp(1.2rem, 3.4vmin, 1.8rem); color: #37474f; }
+  .mini { font-size: 0.55em; background: #eceff1; border-radius: 999px; padding: 2px 10px; color: #455a64; }
+  .formula .ans { border: 3px solid var(--good); border-radius: 12px; padding: 0 0.25em; background: var(--good-bg); }
+  .explain { font-size: 1rem; text-align: center; margin: 0; line-height: 1.8; font-weight: bold; color: #455a64; }
+  .alt { border: 3px dashed #90caf9; background: #f5faff; border-radius: 12px; padding: 4px 10px; text-align: center; font-weight: bold; margin: 0; }
+  .log { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .log li { border-radius: 10px; padding: 2px 12px; background: #f3f4fb; border: 2px solid #e8eaf6; font-weight: 900; font-size: 1.2rem; display: inline-flex; gap: 0.25em; align-items: center; }
+  .log li.new { border-color: #fdd835; background: #fffde7; }
+  .frule { font-size: 1.5rem; }
+  .concl { border: 4px solid #fdd835; background: #fffde7; border-radius: 16px; padding: 6px 12px; text-align: center; font-weight: 900; line-height: 1.9; margin: 0; }
+
+
+  /* ===== 約分の タップ・カード（もんだいでも つかう） ===== */
+  .ctok { min-width: 44px; min-height: 44px; border: 2px dashed #90a4ae; border-radius: 10px; background: #fff; font: inherit; font-weight: 900; cursor: pointer; touch-action: manipulation; padding: 0 4px; line-height: 1.1; }
+  .ctok.sel { border: 3px solid #f9a825; background: #fff59d; }
+  .cx { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; }
+  .cx s { color: #90a4ae; font-size: 0.75em; text-decoration-thickness: 3px; text-decoration-color: #ad1457; }
+  .cnew { color: #ad1457; font-size: 0.85em; }
+  .flipwrap { perspective: 800px; display: flex; justify-content: center; }
+  .flipcard { position: relative; width: 150px; height: 170px; transition: transform 0.6s; transform-style: preserve-3d; }
+  .flipcard.on { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 18px; font-size: 3.4rem; font-weight: 900; }
+  .face.front { background: var(--ca-bg); border: 4px solid #ffb74d; color: var(--ca); }
+  .face.back { background: var(--cb-bg); border: 4px dashed #64b5f6; color: var(--cb); transform: rotateY(180deg); }
+  .calm .flipcard { transition: none; }
+
+
+  /* ===== ✏️ もんだい ===== */
+  .qhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .progress { font-weight: 900; font-size: 1.15rem; color: var(--accent-dark); }
+  .qtag { font-weight: 900; background: #f3e5f5; color: #6a1b9a; border-radius: 999px; padding: 2px 12px; font-size: 0.9rem; }
+  .qkind { font-weight: 900; background: #e8eaf6; color: var(--accent-dark); border-radius: 999px; padding: 2px 12px; font-size: 0.9rem; }
+  .qbig { margin: 0; text-align: center; font-weight: 900; font-size: clamp(1.4rem, 4.2vmin, 2.3rem); line-height: 1.8; }
+  .pad { display: flex; flex-direction: column; gap: 8px; max-width: 420px; width: 100%; margin: 0 auto; }
+  .frbox { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .frbox .bar { width: 160px; height: 5px; background: #37474f; border-radius: 3px; }
+  .pad-box { min-width: 160px; min-height: 1.5em; border: 4px solid var(--soft); border-radius: 14px; background: #fffde7; text-align: center; padding: 0 12px; font-weight: 900; font-size: clamp(1.7rem, 5vmin, 2.4rem); line-height: 1.4; cursor: pointer; }
+  .pad-box.on { border-color: var(--accent); box-shadow: 0 0 0 3px #c5cae9; }
+  .pad-box.empty { color: #9e9e9e; font-size: 1rem; line-height: 2.6; }
+  .keypad { display: grid; grid-template-columns: repeat(4, minmax(56px, 1fr)); gap: 6px; }
+  .kp { min-height: 56px; border-radius: 12px; border: 2px solid var(--soft); background: #fff; font-size: 1.6rem; font-weight: 900; cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 rgba(0,0,0,0.1); }
+  .kp:active { background: #e8eaf6; }
+  .kp-w { font-size: 1rem; }
+  .kp-ok { font-size: 1.15rem; background: var(--accent); border-color: var(--accent); color: #fff; }
+  .choice { font-size: clamp(1.2rem, 3vmin, 1.5rem); min-width: 160px; }
+  .choice.right { border-color: #81c784; background: var(--good-bg); }
+  .choice.right::before { content: "◎ "; color: var(--good); }
+  .choice.wrongc { border-color: #ce93d8; background: #faf3fc; }
+  .choice.wrongc::before { content: "✖ "; color: #8e24aa; }
+  .fb { border-radius: 14px; padding: 6px 12px; font-weight: bold; line-height: 1.8; text-align: center; margin: 0; }
+  .fb.ok { background: var(--good-bg); color: var(--good); border: 3px solid #81c784; }
+  .fb.ok::before { content: "◎ "; }
+  .fb.ng { background: var(--warn-bg); color: var(--warn); border: 3px solid #f48fb1; }
+  .fb.ng::before { content: "△ "; }
+  .trip { border: 4px solid #ab47bc; background: #faf3fc; border-radius: 16px; padding: 6px 12px; line-height: 1.8; margin-top: 6px; }
+  .trip h4 { margin: 0; color: #6a1b9a; font-size: 1.05rem; }
+  .trip h4::before { content: "🔎 "; }
+  .trip p { margin: 2px 0; font-weight: bold; }
+  .ans-t { border: 3px dashed #ffb74d; background: #fff8e1; border-radius: 12px; padding: 4px 10px; font-weight: bold; text-align: center; margin: 0; }
+  .res-big { font-size: 1.6rem; font-weight: 900; color: #e65100; text-align: center; margin: 0; }
+
+
+  /* ===== ✏️ もんだい（この アプリ） ===== */
+  .qlead2 { margin: 0; text-align: center; font-weight: 900; font-size: clamp(1.1rem, 3vmin, 1.45rem); line-height: 1.8; }
+  .qfig { max-width: 420px; margin: 0 auto; }
+  .ansline { display: flex; gap: 8px; align-items: center; justify-content: center; font-weight: 900; font-size: 1.3rem; }
+
+
+  /* ===== 表 ===== */
+  .tbl-scroll { overflow-x: auto; }
+  .cnt th.hl, .cnt td.hl { background: #fff59d; border-color: #fbc02d; }
+  .edit summary { cursor: pointer; font-weight: bold; min-height: 44px; line-height: 44px; }
+  .ed-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-weight: bold; margin: 4px 0; }
+  .ed-row .vin { width: 3.6em; }
+  .footer-links { display: flex; gap: 8px 16px; flex-wrap: wrap; justify-content: center; font-size: 0.9rem; margin-top: 4px; }
+  .footer-links a { color: var(--accent-dark); font-weight: bold; }
+  .diff-note { font-size: 0.8rem; color: #607d8b; text-align: center; margin: 0; }
+
+  .cheer {
+    position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 95; pointer-events: none;
+    background: #fff; border: 5px solid #fdd835; border-radius: 24px; padding: 14px 34px;
+    font-size: clamp(1.5rem, 7vw, 4rem); font-weight: 900; color: #e65100; white-space: nowrap;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: cheer 1.3s ease-out forwards;
+  }
+  @keyframes cheer {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+    15% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+    25%, 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  }
+  .shake { animation: shake 0.4s; }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+  /* ===== まど ===== */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+  .modal.open { display: flex; }
+  .modal-card { background: #fff; border-radius: 20px; padding: 16px 20px; max-width: 760px; width: 100%; max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; font-size: 1rem; }
+  .modal-card h2 { margin: 0; color: var(--accent-dark); font-size: 1.4rem; }
+  .modal-card h3 { margin: 6px 0 0; color: var(--accent-dark); font-size: 1.05rem; }
+  .modal-card p, .modal-card li { line-height: 1.7; }
+  .modal-card ul { margin: 4px 0; padding-left: 1.4em; }
+  .set-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .set-label { font-weight: bold; min-width: 8em; }
+  .ed-note { font-size: 0.85rem; color: #546e7a; margin: 0; line-height: 1.6; }
+
+  /* 「うごきを へらす」 */
+  .calm .cheer, .calm .shake { animation: none; }
+  .calm .fig .fade { transition: none; }
+
+  @media (max-width: 600px) {
+    body { padding: 8px 10px 20px; }
+    .sb { min-width: 44px; }
+  }
+
+  /* ===== 変わり方（この アプリ） ===== */
+  .cnt { border-collapse: separate; border-spacing: 4px; margin: 0 auto; font-weight: 900; }
+  .cnt th { text-align: left; font-size: 1rem; padding: 4px 8px; background: #f3f4fb; border-radius: 10px; white-space: nowrap; }
+  .cnt th.cb { color: var(--cb); background: var(--cb-bg); }
+  .cnt th.ca { color: var(--ca); background: var(--ca-bg); }
+  .cnt td { text-align: center; font-size: 1.3rem; padding: 2px 8px; border: 3px solid #e0e0e0; border-radius: 10px; min-width: 48px; }
+  .cnt td.new { background: #fff59d; border-color: #fbc02d; }
+  .cnt td.empty { color: #b0bec5; }
+  .cnt tr.inc td { border: none; font-size: 1rem; color: #2e7d32; padding: 0; }
+  .ansrow { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; font-weight: 900; }
+  .vin.wide { width: 5em; }
+  .sq-b { color: var(--cb); background: var(--cb-bg); border: 2px solid #64b5f6; border-radius: 6px; padding: 0 6px; }
+  .sq-o { color: var(--ca); background: var(--ca-bg); border: 2px solid #ffb74d; border-radius: 999px; padding: 0 8px; }
+  .incv { display: inline-block; transform: translateX(58%); background: #e8f5e9; border: 2px solid #81c784; border-radius: 999px; padding: 0 6px; }   /* となりの ○ との あいだに 出す */
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← アプリ一覧にもどる</a>
+    <div class="title-box">
+      <h1>🧩 ならべて しらべて <ruby>変<rt>か</rt></ruby>わり<ruby>方<rt>かた</rt></ruby></h1>
+      <p class="subtitle">□と ○の <ruby>表<rt>ひょう</rt></ruby>と <ruby>式<rt>しき</rt></ruby>（<ruby>変<rt>か</rt></ruby>わり<ruby>方<rt>かた</rt></ruby><ruby>調<rt>しら</rt></ruby>べ・5<ruby>年<rt>ねん</rt></ruby>）
+        <span id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></span></p>
+    </div>
+    <div class="tools">
+      <button class="tool-btn" id="btnHowto">❓ <ruby>先生<rt>せんせい</rt></ruby>へ</button>
+      <button class="tool-btn" id="btnFull">⛶ ぜんがめん</button>
+      <button class="tool-btn" id="btnSettings">⚙️ せってい</button>
+    </div>
+  </div>
+
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn" data-mode="narabe">🧩 ならべて しらべよう</button>
+    <button class="mode-btn" data-mode="shiki">🧮 きまりを <ruby>式<rt>しき</rt></ruby>に</button>
+    <button class="mode-btn" data-mode="quiz">✏️ もんだい</button>
+  </div>
+
+  <div class="say" id="say" aria-live="polite"></div>
+  <section class="stage" id="stage"></section>
+
+  <div class="footer-links">
+    <a href="おれ線グラフで 変わり方.html">📈 4年「おれ線グラフで 変わり方」</a>
+    <a href="ふやして くらべて 比例.html">📏 5年「ふやして くらべて 比例」</a>
+    <a href="関数の箱.html">📦 発展「関数の箱」</a>
+    <a href="比例をつくろう.html">📈 中1「比例をつくろう」</a>
+  </div>
+  <p class="diff-note">※じっさいとのちがい：ストローは どれも 同じ 長さで、すきまなく つなげる ものと して います。</p>
+</div>
+
+<!-- せってい -->
+<div class="modal" id="modalSettings" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>⚙️ せってい</h2>
+    <div class="set-line"><span class="set-label">もんだいの 数</span>
+      <button class="chip" data-set="count" data-val="5">5</button>
+      <button class="chip" data-set="count" data-val="10">10</button></div>
+    <div class="set-line"><span class="set-label">ふりがな</span>
+      <button class="chip" data-set="ruby" data-val="true">つける</button>
+      <button class="chip" data-set="ruby" data-val="false">つけない</button></div>
+    <div class="set-line"><span class="set-label">こうかおん</span>
+      <button class="chip" data-set="sound" data-val="true">ON</button>
+      <button class="chip" data-set="sound" data-val="false">OFF</button></div>
+    <div class="set-line"><span class="set-label">うごき</span>
+      <button class="chip" data-set="motion" data-val="auto">じどう</button>
+      <button class="chip" data-set="motion" data-val="less">へらす</button>
+      <button class="chip" data-set="motion" data-val="normal">ふつう</button></div>
+    <p class="ed-note">「じどう」は パソコンの「視差効果を減らす」などの 設定に あわせます。せっていは この ブラウザに 保存されます。</p>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- けっか -->
+<div class="modal" id="modalResult" role="dialog" aria-modal="true">
+  <div class="modal-card" id="resultCard"></div>
+</div>
+
+<!-- 先生へ -->
+<div class="modal" id="modalHowto" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2>❓ 先生へ（つかい方）</h2>
+    <p>5年「変わり方調べ」（東京書籍 新しい算数 5下 93〜95ページ）の教材です。図形をならべたときの数の変わり方を表にまとめ、きまりを見つけて □ と ○ の式に表します。今までの「関数の箱」は、中学につながる発展・練習用として残しています。</p>
+    <h3>🧩 ならべて しらべよう</h3>
+    <ul>
+      <li>場面は4つ：正方形を横にならべたときの まわりの長さ（○＝□×2＋2）／ストローで正三角形をならべたときの本数（○＝□×2＋1）／ストローで正方形をならべたときの本数（○＝□×3＋1）／正方形をだんにつんだときの まわりの長さ（○＝□×4）。</li>
+      <li>「＋ ならべる」で1つずつふやします（8まで）。いまふえた分は色と点線で区別します。□（ならべた数）と ○（まわりの長さ・本数）が表にたまります。「− とる」「↩ ひとつ もどす」「🔄 もういちど」があります。</li>
+      <li>「🔮 つぎを よそう」で、ならべる前に次の ○ を予想して入れられます。「🔍 ふえ方を 見る」で、表の ○ の間に ＋2・＋3 などの矢印が出ます。「□が 1 ふえると ○は いくつ ふえる？」に答えます。</li>
+    </ul>
+    <h3>🧮 きまりを 式に</h3>
+    <ul>
+      <li>同じ4つの場面で、① 表（□1〜5と○、ふえ方）と図、② 式「○＝□×［ ］＋［ ］」をつくる、③ □が20のときの○、④ ○からもどして□を求める、の順に考えます。</li>
+      <li>「🎨 式の わけを 図で 見る」：はじめの分（緑の太い線）と、1つ分ずつのまとまり（色と線のもよう）に分けて、×ふえる数＋はじめの数 になるわけを見せます（だんは、線をうつして正方形のまわりと同じになること）。</li>
+      <li>「➡ 表を のばして しらべる」で表を20までのばせます。10までのばすと「式をつかうとすぐわかる」と声かけします。</li>
+      <li><b>つまずき検知</b>：「ふえる 数だけの 式」（○＝□×3 で ＋1 をわすれる）、「はじめの 数で かける」（1つめの○で ○＝□×4 とする）、「□と ○の とりちがえ」（④で □に○の数を入れて計算する）。どれも □＝1・2・3 を入れた たしかめを出します。</li>
+    </ul>
+    <h3>✏️ もんだい</h3>
+    <ul>
+      <li>5種類がまざって出ます：表のつづき（□が6のときの○）／式をえらぶ（4つから）／□が大きいとき（20〜40こ）／○から□（ストローの本数・まわりの長さから、ならべた数）／図を見て（3つならべた図から、10〜15このとき）。問題の数は「せってい」で5か10にできます。</li>
+      <li>数字ボタンで答えます（2回まで）。式をえらぶ問題は1回です。PCはキーボードの数字・Backspace・Enter も使えます。</li>
+      <li><b>つまずき検知</b>：「ふえる 数だけの 式」「はじめの 数で かける」「□と ○の とりちがえ」。見つけた型は「あなたのつまずき」として出し、次にその型の「にた もんだい」を1つ足します。最後に回数と、「きまりを 式に」へのボタンを出します。</li>
+    </ul>
+    <h3>👩‍🏫 先生モード（アドレスの最後に <code>?teacher=1</code>）</h3>
+    <ul>
+      <li>ならべて しらべよう：「💡 こたえ」で、表を8まで うめます。きまりを 式に：「💡 こたえ」で式と③④の答えを出します。もんだい：「💡 こたえ」。ワークシートにヒントと解答例が出ます。</li>
+    </ul>
+    <p class="ed-note">ワークシートと設定は、このブラウザの localStorage（ikechan-math-ならべて しらべて 変わり方）に保存されます。もんだいの成績は保存しません。</p>
+    <button class="act-btn b-reset" data-close>とじる</button>
+  </div>
+</div>
+
+<script src="worksheet.js"></script>
+<script>
+'use strict';
+/* =========================================================
+   1. 小さな 道具
+   ========================================================= */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const R = (kanji, kana) => `<ruby>${kanji}<rt>${kana}</rt></ruby>`;   // ルビつきの 漢字
+const wait = (ms) => new Promise((ok) => setTimeout(ok, calm() ? Math.min(ms, 150) : ms));
+const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+
+// よく つかう ことば
+const KAWARI = R('変', 'か') + 'わり' + R('方', 'かた'), HYOU = R('表', 'ひょう'), SIKI = R('式', 'しき'), KAZU = R('数', 'かず');
+const NAGA = R('長', 'なが') + 'さ', HON = R('本', 'ほん'), FUE = 'ふえる';
+const BOX = '<span class="sq-b">□</span>', MARU = '<span class="sq-o">○</span>';
+const rnd = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const plainT = (h) => String(h).replace(/<rt>.*?<\/rt>|<[^>]+>/g, '');
+
+/* =========================================================
+   2. ワークシート（よそう → やってみる → わかったこと → まとめ）
+   ========================================================= */
+let captureNow = () => null;   // いまの 画面で「きろくする」と 入る もの
+Worksheet.init({
+  kids: true,
+  title: 'ならべて しらべて 変わり方',
+  question: 'ならべる 数が ふえると、まわりの 長さや ストローの 本数は どのように 変わるかな？',
+  predictions: ['いつも 同じ 数ずつ ふえる', 'ふえ方が だんだん 大きく なる', 'きまりは ない', 'わからない'],
+  fields: [
+    { key: 'scene', label: '場面', math: false },
+    { key: 'n', label: '□（ならべた数）', math: false },
+    { key: 'y', label: '○', math: false },
+    { key: 'rule', label: 'きまり・式', math: false }
+  ],
+  operationNote: '1つずつ ならべて、表に まとめよう。きまりを 見つけたら「きろくする」を おそう。',
+  capture: () => {
+    const r = captureNow();
+    if (!r) say('先に やって みてね', 'warn');
+    return r;
+  },
+  summaryHint: '「□が 1 ふえると、○は 3 ふえる」「○＝□×3＋1」のように、きまりを ことばと 式で 書いて みよう。',
+  teacher: {
+    hint: '1つずつならべて表にまとめ、□が1ふえると○がいくつふえるかに目を向けさせる。ふえた分の色を手がかりに、なぜその数ずつふえるのか（新しく足すストローの本数）を図で説明させる。表をのばすより式を使うほうが、□が大きいときに便利なことに気づかせる。',
+    answer: '正方形を横にならべたまわりの長さ：○＝□×2＋2。ストローの正三角形：○＝□×2＋1。ストローの正方形：○＝□×3＋1（最初の1本＋3本ずつ）。だんにつんだ正方形のまわり：○＝□×4。□が20のとき、ストローの正方形は 20×3＋1＝61本。'
+  }
+});
+
+/* =========================================================
+   3. せってい（ワークシートと 同じ 保存場所）
+   ========================================================= */
+const DEFAULTS = { sound: true, ruby: true, motion: 'auto', count: 5 };
+const settings = { ...DEFAULTS, ...(Worksheet.appData('settings') || {}) };
+const saveSettings = () => { try { Worksheet.appData('settings', { ...settings }); } catch (e) { /* 保存 できなくても よい */ } };
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const calm = () => settings.motion === 'less' || (settings.motion === 'auto' && reduceMQ.matches);
+
+/* =========================================================
+   4. 音（ブラウザで 音を つくる。ファイルは つかわない）
+   ========================================================= */
+let actx = null;
+function play(notes) {
+  if (!settings.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const now = actx.currentTime;
+    for (const [f, t, dur, type = 'sine', vol = 0.14] of notes) {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, now + t);
+      g.gain.exponentialRampToValueAtTime(vol, now + t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + t + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(now + t); o.stop(now + t + dur + 0.05);
+    }
+  } catch (e) { /* 音が 出せなくても うごく */ }
+}
+const sfx = {
+  tap:     () => play([[880, 0, 0.05, 'sine', 0.08]]),
+  up:      () => play([[523, 0, 0.08, 'triangle'], [659, 0.08, 0.12, 'triangle']]),
+  correct: () => play([[784, 0, 0.12], [988, 0.1, 0.12], [1175, 0.2, 0.12], [1568, 0.3, 0.35]]),
+  soft:    () => play([[392, 0, 0.15, 'triangle', 0.1], [440, 0.15, 0.2, 'triangle', 0.1]]),
+  done:    () => play([[523, 0, 0.1], [659, 0.08, 0.1], [784, 0.16, 0.18], [1047, 0.26, 0.3]]),
+};
+
+/* =========================================================
+   5. 共通の 部品
+   ========================================================= */
+const sayEl = $('#say');
+function say(html, kind = '') { sayEl.innerHTML = html; sayEl.className = 'say' + (kind ? ' ' + kind : ''); }
+function cheer(text) {
+  if (calm()) return;
+  const c = document.createElement('div'); c.className = 'cheer'; c.textContent = text;
+  document.body.appendChild(c); setTimeout(() => c.remove(), 1400);
+}
+function shake(el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+
+// 模様（色だけで 区別しない ため）。グループごとに 色と 模様を かえる
+const GROUP = [
+  { fill: '#ffb74d', stroke: '#e65100', pat: '' },        // 1つめ：オレンジ・ぬりつぶし
+  { fill: 'url(#pB)', stroke: '#1565c0', pat: 'pB' },     // 2つめ：青・しま
+  { fill: 'url(#pG)', stroke: '#2e7d32', pat: 'pG' },     // 3つめ：緑・点
+  { fill: 'url(#pP)', stroke: '#6a1b9a', pat: 'pP' },     // 4つめ：むらさき・こうし
+  { fill: '#ffe082', stroke: '#f57f17', pat: '' },        // 5つめ：黄・ぬりつぶし
+  { fill: 'url(#pT)', stroke: '#00695c', pat: 'pT' },     // 6つめ：青緑・横しま
+];
+const PATS = `<defs>
+  <pattern id="pB" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#bbdefb"/><line x1="0" y1="0" x2="0" y2="8" stroke="#1565c0" stroke-width="3"/></pattern>
+  <pattern id="pG" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#c8e6c9"/><circle cx="5" cy="5" r="2.2" fill="#2e7d32"/></pattern>
+  <pattern id="pP" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#e1bee7"/><path d="M0,5 H10 M5,0 V10" stroke="#6a1b9a" stroke-width="1.6"/></pattern>
+  <pattern id="pT" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#b2dfdb"/><line x1="0" y1="4" x2="8" y2="4" stroke="#00695c" stroke-width="2.5"/></pattern>
+</defs>`;
+
+// −・数の 入力・＋ の 部品。onSet(新しい 数) を よぶ
+function stepper(id, v, lab) {
+  return `<span class="frow"><button class="sb" data-st="${id}" data-d="-1" aria-label="${lab}を へらす">−</button><input class="vin" type="number" inputmode="numeric" id="${id}" value="${v}" aria-label="${lab}"><button class="sb" data-st="${id}" data-d="1" aria-label="${lab}を ふやす">＋</button></span>`;
+}
+
+/* =========================================================
+   6. 画面の きりかえ
+   ========================================================= */
+const VIEWS = {};
+let mode = 'narabe', current = null;
+function setMode(m) {
+  if (current && current.stop) current.stop();
+  mode = m;
+  $$('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === m));
+  $('#stage').innerHTML = '';
+  current = VIEWS[m];
+  captureNow = () => null;
+  current.show($('#stage'));
+}
+
+/* =========================================================
+   7. 🧩 ならべて しらべよう
+      図形を 1つずつ ならべて、□（ならべた 数）と ○（まわりの 長さ・ストローの 本数）を 表に まとめる。
+   ========================================================= */
+const NMAX = 8;   // ならべる 数の さいだい
+// ★場面（先生が かえる ときは ここ）。f：□ から ○、a・b：○＝□×a＋b、add：1つ ふやすと ふえる もの
+const SCENES = {
+  sqrow: { label: '🟦 正方形の まわり', icon: '🟦', unit: 'cm', y: 'まわりの 長さ', a: 2, b: 2,
+    lead: `1${R('辺', 'へん')}が 1cmの ${R('正方形', 'せいほうけい')}を ${R('横', 'よこ')}に ならべます。ならべた ${R('数', 'かず')}（□こ）と、まわりの ${NAGA}（○cm）は どう ${R('変', 'か')}わるかな？`,
+    why: `${R('正方形', 'せいほうけい')}を 1こ ふやすと、上と 下が 1cmずつ ふえるので 2cm ふえる` },
+  tri: { label: '🔺 ストローの 三角形', icon: '🔺', unit: '本', y: 'ストローの 本数', a: 2, b: 1,
+    lead: `ストローで ${R('正三角形', 'せいさんかくけい')}を ${R('横', 'よこ')}に つなげて ならべます。${R('三角形', 'さんかくけい')}の ${R('数', 'かず')}（□こ）と、ストローの ${R('本数', 'ほんすう')}（○本）は？`,
+    why: `${R('三角形', 'さんかくけい')}を 1こ ふやすと、ストローは 2本 ふえる（1本は となりと いっしょに つかう）` },
+  sq: { label: '🟧 ストローの 正方形', icon: '🟧', unit: '本', y: 'ストローの 本数', a: 3, b: 1,
+    lead: `ストローで ${R('正方形', 'せいほうけい')}を ${R('横', 'よこ')}に つなげて ならべます。${R('正方形', 'せいほうけい')}の ${R('数', 'かず')}（□こ）と、ストローの ${R('本数', 'ほんすう')}（○本）は？`,
+    why: `${R('正方形', 'せいほうけい')}を 1こ ふやすと、ストローは 3本 ふえる（左の 1本は となりと いっしょ）` },
+  stair: { label: '🪜 だんの まわり', icon: '🪜', unit: 'cm', y: 'まわりの 長さ', a: 4, b: 0,
+    lead: `1${R('辺', 'へん')}が 1cmの ${R('正方形', 'せいほうけい')}を だんの ように つみます。だんの ${R('数', 'かず')}（□だん）と、まわりの ${NAGA}（○cm）は？`,
+    why: `だんを 1つ ふやすと、まわりは 4cm ふえる（たてと よこを まとめて かんがえると 正方形の まわりと 同じ）` },
+};
+const yOf = (S, n) => S.a * n + S.b;
+
+// 図。n：いまの 数、S：場面。いま ふえた 分は 青の 点線で 区別する
+// grp：式の わけを 見せる ときは、はじめの 分（緑）と 1つ分ずつの まとまり（色と 線の もよう）に 分ける
+const GDASH = ['', '10 6', '2 7'];
+function figSVG(key, n, grp = false, fit = false) {   // fit：図の はばに あわせる（ならべる 画面では 大きさを そろえる）
+  const S = SCENES[key], hl = !fit;   // hl：いま ふえた 分を 色わけ（ならべる 画面だけ）
+  let h = '', w = 0, ht = 0;
+  const L = key === 'stair' ? 34 : 56, X0 = 20, Y0 = 20;
+  const stick = (x1, y1, x2, y2, isNew, g = 0) => {
+    const [col, dash] = grp ? (g < 0 ? ['#2e7d32', ''] : [GROUP[g % 6].stroke, GDASH[g % 3]]) : [isNew ? '#1565c0' : '#ef6c00', isNew ? '10 6' : ''];
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="${grp && g < 0 ? 9 : 7}" stroke-linecap="round" ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
+  };
+  if (key === 'sq') {
+    const y = Y0;
+    for (let i = 0; i < n; i++) {
+      const x = X0 + i * L, nw = (hl && i === n - 1 && n > 1);
+      if (i === 0) h += stick(x, y, x, y + L, (hl && n === 1), -1);   // 左はしの 1本
+      h += stick(x, y, x + L, y, nw, i) + stick(x, y + L, x + L, y + L, nw, i) + stick(x + L, y, x + L, y + L, nw || (hl && n === 1), i);
+    }
+    w = X0 * 2 + n * L; ht = Y0 * 2 + L;
+  } else if (key === 'tri') {
+    const H = L * 0.866, B = (k) => [X0 + k * L, Y0 + H], T = (k) => [X0 + (k + 0.5) * L, Y0];
+    const E = [];
+    for (let i = 0; i < n; i++) {
+      const k = Math.floor(i / 2), nw = (hl && i === n - 1 && n > 1);
+      if (i === 0) E.push([B(0), T(0), (hl && n === 1), -1], [B(0), B(1), (hl && n === 1), 0], [B(1), T(0), (hl && n === 1), 0]);   // 左の 1本が はじめの 分
+      else if (i % 2) E.push([T(k), T(k + 1), nw, i], [B(k + 1), T(k + 1), nw, i]);
+      else E.push([B(k), B(k + 1), nw, i], [B(k + 1), T(k), nw, i]);
+    }
+    for (const [p, q, nw, g] of E) h += stick(p[0], p[1], q[0], q[1], nw, g);
+    w = X0 * 2 + (Math.ceil(n / 2) + 0.5) * L; ht = Y0 * 2 + H;
+  } else if (key === 'sqrow') {
+    for (let i = 0; i < n; i++) h += `<rect x="${X0 + i * L}" y="${Y0}" width="${L}" height="${L}" fill="${(hl && i === n - 1 && n > 1) ? 'url(#pB)' : '#ffe0b2'}" stroke="#90a4ae" stroke-width="2"/>`;
+    if (!grp) h += `<rect x="${X0}" y="${Y0}" width="${n * L}" height="${L}" fill="none" stroke="#ef6c00" stroke-width="6"/>`;
+    else {
+      // 左右の はしが はじめの 2cm、正方形 1こごとに 上と 下の 2cm
+      h += stick(X0, Y0, X0, Y0 + L, false, -1) + stick(X0 + n * L, Y0, X0 + n * L, Y0 + L, false, -1);
+      for (let i = 0; i < n; i++) h += stick(X0 + i * L + 3, Y0, X0 + (i + 1) * L - 3, Y0, false, i) + stick(X0 + i * L + 3, Y0 + L, X0 + (i + 1) * L - 3, Y0 + L, false, i);
+    }
+    w = X0 * 2 + n * L; ht = Y0 * 2 + L;
+  } else {
+    // だん：上から 1こ・2こ…と ならべ、いちばん 下が いちばん 長い（左を そろえる）
+    for (let r = 0; r < n; r++) for (let c = 0; c <= r; c++) {
+      h += `<rect x="${X0 + c * L}" y="${Y0 + r * L}" width="${L}" height="${L}" fill="${(hl && r === n - 1 && n > 1) ? 'url(#pB)' : '#ffe0b2'}" stroke="#90a4ae" stroke-width="2"/>`;
+    }
+    let p = `M${X0},${Y0}`;
+    for (let r = 0; r < n; r++) p += ` H${X0 + (r + 1) * L} V${Y0 + (r + 1) * L}`;
+    p += ` H${X0} Z`;
+    h += `<path d="${p}" fill="none" stroke="#ef6c00" stroke-width="5" stroke-linejoin="round"/>`;
+    // わけ：だんの 線を 右と 下に うつすと、1辺が □cmの 正方形の まわりと 同じ
+    if (grp) h += `<rect x="${X0}" y="${Y0}" width="${n * L}" height="${n * L}" fill="none" stroke="#2e7d32" stroke-width="4" stroke-dasharray="8 6"/>`;
+    w = X0 * 2 + n * L; ht = Y0 * 2 + n * L;
+  }
+  const W = fit ? Math.max(w, 260) : Math.max(w, key === 'stair' ? 320 : 520), Ht = Math.max(ht, 100);
+  return { svg: PATS + h, w: W, h: Ht + 34, label: `<text x="${W / 2}" y="${Ht + 24}" font-size="20" text-anchor="middle" fill="#37474f">□＝${n}　○＝${yOf(S, n)}${S.unit}</text>` };
+}
+
+VIEWS.narabe = (() => {
+  let key = 'sq', n = 1, seen = {}, hist = [], showInc = false, incOK = false, predOn = false, fb = '';
+  function reset() { n = 1; seen = { 1: true }; hist = []; showInc = false; incOK = false; predOn = false; fb = ''; }
+  reset();
+  function render(stage) {
+    const S = SCENES[key];
+    stage.innerHTML = `
+      <div class="card"><div class="chips">${Object.entries(SCENES).map(([k, s]) => `<button class="chip ${key === k ? 'active' : ''}" data-sc="${k}">${s.label}</button>`).join('')}</div>
+        <p class="lead">${S.lead}</p></div>
+      <div class="card"><svg class="fig" id="nFig" aria-label="ならべた 図"></svg>
+        <div class="btn-row">
+          <button class="act-btn b-main" id="nAdd">＋ ならべる</button><button class="act-btn" id="nSub">− とる</button>
+          <button class="act-btn ${predOn ? 'b-next' : ''}" id="nPred">🔮 つぎを よそう</button>
+          <button class="act-btn" id="nUndo">↩ ひとつ もどす</button><button class="act-btn b-reset" id="nReset">🔄 もういちど</button>
+          ${TEACHER ? '<button class="act-btn b-teacher" id="nAns">💡 こたえ</button>' : ''}
+        </div>
+        <div id="nPredBox"></div></div>
+      <div class="card"><h3>${HYOU}に まとめよう</h3><div class="tbl-scroll"><table class="cnt" id="nTbl"></table></div>
+        <div class="btn-row"><button class="chip ${showInc ? 'active' : ''}" id="nInc">🔍 ふえ方を 見る</button></div></div>
+      <div class="card"><h3>${BOX}が 1 ふえると、${MARU}は いくつ ふえる？</h3>
+          <div class="ansrow"><input class="vin" type="number" inputmode="numeric" id="nIncIn" aria-label="ふえる 数"> ${S.unit} ふえる <button class="act-btn b-main" id="nIncOk">こたえる</button></div>
+          <div id="nFb">${fb}</div></div>`;
+    stage.querySelectorAll('[data-sc]').forEach((b) => b.addEventListener('click', () => { key = b.dataset.sc; reset(); sfx.tap(); render(stage); }));
+    $('#nAdd').addEventListener('click', () => change(n + 1));
+    $('#nSub').addEventListener('click', () => change(n - 1));
+    $('#nUndo').addEventListener('click', () => { if (!hist.length) { say('もどせる ものが ないよ'); return; } ({ n, seen } = hist.pop()); sfx.tap(); draw(); });
+    $('#nReset').addEventListener('click', () => { reset(); sfx.tap(); render(stage); });
+    $('#nPred').addEventListener('click', () => { predOn = !predOn; sfx.tap(); $('#nPred').classList.toggle('b-next', predOn); drawPred(); });
+    $('#nInc').addEventListener('click', () => { showInc = !showInc; sfx.tap(); $('#nInc').classList.toggle('active', showInc); drawTbl(); });
+    $('#nIncOk').addEventListener('click', checkInc);
+    $('#nIncIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') checkInc(); });
+    if (TEACHER) $('#nAns').addEventListener('click', () => { for (let k = 1; k <= NMAX; k++) seen[k] = true; showInc = true; sfx.tap(); $('#nInc').classList.add('active'); draw(); say(`こたえ：${S.why}。${MARU}＝${BOX}×${S.a}${S.b ? `＋${S.b}` : ''}`); });
+    draw();
+    say(`「＋ ならべる」で 1つずつ ふやして、${HYOU}に まとめよう`);
+  }
+  function change(m, quiet = false) {
+    if (m < 1 || m > NMAX) { say(m < 1 ? '1つより 少なく できないよ' : `${NMAX}こまで だよ`, 'warn'); return false; }
+    hist.push({ n, seen: { ...seen } }); n = m; seen[n] = true;   // もどす ときは 表も もとに もどす if (!quiet) sfx.up(); draw();
+    const S = SCENES[key];
+    if (!quiet) say(`${BOX}＝${n} の とき ${MARU}＝${yOf(S, n)}${S.unit}`);
+    return true;
+  }
+  function draw() {
+    const F = figSVG(key, n);
+    $('#nFig').setAttribute('viewBox', `0 0 ${F.w} ${F.h}`); $('#nFig').innerHTML = F.svg + F.label;
+    drawTbl(); drawPred(); capture();
+  }
+  function drawTbl() {
+    const S = SCENES[key], ks = Array.from({ length: NMAX }, (_, i) => i + 1);
+    let inc = '';
+    if (showInc) inc = `<tr class="inc"><th></th>${ks.map((k) => `<td>${seen[k] && seen[k + 1] ? `<span class="incv">＋${S.a}</span>` : ''}</td>`).join('')}</tr>`;
+    $('#nTbl').innerHTML = `<tr><th class="cb">□ ${S.icon}<br><small>${key === 'stair' ? 'だんの 数' : 'ならべた 数'}</small></th>${ks.map((k) => `<td class="${k === n ? 'new' : ''}">${k}</td>`).join('')}</tr>
+      <tr><th class="ca">○（${S.unit}）<br><small>${S.y}</small></th>${ks.map((k) => `<td class="${k === n ? 'new' : seen[k] ? '' : 'empty'}">${seen[k] ? yOf(S, k) : '？'}</td>`).join('')}</tr>${inc}`;
+  }
+  // ならべる 前に つぎの ○ を よそうする
+  function drawPred() {
+    const S = SCENES[key], box = $('#nPredBox');
+    if (!predOn || n >= NMAX) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="ansrow">${BOX}＝${n + 1} の とき ${MARU}は？ <input class="vin" type="number" inputmode="numeric" id="nPv" aria-label="よそう"> ${S.unit} <button class="act-btn b-main" id="nPok">ならべて たしかめる</button></div>`;
+    $('#nPok').addEventListener('click', checkPred);
+    $('#nPv').addEventListener('keydown', (e) => { if (e.key === 'Enter') checkPred(); });
+  }
+  function checkPred() {
+    const S = SCENES[key], v = parseInt($('#nPv').value, 10);
+    if (!Number.isFinite(v)) { say('数を 入れてね', 'warn'); return; }
+    const ans = yOf(S, n + 1);
+    change(n + 1, true);
+    if (v === ans) { sfx.correct(); cheer('よそうどおり！'); say(`よそうどおり！ ${BOX}＝${n} の とき ${MARU}＝${ans}${S.unit}`, 'good'); }
+    else { sfx.soft(); say(`ならべて みると ${ans}${S.unit}。${v === yOf(S, n - 1) + 1 ? `1つ ふえると 1 ふえるのでは ないね。` : ''}ふえた 分（青の 点線）を 見て みよう`, 'warn'); }
+  }
+  function checkInc() {
+    const S = SCENES[key], v = parseInt($('#nIncIn').value, 10);
+    if (!Number.isFinite(v)) { say('数を 入れてね', 'warn'); return; }
+    if (Object.keys(seen).length < 3) { say(`先に 3つ いじょう ならべて、${HYOU}を 見て みよう`, 'warn'); return; }
+    if (v === S.a) {
+      incOK = true; sfx.correct(); cheer('せいかい！'); showInc = true; $('#nInc').classList.add('active'); drawTbl();
+      fb = `<p class="fb ok">せいかい！ ${BOX}が 1 ふえると ${MARU}は ${S.a}${S.unit} ふえる。<br><small>${S.why}</small></p>`;
+    } else {
+      sfx.soft();
+      fb = `<p class="fb ng">もう いちど。${HYOU}の ${MARU}の ${R('数', 'かず')}を となりどうし くらべよう（「🔍 ふえ方を 見る」）</p>`;
+    }
+    $('#nFb').innerHTML = fb; capture();
+  }
+  function capture() {
+    const S = SCENES[key], ks = Object.keys(seen).map(Number).sort((x, y) => x - y);
+    captureNow = () => ({ scene: plainT(S.label), n: ks.join('、'), y: ks.map((k) => yOf(S, k)).join('、') + S.unit, rule: incOK ? `□が1ふえると○は${S.a}ふえる` : '' });
+  }
+  return { show: render };
+})();
+
+/* =========================================================
+   8. 🧮 きまりを 式に
+      表から「○＝□×ふえる数＋はじめの 分」の 式を つくり、□が 大きい ときの ○ や、○から □ を もとめる。
+   ========================================================= */
+// つまずきの 型（もんだいでも 同じ 名前を つかう）
+const TRIP = {
+  tasu: { name: 'ふえる 数だけの 式', tip: (S) => `${MARU}＝${BOX}×${S.a} だと、${BOX}＝1 の とき ${S.a}。でも ${HYOU}では ${yOf(S, 1)}。はじめの 分（＋${S.b}）を わすれずに。` },
+  first: { name: 'はじめの 数で かける', tip: (S) => `1つめの ${MARU}（${yOf(S, 1)}）で かけると、${BOX}＝2 の とき ${yOf(S, 1) * 2}に なって ${HYOU}（${yOf(S, 2)}）と 合わない。かけるのは、${BOX}が 1 ふえる ごとに ふえる 数（${S.a}）だよ。` },
+  gyaku: { name: '□と ○の とりちがえ', tip: (S) => `${MARU}が わかって いて ${BOX}を もとめる ときは、${SIKI}を 逆に たどる：${S.b ? `（${MARU}−${S.b}）÷${S.a}` : `${MARU}÷${S.a}`}。` },
+};
+const tripBox = (t, S, extra = '') => `<div class="trip"><h4>あなたの つまずき：「${TRIP[t].name}」</h4><p>${TRIP[t].tip(S)}${extra}</p></div>`;
+const fShiki = (S, x = BOX) => `${MARU}＝${x}×${S.a}${S.b ? `＋${S.b}` : ''}`;
+
+VIEWS.shiki = (() => {
+  let key = 'sq', ok = false, fb = '', grp = false, f20 = '', fRev = '', ext = 5, revK = 12;
+  function reset() { ok = false; fb = ''; grp = false; f20 = ''; fRev = ''; ext = 5; revK = rnd(10, 15); }
+  reset();
+  function render(stage) {
+    const S = SCENES[key], Y = yOf(S, revK);
+    stage.innerHTML = `
+      <div class="card"><div class="chips">${Object.entries(SCENES).map(([k, s]) => `<button class="chip ${key === k ? 'active' : ''}" data-sc="${k}">${s.label}</button>`).join('')}</div>
+        <p class="lead">${HYOU}から きまりを 見つけて、${BOX}と ${MARU}の ${SIKI}に 表そう</p></div>
+      <div class="row2">
+        <div class="card"><h3>① ${HYOU}と ${R('図', 'ず')}（${S.y}）</h3>
+          <div class="tbl-scroll"><table class="cnt" id="sTbl"></table></div>
+          <svg class="fig" id="sFig" aria-label="4つ ならべた 図"></svg>
+          <div class="btn-row"><button class="chip ${grp ? 'active' : ''}" id="sGrp">🎨 ${SIKI}の わけを ${R('図', 'ず')}で 見る</button></div>
+          <p class="note" id="sWhy"></p></div>
+        <div class="card"><h3>② ${SIKI}を つくろう</h3>
+          <p class="formula">${MARU} ＝ ${BOX} × <input class="vin" type="number" inputmode="numeric" id="sA" aria-label="かける 数"> ＋ <input class="vin" type="number" inputmode="numeric" id="sB" aria-label="たす 数"></p>
+          <p class="note">たす ${R('数', 'かず')}が ない ときは 0 か、空けた まま</p>
+          <div class="btn-row"><button class="act-btn b-main" id="sOk">たしかめる</button>${TEACHER ? '<button class="act-btn b-teacher" id="sAns">💡 こたえ</button>' : ''}</div>
+          <div id="sFb">${fb}</div></div>
+      </div>
+      <div class="row2">
+        <div class="card"><h3>③ ${BOX}が 20 の とき、${MARU}は？</h3>
+          <div class="ansrow"><input class="vin wide" type="number" inputmode="numeric" id="s20" aria-label="20の とき"> ${S.unit} <button class="act-btn b-main" id="s20ok">こたえる</button></div>
+          <div class="btn-row"><button class="act-btn" id="sExt">➡ ${HYOU}を のばして しらべる</button></div>
+          <div class="tbl-scroll" id="sExtT"></div>
+          <div id="s20fb">${f20}</div></div>
+        <div class="card"><h3>④ ${MARU}が ${Y}${S.unit} の とき、${BOX}は？</h3>
+          <div class="ansrow"><input class="vin wide" type="number" inputmode="numeric" id="sRv" aria-label="□"> ${key === 'stair' ? 'だん' : 'こ'} <button class="act-btn b-main" id="sRvok">こたえる</button></div>
+          <div id="sRvfb">${fRev}</div></div>
+      </div>`;
+    stage.querySelectorAll('[data-sc]').forEach((b) => b.addEventListener('click', () => { key = b.dataset.sc; reset(); sfx.tap(); render(stage); }));
+    $('#sGrp').addEventListener('click', () => { grp = !grp; sfx.tap(); $('#sGrp').classList.toggle('active', grp); drawFig(); });
+    $('#sOk').addEventListener('click', checkF);
+    ['#sA', '#sB'].forEach((id) => $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') checkF(); }));
+    $('#s20ok').addEventListener('click', check20); $('#s20').addEventListener('keydown', (e) => { if (e.key === 'Enter') check20(); });
+    $('#sRvok').addEventListener('click', checkRev); $('#sRv').addEventListener('keydown', (e) => { if (e.key === 'Enter') checkRev(); });
+    $('#sExt').addEventListener('click', extend);
+    if (TEACHER) $('#sAns').addEventListener('click', () => { $('#sA').value = S.a; $('#sB').value = S.b; checkF(); say(`こたえ：${fShiki(S)}。${BOX}＝20 なら ${yOf(S, 20)}${S.unit}、${MARU}＝${Y} なら ${BOX}＝${revK}`); });
+    drawTbl(); drawFig(); drawExt(); capture();
+    say(`${BOX}が 1 ふえると ${MARU}は いくつ ふえる？ ${BOX}＝1 の ときは？`);
+  }
+  function drawTbl() {
+    const S = SCENES[key], ks = [1, 2, 3, 4, 5];
+    $('#sTbl').innerHTML = `<tr><th class="cb">□</th>${ks.map((k) => `<td>${k}</td>`).join('')}</tr><tr><th class="ca">○（${S.unit}）</th>${ks.map((k) => `<td>${yOf(S, k)}</td>`).join('')}</tr>
+      <tr class="inc"><th></th>${ks.map((k) => `<td>${k < 5 ? `<span class="incv">＋${S.a}</span>` : ''}</td>`).join('')}</tr>`;
+  }
+  function drawFig() {
+    const S = SCENES[key], F = figSVG(key, 4, grp, true);
+    $('#sFig').setAttribute('viewBox', `0 0 ${F.w} ${F.h}`); $('#sFig').innerHTML = F.svg + F.label;
+    $('#sWhy').innerHTML = !grp ? '' : key === 'stair'
+      ? `だんの ${R('線', 'せん')}を 右と 下に うつすと、1${R('辺', 'へん')}が ${BOX}cmの ${R('正方形', 'せいほうけい')}（緑の 点線）の まわりと 同じ → ${BOX}×4`
+      : `<span style="color:#2e7d32">緑</span>が はじめの ${S.b}${S.unit}。あとは 1つ ならべる ごとに ${S.a}${S.unit}ずつ（色と ${R('線', 'せん')}の もようで 1つ分） → ${BOX}×${S.a}＋${S.b}`;
+  }
+  function checkF() {
+    const S = SCENES[key], a = parseInt($('#sA').value, 10), bRaw = $('#sB').value.trim(), b = bRaw === '' ? 0 : parseInt(bRaw, 10);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) { say('数を 入れてね', 'warn'); return; }
+    if (a === S.a && b === S.b) {
+      ok = true; sfx.correct(); cheer('せいかい！');
+      fb = `<p class="fb ok">せいかい！ ${fShiki(S)}</p><p class="concl">たしかめ：${[1, 2, 3].map((k) => `${BOX}＝${k} → ${k}×${S.a}${S.b ? `＋${S.b}` : ''}＝${yOf(S, k)}`).join('<br>')}<br><small>${HYOU}と 同じ！</small></p>`;
+      say(`${SIKI}が できたね。③・④も ${SIKI}を つかって みよう`, 'good');
+    } else {
+      sfx.soft();
+      const chk = [1, 2, 3].find((k) => a * k + b !== yOf(S, k));
+      const extra = `<br><small>たしかめ：${BOX}＝${chk} を 入れると ${a}×${chk}${b ? `＋${b}` : ''}＝${a * chk + b}、${HYOU}では ${yOf(S, chk)}</small>`;
+      if (a === S.a && b === 0 && S.b) fb = tripBox('tasu', S, extra);
+      else if (a === yOf(S, 1) && b === 0) fb = tripBox('first', S, extra);
+      else fb = `<p class="fb ng">${HYOU}と 合わないね。${extra}</p>`;
+      say('もう いちど', 'warn');
+    }
+    $('#sFb').innerHTML = fb; capture();
+  }
+  function check20() {
+    const S = SCENES[key], v = parseInt($('#s20').value, 10), ans = yOf(S, 20);
+    if (!Number.isFinite(v)) { say('数を 入れてね', 'warn'); return; }
+    if (v === ans) { sfx.correct(); cheer('せいかい！'); f20 = `<p class="fb ok">せいかい！ 20×${S.a}${S.b ? `＋${S.b}` : ''}＝${ans}（${S.unit}）<br><small>${SIKI}を つかうと、${HYOU}を のばさなくても すぐ わかる</small></p>`; }
+    else { sfx.soft(); f20 = v === S.a * 20 && S.b ? tripBox('tasu', S) : v === yOf(S, 1) * 20 ? tripBox('first', S) : `<p class="fb ng">もう いちど。${fShiki(S)} の ${BOX}に 20を 入れよう</p>`; }
+    $('#s20fb').innerHTML = f20; capture();
+  }
+  function checkRev() {
+    const S = SCENES[key], v = parseInt($('#sRv').value, 10), Y = yOf(S, revK);
+    if (!Number.isFinite(v)) { say('数を 入れてね', 'warn'); return; }
+    if (v === revK) { sfx.correct(); cheer('せいかい！'); fRev = `<p class="fb ok">せいかい！ ${S.b ? `（${Y}−${S.b}）÷${S.a}` : `${Y}÷${S.a}`}＝${revK}<br><small>たしかめ：${revK}×${S.a}${S.b ? `＋${S.b}` : ''}＝${Y}</small></p>`; }
+    else {
+      sfx.soft();
+      if (v === Y * S.a + S.b || v === Y * S.a) fRev = tripBox('gyaku', S, `<br><small>${v} は、${BOX}に ${Y}を 入れた ときの ${MARU}だよ。</small>`);
+      else if (S.b && v === Math.floor(Y / S.a)) fRev = tripBox('tasu', S, `<br><small>${Y}÷${S.a} では なく、はじめの ${S.b}を ひいてから わろう。</small>`);
+      else fRev = `<p class="fb ng">もう いちど。${fShiki(S)} の ${MARU}が ${Y}に なる ${BOX}を さがそう</p>`;
+    }
+    $('#sRvfb').innerHTML = fRev;
+  }
+  // 表を 1つずつ のばす（20まで）。のばしすぎたら 式の よさに 気づかせる
+  function extend() {
+    if (ext >= 20) { say(`20まで のばしたね。${SIKI}なら 1回の 計算で わかるよ`, 'warn'); return; }
+    ext++; sfx.tap(); drawExt();
+    if (ext === 10) say(`のばすのは たいへん…。${SIKI}を つかうと すぐ わかるよ`, 'warn');
+  }
+  function drawExt() {
+    const S = SCENES[key];
+    if (ext <= 5) { $('#sExtT').innerHTML = ''; return; }
+    const ks = Array.from({ length: ext - 5 }, (_, i) => i + 6);
+    $('#sExtT').innerHTML = `<table class="cnt"><tr><th class="cb">□</th>${ks.map((k) => `<td>${k}</td>`).join('')}</tr><tr><th class="ca">○</th>${ks.map((k) => `<td>${yOf(S, k)}</td>`).join('')}</tr></table>`;
+  }
+  function capture() {
+    const S = SCENES[key];
+    captureNow = () => ({ scene: plainT(S.label), n: '1〜5、20', y: `${[1, 2, 3, 4, 5].map((k) => yOf(S, k)).join('、')}、20の とき ${yOf(S, 20)}${S.unit}`, rule: ok ? plainT(fShiki(S)) : '（とちゅう）' });
+  }
+  return { show: render };
+})();
+
+/* =========================================================
+   9. ✏️ もんだい（5種類・つまずき検知 つき）
+      next：表の つづき  shiki：式を えらぶ  big：□が 大きい とき  rev：○から □  fig：図を 見て
+      つまずきの 型は「きまりを 式に」と 同じ（tasu・first・gyaku）
+   ========================================================= */
+const QK = { next: `${HYOU}の つづき`, shiki: `${SIKI}を えらぶ`, big: `${BOX}が 大きい とき`, rev: `${MARU}から ${BOX}`, fig: `${R('図', 'ず')}を 見て` };
+// 表だけの もんだいの きまり（○＝□×a＋b）
+const randRule = () => ({ a: rnd(2, 6), b: rnd(1, 5), unit: '', y: '○' });
+const sceneList = () => Object.keys(SCENES).filter((k) => k !== 'stair');   // ＋が ある 場面（つまずきが 見つけやすい）
+const tblHTML = (S, ks) => `<table class="cnt" style="margin:6px auto"><tr><th class="cb">□</th>${ks.map((k) => `<td>${k}</td>`).join('')}</tr><tr><th class="ca">○</th>${ks.map((k) => `<td>${yOf(S, k)}</td>`).join('')}</tr></table>`;
+
+VIEWS.quiz = (() => {
+  let qs = [], qi = 0, q = null, input = '', tries = 0, firstOK = 0, trips = {}, answered = false, prevKey = '';
+  function makeQ(slot) {
+    for (let t = 0; t < 60; t++) { const r = build(slot); if (r && r.key !== prevKey) { prevKey = r.key; return r; } }
+    return build(slot);
+  }
+  function build(slot) {
+    const k = slot.kind;
+    if (k === 'next') {
+      const S = randRule();
+      return { kind: k, S, key: `n${S.a}${S.b}`, pad: true, unit: '', ans: yOf(S, 6), wrong: { tasu: [S.a * 6], first: [yOf(S, 1) * 6] },
+        lead: `□と ○の ${HYOU}です。□が 6 の とき、○は いくつですか。`, pic: tblHTML(S, [1, 2, 3, 4]), how: `○は ${S.a}ずつ ふえるので、${yOf(S, 4)}＋${S.a}＋${S.a}＝${yOf(S, 6)}（${SIKI}：○＝□×${S.a}＋${S.b}）` };
+    }
+    if (k === 'shiki') {
+      const S = randRule();
+      const ch = [{ t: `○＝□×${S.a}＋${S.b}`, ok: true }, { t: `○＝□×${S.a}`, trip: 'tasu' }, { t: `○＝□×${yOf(S, 1)}`, trip: 'first' }, { t: `○＝□＋${S.a}`, trip: null }];
+      for (let i = ch.length - 1; i > 0; i--) { const j = rnd(0, i); [ch[i], ch[j]] = [ch[j], ch[i]]; }
+      return { kind: k, S, key: `s${S.a}${S.b}`, pad: false, choices: ch, lead: `この ${HYOU}の □と ○の ${R('関係', 'かんけい')}を 表す ${SIKI}は どれですか。`, pic: tblHTML(S, [1, 2, 3, 4, 5]), how: `○＝□×${S.a}＋${S.b}（□＝1 を 入れると ${yOf(S, 1)}）` };
+    }
+    if (k === 'big' || k === 'fig') {
+      const key = pick(sceneList()), S = SCENES[key], N = k === 'fig' ? pick([10, 12, 15]) : pick([20, 25, 30, 40]);
+      const what = key === 'sqrow' ? `まわりの ${NAGA}は ${NAN()}cmですか` : `ストローは ${NAN()}本 いりますか`;
+      return { kind: k, S, key: `${k}${key}${N}`, pad: true, unit: S.unit, ans: yOf(S, N), wrong: { tasu: [S.a * N], first: [yOf(S, 1) * N] },
+        lead: `${plainT(S.label).replace(/^\S+ /, '')}：${N}こ ならべると、${what}。`,
+        pic: k === 'fig' ? (() => { const F = figSVG(key, 3, false, true); return `<svg class="fig qfig" viewBox="0 0 ${F.w} ${F.h}" aria-label="3つ ならべた 図">${F.svg}${F.label}</svg>`; })() : tblHTML(S, [1, 2, 3, 4]),
+        how: `${N}×${S.a}＋${S.b}＝${yOf(S, N)}（${S.unit}）` };
+    }
+    // rev：○から □
+    const key = pick(sceneList()), S = SCENES[key], K = rnd(8, 16), Y = yOf(S, K);
+    const wr = [Y * S.a + S.b, Y * S.a];
+    const tw = Math.floor(Y / S.a) !== K ? [Math.floor(Y / S.a)] : [];
+    return { kind: 'rev', S, key: `r${key}${K}`, pad: true, unit: 'こ', ans: K, wrong: { gyaku: wr, tasu: tw },
+      lead: `${plainT(S.label).replace(/^\S+ /, '')}：${S.unit === '本' ? `ストローを ${Y}本 つかいました` : `まわりの ${NAGA}が ${Y}cmに なりました`}。${R('何', 'なん')}こ ならべましたか。`,
+      pic: tblHTML(S, [1, 2, 3, 4]), how: `（${Y}−${S.b}）÷${S.a}＝${K}（こ）` };
+  }
+  function NAN() { return R('何', 'なん'); }
+  function newSet() {
+    const kinds = ['next', 'shiki', 'big', 'rev', 'fig'];
+    const arr = Array.from({ length: settings.count }, (_, i) => ({ kind: kinds[i % 5] }));
+    for (let i = arr.length - 1; i > 0; i--) { const j = rnd(0, i); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    qs = arr; qi = 0; firstOK = 0; trips = {};
+  }
+  function render(stage) {
+    newSet();
+    stage.innerHTML = `
+      <div class="card">
+        <div class="qhead"><span class="progress" id="qProg"></span><span><span class="qkind" id="qKind"></span> <span class="qtag" id="qTag" hidden>にた もんだい</span></span></div>
+        <p class="qlead2" id="qText"></p>
+        <div id="qPic"></div>
+        <div class="btn-row" id="qChoices"></div>
+        <div class="pad" id="qPadWrap">
+          <div class="ansline"><div class="pad-box" id="qBox"></div><span id="qUnit"></span></div>
+          <div class="keypad" id="qPad">
+            ${[7, 8, 9].map((v) => `<button class="kp" data-key="${v}">${v}</button>`).join('')}<button class="kp kp-w" data-key="del">⌫ けす</button>
+            ${[4, 5, 6].map((v) => `<button class="kp" data-key="${v}">${v}</button>`).join('')}<button class="kp kp-w" data-key="clr">ぜんぶ けす</button>
+            ${[1, 2, 3].map((v) => `<button class="kp" data-key="${v}">${v}</button>`).join('')}<button class="kp" data-key="0">0</button>
+            <button class="kp kp-ok" data-key="ok" style="grid-column: span 4">こたえる</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="qFb"></div>
+        <div class="btn-row">
+          <button class="act-btn b-hint" id="qHint">💡 ヒント</button>
+          <button class="act-btn b-main" id="qNext" hidden>つぎへ ▶</button>
+          ${TEACHER ? '<button class="act-btn b-teacher" id="qAns">💡 こたえ</button>' : ''}
+        </div>
+        <div id="qT"></div>
+        <div class="btn-row"><button class="act-btn b-reset" id="qRestart">🔄 さいしょから</button></div>
+      </div>`;
+    $('#qPad').addEventListener('click', (ev) => { const b = ev.target.closest('[data-key]'); if (b) key(b.dataset.key); });
+    $('#qChoices').addEventListener('click', (ev) => { const b = ev.target.closest('[data-c]'); if (b) choose(+b.dataset.c); });
+    $('#qHint').addEventListener('click', hint);
+    $('#qNext').addEventListener('click', next);
+    $('#qRestart').addEventListener('click', () => { newSet(); load(); });
+    if (TEACHER) $('#qAns').addEventListener('click', () => { $('#qT').innerHTML = `<p class="ans-t">こたえ：${q.how}</p>`; });
+    load();
+  }
+  function load() {
+    const slot = qs[qi];
+    q = makeQ(slot);
+    if (q.wrong) for (const t of Object.keys(q.wrong)) q.wrong[t] = q.wrong[t].filter((w) => w !== q.ans);
+    input = ''; tries = 0; answered = false; q.tripHTML = '';
+    $('#qProg').textContent = `もんだい ${qi + 1} / ${qs.length}`;
+    $('#qKind').innerHTML = QK[q.kind];
+    $('#qTag').hidden = !slot.similar;
+    $('#qText').innerHTML = q.lead;
+    $('#qPic').innerHTML = q.pic || '';
+    $('#qFb').innerHTML = ''; $('#qT').innerHTML = '';
+    $('#qNext').hidden = true; $('#qHint').hidden = false;
+    $('#qPadWrap').hidden = !q.pad; $('#qChoices').hidden = !!q.pad;
+    $('#qUnit').innerHTML = q.unit || '';
+    if (!q.pad) $('#qChoices').innerHTML = q.choices.map((c, i) => `<button class="act-btn choice" data-c="${i}">${c.t}</button>`).join('');
+    drawBox();
+    say(`□が 1 ふえると ○は いくつ ふえるかな？ □＝1 の ときは？`);
+    captureNow = () => ({ scene: 'もんだい', n: plainT(QK[q.kind]), y: plainT(q.lead), rule: answered ? plainT(q.how) : '（とちゅう）' });
+  }
+  function drawBox() { const b = $('#qBox'); b.classList.toggle('empty', !input); b.textContent = input || 'こたえ'; }
+  function key(k) {
+    if (!q.pad) return;
+    if (k === 'ok') { if (answered) next(); else padAns(); return; }
+    if (answered) return;
+    if (k === 'del') input = input.slice(0, -1);
+    else if (k === 'clr') input = '';
+    else if (input.length < 5) input = (input === '0' ? '' : input) + k;
+    sfx.tap(); drawBox();
+  }
+  function trip(t) {
+    trips[t] = (trips[t] || 0) + 1;
+    if (!qs[qi].similar && !qs[qi].added) { qs[qi].added = true; qs.splice(qi + 1, 0, { kind: q.kind, similar: t }); }
+    return tripBox(t, q.S);
+  }
+  function hint() {
+    sfx.tap();
+    const H = { next: `○は いくつずつ ふえて いるかな？`, shiki: `□＝1・2 を 入れて、${HYOU}と 合うか たしかめよう`, big: `${SIKI}（○＝□×ふえる 数＋はじめの 分）に □を 入れよう`,
+      rev: `${SIKI}を 逆に たどろう：（○−はじめの 分）÷ふえる 数`, fig: `1こ ふえると いくつ ふえる？ はじめの 分は？` };
+    say(H[q.kind]);
+  }
+  function padAns() {
+    if (!input) { say('こたえを 入れてね', 'warn'); shake($('#qBox')); return; }
+    const v = parseInt(input, 10);
+    tries++;
+    if (v === q.ans) { correct(); return; }
+    sfx.soft(); shake($('#qBox'));
+    const t = Object.keys(q.wrong).find((k) => q.wrong[k].includes(v));
+    if (t && !q.tripHTML) q.tripHTML = trip(t);
+    let html = `<p class="fb ng">${tries >= 2 ? 'ざんねん…' : 'おしい！ もう いちど 考えよう'}</p>` + q.tripHTML;
+    if (tries >= 2) { answered = true; html += `<p class="fb ok" style="margin-top:6px">こたえは ${q.how}</p>`; $('#qNext').hidden = false; $('#qHint').hidden = true; }
+    else { input = ''; drawBox(); }
+    $('#qFb').innerHTML = html;
+  }
+  function choose(i) {
+    if (answered) return;
+    tries++; answered = true;
+    const c = q.choices[i];
+    $$('#qChoices .choice').forEach((b, j) => { b.classList.toggle('right', !!q.choices[j].ok); b.classList.toggle('wrongc', j === i && !c.ok); });
+    if (c.ok) { correct(); return; }
+    sfx.soft(); shake($('#qChoices'));
+    $('#qFb').innerHTML = `<p class="fb ng">ざんねん… ${q.how}</p>` + (c.trip ? trip(c.trip) : '');
+    $('#qNext').hidden = false; $('#qHint').hidden = true;
+  }
+  function correct() {
+    answered = true;
+    if (tries === 1) firstOK++;
+    sfx.correct(); cheer('せいかい！');
+    $('#qFb').innerHTML = `<p class="fb ok">せいかい！ ${q.how}</p>` + q.tripHTML;
+    $('#qNext').hidden = false; $('#qHint').hidden = true;
+  }
+  function next() { if (qi + 1 < qs.length) { qi++; load(); } else finish(); }
+  function finish() {
+    sfx.done();
+    const any = Object.keys(trips).length;
+    $('#resultCard').innerHTML = `
+      <h2>🎉 おわり！</h2>
+      <p class="res-big">1回めで せいかい：${firstOK} / ${qs.length} もん</p>
+      <h3>🔎 あなたの つまずき</h3>
+      ${any ? `<ul>${Object.keys(TRIP).map((t) => `<li>「${TRIP[t].name}」… ${trips[t] || 0} 回</li>`).join('')}</ul>
+        <p>「🧮 きまりを 式に」で、${R('図', 'ず')}の 色わけ（はじめの 分と 1つ分）を 見て、□＝1・2・3 で たしかめよう。</p>`
+        : firstOK === qs.length ? '<p>つまずきは 見つからなかったよ。すばらしい！</p>' : '<p>3つの つまずきの 型には あてはまらなかったよ。まちがえた もんだいを もう いちど 考えて みよう。</p>'}
+      <div class="btn-row"><button class="act-btn b-main" id="rAgain">もう いちど</button>${any ? '<button class="act-btn" id="rBack">🧮 きまりを 式に へ</button>' : ''}</div>`;
+    $('#modalResult').classList.add('open');
+    $('#rAgain').onclick = () => { $('#modalResult').classList.remove('open'); newSet(); load(); };
+    if (any) $('#rBack').onclick = () => { $('#modalResult').classList.remove('open'); setMode('shiki'); };
+  }
+  document.addEventListener('keydown', (ev) => {
+    if (mode !== 'quiz' || ev.target.closest?.('input, textarea') || $('.modal.open') || !q || !q.pad) return;
+    if (/^[0-9]$/.test(ev.key)) key(ev.key);
+    else if (ev.key === 'Backspace') { ev.preventDefault(); key('del'); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); key('ok'); }
+  });
+  return { show: render };
+})();
+
+/* =========================================================
+   12. ボタン・まど・せってい
+   ========================================================= */
+$('#modeRow').addEventListener('click', (ev) => { const b = ev.target.closest('[data-mode]'); if (b) { sfx.tap(); setMode(b.dataset.mode); } });
+$('#btnHowto').addEventListener('click', () => $('#modalHowto').classList.add('open'));
+$('#btnSettings').addEventListener('click', () => { drawSettings(); $('#modalSettings').classList.add('open'); });
+$('#btnFull').addEventListener('click', () => {
+  try { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); } catch (e) { /* つかえない ときは なにも しない */ }
+});
+$$('.modal').forEach((m) => m.addEventListener('click', (ev) => { if (ev.target === m || ev.target.closest('[data-close]')) m.classList.remove('open'); }));
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') $$('.modal.open').forEach((m) => m.classList.remove('open')); });
+function drawSettings() {
+  $$('[data-set]').forEach((b) => b.classList.toggle('active', String(settings[b.dataset.set]) === b.dataset.val));
+}
+$('#modalSettings').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-set]'); if (!b) return;
+  const k = b.dataset.set, v = b.dataset.val;
+  settings[k] = v === 'true' ? true : v === 'false' ? false : /^\d+$/.test(v) ? +v : v;
+  saveSettings(); applySettings(); drawSettings();
+  if (k === 'count' && mode === 'quiz') setMode('quiz');
+});
+function applySettings() {
+  document.body.classList.toggle('no-ruby', !settings.ruby);
+  document.body.classList.toggle('calm', calm());
+}
+reduceMQ.addEventListener && reduceMQ.addEventListener('change', applySettings);
+
+if (TEACHER) $('#teacherBadge').hidden = false;
+applySettings();
+setMode('narabe');
+</script>
+</body>
+</html>
