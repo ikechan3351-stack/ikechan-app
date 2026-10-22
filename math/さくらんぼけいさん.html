@@ -271,6 +271,7 @@
   .set-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; font-weight: bold; }
   .set-row select { font-size: 1rem; min-height: 44px; border-radius: 10px; padding: 0 8px; font-family: inherit; }
   .set-row input[type=checkbox] { width: 28px; height: 28px; }
+  .credit { margin: 4px 0 0; text-align: center; font-size: 0.8rem; color: #8d6e63; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #4e342e; color: #fff; padding: 12px 20px; border-radius: 14px; font-weight: bold; z-index: 50; }
 
   /* うごきを へらす */
@@ -376,6 +377,7 @@
       <button class="big-btn" id="resMap">🗺️ ちずへ</button>
     </div>
   </section>
+  <p class="credit" id="credit" hidden></p>
 </div>
 
 <dialog id="dlgSettings">
@@ -388,6 +390,8 @@
   <div style="text-align:right;margin-top:14px"><button class="tool-btn" id="dlgClose">とじる</button></div>
 </dialog>
 
+<!-- VOICEVOX の 音声ファイルの 一覧（なくても うごく。そのときは ブラウザの よみあげ） -->
+<script src="さくらんぼけいさん_音声/list.js"></script>
 <script>
 'use strict';
 /* =========================================================
@@ -430,10 +434,46 @@ function pickVoice() {
 }
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
 let demoMode = false;   // まなぶ のときは、こえを きってても よむ時間ぶん まつ
-function say(text) {
+
+/* ===== VOICEVOX で つくった 音声ファイル =====
+   しゃべる 文を「。！？」で くぎり、1文ごとに ファイルを ならす。ファイルが ない 文は ブラウザの よみあげで よむ。
+   ファイルは tools/さくらんぼ音声.py で つくる（ファイル名は 文の ハッシュ）。 */
+const VOICE_DIR = 'さくらんぼけいさん_音声/';
+const voiceSet = new Set((window.SAKURA_VOICE && window.SAKURA_VOICE.files) || []);
+const voiceEl = new Audio();
+voiceEl.preload = 'auto';
+let voiceUnlocked = false, voiceDone = null, sayId = 0;
+// えもじを のぞいて、1文ずつに わける
+function speechParts(text) {
+  const t = text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/[ 　]+/g, ' ');
+  return (t.match(/[^。！？]+[。！？]*/g) || []).map(s => s.trim()).filter(s => s && !/^[、。！？]+$/.test(s));
+}
+// 文の ハッシュ（FNV-1a 32bit。tools/さくらんぼ音声.py と おなじ 計算）
+function voiceHash(s) {
+  let h = 0x811c9dc5;
+  for (const b of new TextEncoder().encode(s)) { h ^= b; h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0');
+}
+// iPad では、さいしょの タップの ときに 1回 ならしておくと、あとから 音声を ならせる
+function unlockVoice() {
+  if (voiceUnlocked || !voiceSet.size) return;
+  voiceUnlocked = true;
+  voiceEl.src = VOICE_DIR + 'silence.m4a';
+  voiceEl.play().catch(() => {});
+}
+function playFile(h) {
+  return new Promise((res, rej) => {
+    voiceDone = res;
+    voiceEl.onended = () => res();
+    voiceEl.onerror = () => rej();
+    voiceEl.src = VOICE_DIR + h + '.m4a';
+    voiceEl.play().catch(rej);
+    setTimeout(res, 15000);
+  });
+}
+function ttsOne(text) {
   return new Promise(res => {
-    if (!store.settings.voice || !('speechSynthesis' in window)) { setTimeout(res, demoMode ? text.length * 90 + 400 : 0); return; }
-    speechSynthesis.cancel();
+    if (!('speechSynthesis' in window)) { res(); return; }
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ja-JP'; if (jaVoice) u.voice = jaVoice; u.rate = 0.95;
     let done = false; const fin = () => { if (!done) { done = true; res(); } };
@@ -441,11 +481,31 @@ function say(text) {
     speechSynthesis.speak(u);
   });
 }
-function hush() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+function say(text) {
+  hush();
+  const id = ++sayId;
+  if (!store.settings.voice) return new Promise(res => setTimeout(res, demoMode ? text.length * 90 + 400 : 0));
+  return (async () => {
+    for (const s of speechParts(text)) {
+      if (id !== sayId) return;
+      const h = voiceHash(s);
+      if (voiceSet.has(h)) { try { await playFile(h); continue; } catch (e) { /* ならなければ よみあげへ */ } }
+      else if (voiceSet.size) console.warn('音声ファイルが ない 文：', s);   // collectPhrases に たりない 文を さがす ため
+      if (id !== sayId) return;
+      await ttsOne(s);
+    }
+  })();
+}
+function hush() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  voiceEl.pause();
+  if (voiceDone) { const r = voiceDone; voiceDone = null; r(); }
+}
 
 /* ===== こうかおん（ファイルを つかわず、その場で 音を つくる） ===== */
 let actx = null;
 function ac() {
+  unlockVoice();
   if (!store.settings.sfx) return null;
   try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); }
   catch (e) { return null; }
@@ -1148,18 +1208,20 @@ function autoDo() {
 }
 
 /* ===== できあがり ===== */
+function finishWords() {
+  const ans = answer();
+  if (P.kind === 'ten') return `${P.a}と ${ans}で 10。`;
+  if (P.splitOnly) return `${P.b}は ${P.br[0].want}と ${P.br[1].want}。さくらんぼ できたね！`;
+  if (P.kind === 'add') return `10と ${P.rows[1].l[2]}で ${ans}。できあがり！`;
+  return `こたえは ${ans}。ごちそうさま！`;
+}
 async function finish(my) {
   P.phase = 'done'; P.active = null; P.busy = false;
   glow(() => false);
   P.ok = P.miss[1] + P.miss[2] + P.miss[3] === 0 && P.maxHint <= 1;
   render();
   SFX.fanfare();
-  const ans = answer();
-  let words;
-  if (P.kind === 'ten') words = `${P.a}と ${ans}で 10。`;
-  else if (P.splitOnly) words = `${P.b}は ${P.br[0].want}と ${P.br[1].want}。さくらんぼ できたね！`;
-  else if (P.kind === 'add') words = `10と ${P.rows[1].l[2]}で ${ans}。できあがり！`;
-  else words = `こたえは ${ans}。ごちそうさま！`;
+  let words = finishWords();
   if (P.learn) { bubble('🎉 ' + words, 'yatta', false); return words; }
   if (P.ok) { words += '　シール ゲット！'; setTimeout(() => SFX.sticker(), 700); }
   bubble((P.ok ? '🎉 ' : '👍 ') + words, 'yatta');
@@ -1223,56 +1285,79 @@ function goLearn(idx = 0, spec) {
 function scene(i) { $$('.scene').forEach((el, j) => { el.classList.toggle('on', j === i); el.classList.toggle('done', j < i); }); }
 async function tell(text, my) { bubble(text, '', false); await say(text); if (my !== tok) throw ABORT; await pause(250, my); }
 
+// まなぶ の せりふ（じゅんばんに よむ）
+function demoLines() {
+  const { a, b } = P, m = P.method, k = a - 10;
+  if (m === 'kasu' || m === 'hika') {
+    const x = m === 'kasu' ? a : b, y = m === 'kasu' ? b : a, p = 10 - x, q = y - p;
+    return [
+      `${x}は あと ${p}で 10。だから ${y}を ${m === 'kasu' ? `${p}と ${q}` : `${q}と ${p}`}に わけよう。`,
+      `${x}と ${p}を ゆびで なぞって かこむと、ソーセージの かたち！`,
+      `${P.rows[0].l[0]} たす ${P.rows[0].l[2]}で、10が やけたよ。`,
+      `10と、のこりの ${q}を あわせて ${a + b}。`,
+    ];
+  }
+  if (m === 'genka') return [
+    `${a}は 10と ${k}。10こ いりの パックと、バラが ${k}こ。`,
+    `バラの ${k}こから ${b}こは たべられないね。パックから ${b}こ パクッ！`,
+    `10 ひく ${b}で ${10 - b}。`,
+    `パックに のこった ${10 - b}こと、バラの ${k}こを、おさらに あつめる。`,
+    `${10 - b} たす ${k}で ${a - b}。`,
+  ];
+  return [
+    `${a}は バラが ${k}こ。だから ${b}を ${k}と ${b - k}に わけよう。`,
+    `まず バラの ${k}こを たべる。`,
+    `${a} ひく ${k}で 10。`,
+    `たりない ${b - k}こは、パックから パクッ！`,
+    `10 ひく ${b - k}で ${a - b}。`,
+  ];
+}
 async function demo(my) {
   demoMode = true;
-  const { a, b } = P, m = P.method;
+  const { a, b } = P, m = P.method, L = demoLines();
   // ① さくらんぼで わける
   scene(0);
-  if (m === 'kasu') await tell(`${a}は あと ${10 - a}で 10。だから ${b}を ${10 - a}と ${b - 10 + a}に わけよう。`, my);
-  if (m === 'hika') await tell(`${b}は あと ${10 - b}で 10。だから ${a}を ${a - 10 + b}と ${10 - b}に わけよう。`, my);
-  if (m === 'genka') await tell(`${a}は 10と ${a - 10}。10こ いりの パックと、バラが ${a - 10}こ。`, my);
-  if (m === 'gengen') await tell(`${a}は バラが ${a - 10}こ。だから ${b}を ${a - 10}と ${b - a + 10}に わけよう。`, my);
+  await tell(L[0], my);
   for (const i of P.order) { P.br[i].val = P.br[i].want; SFX.pop(); render(); await pause(500, my); }
   splitColors(); render(); await pause(600, my);
   if (P.kind === 'add') {
     // ② ソーセージを つくる ③ ジュージュー やく
     scene(1);
-    const x = m === 'kasu' ? a : b, p = 10 - x, q = P.rows[1].l[2];
-    await tell(`${x}と ${p}を ゆびで なぞって かこむと、ソーセージの かたち！`, my);
+    await tell(L[1], my);
     P.phase = 'make'; P.busy = true;
     scene(2);
     await doSausage(my);
-    await tell(`${P.rows[0].l[0]} たす ${P.rows[0].l[2]}で、10が やけたよ。`, my);
+    await tell(L[2], my);
     P.phase = 'rows'; P.rows[0].val = 10; SFX.pop(); render(); await pause(500, my);
     // ④ のこりと あわせる
     scene(3);
-    await tell(`10と、のこりの ${q}を あわせて ${a + b}。`, my);
+    await tell(L[3], my);
     P.rows[1].val = a + b; SFX.pop(); render(); await pause(400, my);
   } else if (m === 'genka') {
     scene(1);
-    await tell(`バラの ${a - 10}こから ${b}こは たべられないね。パックから ${b}こ パクッ！`, my);
+    await tell(L[1], my);
     P.phase = 'make'; P.busy = true; render();
     await eat('pack', b, my);
-    await tell(`10 ひく ${b}で ${10 - b}。`, my);
+    await tell(L[2], my);
     P.phase = 'rows'; P.rows[0].val = 10 - b; SFX.pop(); render(); await pause(400, my);
     scene(2);
-    await tell(`パックに のこった ${10 - b}こと、バラの ${a - 10}こを、おさらに あつめる。`, my);
+    await tell(L[3], my);
     await gather(my);
-    await tell(`${10 - b} たす ${a - 10}で ${a - b}。`, my);
+    await tell(L[4], my);
     P.rows[1].val = a - b; SFX.pop(); render(); await pause(400, my);
     scene(3);
   } else {
     const k = a - 10;
     scene(1);
-    await tell(`まず バラの ${k}こを たべる。`, my);
+    await tell(L[1], my);
     P.phase = 'make'; P.busy = true; render();
     await eat('bara', k, my);
-    await tell(`${a} ひく ${k}で 10。`, my);
+    await tell(L[2], my);
     P.phase = 'rows'; P.rows[0].val = 10; SFX.pop(); render(); await pause(400, my);
     scene(2);
-    await tell(`たりない ${b - k}こは、パックから パクッ！`, my);
+    await tell(L[3], my);
     await eat('pack', b - k, my);
-    await tell(`10 ひく ${b - k}で ${a - b}。`, my);
+    await tell(L[4], my);
     P.rows[1].val = a - b; SFX.pop(); render(); await pause(400, my);
     scene(3);
   }
@@ -1283,6 +1368,43 @@ async function demo(my) {
   await chant(my);
   demoMode = false;
 }
+/* ===== 音声ファイルを つくる ための、しゃべる 文の 一覧 =====
+   すべての もんだい・やり方・だんかいで 言う 文を あつめる（tools/さくらんぼ音声.py に わたす）。
+   文を ふやしたら、ここにも たす。 */
+const STATIC_PHRASES = [
+  'さくらんぼを つける かずを タップしてね。', 'ジュージュー！', 'いっしょに やってみよう。',
+  'おしい！', 'おしい！ さくらんぼを もういちど みてみよう。', 'おしい！ ブロックを みてみよう。',
+  'おしい！ のこりを あわせるのを わすれていないかな？', 'おしい！ その 2つで 10に なるかな？', 'おしい！ まず バラから たべよう。',
+  'ひかっている ところを よく みてね。', 'ひかっている ところを みてね。', 'うすく みえている かずを かいてみよう。',
+  '2つだけ かこもう。', 'もう 1つも なぞってね。2つで 10に なるよ。', 'バラは もう ないよ。パックから たべよう。',
+  'シール ゲット！', 'クリア！ よく できました！', 'あと すこし！ もういちど やってみよう。',
+];
+function collectPhrases() {
+  const out = new Set(), add = t => speechParts(t).forEach(s => out.add(s));
+  const keep = P;
+  STATIC_PHRASES.forEach(add);
+  Object.values(CHANTS).flat().forEach(add);
+  const specs = [];
+  for (let a = 1; a <= 9; a++) specs.push({ kind: 'ten', a });
+  ADD.forEach(p => { specs.push({ ...p, method: 'kasu' }, { ...p, method: 'hika' }, { ...p, method: 'kasu', splitOnly: true }); });
+  SUB.forEach(p => { specs.push({ ...p, method: 'genka' }, { ...p, method: 'gengen' }); });
+  for (const sp of specs) {
+    P = newP(sp);
+    if (sp.kind === 'ten') { P.phase = 'ten'; add(promptText()); add(hintText()); add(finishWords()); continue; }
+    setMethod(sp.method);
+    for (let bi = 0; bi < 2; bi++) { P.phase = 'split'; P.bi = bi; P.active = { t: 'br', i: P.order[bi] }; add(promptText()); add(hintText()); }
+    P.splitDone = true;
+    if (sp.splitOnly) { add(finishWords()); continue; }
+    P.phase = 'make'; P.active = null;
+    for (let st = 0; st < 2; st++) { P.eatStage = st; add(promptText()); add(hintText()); }
+    if (P.kind === 'sub') add(`おしい！ バラの ${P.a - 10}こからは ${P.b}こ たべられないね。`);
+    for (let i = 0; i < 2; i++) { P.phase = 'rows'; P.active = { t: 'row', i }; add(promptText()); add(hintText()); }
+    P.learn = true; demoLines().forEach(add); add(finishWords());
+  }
+  P = keep;
+  return [...out];
+}
+
 // あいことばを 1つずつ ひからせて よむ
 async function chant(my) {
   demoMode = true;
@@ -1397,6 +1519,8 @@ window.addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(()
 reduceMQ.addEventListener?.('change', applyCalm);
 
 $('#tBadge').hidden = !TEACHER;
+// VOICEVOX の 声を つかう ときは、きまりで キャラクター名を 出す
+if (voiceSet.size) { $('#credit').textContent = '音声：' + window.SAKURA_VOICE.credit; $('#credit').hidden = false; }
 syncTools();
 goHome();
 </script>
