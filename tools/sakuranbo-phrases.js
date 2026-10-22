@@ -7,7 +7,7 @@ const stub = new Proxy(function () {}, {
   get: (t, k) => k === Symbol.toPrimitive ? () => '' : k === Symbol.iterator ? function* () {} : k === 'length' ? 0 : stub,
   apply: () => stub, set: () => true, construct: () => stub, has: () => false,
 });
-const window = new Proxy({ matchMedia: () => stub }, { get: (t, k) => k in t ? t[k] : stub, has: (t, k) => k in t });
+const window = new Proxy({ matchMedia: () => stub, Worksheet: undefined, SAKURA_VOICE: undefined }, { get: (t, k) => k in t ? t[k] : stub, has: (t, k) => k in t });
 const ctx = { window, document: stub, localStorage: { getItem: () => null, setItem() {} }, location: { search: '' },
   Audio: function () { return stub; }, URLSearchParams, TextEncoder, console, setTimeout, clearTimeout, setInterval, clearInterval };
 const fn = new Function(...Object.keys(ctx), code + '\nreturn collectPhrases();');
