@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>田辺市マップ</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e8f5e9 0%, #c8e6c9 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { display: inline-block; font-size: 0.85rem; color: #2e7d32; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.4rem; color: #1b5e20; text-align: center; }
+  .subtitle { margin: 0 0 8px; font-size: 0.88rem; color: #388e3c; text-align: center; }
+  rt { font-size: 0.6em; }
+  .panel { width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 10px; }
+
+  .area-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .area-btn {
+    border: 3px solid transparent; background: #fff; border-radius: 12px;
+    padding: 6px 12px; font-size: 1rem; font-weight: bold; color: #333;
+    cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.12); touch-action: manipulation;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .area-btn .sw { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.2); }
+  .area-btn.active { border-color: #1b5e20; background: #f1f8e9; }
+
+  .main { display: flex; gap: 12px; align-items: flex-start; }
+  .side { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+
+  .info {
+    background: #fff; border-radius: 14px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    font-size: 0.95rem; line-height: 1.7; color: #333; border-left: 8px solid #a5d6a7;
+  }
+  .info h2 { margin: 0 0 4px; font-size: 1.35rem; color: #1b5e20; }
+  .info .stat { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+  .info .stat span { background: #f1f8e9; border-radius: 8px; padding: 2px 8px; font-weight: bold; font-size: 0.88rem; }
+  .info .places { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px; }
+  .info .places li { background: #fff8e1; border-radius: 8px; padding: 2px 8px; font-size: 0.85rem; cursor: pointer; }
+  .info .hint { font-size: 0.8rem; color: #888; margin-top: 6px; }
+  .info .btn {
+    border: none; background: #2e7d32; color: #fff; border-radius: 10px; padding: 7px 14px;
+    font-size: 0.9rem; font-weight: bold; cursor: pointer; margin-top: 8px; touch-action: manipulation;
+  }
+
+  .opts {
+    background: #fff; border-radius: 12px; padding: 8px 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.9rem; color: #333;
+  }
+  .opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .opts input { width: 18px; height: 18px; }
+
+  .legend { background: #fff; border-radius: 12px; padding: 8px 12px; font-size: 0.8rem; color: #444; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .legend .ttl { font-weight: bold; margin-bottom: 4px; }
+  .legend .row { display: inline-flex; align-items: center; gap: 4px; margin: 2px 10px 2px 0; }
+  .legend svg { width: 20px; height: 20px; }
+
+  .board-wrap { position: relative; flex: 1; min-width: 0; background: #cfe9f7; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden; }
+  svg#board { width: 100%; height: calc(100vh - 200px); min-height: 420px; max-height: 900px; display: block; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+  .area { cursor: pointer; transition: fill 0.35s, opacity 0.35s; }
+  .area:hover { filter: brightness(1.06); }
+  .area.dim { fill: #eceff1 !important; }
+  .nb { fill: #f5f5f0; stroke: #bdbdbd; }
+  .nb.nara { fill: #ece9e2; }
+  .lbl text { paint-order: stroke; stroke: #fff; stroke-linejoin: round; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+  svg:not(.zoomed) .minor { display: none; }   /* 小さい川は、大きくしたときだけ */
+  .hide-rivers .river, .hide-rivers .rlbl { display: none; }
+  .hide-places .place { display: none; }
+  .hide-kana .kana { display: none; }
+
+  .compass { position: absolute; top: 10px; right: 12px; width: 44px; pointer-events: none; }
+  .scale { position: absolute; left: 12px; bottom: 10px; font-size: 0.8rem; font-weight: bold; color: #333; pointer-events: none; }
+  .scale .bar { height: 7px; border: 2px solid #333; border-top: none; margin-top: 2px; background: linear-gradient(90deg, #333 50%, #fff 50%); }
+  .zoom-out {
+    position: absolute; left: 12px; top: 10px; border: none; background: #fff; border-radius: 10px;
+    padding: 8px 12px; font-size: 0.95rem; font-weight: bold; color: #2e7d32; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    cursor: pointer; display: none;
+  }
+  .zoom-out.show { display: block; }
+  .credit { font-size: 0.72rem; color: #666; text-align: center; margin-top: 6px; }
+
+  @media (max-width: 820px) {
+    .main { flex-direction: column; }
+    .side { width: 100%; }
+    svg#board { height: 70vh; }
+  }
+</style>
+</head>
+<body>
+<div class="panel">
+  <div>
+    <a class="back-link" href="../index.html">← もどる</a>
+    <h1><ruby>田辺<rt>たなべ</rt></ruby><ruby>市<rt>し</rt></ruby>マップ</h1>
+    <p class="subtitle">地図の色のところをタップすると、大きくなるよ</p>
+  </div>
+
+  <div class="area-row" id="areaRow"></div>
+
+  <div class="main">
+    <div class="board-wrap">
+      <svg id="board" viewBox="0 0 1000 1032" preserveAspectRatio="xMidYMid meet">
+        <g id="nbLayer"></g>
+        <path id="prefLine" fill="none" stroke="#8d6e63" stroke-width="3" stroke-dasharray="10 5" vector-effect="non-scaling-stroke"/>
+        <g id="areaLayer"></g>
+        <path id="outline" fill="none" stroke="#c62828" stroke-width="3" vector-effect="non-scaling-stroke" pointer-events="none"/>
+        <g id="riverLayer" pointer-events="none"></g>
+        <g id="labelLayer" pointer-events="none"></g>
+        <g id="placeLayer"></g>
+      </svg>
+      <button class="zoom-out" id="zoomOut">← 田辺市ぜんたい</button>
+      <svg class="compass" viewBox="0 0 40 56">
+        <text x="20" y="11" text-anchor="middle" font-size="13" font-weight="bold" fill="#c62828">北</text>
+        <path d="M20,15 L28,50 L20,43 L12,50 Z" fill="#c62828" stroke="#fff" stroke-width="1.5"/>
+      </svg>
+      <div class="scale" id="scale"><span id="scaleTxt">5km</span><div class="bar" id="scaleBar"></div></div>
+    </div>
+
+    <div class="side">
+      <div class="info" id="info"></div>
+      <div class="opts">
+        <label><input type="checkbox" id="optRiver" checked>川</label>
+        <label><input type="checkbox" id="optPlace" checked>目印</label>
+        <label><input type="checkbox" id="optKana" checked>ふりがな</label>
+      </div>
+      <div class="legend">
+        <div class="ttl">地図の記号</div>
+        <span class="row"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="24" fill="none" stroke="#333" stroke-width="5"/><circle cx="32" cy="32" r="12" fill="none" stroke="#333" stroke-width="5"/></svg>市役所</span>
+        <span class="row"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="16" fill="#fff" stroke="#333" stroke-width="6"/></svg>行政局（もとの役場）</span>
+        <span class="row"><svg viewBox="0 0 64 64"><path d="M8,17 Q32,10 56,17 M13,27 H51 M19,21 V54 M45,21 V54" fill="none" stroke="#333" stroke-width="5"/></svg>神社</span>
+        <span class="row"><svg viewBox="0 0 64 64"><path d="M13,32 A19 19 0 0 0 51,32 Z M22,26 C20,21 24,17 22,11 M32,26 C30,21 34,17 32,11 M42,26 C40,21 44,17 42,11" fill="none" stroke="#333" stroke-width="4.5"/></svg>温泉</span>
+        <span class="row"><svg viewBox="0 0 64 64"><path d="M32,10 L56,52 H8 Z" fill="#6d4c41"/></svg>山</span>
+        <span class="row"><svg viewBox="0 0 64 64"><rect x="10" y="22" width="44" height="20" fill="#fff" stroke="#333" stroke-width="5"/><rect x="10" y="22" width="22" height="20" fill="#333"/></svg>駅</span>
+        <span class="row"><svg viewBox="0 0 64 64"><line x1="4" y1="32" x2="60" y2="32" stroke="#c62828" stroke-width="7"/></svg>市のさかい</span>
+        <span class="row"><svg viewBox="0 0 64 64"><line x1="4" y1="32" x2="60" y2="32" stroke="#8d6e63" stroke-width="6" stroke-dasharray="12 6"/></svg>県のさかい</span>
+      </div>
+    </div>
+  </div>
+  <div class="credit">地図：国土交通省「国土数値情報（行政区域・河川）」を加工して作成</div>
+</div>
+
+<script src="tanabe-map-data.js"></script>
+<script>
+const M = TANABE_MAP;
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('board');
+
+// 地区の色（やさしい色）
+const COLOR = { tanabe: '#ffcc80', ryujin: '#a5d6a7', nakahechi: '#ce93d8', oto: '#fff59d', hongu: '#f8bbd0' };
+const DEEP  = { tanabe: '#ef6c00', ryujin: '#2e7d32', nakahechi: '#7b1fa2', oto: '#f9a825', hongu: '#c2185b' };
+
+// よみがな
+const KANA = {
+  '日高川': 'ひだかがわ', '日置川': 'ひきがわ', '富田川': 'とんだがわ', '熊野川': 'くまのがわ',
+  '左会津川': 'さあいづがわ', '右会津川': 'うあいづがわ', '芳養川': 'はやがわ', '四村川': 'よむらがわ',
+  '大塔川': 'おおとうがわ', '前ノ川': 'まえのかわ',
+  'みなべ町': '', '日高川町': 'ひだかがわちょう', '有田川町': 'ありだがわちょう', '印南町': 'いなみちょう',
+  '白浜町': 'しらはまちょう', '上富田町': 'かみとんだちょう', '古座川町': 'こざがわちょう', '新宮市': 'しんぐうし',
+  '野迫川村': 'のせがわむら', '十津川村': 'とつかわむら', 'すさみ町': '', '高野町': 'こうやちょう',
+  '日高町': 'ひだかちょう', '御坊市': 'ごぼうし', '那智勝浦町': 'なちかつうらちょう', '五條市': 'ごじょうし',
+  '北山村': 'きたやまむら', '美浜町': 'みはまちょう', 'かつらぎ町': '', '九度山町': 'くどやまちょう',
+  '有田市': 'ありだし', '湯浅町': 'ゆあさちょう', '広川町': 'ひろがわちょう', '串本町': 'くしもとちょう',
+  '天川村': 'てんかわむら', '下北山村': 'しもきたやまむら', '上北山村': 'かみきたやまむら', '川上村': 'かわかみむら'
+};
+
+// 海の名前
+const SEA = [{ name: '田辺湾', kana: 'たなべわん', lon: 135.345, lat: 33.703 }];
+
+// ---------- 地図をかく ----------
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+const nbLayer = document.getElementById('nbLayer');
+M.neighbors.forEach(n => {
+  el('path', { d: n.d, class: 'nb' + (n.pref === '奈良県' ? ' nara' : ''), 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' }, nbLayer);
+});
+document.getElementById('prefLine').setAttribute('d', M.prefLine);
+document.getElementById('outline').setAttribute('d', M.outline);
+
+const areaLayer = document.getElementById('areaLayer');
+const areaEls = {};
+M.areas.forEach(a => {
+  const p = el('path', { d: a.d, class: 'area', fill: COLOR[a.id], stroke: '#fff', 'stroke-width': 2.5,
+    'vector-effect': 'non-scaling-stroke', 'fill-rule': 'evenodd' }, areaLayer);
+  p.addEventListener('click', () => go(a.id));
+  areaEls[a.id] = p;
+});
+
+const riverLayer = document.getElementById('riverLayer');
+const riverEls = [];
+M.rivers.forEach(r => {
+  const p = el('path', { d: r.d, class: 'river' + (r.lv === 2 ? ' minor' : ''), fill: 'none', stroke: '#1e88e5',
+    'stroke-width': r.lv === 1 ? 2.6 : 1.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    'vector-effect': 'non-scaling-stroke' }, riverLayer);
+  riverEls.push({ r, p });
+});
+
+// ラベルは「画面の大きさ」で書いて、ズームしても同じ大きさに見えるようにする
+const labelLayer = document.getElementById('labelLayer');
+const placeLayer = document.getElementById('placeLayer');
+const labels = [];   // { g, x, y, show(zoomed, cur) }
+
+function addLabel(layer, x, y, cls, build, show) {
+  const g = el('g', { class: 'lbl ' + cls }, layer);
+  build(g);
+  labels.push({ g, x, y, show });
+  return g;
+}
+function txt(g, s, attrs) {
+  const t = el('text', attrs, g);
+  t.textContent = s;
+  return t;
+}
+
+// となりの市町村
+M.neighbors.forEach(n => {
+  addLabel(labelLayer, n.lab[0], n.lab[1], 'nblbl', g => {
+    txt(g, n.name, { y: 0, 'font-size': 14, fill: '#757575', 'stroke-width': 3, 'font-weight': 'bold' });
+    if (KANA[n.name]) txt(g, KANA[n.name], { y: -14, 'font-size': 9, fill: '#9e9e9e', 'stroke-width': 2, class: 'kana' });
+  }, (z) => z ? true : n.touch && n.km2 > 40);
+});
+// 県名
+[['奈良県', 135.80, 34.12], ['和歌山県', 135.36, 34.03]].forEach(([s, lon, lat]) => {
+  const [x, y] = proj(lon, lat);
+  addLabel(labelLayer, x, y, 'pref', g => {
+    txt(g, s, { 'font-size': 22, fill: '#8d6e63', 'stroke-width': 4, 'font-weight': 'bold', opacity: 0.8 });
+  }, (z) => !z);
+});
+// 海
+SEA.forEach(s => {
+  const [x, y] = proj(s.lon, s.lat);
+  addLabel(labelLayer, x, y, 'sea', g => {
+    txt(g, s.name, { 'font-size': 15, fill: '#1565c0', 'stroke-width': 0, 'font-weight': 'bold' });
+    txt(g, s.kana, { y: -14, 'font-size': 9, fill: '#1565c0', 'stroke-width': 0, class: 'kana' });
+  }, () => true);
+});
+// 川の名前
+M.rivers.forEach(r => {
+  addLabel(labelLayer, r.lab[0], r.lab[1], 'rlbl', g => {
+    txt(g, r.name, { 'font-size': r.lv === 1 ? 13 : 11, fill: '#0d47a1', 'stroke-width': 3, 'font-weight': r.lv === 1 ? 'bold' : 'normal' });
+    if (KANA[r.name]) txt(g, KANA[r.name], { y: -12, 'font-size': 8.5, fill: '#1565c0', 'stroke-width': 2, class: 'kana' });
+  }, (z, cur) => r.lv === 1 ? (z || ['日高川', '日置川', '富田川', '熊野川', '左会津川'].includes(r.name)) : z);
+});
+// 地区の名前
+M.areas.forEach(a => {
+  addLabel(labelLayer, a.lab[0], a.lab[1], 'arealbl', g => {
+    txt(g, a.kana, { y: -19, 'font-size': 11, fill: DEEP[a.id], 'stroke-width': 3, 'font-weight': 'bold', class: 'kana' });
+    txt(g, a.name, { y: 0, 'font-size': 22, fill: DEEP[a.id], 'stroke-width': 5, 'font-weight': 'bold' });
+  }, (z, cur) => !z);
+});
+
+// 目印（地図記号）
+const SYM = {
+  office:  '<circle r="9" fill="#fff" stroke="#333" stroke-width="2.4"/><circle r="4.5" fill="none" stroke="#333" stroke-width="2.4"/>',
+  office2: '<circle r="6.5" fill="#fff" stroke="#333" stroke-width="2.6"/>',
+  shrine:  '<g transform="translate(-9,-9) scale(0.28)"><rect x="4" y="6" width="56" height="54" rx="8" fill="#fff" opacity="0.9"/><path d="M8,17 Q32,10 56,17 M13,27 H51 M19,21 V54 M45,21 V54" fill="none" stroke="#333" stroke-width="6"/></g>',
+  onsen:   '<g transform="translate(-9,-10) scale(0.28)"><rect x="6" y="4" width="52" height="54" rx="8" fill="#fff" opacity="0.9"/><path d="M13,32 A19 19 0 0 0 51,32 Z M22,26 C20,21 24,17 22,11 M32,26 C30,21 34,17 32,11 M42,26 C40,21 44,17 42,11" fill="none" stroke="#333" stroke-width="5.5"/></g>',
+  mount:   '<path d="M0,-9 L9,7 H-9 Z" fill="#6d4c41" stroke="#fff" stroke-width="1.5"/>',
+  station: '<rect x="-10" y="-5" width="20" height="10" fill="#fff" stroke="#333" stroke-width="2"/><rect x="-10" y="-5" width="10" height="10" fill="#333"/>',
+  sight:   '<circle r="5" fill="#ff7043" stroke="#fff" stroke-width="2"/>'
+};
+// 名前を書く向き（記号とかさならないように）
+const PLACE_POS = { '紀伊田辺駅': 'top', '闘雞神社': 'bottom', '天神崎': 'left', '田辺市役所': 'right', '湯の峰温泉': 'left', '川湯温泉': 'bottom', '熊野本宮大社': 'top', '本宮行政局': 'right' };
+M.places.forEach(pl => {
+  const g = addLabel(placeLayer, pl.x, pl.y, 'place', g => {
+    const s = el('g', {}, g); s.innerHTML = SYM[pl.kind];
+    const pos = PLACE_POS[pl.name] || 'right';
+    const o = { right: [14, 0, 'start'], left: [-14, 0, 'end'], top: [0, -24, 'middle'], bottom: [0, 22, 'middle'] }[pos];
+    const t = txt(g, pl.name, { x: o[0], y: o[1], 'font-size': 13, fill: '#212121', 'stroke-width': 3.5, 'font-weight': 'bold' });
+    t.style.textAnchor = o[2];
+    const k = txt(g, pl.kana, { x: o[0], y: o[1] - 12, 'font-size': 8.5, fill: '#555', 'stroke-width': 2, class: 'kana' });
+    k.style.textAnchor = o[2];
+  }, (z, cur) => z ? true : ['office', 'shrine', 'onsen', 'mount'].includes(pl.kind) && pl.name !== '湯の峰温泉' && pl.name !== '闘雞神社');
+  g.style.cursor = 'pointer';
+  g.addEventListener('click', e => { e.stopPropagation(); showPlace(pl); });
+});
+
+// 経度・緯度 → 地図の位置（データ作成時と同じ計算）
+function proj(lon, lat) {
+  const [x0, y1, kx, ky] = M.proj;
+  return [(lon - x0) * kx, (y1 - lat) * ky];
+}
+
+// ---------- ズーム ----------
+let vb = [0, 0, M.W, M.H];      // いまの見えている範囲
+let cur = null;                 // いま開いている地区（null = 全体）
+let anim = null;
+
+function fitBox(b, pad = 0.12) {
+  // 地区の四角に、まわりを少し足して、画面の形に合わせる
+  const r = svg.getBoundingClientRect();
+  const asp = r.width > 0 && r.height > 0 ? r.width / r.height : 1;
+  let [x0, y0, x1, y1] = b;
+  const padx = (x1 - x0) * pad, pady = (y1 - y0) * pad;
+  x0 -= padx; x1 += padx; y0 -= pady; y1 += pady;
+  let w = x1 - x0, h = y1 - y0;
+  if (w / h < asp) { const nw = h * asp; x0 -= (nw - w) / 2; w = nw; }
+  else { const nh = w / asp; y0 -= (nh - h) / 2; h = nh; }
+  return [x0, y0, w, h];
+}
+function fullBox() { return fitBox([40, 40, M.W - 30, M.H - 40], 0.02); }
+
+function applyView() {
+  svg.setAttribute('viewBox', vb.join(' '));
+  const r = svg.getBoundingClientRect();
+  if (!r.width) return;
+  const s = Math.max(vb[2] / r.width, vb[3] / r.height);   // 画面1pxが地図で何単位か
+  const z = cur !== null;
+  const f = Math.min(1, Math.max(0.7, r.width / 650));      // 小さい画面では文字も少し小さく
+  labels.forEach(L => {
+    L.g.setAttribute('transform', `translate(${L.x},${L.y}) scale(${s * f})`);
+    L.g.style.display = L.show(z, cur) ? '' : 'none';
+  });
+  updateScale(s);
+}
+
+function updateScale(s) {
+  const pxPerKm = M.km / s;
+  const steps = [0.5, 1, 2, 5, 10, 20];
+  let km = steps[0];
+  for (const k of steps) if (k * pxPerKm <= 130) km = k;
+  document.getElementById('scaleBar').style.width = (km * pxPerKm) + 'px';
+  document.getElementById('scaleTxt').textContent = (km < 1 ? km * 1000 + 'm' : km + 'km');
+}
+
+function animateTo(target) {
+  const from = vb.slice(), t0 = performance.now(), dur = 650;
+  cancelAnimationFrame(anim);
+  const step = now => {
+    let t = Math.min(1, (now - t0) / dur);
+    t = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    vb = from.map((v, i) => v + (target[i] - v) * t);
+    applyView();
+    if (t < 1) anim = requestAnimationFrame(step);
+  };
+  anim = requestAnimationFrame(step);
+}
+
+function go(id) {
+  cur = id;
+  svg.classList.toggle('zoomed', id !== null);
+  M.areas.forEach(a => areaEls[a.id].classList.toggle('dim', id !== null && a.id !== id));
+  document.querySelectorAll('.area-btn').forEach(b => b.classList.toggle('active', (b.dataset.id || null) === id));
+  document.getElementById('zoomOut').classList.toggle('show', id !== null);
+  animateTo(id ? fitBox(M.areas.find(a => a.id === id).box) : fullBox());
+  showInfo();
+  history.replaceState(null, '', id ? '#' + id : location.pathname + location.search);
+}
+
+// ---------- 説明のパネル ----------
+const info = document.getElementById('info');
+function showInfo() {
+  if (!cur) {
+    const total = M.areas.reduce((s, a) => s + a.km2, 0);
+    info.style.borderLeftColor = '#c62828';
+    info.innerHTML = `<h2><ruby>田辺<rt>たなべ</rt></ruby><ruby>市<rt>し</rt></ruby></h2>
+      <div class="stat"><span>広さ：やく ${total.toLocaleString()} km²</span><span>和歌山県でいちばん広い市</span></div>
+      2005年に、5つの市町村がいっしょになって、今の田辺市ができました。<br>
+      色のちがう5つの地区を、タップしてみよう。
+      <div class="hint">上のボタンからも、えらべます。</div>`;
+    return;
+  }
+  const a = M.areas.find(x => x.id === cur);
+  const pls = M.places.filter(p => p.area === cur);
+  info.style.borderLeftColor = DEEP[cur];
+  info.innerHTML = `<h2 style="color:${DEEP[cur]}"><ruby>${a.name}<rt>${a.kana}</rt></ruby></h2>
+    <div class="stat"><span>広さ：やく ${a.km2} km²</span></div>
+    ${a.desc}
+    ${pls.length ? '<div class="hint">目印（タップすると場所が光るよ）</div><ul class="places">' + pls.map(p => `<li data-n="${p.name}">${p.name}</li>`).join('') + '</ul>' : ''}
+    <button class="btn" id="infoBack">← 田辺市ぜんたい</button>`;
+  info.querySelectorAll('.places li').forEach(li => li.addEventListener('click', () => showPlace(M.places.find(p => p.name === li.dataset.n))));
+  document.getElementById('infoBack').addEventListener('click', () => go(null));
+}
+
+let pulse = null;
+function showPlace(pl) {
+  if (pulse) pulse.remove();
+  pulse = el('circle', { cx: pl.x, cy: pl.y, r: 1, fill: 'none', stroke: '#ff1744', 'stroke-width': 4, 'vector-effect': 'non-scaling-stroke' }, placeLayer);
+  const s = vb[2] / svg.getBoundingClientRect().width;
+  pulse.innerHTML = `<animate attributeName="r" values="${4 * s};${30 * s};${4 * s}" dur="0.9s" repeatCount="3"/>`;
+  const c = pulse; setTimeout(() => { if (pulse === c) { c.remove(); pulse = null; } }, 2800);
+}
+
+// ---------- ボタン ----------
+const row = document.getElementById('areaRow');
+[{ id: null, name: '田辺市ぜんたい' }, ...M.areas].forEach(a => {
+  const b = document.createElement('button');
+  b.className = 'area-btn';
+  if (a.id) b.dataset.id = a.id;
+  b.innerHTML = (a.id ? `<span class="sw" style="background:${COLOR[a.id]}"></span>` : '') + a.name;
+  b.addEventListener('click', () => go(a.id));
+  row.appendChild(b);
+});
+document.getElementById('zoomOut').addEventListener('click', () => go(null));
+const toggle = (id, cls) => document.getElementById(id).addEventListener('change', e => svg.classList.toggle(cls, !e.target.checked));
+toggle('optRiver', 'hide-rivers');
+toggle('optPlace', 'hide-places');
+toggle('optKana', 'hide-kana');
+
+window.addEventListener('resize', () => { vb = cur ? fitBox(M.areas.find(a => a.id === cur).box) : fullBox(); applyView(); });
+
+// アドレスの #hongu などで、その地区から始められる
+const start = location.hash.slice(1);
+vb = fullBox(); applyView();
+go(M.areas.some(a => a.id === start) ? start : null);
+</script>
+</body>
+</html>
