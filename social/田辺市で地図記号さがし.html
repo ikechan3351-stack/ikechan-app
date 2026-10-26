@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>田辺市で地図記号さがし</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e8f5e9 0%, #c8e6c9 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { display: inline-block; font-size: 0.85rem; color: #2e7d32; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.4rem; color: #1b5e20; text-align: center; }
+  .subtitle { margin: 0 0 8px; font-size: 0.88rem; color: #388e3c; text-align: center; }
+  rt { font-size: 0.6em; }
+  .hide-kana rt { visibility: hidden; }
+  .panel { width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 10px; }
+  button { font-family: inherit; touch-action: manipulation; }
+
+  /* 問題のバー */
+  .qbar {
+    background: #fff; border-radius: 14px; padding: 8px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    display: flex; align-items: center; gap: 12px; min-height: 64px;
+  }
+  .qbar .q { flex: 1; font-size: 1.45rem; font-weight: bold; color: #1b5e20; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .qbar .q .kind { color: #e65100; }
+  .qbar .q .qsym { width: 44px; height: 44px; background: #fff8e1; border-radius: 10px; border: 2px solid #ffcc80; }
+  .qbar .prog { font-size: 0.95rem; color: #555; font-weight: bold; white-space: nowrap; }
+  .qbar .msg { flex: 1; font-size: 1.05rem; color: #333; }
+  .hint-btn {
+    border: none; background: #fff3e0; color: #e65100; border-radius: 12px; padding: 8px 14px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+  }
+  .hint-btn:disabled { opacity: 0.4; cursor: default; }
+
+  .main { display: flex; gap: 12px; align-items: flex-start; }
+  .side { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+
+  .card {
+    background: #fff; border-radius: 14px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    font-size: 0.95rem; line-height: 1.7; color: #333; border-left: 8px solid #a5d6a7;
+  }
+  .card h2 { margin: 0 0 6px; font-size: 1.2rem; color: #1b5e20; }
+  .card h3 { margin: 8px 0 4px; font-size: 0.95rem; color: #2e7d32; }
+  .card .note { font-size: 0.8rem; color: #888; }
+  .choice-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .choice {
+    border: 3px solid transparent; background: #f1f8e9; border-radius: 12px; padding: 6px 10px;
+    font-size: 0.95rem; font-weight: bold; color: #333; cursor: pointer; display: flex; align-items: center; gap: 6px;
+  }
+  .choice .sw { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.2); }
+  .choice.active { border-color: #1b5e20; background: #fff; }
+  .choice small { font-weight: normal; color: #666; font-size: 0.78rem; }
+  .level .choice { flex-direction: column; align-items: flex-start; gap: 0; line-height: 1.35; flex: 1 1 30%; padding: 5px 7px; }
+  .big-btn {
+    border: none; background: #2e7d32; color: #fff; border-radius: 12px; padding: 10px 18px;
+    font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 10px; width: 100%;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+  }
+  .big-btn.sub { background: #fff; color: #2e7d32; border: 2px solid #2e7d32; box-shadow: none; }
+  .found-name { font-size: 1.35rem; font-weight: bold; color: #1b5e20; line-height: 1.5; margin: 4px 0; }
+  .ask { background: #fff8e1; border-radius: 10px; padding: 6px 10px; font-weight: bold; color: #e65100; margin: 6px 0; }
+  .ng { border-left-color: #ef9a9a; }
+  .sym-inline { width: 30px; height: 30px; vertical-align: middle; background: #fff; border-radius: 6px; border: 1px solid #ccc; }
+  .miss-list { list-style: none; margin: 4px 0; padding: 0; }
+  .miss-list li { margin: 3px 0; font-size: 0.9rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; padding: 0; list-style: none; }
+  .chips li { background: #f1f8e9; border-radius: 8px; padding: 2px 8px; font-size: 0.85rem; cursor: pointer; }
+
+  .opts {
+    background: #fff; border-radius: 12px; padding: 8px 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.9rem; color: #333;
+  }
+  .opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .opts input { width: 18px; height: 18px; }
+
+  /* 地図 */
+  .board-wrap { position: relative; flex: 1; min-width: 0; background: #cfe9f7; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden; }
+  svg#board { width: 100%; height: calc(100vh - 230px); min-height: 420px; max-height: 900px; display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+  svg#board.dragging { cursor: grabbing; }
+  .area { transition: fill 0.35s; }
+  .area.dim { fill: #eceff1 !important; }
+  .area.pick { cursor: pointer; }
+  .area.pick:hover { filter: brightness(1.06); }
+  .nb { fill: #f5f5f0; stroke: #bdbdbd; }
+  .nb.nara { fill: #ece9e2; }
+  .lbl text { paint-order: stroke; stroke: #fff; stroke-linejoin: round; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+  svg:not(.zoomed) .minor { display: none; }
+  .hide-kana .kana { display: none; }
+  .sym .glow { display: none; }
+  .sym.lit .glow { display: inline; }
+  .sym .nm { display: none; }
+  .sym.named .nm { display: inline; }
+  .sym.hit .bg { stroke: #e65100; stroke-width: 3; }
+  .sym.miss .bg { stroke: #c62828; stroke-width: 3; }
+  .sym text { text-anchor: start; }
+
+  .compass { position: absolute; top: 10px; right: 12px; width: 40px; pointer-events: none; }
+  .scale { position: absolute; left: 12px; bottom: 10px; font-size: 0.8rem; font-weight: bold; color: #333; pointer-events: none; }
+  .scale .bar { height: 7px; border: 2px solid #333; border-top: none; margin-top: 2px; background: linear-gradient(90deg, #333 50%, #fff 50%); }
+  .tools { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .tools button {
+    border: none; background: #fff; border-radius: 10px; min-width: 44px; height: 44px; padding: 0 10px;
+    font-size: 1.2rem; font-weight: bold; color: #2e7d32; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer;
+  }
+  .tools button.wide { font-size: 0.9rem; }
+  .tools button[hidden] { display: none; }
+  .mini { position: absolute; right: 10px; bottom: 10px; width: 120px; height: 124px; background: rgba(255,255,255,0.85); border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); pointer-events: none; }
+  .toast {
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: 82%;
+    background: #fff; border-radius: 12px; padding: 8px 14px; font-size: 1rem; font-weight: bold; color: #333;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.25); display: none; text-align: center; line-height: 1.6;
+  }
+  .toast.show { display: block; }
+  .toast.ng { border: 3px solid #ef9a9a; }
+  .toast.ok { border: 3px solid #a5d6a7; }
+  .toast .wait { height: 5px; background: #ef9a9a; border-radius: 3px; margin-top: 4px; transform-origin: left; }
+
+  /* かんたん：記号の3択 */
+  .pick3 {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.75); display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+  }
+  .pick3.show { display: flex; }
+  .pick3 .ttl { font-size: 1.3rem; font-weight: bold; color: #1b5e20; text-align: center; padding: 0 10px; }
+  .pick3 .row { display: flex; gap: 14px; }
+  .pick3 button { width: 110px; height: 110px; border: 4px solid #a5d6a7; background: #fff; border-radius: 18px; cursor: pointer; box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
+  .pick3 button.no { border-color: #ef9a9a; opacity: 0.5; }
+  .pick3 .say { font-size: 1rem; font-weight: bold; color: #c62828; min-height: 1.6em; text-align: center; padding: 0 10px; }
+
+  /* 先生モード */
+  .teacher { border-left-color: #90caf9; }
+  .teacher h2 { color: #1565c0; }
+  .kind-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; font-size: 0.85rem; }
+  .kind-grid label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .kind-grid svg { width: 22px; height: 22px; }
+  .link-box { width: 100%; font-size: 0.75rem; padding: 4px; margin-top: 6px; }
+  .tlist { max-height: 340px; overflow-y: auto; font-size: 0.82rem; line-height: 1.5; }
+  .tlist .k { font-weight: bold; color: #1565c0; margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+  .tlist .k svg { width: 20px; height: 20px; }
+  .tlist span.it { display: inline-block; background: #e3f2fd; border-radius: 6px; padding: 0 6px; margin: 2px 2px 0 0; cursor: pointer; }
+  .small-btn { border: none; background: #1565c0; color: #fff; border-radius: 8px; padding: 5px 10px; font-size: 0.85rem; cursor: pointer; margin-top: 6px; }
+
+  .credit { font-size: 0.72rem; color: #666; text-align: center; margin-top: 6px; }
+
+  @media (max-width: 820px) {
+    .main { flex-direction: column; }
+    .side { width: 100%; }
+    svg#board { height: 62vh; }
+    .qbar .q { font-size: 1.15rem; }
+    .pick3 button { width: 88px; height: 88px; }
+    .mini { width: 80px; height: 83px; }
+  }
+</style>
+</head>
+<body>
+<div class="panel" id="page">
+  <div>
+    <a class="back-link" href="../index.html">← もどる</a>
+    <h1><ruby>田辺<rt>たなべ</rt></ruby><ruby>市<rt>し</rt></ruby>で<ruby>地図<rt>ちず</rt></ruby><ruby>記号<rt>きごう</rt></ruby>さがし</h1>
+    <p class="subtitle">田辺市のほんものの地図から、地図記号を見つけよう</p>
+  </div>
+
+  <div class="qbar" id="qbar"></div>
+
+  <div class="main">
+    <div class="board-wrap" id="boardWrap">
+      <svg id="board" viewBox="0 0 1000 1032" preserveAspectRatio="xMidYMid meet">
+        <g id="nbLayer"></g>
+        <path id="prefLine" fill="none" stroke="#8d6e63" stroke-width="3" stroke-dasharray="10 5" vector-effect="non-scaling-stroke"/>
+        <g id="areaLayer"></g>
+        <path id="outline" fill="none" stroke="#c62828" stroke-width="3" vector-effect="non-scaling-stroke" pointer-events="none"/>
+        <g id="riverLayer" pointer-events="none"></g>
+        <g id="labelLayer" pointer-events="none"></g>
+        <g id="hintLayer" pointer-events="none"></g>
+        <g id="symLayer" pointer-events="none"></g>
+      </svg>
+      <div class="tools">
+        <button id="zIn" title="大きくする">＋</button>
+        <button id="zOut" title="小さくする">－</button>
+        <button id="zReset" class="wide">もどす</button>
+        <button id="toAll" class="wide" hidden>← ぜんたい</button>
+      </div>
+      <svg class="compass" viewBox="0 0 40 56">
+        <text x="20" y="11" text-anchor="middle" font-size="13" font-weight="bold" fill="#c62828">北</text>
+        <path d="M20,15 L28,50 L20,43 L12,50 Z" fill="#c62828" stroke="#fff" stroke-width="1.5"/>
+      </svg>
+      <div class="scale"><span id="scaleTxt">5km</span><div class="bar" id="scaleBar"></div></div>
+      <svg class="mini" id="mini" viewBox="0 0 1000 1032" preserveAspectRatio="xMidYMid meet">
+        <g id="miniAreas"></g>
+        <rect id="miniRect" fill="rgba(229,57,53,0.15)" stroke="#e53935" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+        <circle id="miniDot" r="14" fill="#e53935"/>
+      </svg>
+      <div class="toast" id="toast"></div>
+      <div class="pick3" id="pick3">
+        <div class="ttl" id="pickTtl"></div>
+        <div class="row" id="pickRow"></div>
+        <div class="say" id="pickSay"></div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card" id="card"></div>
+      <div class="card teacher" id="tcard" hidden></div>
+      <div class="opts">
+        <label><input type="checkbox" id="optKana" checked>ふりがな</label>
+        <label><input type="checkbox" id="optSound" checked>音</label>
+      </div>
+    </div>
+  </div>
+  <div class="credit">地図：国土交通省「国土数値情報（行政区域・河川・学校・郵便局・医療機関・警察署・消防署・文化施設・福祉施設・市区町村役場）」を加工して作成<br>神社・寺・温泉などの一部：© OpenStreetMap contributors（ODbL）</div>
+</div>
+
+<script src="tanabe-map-data.js"></script>
+<script src="tanabe-symbols-data.js"></script>
+<script>
+const M = TANABE_MAP;
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const svg = $('board');
+const ROUND = 10;
+const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+
+// 地区の色（田辺市マップと同じ）
+const COLOR = { tanabe: '#ffcc80', ryujin: '#a5d6a7', nakahechi: '#ce93d8', oto: '#fff59d', hongu: '#f8bbd0' };
+const DEEP  = { tanabe: '#ef6c00', ryujin: '#2e7d32', nakahechi: '#7b1fa2', oto: '#f9a825', hongu: '#c2185b' };
+const AREA = {};
+M.areas.forEach(a => AREA[a.id] = a);
+
+// ---------- 地図記号（絵は 地図記号クイズ と同じ） ----------
+const ST = 'stroke="#212121" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+const SYM = {
+  school: `<text x="32" y="44" text-anchor="middle" font-size="36" font-weight="bold" fill="#212121">文</text>`,
+  highschool: `<circle cx="32" cy="32" r="26" ${ST} stroke-width="3"/><text x="32" y="42" text-anchor="middle" font-size="28" font-weight="bold" fill="#212121">文</text>`,
+  city: `<circle cx="32" cy="32" r="24" ${ST} stroke-width="3.5"/><circle cx="32" cy="32" r="13" ${ST} stroke-width="3.5"/>`,
+  town: `<circle cx="32" cy="32" r="15" ${ST} stroke-width="4"/>`,
+  post: `<circle cx="32" cy="32" r="26" ${ST} stroke-width="3"/><text x="32" y="43" text-anchor="middle" font-size="30" font-weight="bold" fill="#212121">〒</text>`,
+  koban: `<line x1="18" y1="16" x2="46" y2="48" ${ST} stroke-width="5"/><line x1="46" y1="16" x2="18" y2="48" ${ST} stroke-width="5"/>`,
+  police: `<circle cx="32" cy="32" r="26" ${ST} stroke-width="3"/><line x1="22" y1="22" x2="42" y2="42" ${ST} stroke-width="4.5"/><line x1="42" y1="22" x2="22" y2="42" ${ST} stroke-width="4.5"/>`,
+  fire: `<line x1="32" y1="56" x2="32" y2="32" ${ST} stroke-width="4.5"/><path d="M32,32 C32,24 20,26 15,12" ${ST} stroke-width="4.5"/><path d="M32,32 C32,24 44,26 49,12" ${ST} stroke-width="4.5"/>`,
+  hospital: `<path d="M32,8 L53,17 V33 Q53,50 32,57 Q11,50 11,33 V17 Z" ${ST} stroke-width="3"/><line x1="32" y1="20" x2="32" y2="45" ${ST} stroke-width="5.5"/><line x1="20" y1="32.5" x2="44" y2="32.5" ${ST} stroke-width="5.5"/>`,
+  shrine: `<path d="M8,17 Q32,10 56,17" ${ST} stroke-width="4.5"/><line x1="13" y1="27" x2="51" y2="27" ${ST} stroke-width="3.5"/><line x1="19" y1="21" x2="19" y2="54" ${ST} stroke-width="4"/><line x1="45" y1="21" x2="45" y2="54" ${ST} stroke-width="4"/>`,
+  temple: `<text x="32" y="46" text-anchor="middle" font-size="42" font-weight="bold" fill="#212121">卍</text>`,
+  library: `<path d="M32,18 C25,11 13,12 9,14 V47 C13,45 25,45 32,51 C39,45 51,45 55,47 V14 C51,12 39,11 32,18 Z" ${ST} stroke-width="3"/><line x1="32" y1="18" x2="32" y2="51" ${ST} stroke-width="2.5"/>`,
+  museum: `<line x1="10" y1="18" x2="54" y2="18" ${ST} stroke-width="4.5"/><line x1="18" y1="22" x2="18" y2="44" ${ST} stroke-width="4"/><line x1="32" y1="22" x2="32" y2="44" ${ST} stroke-width="4"/><line x1="46" y1="22" x2="46" y2="44" ${ST} stroke-width="4"/><line x1="10" y1="48" x2="54" y2="48" ${ST} stroke-width="4.5"/>`,
+  onsen: `<path d="M13,32 A19 19 0 0 0 51,32 Z" ${ST} stroke-width="3.5"/><path d="M22,26 C20,21 24,17 22,11" ${ST} stroke-width="3"/><path d="M32,26 C30,21 34,17 32,11" ${ST} stroke-width="3"/><path d="M42,26 C40,21 44,17 42,11" ${ST} stroke-width="3"/>`,
+  elderly: `<path d="M9,30 L32,11 L55,30 V54 H9 Z" ${ST} stroke-width="3"/><path d="M28,28 A6 6 0 0 1 40,28" ${ST} stroke-width="3.5"/><line x1="40" y1="28" x2="40" y2="48" ${ST} stroke-width="3.5"/>`
+};
+// [名前, よみ, 形のヒント（地図記号クイズと同じ）, にた記号]
+const KIND = {
+  school:     ['小・中学校', 'しょう・ちゅうがっこう', '漢字の「文」の形。勉強するところだから', 'highschool'],
+  highschool: ['高等学校', 'こうとうがっこう', '「文」を○でかこんだ形', 'school'],
+  city:       ['市役所', 'しやくしょ', '二重の丸。町・村役場より丸が1つ多い', 'town'],
+  town:       ['町・村役場', 'まち・むらやくば', '丸1つ。田辺市では、もとの村や町の役場（今の行政局）', 'city'],
+  post:       ['郵便局', 'ゆうびんきょく', 'カタカナの「テ」を丸でかこんだ形', 'hospital'],
+  koban:      ['交番', 'こうばん', 'けいぼう（警棒）を2本交差させた形。駐在所もこの記号', 'police'],
+  police:     ['警察署', 'けいさつしょ', '交番の記号を○でかこんだ形', 'koban'],
+  fire:       ['消防署', 'しょうぼうしょ', 'むかしの火消しの道具「さすまた」の形', null],
+  hospital:   ['病院', 'びょういん', '十字のまわりを、たてのような形でかこんだ形', 'post'],
+  shrine:     ['神社', 'じんじゃ', '神社の入口にある鳥居（とりい）の形', 'temple'],
+  temple:     ['寺', 'てら', '「卍（まんじ）」という、仏教に関係のある印', 'shrine'],
+  library:    ['図書館', 'としょかん', '開いた本の形', 'museum'],
+  museum:     ['博物館・美術館', 'はくぶつかん・びじゅつかん', '柱のある建物の形', 'library'],
+  onsen:      ['温泉', 'おんせん', '湯つぼから湯気が3本のぼっている形', null],
+  elderly:    ['老人ホーム', 'ろうじんホーム', 'たてものの中に「つえ」がある形', null]
+};
+// にた記号をまちがえたときの声かけ（つまずきの型）
+const PAIR_SAY = {
+  'school|highschool': 'まるでかこんであるのが高校、まるがないのが小・中学校だよ',
+  'city|town': '二重まるは市役所、一重まるは町・村役場（行政局）だよ',
+  'koban|police': 'まるでかこんであるのが警察署、まるがないのが交番だよ',
+  'shrine|temple': '鳥居（とりい）の形が神社、卍（まんじ）がお寺だよ',
+  'hospital|post': '〒は郵便のマーク。病院は、たての形の中に十字だよ',
+  'library|museum': '本を開いた形が図書館、柱のある建物が博物館だよ'
+};
+const pairSay = (a, b) => PAIR_SAY[a + '|' + b] || PAIR_SAY[b + '|' + a];
+// 有名な場所のひとこと
+const NOTE = {
+  '田辺市役所': '田辺市の仕事の中心。2021年に新しい建物になったよ',
+  '熊野本宮大社': '世界遺産「紀伊山地の霊場と参詣道」の1つ。全国の熊野神社の中心',
+  '闘鶏神社': '世界遺産の1つ。源平の戦いのとき、にわとりをたたかわせて味方を決めた話がある',
+  '湯の峰温泉': '「つぼ湯」は、入れる世界遺産。日本でいちばん古い温泉の1つといわれる',
+  '川湯温泉': '川原をほると、お湯がわき出る温泉',
+  '龍神温泉': '日高川ぞいの温泉。「日本三美人の湯」の1つ',
+  '渡瀬温泉': '熊野川の上流、四村川ぞいの温泉',
+  '南方熊楠顕彰館': '田辺でくらした学者・南方熊楠（みなかたくまぐす）の研究をしょうかいしている',
+  '世界遺産熊野本宮館': '熊野古道や熊野本宮大社のことを学べる',
+  '熊野古道なかへち美術館': '熊野古道の近露（ちかつゆ）にある美術館',
+  '田辺市立美術館': '田辺市の美術館。地元の画家の作品などがある',
+  '紀南病院': '田辺市や近くの町の人が通う大きな病院',
+  '田辺市立図書館': '駅の近くにある市の図書館',
+  '和歌山県立紀南図書館': '和歌山県の南のほうの人のための県の図書館'
+};
+
+// 記号の一覧（データの順：kind, name, kana, x, y, area, osm）
+const ITEMS = TANABE_SYMBOLS.items.map(([kind, name, kana, x, y, area], i) => ({ i, kind, name, kana, x, y, area }));
+
+// ---------- 地図をかく ----------
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(g, s, attrs) { const t = el('text', attrs, g); t.textContent = s; return t; }
+function proj(lon, lat) { const [x0, y1, kx, ky] = M.proj; return [(lon - x0) * kx, (y1 - lat) * ky]; }
+
+M.neighbors.forEach(n => el('path', { d: n.d, class: 'nb' + (n.pref === '奈良県' ? ' nara' : ''), 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' }, $('nbLayer')));
+$('prefLine').setAttribute('d', M.prefLine);
+$('outline').setAttribute('d', M.outline);
+
+const areaEls = {};
+M.areas.forEach(a => {
+  const p = el('path', { d: a.d, class: 'area', fill: COLOR[a.id], stroke: '#fff', 'stroke-width': 2.5,
+    'vector-effect': 'non-scaling-stroke', 'fill-rule': 'evenodd' }, $('areaLayer'));
+  areaEls[a.id] = p;
+  el('path', { d: a.d, fill: COLOR[a.id], stroke: '#fff', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' }, $('miniAreas'));
+});
+M.rivers.forEach(r => el('path', { d: r.d, class: 'river' + (r.lv === 2 ? ' minor' : ''), fill: 'none', stroke: '#1e88e5',
+  'stroke-width': r.lv === 1 ? 2.6 : 1.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' }, $('riverLayer')));
+
+// ラベル・記号は「画面の大きさ」で書いて、ズームしても同じ大きさに見えるようにする
+const labels = [];   // { g, x, y, show(zoomed) }
+function addLabel(layer, x, y, cls, build, show) {
+  const g = el('g', { class: 'lbl ' + cls }, layer);
+  build(g);
+  labels.push({ g, x, y, show });
+  return g;
+}
+const RKANA = { '日高川': 'ひだかがわ', '日置川': 'ひきがわ', '富田川': 'とんだがわ', '熊野川': 'くまのがわ', '左会津川': 'さあいづがわ',
+  '右会津川': 'うあいづがわ', '芳養川': 'はやがわ', '四村川': 'よむらがわ', '大塔川': 'おおとうがわ', '前ノ川': 'まえのかわ' };
+M.rivers.forEach(r => addLabel($('labelLayer'), r.lab[0], r.lab[1], 'rlbl', g => {
+  txt(g, r.name, { 'font-size': r.lv === 1 ? 13 : 11, fill: '#0d47a1', 'stroke-width': 3, 'font-weight': r.lv === 1 ? 'bold' : 'normal' });
+  if (RKANA[r.name]) txt(g, RKANA[r.name], { y: -12, 'font-size': 8.5, fill: '#1565c0', 'stroke-width': 2, class: 'kana' });
+}, z => z && r.lv === 1));
+M.areas.forEach(a => addLabel($('labelLayer'), a.lab[0], a.lab[1], 'arealbl', g => {
+  txt(g, a.kana, { y: -19, 'font-size': 11, fill: DEEP[a.id], 'stroke-width': 3, 'font-weight': 'bold', class: 'kana' });
+  txt(g, a.name, { y: 0, 'font-size': 22, fill: DEEP[a.id], 'stroke-width': 5, 'font-weight': 'bold' });
+}, z => !z));
+const [seaX, seaY] = proj(135.345, 33.703);
+addLabel($('labelLayer'), seaX, seaY, 'sea', g => {
+  txt(g, '田辺湾', { 'font-size': 15, fill: '#1565c0', 'stroke-width': 0, 'font-weight': 'bold' });
+  txt(g, 'たなべわん', { y: -14, 'font-size': 9, fill: '#1565c0', 'stroke-width': 0, class: 'kana' });
+}, () => true);
+
+// 記号（さがしている間は名前をかくす）
+ITEMS.forEach(it => {
+  it.g = addLabel($('symLayer'), it.x, it.y, 'sym', g => {
+    el('circle', { class: 'glow', r: 20, fill: '#ffeb3b', opacity: 0.75 }, g);
+    el('circle', { class: 'bg', r: 13, fill: '#fff', stroke: '#757575', 'stroke-width': 1.2 }, g);
+    el('g', { transform: 'translate(-11,-11) scale(0.344)' }, g).innerHTML = SYM[it.kind];
+    const nm = el('g', { class: 'nm' }, g);
+    txt(nm, it.kana, { x: 17, y: -9, 'font-size': 9, fill: '#555', 'stroke-width': 2.5, class: 'kana' });
+    txt(nm, it.name, { x: 17, y: 4, 'font-size': 14, fill: '#212121', 'stroke-width': 4, 'font-weight': 'bold' });
+  }, () => visibleItem(it));
+});
+const symSVG = (kind, size) => `<svg viewBox="0 0 64 64" width="${size}" height="${size}" class="sym-inline">${SYM[kind]}</svg>`;
+const kindRuby = k => `<ruby>${KIND[k][0]}<rt>${KIND[k][1]}</rt></ruby>`;
+
+// ---------- 見えている範囲（ズーム・スクロール） ----------
+let vb = [0, 0, M.W, M.H];
+let cur = null;          // いま開いている地区（null = 全体）
+let anim = null;
+const MIN_W = 8;         // いちばん大きくしたとき（地図の幅 やく400m）
+
+function aspect() { const r = svg.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r.width / r.height : 1; }
+function fitBox(b, pad = 0.1) {
+  const asp = aspect();
+  let [x0, y0, x1, y1] = b;
+  const padx = (x1 - x0) * pad, pady = (y1 - y0) * pad;
+  x0 -= padx; x1 += padx; y0 -= pady; y1 += pady;
+  let w = x1 - x0, h = y1 - y0;
+  if (w / h < asp) { const nw = h * asp; x0 -= (nw - w) / 2; w = nw; }
+  else { const nh = w / asp; y0 -= (nh - h) / 2; h = nh; }
+  return [x0, y0, w, h];
+}
+const homeBox = () => cur ? fitBox(AREA[cur].box) : fitBox([40, 40, M.W - 30, M.H - 40], 0.02);
+
+// 見えている範囲が、地区の外へ行きすぎないようにする
+function clampView(v) {
+  const H = homeBox();
+  let [x, y, w, h] = v;
+  if (w > H[2]) { w = H[2]; h = H[3]; }
+  if (w < MIN_W) { h = h * MIN_W / w; w = MIN_W; }
+  const cx = Math.min(Math.max(x + w / 2, H[0]), H[0] + H[2]);
+  const cy = Math.min(Math.max(y + h / 2, H[1]), H[1] + H[3]);
+  return [cx - w / 2, cy - h / 2, w, h];
+}
+
+function applyView() {
+  svg.setAttribute('viewBox', vb.join(' '));
+  const r = svg.getBoundingClientRect();
+  if (!r.width) return;
+  const s = Math.max(vb[2] / r.width, vb[3] / r.height);
+  const z = cur !== null;
+  const f = Math.min(1, Math.max(0.75, r.width / 650));
+  labels.forEach(L => {
+    const on = L.show(z);
+    L.g.style.display = on ? '' : 'none';
+    if (on) L.g.setAttribute('transform', `translate(${L.x},${L.y}) scale(${s * f})`);
+  });
+  const mr = $('miniRect');
+  mr.setAttribute('x', vb[0]); mr.setAttribute('y', vb[1]); mr.setAttribute('width', vb[2]); mr.setAttribute('height', vb[3]);
+  $('miniDot').setAttribute('cx', vb[0] + vb[2] / 2); $('miniDot').setAttribute('cy', vb[1] + vb[3] / 2);
+  $('mini').style.display = z ? '' : 'none';
+  updateScale(s);
+}
+function updateScale(s) {
+  const pxPerKm = M.km / s;
+  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20];
+  let km = steps[0];
+  for (const k of steps) if (k * pxPerKm <= 130) km = k;
+  $('scaleBar').style.width = (km * pxPerKm) + 'px';
+  $('scaleTxt').textContent = km < 1 ? Math.round(km * 1000) + 'm' : km + 'km';
+}
+function animateTo(target, dur = 600) {
+  const from = vb.slice(), t0 = performance.now();
+  cancelAnimationFrame(anim);
+  const step = now => {
+    let t = Math.min(1, Math.max(0, (now - t0) / dur));   // 最初のコマは now が t0 より前のことがある
+    t = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    vb = from.map((v, i) => v + (target[i] - v) * t);
+    applyView();
+    if (t < 1) anim = requestAnimationFrame(step);
+  };
+  anim = requestAnimationFrame(step);
+}
+// 画面の点 (sx, sy) を中心に k 倍に大きくする
+function zoomAt(sx, sy, k) {
+  cancelAnimationFrame(anim);
+  const r = svg.getBoundingClientRect(), s = vb[2] / r.width;
+  const mx = vb[0] + (sx - r.left) * s, my = vb[1] + (sy - r.top) * s;
+  let w = vb[2] / k, h = vb[3] / k;
+  if (w < MIN_W) { h *= MIN_W / w; w = MIN_W; }
+  vb = clampView([mx - (sx - r.left) * w / r.width, my - (sy - r.top) * h / r.height, w, h]);
+  applyView();
+}
+function panBy(dx, dy) {
+  const s = vb[2] / svg.getBoundingClientRect().width;
+  vb = clampView([vb[0] - dx * s, vb[1] - dy * s, vb[2], vb[3]]);
+  applyView();
+}
+function zoomCenter(k) { const r = svg.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, k); }
+
+function openArea(id, dur) {
+  cur = id;
+  svg.classList.toggle('zoomed', id !== null);
+  M.areas.forEach(a => {
+    areaEls[a.id].classList.toggle('dim', id !== null && a.id !== id);
+    areaEls[a.id].classList.toggle('pick', id === null && state.level === 'challenge' && state.phase === 'search');
+  });
+  $('toAll').hidden = !(id !== null && state.level === 'challenge' && state.phase === 'search');
+  animateTo(homeBox(), dur);
+}
+
+// ---------- 指・マウスの操作 ----------
+const ptrs = new Map();
+let gesture = null;   // { moved, sx, sy }
+svg.addEventListener('pointerdown', e => {
+  svg.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 1) gesture = { moved: false, sx: e.clientX, sy: e.clientY, multi: false };
+  else if (gesture) gesture.multi = true;
+});
+svg.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId);
+  if (!p) return;
+  if (ptrs.size === 1) {
+    if (gesture && Math.hypot(e.clientX - gesture.sx, e.clientY - gesture.sy) > 8) gesture.moved = true;
+    if (gesture && gesture.moved && cur) { svg.classList.add('dragging'); panBy(e.clientX - p.x, e.clientY - p.y); }
+  } else if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()];
+    const o = a === p ? b : a;
+    const d0 = Math.hypot(p.x - o.x, p.y - o.y), d1 = Math.hypot(e.clientX - o.x, e.clientY - o.y);
+    const m0 = [(p.x + o.x) / 2, (p.y + o.y) / 2], m1 = [(e.clientX + o.x) / 2, (e.clientY + o.y) / 2];
+    if (cur && d0 > 0) { panBy(m1[0] - m0[0], m1[1] - m0[1]); zoomAt(m1[0], m1[1], d1 / d0); }
+  }
+  p.x = e.clientX; p.y = e.clientY;
+});
+function endPtr(e) {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId);
+  svg.classList.remove('dragging');
+  if (ptrs.size === 0 && gesture) {
+    if (!gesture.moved && !gesture.multi && e.type === 'pointerup') onTap(e.clientX, e.clientY);
+    gesture = null;
+  }
+}
+svg.addEventListener('pointerup', endPtr);
+svg.addEventListener('pointercancel', endPtr);
+svg.addEventListener('wheel', e => { if (!cur) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.25 : 0.8); }, { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());   // iPad の画面ぜんたいの拡大をとめる
+$('zIn').addEventListener('click', () => cur && zoomCenter(1.6));
+$('zOut').addEventListener('click', () => cur && zoomCenter(1 / 1.6));
+$('zReset').addEventListener('click', () => animateTo(homeBox(), 400));
+$('toAll').addEventListener('click', () => openArea(null));
+window.addEventListener('resize', () => { vb = clampView(fitBox([vb[0], vb[1], vb[0] + vb[2], vb[1] + vb[3]], 0)); applyView(); });
+
+// ---------- ゲームの状態 ----------
+const params = new URLSearchParams(location.search);
+const state = {
+  level: ['easy', 'normal', 'challenge'].includes(params.get('level')) ? params.get('level') : 'normal',
+  area: AREA[params.get('area')] ? params.get('area') : 'tanabe',
+  kinds: (params.get('kinds') || '').split(',').filter(k => KIND[k]),   // 先生がしぼった記号（空なら全部）
+  phase: 'start',      // start / pick（3択）/ search / found / review
+  qs: [], qi: 0, rec: [], target: null, locked: false, hint: 0
+};
+let hintRing = null;
+
+function visibleItem(it) {
+  if (state.phase === 'start' && !TEACHER) return false;
+  if (!cur) return false;
+  return it.area === cur;
+}
+function kindsIn(area) {
+  const ks = new Set(ITEMS.filter(it => !area || it.area === area).map(it => it.kind));
+  return Object.keys(KIND).filter(k => ks.has(k) && (!state.kinds.length || state.kinds.includes(k)));
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function makeQuestions(pool) {
+  const qs = [];
+  while (qs.length < ROUND) {
+    const bag = shuffle(pool.slice());
+    if (qs.length && bag[0] === qs[qs.length - 1] && bag.length > 1) bag.push(bag.shift());   // 同じ記号が続かないように
+    qs.push(...bag);
+  }
+  return qs.slice(0, ROUND);
+}
+
+// ---------- 効果音 ----------
+let audioCtx = null;
+function beep(seq) {
+  if (!$('optSound').checked) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      gn.gain.setValueAtTime(0.15, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  } catch (e) { /* 音が出せなくても続ける */ }
+}
+const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+let toastTimer = null;
+function toast(html, cls, ms = 2200) {
+  const t = $('toast');
+  t.className = 'toast show ' + (cls || '');
+  t.innerHTML = html;
+  clearTimeout(toastTimer);
+  if (ms) toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ---------- はじめの画面 ----------
+const LEVELS = [
+  ['easy', 'かんたん', 'まず記号を3つからえらぶ'],
+  ['normal', 'ふつう', '名前だけを見てさがす'],
+  ['challenge', 'チャレンジ', '地区も自分でえらぶ']
+];
+function showStart() {
+  state.phase = 'start';
+  clearMarks();
+  $('qbar').innerHTML = `<div class="msg">「温泉はどこ？」のように出る記号を、地図の中から見つけてタップしよう。<b>${ROUND}問</b>です。</div>`;
+  const ch = state.level === 'challenge';
+  $('card').className = 'card';
+  $('card').innerHTML = `<h2>はじめよう</h2>
+    <h3>むずかしさ</h3><div class="choice-row level">${LEVELS.map(([id, nm, d]) =>
+      `<button class="choice ${state.level === id ? 'active' : ''}" data-lv="${id}">${nm}<small>${d}</small></button>`).join('')}</div>
+    ${ch ? '' : `<h3>さがす地区</h3><div class="choice-row">${M.areas.map(a =>
+      `<button class="choice ${state.area === a.id ? 'active' : ''}" data-ar="${a.id}"><span class="sw" style="background:${COLOR[a.id]}"></span><ruby>${a.name}<rt>${a.kana}</rt></ruby></button>`).join('')}</div>
+      <div class="note">自分の学校がある地区から、はじめてみよう。</div>`}
+    ${state.kinds.length ? `<div class="note">先生がえらんだ記号：${state.kinds.map(k => KIND[k][0]).join('・')}</div>` : ''}
+    <button class="big-btn" id="go">スタート</button>`;
+  $('card').querySelectorAll('[data-lv]').forEach(b => b.addEventListener('click', () => { state.level = b.dataset.lv; showStart(); }));
+  $('card').querySelectorAll('[data-ar]').forEach(b => b.addEventListener('click', () => { state.area = b.dataset.ar; showStart(); }));
+  $('go').addEventListener('click', startGame);
+  openArea(ch ? null : state.area);
+  if (TEACHER) renderTeacher();
+}
+
+function startGame() {
+  const ch = state.level === 'challenge';
+  const pool = kindsIn(ch ? null : state.area);
+  if (!pool.length) { toast('この地区には、えらんだ記号がないよ', 'ng'); return; }
+  state.qs = makeQuestions(pool);
+  state.qi = 0; state.rec = [];
+  nextQuestion();
+}
+
+// ---------- 1問ずつ ----------
+function nextQuestion() {
+  clearMarks();
+  if (state.qi >= state.qs.length) return showReview();
+  const k = state.qs[state.qi];
+  state.target = k; state.hint = 0; state.locked = false;
+  state.rec.push({ kind: k, wrong: [], hint: 0, found: null });
+  if (state.level === 'easy') showPick3(k);
+  else beginSearch();
+}
+function qText(k, withSym) {
+  return `<div class="q">${withSym ? `<svg viewBox="0 0 64 64" class="qsym">${SYM[k]}</svg>` : ''}<span>「<span class="kind">${kindRuby(k)}</span>」はどこ？</span></div>
+    <span class="prog">${state.qi + 1} / ${state.qs.length}</span>`;
+}
+
+// かんたん：記号を3つからえらぶ
+function showPick3(k) {
+  state.phase = 'pick';
+  $('qbar').innerHTML = qText(k, false);
+  const others = Object.keys(KIND).filter(x => x !== k && x !== KIND[k][3]);
+  const opts = shuffle([k, KIND[k][3] || shuffle(others.slice())[0], shuffle(others)[0]].filter((v, i, a) => a.indexOf(v) === i));
+  while (opts.length < 3) { const x = Object.keys(KIND).find(x => !opts.includes(x)); opts.push(x); }
+  $('pickTtl').innerHTML = `「${kindRuby(k)}」の記号は、どれかな？`;
+  $('pickSay').textContent = '';
+  $('pickRow').innerHTML = opts.map(o => `<button data-k="${o}"><svg viewBox="0 0 64 64" width="80" height="80">${SYM[o]}</svg></button>`).join('');
+  $('pickRow').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.k === k) { sndOK(); $('pick3').classList.remove('show'); beginSearch(); return; }
+    sndNG();
+    state.rec[state.rec.length - 1].wrong.push(b.dataset.k);
+    b.classList.add('no'); b.disabled = true;
+    const ps = pairSay(k, b.dataset.k);
+    $('pickSay').innerHTML = `それは「${kindRuby(b.dataset.k)}」の記号。` + (ps || KIND[k][2]);
+  }));
+  $('pick3').classList.add('show');
+  sideSearching();
+}
+
+function beginSearch() {
+  state.phase = 'search';
+  const k = state.target;
+  $('qbar').innerHTML = qText(k, state.level === 'easy') + `<button class="hint-btn" id="hintBtn">ヒント</button>`;
+  $('hintBtn').addEventListener('click', giveHint);
+  sideSearching();
+  if (state.level === 'challenge') {
+    openArea(null);
+    toast('どの地区にありそうかな？ 地区をタップしよう', 'ok', 2600);
+  } else if (cur !== state.area) openArea(state.area);
+  else applyView();
+}
+function sideSearching() {
+  const ch = state.level === 'challenge';
+  $('card').className = 'card';
+  $('card').innerHTML = `<h2>さがそう</h2>
+    ・地図を<b>指2本</b>で広げると、大きくなるよ（＋ボタンでもOK）<br>
+    ・指1本で動かせるよ<br>
+    ・見つけたら、記号をタップ！
+    ${ch ? '<br>・まずは、ありそうな<b>地区</b>をタップ' : ''}
+    <button class="big-btn sub" id="quit">やめて、はじめにもどる</button>`;
+  $('quit').addEventListener('click', showStart);
+}
+
+// 地図をタップしたとき
+function onTap(sx, sy) {
+  if (state.phase === 'search' && state.level === 'challenge' && !cur) return pickArea(sx, sy);
+  if (TEACHER && state.phase === 'start') {
+    const it = nearestItem(sx, sy);
+    if (it) { it.g.classList.toggle('named'); }
+    return;
+  }
+  if (state.phase !== 'search' || state.locked || !cur) return;
+  const it = nearestItem(sx, sy);
+  if (!it) return;   // 記号のないところは、何も起きない
+  const rec = state.rec[state.rec.length - 1];
+  if (it.kind === state.target) return found(it, rec);
+  // まちがい：記号の名前と声かけ、1秒まつ
+  sndNG();
+  rec.wrong.push(it.kind);
+  it.g.classList.add('miss');
+  const ps = pairSay(state.target, it.kind);
+  const t = state.target;
+  toast(`それは「${kindRuby(it.kind)}」の記号だよ。<br>${ps ? ps : '「' + kindRuby(t) + '」は、' + KIND[t][2] + 'だよ'}<div class="wait" id="wait"></div>`, 'ng', 2600);
+  state.locked = true;
+  const w = $('wait');
+  w.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: 1000, fill: 'forwards' });
+  setTimeout(() => { state.locked = false; it.g.classList.remove('miss'); }, 1000);
+}
+function nearestItem(sx, sy) {
+  const r = svg.getBoundingClientRect(), s = vb[2] / r.width;
+  const f = Math.min(1, Math.max(0.75, r.width / 650));
+  let best = null, bd = 18 * f + 4;
+  ITEMS.forEach(it => {
+    if (!visibleItem(it)) return;
+    const px = r.left + (it.x - vb[0]) / s, py = r.top + (it.y - vb[1]) / s;
+    const d = Math.hypot(px - sx, py - sy);
+    if (d < bd) { bd = d; best = it; }
+  });
+  return best;
+}
+function pickArea(sx, sy) {
+  const hit = document.elementsFromPoint(sx, sy).find(e => e.classList && e.classList.contains('area'));
+  if (!hit) return;
+  const id = Object.keys(areaEls).find(k => areaEls[k] === hit);
+  if (ITEMS.some(it => it.area === id && it.kind === state.target)) { openArea(id); return; }
+  sndNG();
+  toast(`${AREA[id].name}には「${kindRuby(state.target)}」はないよ。ほかの地区をさがそう`, 'ng', 2400);
+}
+
+function found(it, rec) {
+  sndOK();
+  state.phase = 'found';
+  rec.found = it;
+  $('toAll').hidden = true;
+  $('toast').classList.remove('show');
+  clearHint();
+  it.g.classList.add('named', 'hit');
+  const same = ITEMS.filter(x => x.area === it.area && x.kind === it.kind);
+  same.forEach(x => x.g.classList.add('lit'));
+  $('qbar').innerHTML = `<div class="q">⭕ 見つけた！</div><span class="prog">${state.qi + 1} / ${state.qs.length}</span>`;
+  const last = state.qi + 1 >= state.qs.length;
+  $('card').className = 'card';
+  $('card').innerHTML = `${symSVG(it.kind, 30)} ${kindRuby(it.kind)}
+    <div class="found-name"><ruby>${it.name}<rt>${it.kana}</rt></ruby></div>
+    ${NOTE[it.name] ? `<div>${NOTE[it.name]}</div>` : ''}
+    <div class="ask">ここに行ったことはあるかな？ となりの人と話してみよう</div>
+    ${same.length > 1 ? `<div class="note">光っているのも、ぜんぶ「${KIND[it.kind][0]}」。${AREA[it.area].name}には ${same.length} こあるよ</div>` : ''}
+    <button class="big-btn" id="next">${last ? 'ふりかえりへ' : 'つぎの問題へ'}</button>`;
+  $('next').addEventListener('click', () => { state.qi++; nextQuestion(); });
+  applyView();
+}
+
+// ヒント：あたりを円でしめす
+function giveHint() {
+  if (state.phase !== 'search') return;
+  const rec = state.rec[state.rec.length - 1];
+  rec.hint++;
+  if (state.level === 'challenge' && !cur) {
+    const ids = [...new Set(ITEMS.filter(it => it.kind === state.target).map(it => it.area))];
+    const id = ids[Math.floor(Math.random() * ids.length)];
+    toast(`ヒント：<b>${AREA[id].name}</b>をさがしてみよう`, 'ok', 2600);
+    areaEls[id].animate([{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }], { duration: 700, iterations: 3 });
+    return;
+  }
+  const cx = vb[0] + vb[2] / 2, cy = vb[1] + vb[3] / 2;
+  const cands = ITEMS.filter(it => it.area === cur && it.kind === state.target);
+  if (!cands.length) return;
+  const t = cands.reduce((a, b) => Math.hypot(a.x - cx, a.y - cy) <= Math.hypot(b.x - cx, b.y - cy) ? a : b);
+  // 1回目は大きな円、2回目からは小さな円
+  const R = Math.max(MIN_W * 0.6, (rec.hint === 1 ? 0.18 : 0.07) * homeBox()[2]);
+  const ang = Math.random() * Math.PI * 2, off = Math.random() * R * 0.55;
+  const hx = t.x + Math.cos(ang) * off, hy = t.y + Math.sin(ang) * off;
+  clearHint();
+  hintRing = el('circle', { cx: hx, cy: hy, r: R, fill: 'rgba(255,235,59,0.18)', stroke: '#ff9800', 'stroke-dasharray': '8 6', 'vector-effect': 'non-scaling-stroke' }, $('hintLayer'));
+  hintRing.setAttribute('stroke-width', 4);
+  // 円が見えるところまで動かす
+  const box = fitBox([hx - R, hy - R, hx + R, hy + R], 0.25);
+  if (box[2] > vb[2] || hx - R < vb[0] || hx + R > vb[0] + vb[2] || hy - R < vb[1] || hy + R > vb[1] + vb[3]) animateTo(clampView(box), 500);
+  toast('この円の中をさがしてみよう', 'ok', 2000);
+}
+function clearHint() { $('hintLayer').innerHTML = ''; hintRing = null; }
+function clearMarks() {
+  clearHint();
+  $('pick3').classList.remove('show');
+  $('toast').classList.remove('show');
+  ITEMS.forEach(it => it.g.classList.remove('named', 'lit', 'hit', 'miss'));
+}
+
+// ---------- ふりかえり ----------
+function showReview() {
+  state.phase = 'review';
+  clearMarks();
+  sndDone();
+  const first = state.rec.filter(r => !r.wrong.length).length;
+  const misses = state.rec.filter(r => r.wrong.length);
+  $('qbar').innerHTML = `<div class="q">🎉 ${state.qs.length}問 おわり！</div>`;
+  $('card').className = 'card';
+  $('card').innerHTML = `<h2>ふりかえり</h2>
+    <div>1回で見つけた：<b style="font-size:1.3rem;color:#2e7d32">${first}</b> / ${state.rec.length}問</div>
+    ${misses.length ? `<h3>まちがえた記号</h3><ul class="miss-list">${misses.map(r =>
+      `<li>${symSVG(r.kind, 26)}「${KIND[r.kind][0]}」をさがして → ${[...new Set(r.wrong)].map(w => symSVG(w, 26) + KIND[w][0]).join('、')}</li>`).join('')}</ul>
+      <div class="note">先生に見せよう。にている記号は、どこがちがうかな？</div>` : '<div class="ask">ぜんぶ1回で見つけたよ！</div>'}
+    <h3>見つけた場所</h3><ul class="chips">${state.rec.filter(r => r.found).map((r, i) => `<li data-i="${r.found.i}">${r.found.name}</li>`).join('')}</ul>
+    <div class="note">タップすると、地図に名前が出るよ</div>
+    <button class="big-btn" id="again">もう一回（同じ地区）</button>
+    <button class="big-btn sub" id="back">はじめにもどる</button>`;
+  $('card').querySelectorAll('.chips li').forEach(li => li.addEventListener('click', () => {
+    const it = ITEMS[+li.dataset.i];
+    if (cur !== it.area) openArea(it.area);
+    it.g.classList.toggle('named');
+    it.g.classList.add('lit');
+  }));
+  $('again').addEventListener('click', startGame);
+  $('back').addEventListener('click', showStart);
+  applyView();
+}
+
+// ---------- 先生モード（?teacher=1） ----------
+function renderTeacher() {
+  const tc = $('tcard');
+  tc.hidden = false;
+  const url = () => {
+    const u = new URL(location.href);
+    u.search = '';
+    u.searchParams.set('level', state.level);
+    if (state.level !== 'challenge') u.searchParams.set('area', state.area);
+    if (state.kinds.length) u.searchParams.set('kinds', state.kinds.join(','));
+    return u.toString();
+  };
+  const area = state.level === 'challenge' ? null : state.area;
+  tc.innerHTML = `<h2>先生モード</h2>
+    <h3>出題する記号（えらばないと全部）</h3>
+    <div class="kind-grid">${Object.keys(KIND).map(k => {
+      const n = ITEMS.filter(it => it.kind === k && (!area || it.area === area)).length;
+      return `<label><input type="checkbox" data-k="${k}" ${state.kinds.includes(k) ? 'checked' : ''} ${n ? '' : 'disabled'}><svg viewBox="0 0 64 64">${SYM[k]}</svg>${KIND[k][0]}（${n}）</label>`;
+    }).join('')}</div>
+    <h3>子ども用のリンク（今のむずかしさ・地区・記号）</h3>
+    <input class="link-box" id="tLink" readonly value="${url()}">
+    <button class="small-btn" id="tCopy">リンクをコピー</button>
+    <h3>記号リスト（${area ? AREA[area].name : '全地区'}・確認用）</h3>
+    <div class="note">名前をタップすると、地図に名前が出ます。地図の記号をタップしても出ます。</div>
+    <div class="tlist" id="tList"></div>`;
+  tc.querySelectorAll('[data-k]').forEach(c => c.addEventListener('change', () => {
+    state.kinds = [...tc.querySelectorAll('[data-k]:checked')].map(x => x.dataset.k);
+    if (state.phase === 'start') showStart(); else renderTeacher();   // はじめの画面の「先生がえらんだ記号」も直す
+  }));
+  $('tCopy').addEventListener('click', () => {
+    const inp = $('tLink'); inp.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(inp.value) : Promise.reject()).then(
+      () => toast('コピーしました', 'ok', 1200), () => { document.execCommand('copy'); toast('コピーしました', 'ok', 1200); });
+  });
+  const list = ITEMS.filter(it => !area || it.area === area);
+  $('tList').innerHTML = Object.keys(KIND).map(k => {
+    const ks = list.filter(it => it.kind === k);
+    if (!ks.length) return '';
+    return `<div class="k"><svg viewBox="0 0 64 64">${SYM[k]}</svg>${KIND[k][0]}（${ks.length}）</div>` +
+      ks.map(it => `<span class="it" data-i="${it.i}">${area ? '' : AREA[it.area].name + '：'}${it.name}</span>`).join('');
+  }).join('');
+  $('tList').querySelectorAll('.it').forEach(s => s.addEventListener('click', () => {
+    const it = ITEMS[+s.dataset.i];
+    if (cur !== it.area) { cur = it.area; svg.classList.add('zoomed'); M.areas.forEach(a => areaEls[a.id].classList.toggle('dim', a.id !== it.area)); }
+    ITEMS.forEach(x => x.g.classList.remove('lit'));
+    it.g.classList.add('named', 'lit');
+    animateTo(clampView(fitBox([it.x - 6, it.y - 6, it.x + 6, it.y + 6], 0)), 500);
+  }));
+}
+
+// ---------- オプション ----------
+$('optKana').addEventListener('change', e => { document.body.classList.toggle('hide-kana', !e.target.checked); svg.classList.toggle('hide-kana', !e.target.checked); });
+
+vb = fitBox([40, 40, M.W - 30, M.H - 40], 0.02);
+applyView();
+showStart();
+</script>
+</body>
+</html>
