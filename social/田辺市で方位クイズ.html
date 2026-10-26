@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>田辺市で方位クイズ</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #e8f5e9 0%, #c8e6c9 100%);
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .back-link { display: inline-block; font-size: 0.85rem; color: #2e7d32; text-decoration: none; margin-bottom: 4px; }
+  h1 { margin: 2px 0; font-size: 1.4rem; color: #1b5e20; text-align: center; }
+  .subtitle { margin: 0 0 8px; font-size: 0.88rem; color: #388e3c; text-align: center; }
+  rt { font-size: 0.6em; }
+  .hide-kana rt { visibility: hidden; }
+  .panel { width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 10px; }
+  button { font-family: inherit; touch-action: manipulation; }
+
+  /* 問題のバー */
+  .qbar {
+    background: #fff; border-radius: 14px; padding: 8px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    display: flex; align-items: center; gap: 12px; min-height: 64px;
+  }
+  .qbar .q { flex: 1; font-size: 1.4rem; font-weight: bold; color: #1b5e20; line-height: 1.6; }
+  .qbar .q .from { color: #e65100; }
+  .qbar .q .to { color: #1565c0; }
+  .qbar .step { display: block; font-size: 0.95rem; color: #555; font-weight: bold; }
+  .qbar .prog { font-size: 0.95rem; color: #555; font-weight: bold; white-space: nowrap; }
+  .qbar .msg { flex: 1; font-size: 1.05rem; color: #333; }
+  .hint-btn {
+    border: none; background: #fff3e0; color: #e65100; border-radius: 12px; padding: 8px 14px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+  }
+
+  .main { display: flex; gap: 12px; align-items: flex-start; }
+  .side { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+
+  .card {
+    background: #fff; border-radius: 14px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    font-size: 0.95rem; line-height: 1.7; color: #333; border-left: 8px solid #a5d6a7;
+  }
+  .card h2 { margin: 0 0 6px; font-size: 1.2rem; color: #1b5e20; }
+  .card h3 { margin: 8px 0 4px; font-size: 0.95rem; color: #2e7d32; }
+  .card .note { font-size: 0.8rem; color: #888; line-height: 1.5; }
+  .choice-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .choice {
+    border: 3px solid transparent; background: #f1f8e9; border-radius: 12px; padding: 6px 10px;
+    font-size: 0.95rem; font-weight: bold; color: #333; cursor: pointer; display: flex; align-items: center; gap: 6px;
+  }
+  .choice .sw { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.2); }
+  .choice.active { border-color: #1b5e20; background: #fff; }
+  .choice small { font-weight: normal; color: #666; font-size: 0.78rem; }
+  .level .choice { flex-direction: column; align-items: flex-start; gap: 0; line-height: 1.35; flex: 1 1 30%; padding: 5px 7px; }
+  .big-btn {
+    border: none; background: #2e7d32; color: #fff; border-radius: 12px; padding: 10px 18px;
+    font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 10px; width: 100%;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+  }
+  .big-btn.sub { background: #fff; color: #2e7d32; border: 2px solid #2e7d32; box-shadow: none; }
+  .ans-name { font-size: 1.5rem; font-weight: bold; color: #1b5e20; margin: 2px 0; }
+  .lean { background: #fff8e1; border-radius: 10px; padding: 4px 10px; font-weight: bold; color: #e65100; margin: 6px 0; }
+  .ask { background: #fff8e1; border-radius: 10px; padding: 6px 10px; font-weight: bold; color: #e65100; margin: 6px 0; }
+  .miss-list { list-style: none; margin: 4px 0; padding: 0; }
+  .miss-list li { margin: 3px 0; font-size: 0.88rem; line-height: 1.5; }
+  .star-i { color: #f9a825; }
+
+  /* 方位のボタン（方位記号と同じならび） */
+  .dirpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px auto 0; max-width: 270px; }
+  .dirpad button {
+    height: 64px; border: 3px solid #a5d6a7; background: #fff; border-radius: 14px; cursor: pointer;
+    font-size: 1.3rem; font-weight: bold; color: #1b5e20; box-shadow: 0 2px 5px rgba(0,0,0,0.12); line-height: 1.1;
+  }
+  .dirpad button rt { font-size: 0.5em; }
+  .dirpad button:disabled { opacity: 0.35; cursor: default; }
+  .dirpad button.no { border-color: #ef9a9a; background: #ffebee; opacity: 0.5; }
+  .dirpad button.yes { border-color: #2e7d32; background: #c8e6c9; opacity: 1; }
+  .dirpad .mid { display: flex; align-items: center; justify-content: center; }
+  .dirpad .mid svg { width: 54px; height: 54px; }
+  .dirpad .blank { visibility: hidden; }
+
+  .opts {
+    background: #fff; border-radius: 12px; padding: 8px 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.9rem; color: #333;
+  }
+  .opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .opts input { width: 18px; height: 18px; }
+
+  /* 地図 */
+  .board-wrap { position: relative; flex: 1; min-width: 0; background: #cfe9f7; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden; }
+  svg#board { width: 100%; height: calc(100vh - 230px); min-height: 440px; max-height: 900px; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .area { transition: fill 0.35s; }
+  .lbl text { paint-order: stroke; stroke: #fff; stroke-linejoin: round; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+  .hide-kana .kana { display: none; }
+  svg.no-names .arealbl { display: none; }
+  .star .glow { display: none; }
+  .star.lit .glow { display: inline; }
+  .lm { display: none; }
+  .lm.on { display: inline; }
+  .lm .glow { display: none; }
+  .lm.lit .glow { display: inline; }
+  .lm .nm text { text-anchor: start; }
+  .arm.on { stroke: #e65100 !important; }
+
+  .compass { position: absolute; top: 10px; right: 12px; width: 40px; pointer-events: none; }
+  .scale { position: absolute; right: 12px; bottom: 10px; font-size: 0.8rem; font-weight: bold; color: #333; pointer-events: none; text-align: right; }
+  .scale .bar { height: 7px; border: 2px solid #333; border-top: none; margin-top: 2px; background: linear-gradient(90deg, #333 50%, #fff 50%); margin-left: auto; }
+
+  /* 動かす方位記号 */
+  .dock {
+    position: absolute; left: 10px; top: 10px; width: 120px; padding: 6px 4px 4px;
+    background: rgba(255,255,255,0.9); border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    text-align: center; font-size: 0.8rem; font-weight: bold; color: #e65100; line-height: 1.3;
+  }
+  .dock[hidden] { display: none; }
+  .dock .cmp { width: 96px; height: 96px; cursor: grab; touch-action: none; display: block; margin: 0 auto; }
+  .dock.ready .cmp { animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+  .drag-ghost { position: fixed; width: 96px; height: 96px; pointer-events: none; z-index: 50; transform: translate(-50%, -50%); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); }
+
+  .toast {
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: 82%;
+    background: #fff; border-radius: 12px; padding: 8px 14px; font-size: 1rem; font-weight: bold; color: #333;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.25); display: none; text-align: center; line-height: 1.6; z-index: 5;
+  }
+  .toast.show { display: block; }
+  .toast.ng { border: 3px solid #ef9a9a; }
+  .toast.ok { border: 3px solid #a5d6a7; }
+  .toast .wait { height: 5px; background: #ef9a9a; border-radius: 3px; margin-top: 4px; transform-origin: left; }
+
+  /* まとめ：大きな方位記号 */
+  .sum { position: absolute; inset: 0; background: #fffdf5; display: none; align-items: center; justify-content: center; }
+  .sum.show { display: flex; }
+  .sum svg { width: 100%; height: 100%; }
+  .slot circle.ring { fill: #fff; stroke: #a5d6a7; stroke-width: 3; stroke-dasharray: 7 5; }
+  .slot.near circle.ring { fill: #fff8e1; stroke: #e65100; stroke-dasharray: none; }
+  .slot.hintme circle.ring { fill: #fff3e0; stroke: #ff9800; stroke-width: 5; }
+  .slot text { text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+  .cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+  .dcard {
+    border: 3px solid #a5d6a7; background: #fff; border-radius: 12px; padding: 8px 12px; font-size: 1.05rem; font-weight: bold;
+    color: #333; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; display: flex; align-items: center; gap: 6px;
+  }
+  .dcard .sw { width: 14px; height: 14px; border-radius: 4px; }
+  .dcard.done { opacity: 0.35; cursor: default; }
+  .dcard.ghost { position: fixed; pointer-events: none; z-index: 50; transform: translate(-50%, -50%); box-shadow: 0 6px 12px rgba(0,0,0,0.3); }
+
+  /* 先生モード */
+  .teacher { border-left-color: #90caf9; }
+  .teacher h2 { color: #1565c0; }
+  .link-box { width: 100%; font-size: 0.75rem; padding: 4px; margin-top: 6px; }
+  .small-btn { border: none; background: #1565c0; color: #fff; border-radius: 8px; padding: 5px 10px; font-size: 0.85rem; cursor: pointer; margin-top: 6px; }
+  .tlist { max-height: 320px; overflow-y: auto; font-size: 0.8rem; line-height: 1.45; }
+  .tlist table { border-collapse: collapse; width: 100%; }
+  .tlist td { border-bottom: 1px solid #e3f2fd; padding: 2px 3px; }
+  .tlist tr.out td { color: #aaa; text-decoration: line-through; }
+  .tlist .th td { background: #e3f2fd; font-weight: bold; color: #1565c0; text-decoration: none; }
+  .credit { font-size: 0.72rem; color: #666; text-align: center; margin-top: 6px; }
+
+  /* 印刷用の白地図 */
+  #sheet { display: none; }
+  @media print {
+    @page { size: A4 portrait; margin: 12mm; }
+    body { background: #fff; padding: 0; display: block; }
+    #page { display: none; }
+    #sheet { display: block; font-family: "Hiragino Sans", "Yu Gothic", sans-serif; color: #000; }
+    #sheet h2 { margin: 0 0 4px; font-size: 18pt; }
+    #sheet .nm { font-size: 12pt; margin-bottom: 6px; }
+    #sheet ol { font-size: 11pt; margin: 4px 0 6px 1.4em; padding: 0; line-height: 1.6; }
+    #sheet svg { width: 100%; height: 150mm; display: block; }
+    #sheet table { border-collapse: collapse; font-size: 12pt; margin-top: 6px; width: 100%; }
+    #sheet td { border: 1px solid #000; padding: 6px 8px; height: 11mm; }
+  }
+
+  @media (max-width: 820px) {
+    .main { flex-direction: column; }
+    .side { width: 100%; }
+    svg#board { height: 62vh; }
+    .qbar .q { font-size: 1.15rem; }
+  }
+</style>
+</head>
+<body>
+<div class="panel" id="page">
+  <div>
+    <a class="back-link" href="../index.html">← もどる</a>
+    <h1><ruby>田辺<rt>たなべ</rt></ruby><ruby>市<rt>し</rt></ruby>で<ruby>方位<rt>ほうい</rt></ruby>クイズ</h1>
+    <p class="subtitle">方位記号を★において、田辺市の地区がどの方位にあるか答えよう</p>
+  </div>
+
+  <div class="qbar" id="qbar"></div>
+
+  <div class="main">
+    <div class="board-wrap" id="boardWrap">
+      <svg id="board" viewBox="0 0 1000 1032" preserveAspectRatio="xMidYMid meet">
+        <g id="nbLayer"></g>
+        <path id="prefLine" fill="none" stroke="#8d6e63" stroke-width="3" stroke-dasharray="10 5" vector-effect="non-scaling-stroke"/>
+        <g id="areaLayer"></g>
+        <path id="outline" fill="none" stroke="#c62828" stroke-width="3" vector-effect="non-scaling-stroke" pointer-events="none"/>
+        <g id="riverLayer" pointer-events="none"></g>
+        <g id="labelLayer" pointer-events="none"></g>
+        <g id="lineLayer" pointer-events="none"></g>
+        <g id="lmLayer" pointer-events="none"></g>
+        <g id="starLayer" pointer-events="none"></g>
+        <g id="compLayer" pointer-events="none"></g>
+      </svg>
+      <svg class="compass" viewBox="0 0 40 56">
+        <text x="20" y="11" text-anchor="middle" font-size="13" font-weight="bold" fill="#c62828">北</text>
+        <path d="M20,15 L28,50 L20,43 L12,50 Z" fill="#c62828" stroke="#fff" stroke-width="1.5"/>
+      </svg>
+      <div class="scale"><span id="scaleTxt">5km</span><div class="bar" id="scaleBar"></div></div>
+      <div class="dock" id="dock" hidden>
+        <svg class="cmp" id="dockCmp" viewBox="-68 -68 136 136"></svg>
+        <span id="dockTxt">★まで動かそう</span>
+      </div>
+      <div class="sum" id="sum"><svg id="sumSvg" viewBox="-260 -230 520 460"></svg></div>
+      <div class="toast" id="toast"></div>
+    </div>
+
+    <div class="side">
+      <div class="card" id="card"></div>
+      <div class="card teacher" id="tcard" hidden></div>
+      <div class="opts">
+        <label><input type="checkbox" id="optKana" checked>ふりがな</label>
+        <label><input type="checkbox" id="optSound" checked>音</label>
+      </div>
+    </div>
+  </div>
+  <div class="credit">地図：国土交通省「国土数値情報（行政区域・河川）」を加工して作成</div>
+</div>
+
+<div id="sheet"></div>
+
+<script src="tanabe-map-data.js"></script>
+<script>
+const M = TANABE_MAP;
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const svg = $('board');
+const ROUND = 10;
+const params = new URLSearchParams(location.search);
+const TEACHER = params.get('teacher') === '1';
+
+// 地区の色（田辺市マップと同じ）
+const COLOR = { tanabe: '#ffcc80', ryujin: '#a5d6a7', nakahechi: '#ce93d8', oto: '#fff59d', hongu: '#f8bbd0' };
+const DEEP  = { tanabe: '#ef6c00', ryujin: '#2e7d32', nakahechi: '#7b1fa2', oto: '#f9a825', hongu: '#c2185b' };
+const AREA = {};
+M.areas.forEach(a => AREA[a.id] = a);
+
+// ---------- 方位 ----------
+// 番号は東から反時計回り（0=東, 2=北, 4=西, 6=南）。地図は北が上で、東西と南北の縮尺をそろえてある
+const DIR = ['東', '北東', '北', '北西', '西', '南西', '南', '南東'];
+const DIR_KANA = ['ひがし', 'ほくとう', 'きた', 'ほくせい', 'にし', 'なんせい', 'みなみ', 'なんとう'];
+const dirRuby = i => `<ruby>${DIR[i]}<rt>${DIR_KANA[i]}</rt></ruby>`;
+const MIN_MARGIN_AREA = 3.5;   // 地区どうし：方位の境目まで、これより近い組み合わせは出さない（旧田辺市↔龍神村 2.7° だけが外れる）
+const MIN_MARGIN_LM = 5;       // 地区から目印
+const LEAN_MARGIN = 8;         // これより境目に近いと「少し○より」と言う。まとめでは、となりのうでも正解にする
+
+function dirOf(p, q) {
+  const ang = Math.atan2(-(q.y - p.y), q.x - p.x) * 180 / Math.PI;
+  const i = ((Math.round(ang / 45) % 8) + 8) % 8;
+  let d = ang - Math.round(ang / 45) * 45;
+  const margin = 22.5 - Math.abs(d);
+  const lean = (i + (d > 0 ? 1 : 7)) % 8;          // 境目の向こうがわの方位
+  return { i, ang, margin, lean };
+}
+// 「東だけど、少し北よりだね」
+function leanText(r) {
+  const word = DIR[r.i].length === 1 ? DIR[r.lean].replace(DIR[r.i], '') : DIR[r.lean];
+  return `${DIR[r.i]}だけど、少し${word}よりだね`;
+}
+
+// ---------- 地区の★（行政局・市役所）と目印 ----------
+const STARS = M.areas.map(a => {
+  const p = M.places.find(p => p.area === a.id && (p.kind === 'office' || p.kind === 'office2'));
+  return { id: a.id, name: a.name, kana: a.kana, desc: a.desc, x: p.x, y: p.y, office: p.name, officeKana: p.kana };
+});
+const STAR = {};
+STARS.forEach(s => STAR[s.id] = s);
+const LM_NOTE = {
+  '龍神温泉': '日高川ぞいの温泉。「日本三美人の湯」の1つ',
+  '護摩壇山': '龍神村のいちばん北。和歌山県でいちばん高い山のあたり',
+  '近露': '熊野古道（中辺路）の宿場町',
+  '百間山': '旧大塔村の山。百間山渓谷には滝がたくさんある',
+  '熊野本宮大社': '世界遺産「紀伊山地の霊場と参詣道」の1つ',
+  '湯の峰温泉': '「つぼ湯」は、入れる世界遺産',
+  '川湯温泉': '川原をほると、お湯がわき出る温泉',
+  '天神崎': '田辺湾につき出た岬。ナショナル・トラストで自然を守っている'
+};
+const LMS = M.places.filter(p => LM_NOTE[p.name]);
+
+// 目印の地図記号（田辺市マップと同じ）
+const LM_SYM = {
+  shrine:  '<g transform="translate(-9,-9) scale(0.28)"><rect x="4" y="6" width="56" height="54" rx="8" fill="#fff" opacity="0.9"/><path d="M8,17 Q32,10 56,17 M13,27 H51 M19,21 V54 M45,21 V54" fill="none" stroke="#333" stroke-width="6"/></g>',
+  onsen:   '<g transform="translate(-9,-10) scale(0.28)"><rect x="6" y="4" width="52" height="54" rx="8" fill="#fff" opacity="0.9"/><path d="M13,32 A19 19 0 0 0 51,32 Z M22,26 C20,21 24,17 22,11 M32,26 C30,21 34,17 32,11 M42,26 C40,21 44,17 42,11" fill="none" stroke="#333" stroke-width="5.5"/></g>',
+  mount:   '<path d="M0,-9 L9,7 H-9 Z" fill="#6d4c41" stroke="#fff" stroke-width="1.5"/>',
+  sight:   '<circle r="5" fill="#ff7043" stroke="#fff" stroke-width="2"/>'
+};
+
+// ---------- 問題 ----------
+// { from: 地区id, to: {type:'area'|'lm', id, name, kana, x, y, note}, r: dirOf }
+const toArea = s => ({ type: 'area', id: s.id, name: s.name, kana: s.kana, x: s.x, y: s.y, note: s.desc });
+const toLm = p => ({ type: 'lm', id: p.name, name: p.name, kana: p.kana, x: p.x, y: p.y, note: LM_NOTE[p.name], kind: p.kind, area: p.area });
+const ALL_AREA_Q = [], ALL_LM_Q = [];
+STARS.forEach(s => STARS.forEach(t => { if (s !== t) ALL_AREA_Q.push({ from: s.id, to: toArea(t), r: dirOf(s, t) }); }));
+STARS.forEach(s => LMS.forEach(p => { if (p.area !== s.id) ALL_LM_Q.push({ from: s.id, to: toLm(p), r: dirOf(s, p) }); }));
+const AREA_Q = ALL_AREA_Q.filter(q => q.r.margin >= MIN_MARGIN_AREA);
+const LM_Q = ALL_LM_Q.filter(q => q.r.margin >= MIN_MARGIN_LM);
+const EASY_Q = AREA_Q.filter(q => q.r.i % 2 === 0);
+
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+// 10問を、方位がなるべく全部出るように選ぶ
+function makeQuestions(level) {
+  const picked = [];
+  const take = q => { if (q && !picked.includes(q)) picked.push(q); };
+  if (level === 'easy') {
+    shuffle([0, 2, 4, 6]).forEach(i => take(shuffle(EASY_Q.filter(q => q.r.i === i))[0]));
+    shuffle(EASY_Q.slice()).forEach(q => picked.length < ROUND && take(q));
+  } else {
+    // 8方位を1つずつ（地区どうしがあればそちらを先に）→ のこりは地区どうしと目印をまぜて
+    shuffle([0, 1, 2, 3, 4, 5, 6, 7]).forEach(i => {
+      const a = shuffle(AREA_Q.filter(q => q.r.i === i && !picked.includes(q)));
+      const l = shuffle(LM_Q.filter(q => q.r.i === i && !picked.includes(q)));
+      take(a.length && (Math.random() < 0.6 || !l.length) ? a[0] : l[0]);
+    });
+    shuffle(AREA_Q.slice()).forEach(q => picked.length < ROUND && picked.filter(x => x.to.type === 'area').length < 6 && take(q));
+    shuffle(LM_Q.slice()).forEach(q => picked.length < ROUND && take(q));
+  }
+  const qs = shuffle(picked.slice(0, ROUND));
+  // 同じ地区からの問題が続かないように
+  for (let k = 1; k < qs.length; k++) {
+    if (qs[k].from === qs[k - 1].from) {
+      const j = qs.findIndex((q, n) => n > k && q.from !== qs[k - 1].from);
+      if (j > 0) [qs[k], qs[j]] = [qs[j], qs[k]];
+    }
+  }
+  return qs;
+}
+
+// ---------- 地図をかく ----------
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(g, s, attrs) { const t = el('text', attrs, g); t.textContent = s; return t; }
+
+M.neighbors.forEach(n => el('path', { d: n.d, fill: n.pref === '奈良県' ? '#ece9e2' : '#f5f5f0', stroke: '#bdbdbd', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' }, $('nbLayer')));
+$('prefLine').setAttribute('d', M.prefLine);
+$('outline').setAttribute('d', M.outline);
+const areaEls = {};
+M.areas.forEach(a => {
+  areaEls[a.id] = el('path', { d: a.d, class: 'area', fill: COLOR[a.id], stroke: '#fff', 'stroke-width': 2.5,
+    'vector-effect': 'non-scaling-stroke', 'fill-rule': 'evenodd' }, $('areaLayer'));
+});
+M.rivers.filter(r => r.lv === 1).forEach(r => el('path', { d: r.d, fill: 'none', stroke: '#1e88e5', 'stroke-width': 2.4,
+  'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' }, $('riverLayer')));
+
+// ラベル・★・方位記号は「画面の大きさ」で書く（地図の大きさが変わっても同じ大きさに見える）
+const labels = [];
+function addLabel(layer, x, y, cls, build) {
+  const g = el('g', { class: cls }, layer);
+  build(g);
+  labels.push({ g, x, y });
+  return g;
+}
+M.areas.forEach(a => addLabel($('labelLayer'), a.lab[0], a.lab[1], 'lbl arealbl', g => {
+  txt(g, a.kana, { y: -19, 'font-size': 11, fill: DEEP[a.id], 'stroke-width': 3, 'font-weight': 'bold', class: 'kana' });
+  txt(g, a.name, { y: 0, 'font-size': 22, fill: DEEP[a.id], 'stroke-width': 5, 'font-weight': 'bold' });
+}));
+const STAR_D = 'M0,-13 L3.8,-4.2 L12.4,-4 L5.6,2.2 L7.6,11 L0,6 L-7.6,11 L-5.6,2.2 L-12.4,-4 L-3.8,-4.2 Z';
+STARS.forEach(s => {
+  s.g = addLabel($('starLayer'), s.x, s.y, 'star', g => {
+    el('circle', { class: 'glow', r: 22, fill: '#ffeb3b', opacity: 0.8 }, g);
+    el('path', { d: STAR_D, fill: '#ffd54f', stroke: '#e65100', 'stroke-width': 2, 'stroke-linejoin': 'round' }, g);
+  });
+});
+// 目印（その問題のときだけ出す）。東のはしは名前を左に、西のはしの天神崎は下に書く
+LMS.forEach(p => {
+  p.g = addLabel($('lmLayer'), p.x, p.y, 'lbl lm', g => {
+    el('circle', { class: 'glow', r: 20, fill: '#90caf9', opacity: 0.8 }, g);
+    el('g', {}, g).innerHTML = LM_SYM[p.kind];
+    const pos = p.name === '天神崎' ? [0, 30, 'middle'] : p.x > 700 ? [-14, 1, 'end'] : [14, 1, 'start'];
+    const nm = el('g', { class: 'nm' }, g);
+    const [x, y, a] = pos;
+    const k = txt(nm, p.kana, { x, y: y - 13, 'font-size': 9, fill: '#1565c0', 'stroke-width': 2.5, class: 'kana' });
+    const t = txt(nm, p.name, { x, y, 'font-size': 15, fill: '#0d47a1', 'stroke-width': 4, 'font-weight': 'bold' });
+    k.style.textAnchor = a; t.style.textAnchor = a;
+  });
+});
+
+// 方位記号の絵（中心 0,0。北のうでだけ赤くして「北」と書く。ほかのうでの名前は子どもが読む）
+function compassSVG(g, R, opts = {}) {
+  const sw = opts.sw || 5;
+  for (let i = 0; i < 8; i++) {
+    const len = i % 2 ? R * 0.68 : R;
+    const a = i * Math.PI / 4;
+    const x = Math.cos(a) * len, y = -Math.sin(a) * len;
+    el('line', { class: 'arm', 'data-i': i, x1: 0, y1: 0, x2: x, y2: y, stroke: i === 2 ? '#c62828' : '#455a64',
+      'stroke-width': i % 2 ? sw * 0.7 : sw, 'stroke-linecap': 'round' }, g);
+  }
+  el('path', { d: `M0,${-R - 6} L${R * 0.16},${-R * 0.62} L${-R * 0.16},${-R * 0.62} Z`, fill: '#c62828' }, g);
+  txt(g, '北', { x: 0, y: -R - 14, 'font-size': opts.fs || 14, 'font-weight': 'bold', fill: '#c62828', 'text-anchor': 'middle' });
+  el('circle', { r: sw * 0.9, fill: '#fff', stroke: '#455a64', 'stroke-width': 2 }, g);
+}
+compassSVG($('dockCmp'), 40, { sw: 6, fs: 14 });
+
+// ---------- 見えている範囲 ----------
+let vb = [0, 0, M.W, M.H];
+function aspect() { const r = svg.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r.width / r.height : 1; }
+function fitBox(b, pad) {
+  const asp = aspect();
+  let [x0, y0, x1, y1] = b;
+  const padx = (x1 - x0) * pad, pady = (y1 - y0) * pad;
+  x0 -= padx; x1 += padx; y0 -= pady; y1 += pady;
+  let w = x1 - x0, h = y1 - y0;
+  if (w / h < asp) { const nw = h * asp; x0 -= (nw - w) / 2; w = nw; }
+  else { const nh = w / asp; y0 -= (nh - h) / 2; h = nh; }
+  return [x0, y0, w, h];
+}
+let unit = 1;   // 画面の1px が地図の何単位か
+function applyView() {
+  vb = fitBox([40, 40, M.W - 30, M.H - 40], 0.02);
+  svg.setAttribute('viewBox', vb.join(' '));
+  const r = svg.getBoundingClientRect();
+  if (!r.width) return;
+  const s = Math.max(vb[2] / r.width, vb[3] / r.height);
+  const f = Math.min(1, Math.max(0.75, r.width / 650));
+  unit = s * f;
+  labels.forEach(L => L.g.setAttribute('transform', `translate(${L.x},${L.y}) scale(${unit})`));
+  $('compLayer').querySelectorAll('[data-x]').forEach(g => g.setAttribute('transform', `translate(${g.dataset.x},${g.dataset.y}) scale(${unit})`));
+  drawLines();
+  const pxPerKm = M.km / s;
+  let km = 1;
+  for (const k of [1, 2, 5, 10, 20]) if (k * pxPerKm <= 130) km = k;
+  $('scaleBar').style.width = (km * pxPerKm) + 'px';
+  $('scaleTxt').textContent = km + 'km';
+}
+window.addEventListener('resize', applyView);
+// 地図の点 → 画面の点
+function toScreen(x, y) {
+  const m = svg.getScreenCTM();
+  return [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f];
+}
+
+// 矢印（★から見る先へ）。ズームしても太さが同じになるよう、applyView のたびにかき直す
+let lines = [];   // { from, to, label, color }
+function drawLines() {
+  const L = $('lineLayer');
+  L.innerHTML = '';
+  lines.forEach(ln => {
+    const dx = ln.to.x - ln.from.x, dy = ln.to.y - ln.from.y, d = Math.hypot(dx, dy);
+    const ux = dx / d, uy = dy / d;
+    const x1 = ln.from.x + ux * 16 * unit, y1 = ln.from.y + uy * 16 * unit;
+    const x2 = ln.to.x - ux * 18 * unit, y2 = ln.to.y - uy * 18 * unit;
+    const hw = 9 * unit, hl = 16 * unit;
+    el('line', { x1, y1, x2: x2 - ux * hl * 0.6, y2: y2 - uy * hl * 0.6, stroke: '#fff', 'stroke-width': 9 * unit, 'stroke-linecap': 'round' }, L);
+    el('line', { x1, y1, x2: x2 - ux * hl * 0.6, y2: y2 - uy * hl * 0.6, stroke: ln.color, 'stroke-width': 5 * unit, 'stroke-linecap': 'round' }, L);
+    el('path', { d: `M${x2},${y2} L${x2 - ux * hl - uy * hw},${y2 - uy * hl + ux * hw} L${x2 - ux * hl + uy * hw},${y2 - uy * hl - ux * hw} Z`,
+      fill: ln.color, stroke: '#fff', 'stroke-width': 1.5 * unit }, L);
+    if (ln.label) {
+      const mx = (x1 + x2) / 2 - uy * 16 * unit, my = (y1 + y2) / 2 + ux * 16 * unit;
+      const g = el('g', { class: 'lbl', transform: `translate(${mx},${my}) scale(${unit})` }, L);
+      txt(g, ln.label, { 'font-size': 20, 'font-weight': 'bold', fill: ln.color, 'stroke-width': 5 });
+    }
+  });
+}
+
+// ---------- 効果音 ----------
+let audioCtx = null;
+function beep(seq) {
+  if (!$('optSound').checked) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    for (const [freq, start, len, type] of seq) {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      gn.gain.setValueAtTime(0.15, t0 + start);
+      gn.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
+      o.connect(gn).connect(audioCtx.destination);
+      o.start(t0 + start); o.stop(t0 + start + len);
+    }
+  } catch (e) { /* 音が出せなくても続ける */ }
+}
+const sndOK = () => beep([[880, 0, 0.1], [1320, 0.09, 0.15]]);
+const sndNG = () => beep([[170, 0, 0.18, 'square']]);
+const sndPut = () => beep([[600, 0, 0.08]]);
+const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
+
+let toastTimer = null;
+function toast(html, cls, ms = 2600) {
+  const t = $('toast');
+  t.className = 'toast show ' + (cls || '');
+  t.innerHTML = html;
+  clearTimeout(toastTimer);
+  if (ms) toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ---------- ゲームの状態 ----------
+const state = {
+  level: ['easy', 'normal', 'challenge'].includes(params.get('level')) ? params.get('level') : 'normal',
+  home: STAR[params.get('home')] ? params.get('home') : 'tanabe',
+  phase: 'start',   // start / place（方位記号を置く）/ answer / result / summary / review
+  qs: [], qi: 0, rec: [], locked: false
+};
+const q = () => state.qs[state.qi];
+const rec = () => state.rec[state.rec.length - 1];
+const nameRuby = (name, kana) => `<ruby>${name}<rt>${kana}</rt></ruby>`;
+
+function setNames(show) { svg.classList.toggle('no-names', !show); }
+function clearMarks() {
+  lines = []; drawLines();
+  $('compLayer').innerHTML = '';
+  STARS.forEach(s => s.g.classList.remove('lit'));
+  LMS.forEach(p => p.g.classList.remove('on', 'lit'));
+  $('toast').classList.remove('show');
+  $('dock').hidden = true;
+  $('sum').classList.remove('show');
+}
+
+// ---------- はじめの画面 ----------
+const LEVELS = [
+  ['easy', 'かんたん', '東・西・南・北の4つ'],
+  ['normal', 'ふつう', '八方位。目印も出る'],
+  ['challenge', 'チャレンジ', '地図に地区の名前なし']
+];
+function showStart() {
+  state.phase = 'start';
+  clearMarks();
+  setNames(true);
+  $('qbar').innerHTML = `<div class="msg">「本宮町から見て、龍神村はどの方位？」のような問題に答えよう。<b>${ROUND}問</b>のあと、まとめがあります。</div>`;
+  const h = STAR[state.home];
+  $('card').innerHTML = `<h2>はじめよう</h2>
+    <h3>むずかしさ</h3><div class="choice-row level">${LEVELS.map(([id, nm, d]) =>
+      `<button class="choice ${state.level === id ? 'active' : ''}" data-lv="${id}">${nm}<small>${d}</small></button>`).join('')}</div>
+    <h3>やりかた</h3>
+    ①「〜から見て」の地区の <span class="star-i">★</span> に、方位記号を動かしておく<br>
+    ② ボタンで方位を答える
+    <div class="note"><span class="star-i">★</span>は、市役所と行政局（もとの町や村の役場）。地区の中心の★どうしで考えよう。</div>
+    <div class="note">わたしたちの地区：<b>${h.name}</b>（まとめで使います）</div>
+    <button class="big-btn" id="go">スタート</button>`;
+  $('card').querySelectorAll('[data-lv]').forEach(b => b.addEventListener('click', () => { state.level = b.dataset.lv; showStart(); }));
+  $('go').addEventListener('click', startGame);
+  applyView();
+  if (TEACHER) renderTeacher();
+}
+function startGame() {
+  state.qs = makeQuestions(state.level);
+  state.qi = 0; state.rec = [];
+  nextQuestion();
+}
+
+// ---------- 1問ずつ ----------
+function qHTML(stepText) {
+  const Q = q(), f = STAR[Q.from];
+  return `<div class="q"><span class="from">${nameRuby(f.name, f.kana)}</span>から見て、<span class="to">${nameRuby(Q.to.name, Q.to.kana)}</span>はどの方位？
+    <span class="step">${stepText}</span></div>
+    ${state.level === 'challenge' && state.phase !== 'result' ? '<button class="hint-btn" id="hintBtn">ヒント</button>' : ''}
+    <span class="prog">${state.qi + 1} / ${state.qs.length}</span>`;
+}
+function bindHint() {
+  const b = $('hintBtn');
+  if (b) b.addEventListener('click', () => {
+    setNames(true);
+    rec().hint++;
+    setTimeout(() => { if (state.phase === 'place' || state.phase === 'answer') setNames(false); }, 1500);
+  });
+}
+function nextQuestion() {
+  clearMarks();
+  if (state.qi >= state.qs.length) return showSummary();
+  state.rec.push({ q: q(), wrong: [], hint: 0, putWrong: 0 });
+  state.locked = false;
+  setNames(state.level !== 'challenge');
+  if (q().to.type === 'lm') {
+    q().to.ref = LMS.find(p => p.name === q().to.id);
+    q().to.ref.g.classList.add('on');
+  }
+  state.phase = 'place';
+  $('qbar').innerHTML = qHTML(`① 方位記号を、${STAR[q().from].name}の★まで動かそう`);
+  bindHint();
+  $('dock').hidden = false;
+  $('dock').classList.add('ready');
+  $('dockTxt').textContent = '★まで動かそう';
+  renderPad();
+  applyView();
+}
+
+// 方位のボタン（方位記号と同じならび）
+const PAD = [3, 2, 1, 4, -1, 0, 5, 6, 7];
+function renderPad(done) {
+  const easy = state.level === 'easy';
+  const r = rec();
+  const off = state.phase !== 'answer';
+  $('card').innerHTML = `<h2>${state.phase === 'place' ? 'まず、方位記号を置こう' : 'どの方位かな？'}</h2>
+    <div class="dirpad">${PAD.map(i => {
+      if (i < 0) return `<div class="mid"><svg viewBox="-68 -68 136 136" id="padCmp"></svg></div>`;
+      if (easy && i % 2) return `<div class="blank"></div>`;
+      const cls = r.wrong.includes(i) ? 'no' : (done && done.i === i ? 'yes' : '');
+      return `<button data-i="${i}" class="${cls}" ${off || r.wrong.includes(i) ? 'disabled' : ''}>${dirRuby(i)}</button>`;
+    }).join('')}</div>
+    <div class="note" style="margin-top:8px">${state.phase === 'place' ? '方位記号を★に置くと、ボタンがおせるようになるよ' : '★に置いた方位記号のうでを見て、見る先がどのうでの方にあるか考えよう'}</div>
+    <button class="big-btn sub" id="quit">やめて、はじめにもどる</button>`;
+  compassSVG($('padCmp'), 36, { sw: 5, fs: 13 });
+  $('card').querySelectorAll('.dirpad button').forEach(b => b.addEventListener('click', () => answer(+b.dataset.i)));
+  $('quit').addEventListener('click', showStart);
+}
+
+// ---------- 方位記号を動かす ----------
+let drag = null;
+$('dockCmp').addEventListener('pointerdown', e => {
+  if (state.phase !== 'place' || state.locked) return;
+  e.preventDefault();
+  const ghost = $('dockCmp').cloneNode(true);
+  ghost.removeAttribute('id');
+  ghost.setAttribute('class', 'drag-ghost');
+  ghost.style.left = e.clientX + 'px'; ghost.style.top = e.clientY + 'px';
+  document.body.appendChild(ghost);
+  $('dockCmp').style.opacity = 0.25;
+  drag = { id: e.pointerId, ghost };
+  $('dockCmp').setPointerCapture(e.pointerId);
+});
+$('dockCmp').addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag.ghost.style.left = e.clientX + 'px'; drag.ghost.style.top = e.clientY + 'px';
+});
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag.ghost.remove();
+  drag = null;
+  $('dockCmp').style.opacity = 1;
+  if (e.type === 'pointerup') dropCompass(e.clientX, e.clientY);
+}
+$('dockCmp').addEventListener('pointerup', endDrag);
+$('dockCmp').addEventListener('pointercancel', endDrag);
+
+const nearPx = (pt, sx, sy) => { const [x, y] = toScreen(pt.x, pt.y); return Math.hypot(x - sx, y - sy); };
+function dropCompass(sx, sy) {
+  const Q = q(), f = STAR[Q.from];
+  const R = 46;
+  // 見る先に置いた → 反対向き型を、答える前にふせぐ
+  if (nearPx(Q.to, sx, sy) < R && nearPx(Q.to, sx, sy) < nearPx(f, sx, sy)) {
+    sndNG();
+    rec().putWrong++;
+    toast(`そこは<b>見る先</b>の${nameRuby(Q.to.name, Q.to.kana)}だよ。<br><b>${nameRuby(f.name, f.kana)}に立って</b>見てみよう`, 'ng', 3200);
+    return;
+  }
+  if (nearPx(f, sx, sy) < R) return placeCompass();
+  const other = STARS.find(s => nearPx(s, sx, sy) < R);
+  sndNG();
+  rec().putWrong++;
+  if (other) toast(`そこは${state.level === 'challenge' ? 'ちがう地区' : other.name}の★だよ。<br>${nameRuby(f.name, f.kana)}の★をさがそう`, 'ng', 2800);
+  else toast(`★の上に置こう`, 'ng', 1800);
+}
+function placeCompass() {
+  sndPut();
+  const f = STAR[q().from];
+  const g = el('g', { 'data-x': f.x, 'data-y': f.y, id: 'placed' }, $('compLayer'));
+  compassSVG(g, 46, { sw: 5, fs: 15 });
+  $('dock').hidden = true;
+  state.phase = 'answer';
+  $('qbar').innerHTML = qHTML('② 方位記号のうでを見て、ボタンで答えよう');
+  bindHint();
+  renderPad();
+  applyView();
+}
+
+// ---------- 答える ----------
+function answer(i) {
+  if (state.phase !== 'answer' || state.locked) return;
+  const Q = q(), r = rec(), f = STAR[Q.from];
+  if (i === Q.r.i) return showResult(true);
+  sndNG();
+  r.wrong.push(i);
+  if (r.wrong.length >= 2) return showResult(false);
+  // まちがい1回目：型に合わせた声かけ、1秒まつ
+  let say;
+  if (i === (Q.r.i + 4) % 8) {
+    say = `それは<b>${nameRuby(Q.to.name, Q.to.kana)}から${f.name}</b>を見たときの方位だよ。<br>${nameRuby(f.name, f.kana)}に立って考えよう`;
+  } else {
+    say = `${f.name}の★と、${Q.to.name}を地図でくらべてみよう。<br>★からまっすぐ線をひくと、どのうでの方かな？`;
+    f.g.classList.add('lit');
+    if (Q.to.type === 'area') STAR[Q.to.id].g.classList.add('lit'); else Q.to.ref.g.classList.add('lit');
+  }
+  toast(say + '<div class="wait" id="wait"></div>', 'ng', 3200);
+  state.locked = true;
+  $('wait').animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: 1000, fill: 'forwards' });
+  renderPad();
+  setTimeout(() => { state.locked = false; }, 1000);
+}
+function showResult(ok) {
+  const Q = q(), f = STAR[Q.from];
+  state.phase = 'result';
+  if (ok) sndOK();
+  $('toast').classList.remove('show');
+  setNames(true);
+  STARS.forEach(s => s.g.classList.remove('lit'));
+  if (Q.to.type === 'lm') Q.to.ref.g.classList.remove('lit');
+  lines = [{ from: f, to: Q.to, label: DIR[Q.r.i], color: '#e65100' }];
+  const arm = $('placed') && $('placed').querySelector(`.arm[data-i="${Q.r.i}"]`);
+  if (arm) arm.classList.add('on');
+  applyView();
+  const last = state.qi + 1 >= state.qs.length;
+  $('qbar').innerHTML = `<div class="q">${ok ? '⭕ せいかい！' : '答えを見てみよう'}
+    <span class="step">${f.name}から見て、${Q.to.name}は <b>${DIR[Q.r.i]}</b></span></div>
+    <span class="prog">${state.qi + 1} / ${state.qs.length}</span>`;
+  $('card').innerHTML = `<div>${f.name}から見て、${nameRuby(Q.to.name, Q.to.kana)}は</div>
+    <div class="ans-name">${dirRuby(Q.r.i)}</div>
+    ${Q.r.margin < LEAN_MARGIN ? `<div class="lean">${leanText(Q.r)}</div>` : ''}
+    ${!ok ? `<div class="note">反対の方位（${DIR[(Q.r.i + 4) % 8]}）は、${Q.to.name}から${f.name}を見たときの方位だよ</div>` : ''}
+    <h3>${Q.to.type === 'lm' ? '目印' : '地区'}：${Q.to.name}</h3>
+    <div>${Q.to.note}</div>
+    <button class="big-btn" id="next">${last ? 'まとめへ' : 'つぎの問題へ'}</button>`;
+  $('next').addEventListener('click', () => { state.qi++; nextQuestion(); });
+}
+
+// ---------- まとめ：わたしたちの地区から見て ----------
+const SUM_R = 165;
+let sumCards = [];   // { id, r, placed }
+function showSummary() {
+  state.phase = 'summary';
+  clearMarks();
+  sndDone();
+  const h = STAR[state.home];
+  const easy = state.level === 'easy';
+  sumCards = shuffle(STARS.filter(s => s.id !== state.home).map(s => ({ id: s.id, r: dirOf(h, s), placed: null, tries: 0 })));
+  const S = $('sumSvg');
+  S.innerHTML = '';
+  const g = el('g', {}, S);
+  compassSVG(g, SUM_R - 72, { sw: 7, fs: 20 });
+  el('path', { d: STAR_D, fill: '#ffd54f', stroke: '#e65100', 'stroke-width': 2, transform: 'scale(1.6)' }, g);
+  const ht = el('g', { class: 'slot' }, g);
+  txt(ht, h.name, { y: 34, 'font-size': 20, 'font-weight': 'bold', fill: DEEP[h.id], 'paint-order': 'stroke', stroke: '#fffdf5', 'stroke-width': 6 });
+  for (let i = 0; i < 8; i++) {
+    if (easy && i % 2) continue;
+    const a = i * Math.PI / 4;
+    const sg = el('g', { class: 'slot', 'data-i': i, transform: `translate(${Math.cos(a) * SUM_R * 1.18},${-Math.sin(a) * SUM_R})` }, S);
+    el('circle', { class: 'ring', r: 44 }, sg);
+    el('g', { class: 'names' }, sg);
+  }
+  $('sum').classList.add('show');
+  $('qbar').innerHTML = `<div class="q">まとめ：<span class="from">${nameRuby(h.name, h.kana)}</span>から見て、ほかの地区はどの方位？
+    <span class="step">地図を見ないで、カードを方位記号のうでの先（○）へ動かそう</span></div>`;
+  renderSumCard();
+}
+function renderSumCard() {
+  const left = sumCards.filter(c => !c.placed);
+  $('card').innerHTML = `<h2>まとめ</h2>
+    <div class="cards">${sumCards.map(c => `<div class="dcard ${c.placed ? 'done' : ''}" data-id="${c.id}"><span class="sw" style="background:${COLOR[c.id]}"></span>${nameRuby(AREA[c.id].name, AREA[c.id].kana)}</div>`).join('')}</div>
+    ${left.length ? '<div class="note">カードを、方位記号のうでの先の○まで動かそう</div>'
+      : `<div class="ask">ぜんぶ置けたね！ 地図でたしかめよう</div><button class="big-btn" id="check">地図でたしかめる</button>`}`;
+  $('card').querySelectorAll('.dcard:not(.done)').forEach(d => d.addEventListener('pointerdown', e => startCardDrag(e, d)));
+  if (!left.length) $('check').addEventListener('click', checkOnMap);
+}
+let cdrag = null;
+function startCardDrag(e, d) {
+  e.preventDefault();
+  const ghost = d.cloneNode(true);
+  ghost.classList.add('ghost');
+  ghost.style.left = e.clientX + 'px'; ghost.style.top = e.clientY + 'px';
+  document.body.appendChild(ghost);
+  cdrag = { id: e.pointerId, card: sumCards.find(c => c.id === d.dataset.id), ghost };
+}
+function slotAt(sx, sy) {
+  let best = null, bd = 70;
+  $('sumSvg').querySelectorAll('.slot[data-i]').forEach(s => {
+    const b = s.querySelector('.ring').getBoundingClientRect();
+    const d = Math.hypot(b.left + b.width / 2 - sx, b.top + b.height / 2 - sy);
+    if (d < bd) { bd = d; best = s; }
+  });
+  return best;
+}
+document.addEventListener('pointermove', e => {
+  if (!cdrag || e.pointerId !== cdrag.id) return;
+  cdrag.ghost.style.left = e.clientX + 'px'; cdrag.ghost.style.top = e.clientY + 'px';
+  const s = slotAt(e.clientX, e.clientY);
+  $('sumSvg').querySelectorAll('.slot').forEach(x => x.classList.toggle('near', x === s));
+});
+function endCardDrag(e) {
+  if (!cdrag || e.pointerId !== cdrag.id) return;
+  const { card, ghost } = cdrag;
+  ghost.remove();
+  cdrag = null;
+  $('sumSvg').querySelectorAll('.slot').forEach(x => x.classList.remove('near'));
+  if (e.type !== 'pointerup') return;
+  const s = slotAt(e.clientX, e.clientY);
+  if (s) dropCard(card, +s.dataset.i);
+}
+document.addEventListener('pointerup', endCardDrag);
+document.addEventListener('pointercancel', endCardDrag);
+
+function dropCard(c, i) {
+  const h = STAR[state.home], a = AREA[c.id], r = c.r;
+  const easy = state.level === 'easy';
+  // かんたん（4方位）でななめの地区は、となりの2つのうでどちらでも正解。境目に近い地区も、となりのうでで正解
+  const ok = i === r.i || (r.margin < LEAN_MARGIN && i === r.lean) || (easy && r.i % 2 && (i === (r.i + 1) % 8 || i === (r.i + 7) % 8));
+  if (ok) {
+    sndOK();
+    c.placed = i;
+    const names = $('sumSvg').querySelector(`.slot[data-i="${i}"] .names`);
+    const n = names.childNodes.length;
+    const t = txt(names, a.name, { y: 0, 'font-size': 19, 'font-weight': 'bold', fill: DEEP[a.id], 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 4 });
+    [...names.childNodes].forEach((x, k, all) => x.setAttribute('y', (k - (all.length - 1) / 2) * 22));
+    let note = '';
+    if (i !== r.i) note = easy && r.i % 2 ? `ほんとうは<b>${DIR[r.i]}</b>（${DIR[r.i][0]}と${DIR[r.i][1]}のあいだ）だよ` : `${leanText(r)}。${DIR[i]}でもOK`;
+    toast(`⭕ ${a.name}は${DIR[r.i]}${note ? '<br>' + note : ''}`, 'ok', note ? 3000 : 1500);
+    renderSumCard();
+    return;
+  }
+  sndNG();
+  c.tries++;
+  let say = i === (r.i + 4) % 8
+    ? `それは${a.name}から${h.name}を見たときの方位だよ。<b>${h.name}に立って</b>考えよう`
+    : `${a.name}は、そっちじゃないみたい。${h.name}から見て、どっちだったかな？`;
+  if (c.tries >= 2) {
+    const hint = $('sumSvg').querySelector(`.slot[data-i="${easy && r.i % 2 ? (r.i + 1) % 8 : r.i}"]`);
+    hint.classList.add('hintme');
+    setTimeout(() => hint.classList.remove('hintme'), 2500);
+    say += '<br>光っている○に置いてみよう';
+  }
+  toast(say, 'ng', 3000);
+}
+function checkOnMap() {
+  const h = STAR[state.home];
+  $('sum').classList.remove('show');
+  setNames(true);
+  lines = sumCards.map(c => ({ from: h, to: STAR[c.id], label: DIR[c.r.i], color: DEEP[c.id] }));
+  h.g.classList.add('lit');
+  applyView();
+  $('qbar').innerHTML = `<div class="q"><span class="from">${nameRuby(h.name, h.kana)}</span>から見ると…<span class="step">矢印の向きと、方位記号のうでをくらべてみよう</span></div>`;
+  const g = el('g', { 'data-x': h.x, 'data-y': h.y, id: 'placed' }, $('compLayer'));
+  compassSVG(g, 46, { sw: 5, fs: 15 });
+  applyView();
+  $('card').innerHTML = `<h2>${h.name}から見て</h2>
+    ${sumCards.slice().sort((a, b) => a.r.i - b.r.i).map(c => `<div>${AREA[c.id].name} … <b>${DIR[c.r.i]}</b>${c.r.margin < LEAN_MARGIN ? `<span class="note">（${leanText(c.r)}）</span>` : ''}</div>`).join('')}
+    <button class="big-btn" id="toReview">ふりかえりへ</button>`;
+  $('toReview').addEventListener('click', showReview);
+}
+
+// ---------- ふりかえり ----------
+function showReview() {
+  state.phase = 'review';
+  clearMarks();
+  applyView();
+  const first = state.rec.filter(r => !r.wrong.length).length;
+  const misses = state.rec.filter(r => r.wrong.length);
+  $('qbar').innerHTML = `<div class="q">🎉 おわり！</div>`;
+  $('card').innerHTML = `<h2>ふりかえり</h2>
+    <div>1回で正解：<b style="font-size:1.3rem;color:#2e7d32">${first}</b> / ${state.rec.length}問</div>
+    ${misses.length ? `<h3>まちがえた問題</h3><ul class="miss-list">${misses.map(r =>
+      `<li>${STAR[r.q.from].name}から見て${r.q.to.name}：<b>${DIR[r.q.r.i]}</b><span class="note">（えらんだのは ${r.wrong.map(i => DIR[i]).join('・')}${r.wrong.includes((r.q.r.i + 4) % 8) ? '　← 反対向き' : ''}）</span></li>`).join('')}</ul>`
+      : '<div class="ask">ぜんぶ1回で正解！</div>'}
+    <div class="ask">白地図にも書いてみよう。地区の名前と、方位記号をかけるかな？</div>
+    <button class="big-btn" id="again">もう一回（同じむずかしさ）</button>
+    <button class="big-btn sub" id="back">はじめにもどる</button>`;
+  $('again').addEventListener('click', startGame);
+  $('back').addEventListener('click', showStart);
+}
+
+// ---------- 先生モード（?teacher=1） ----------
+function renderTeacher() {
+  const tc = $('tcard');
+  tc.hidden = false;
+  const url = () => {
+    const u = new URL(location.href);
+    u.search = '';
+    u.searchParams.set('level', state.level);
+    u.searchParams.set('home', state.home);
+    return u.toString();
+  };
+  const row = x => `<tr class="${x.ok ? '' : 'out'}"><td>${STAR[x.from].name}→${x.to.name}</td><td><b>${DIR[x.r.i]}</b></td><td>${x.r.margin.toFixed(1)}°</td></tr>`;
+  tc.innerHTML = `<h2>先生モード</h2>
+    <h3>わたしたちの地区（まとめの中心）</h3>
+    <div class="choice-row">${STARS.map(s => `<button class="choice ${state.home === s.id ? 'active' : ''}" data-home="${s.id}"><span class="sw" style="background:${COLOR[s.id]}"></span>${s.name}</button>`).join('')}</div>
+    <h3>子ども用のリンク（今のむずかしさ・地区）</h3>
+    <input class="link-box" id="tLink" readonly value="${url()}">
+    <button class="small-btn" id="tCopy">リンクをコピー</button>
+    <h3>印刷用の白地図</h3>
+    <div class="note">★と地区の形だけの地図です。地区の名前と方位記号は子どもが書きます（${STAR[state.home].name}から見た表つき）。</div>
+    <button class="small-btn" id="tPrint">白地図を印刷する</button>
+    <h3>問題と答えの一覧</h3>
+    <div class="note">右の数字は、方位の境目までの角度。小さいほど、となりの方位とまぎらわしい。線を引いた問題は出しません。</div>
+    <div class="tlist"><table>
+      <tr class="th"><td colspan="3">地区どうし（★は${STARS.map(s => s.office).join('・')}）</td></tr>
+      ${ALL_AREA_Q.map(x => row({ ...x, ok: x.r.margin >= MIN_MARGIN_AREA })).join('')}
+      <tr class="th"><td colspan="3">地区から目印（ふつう・チャレンジ）</td></tr>
+      ${ALL_LM_Q.map(x => row({ ...x, ok: x.r.margin >= MIN_MARGIN_LM })).join('')}
+    </table></div>`;
+  tc.querySelectorAll('[data-home]').forEach(b => b.addEventListener('click', () => { state.home = b.dataset.home; if (state.phase === 'start') showStart(); else renderTeacher(); }));
+  $('tCopy').addEventListener('click', () => {
+    const inp = $('tLink'); inp.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(inp.value) : Promise.reject()).then(
+      () => toast('コピーしました', 'ok', 1200), () => { document.execCommand('copy'); toast('コピーしました', 'ok', 1200); });
+  });
+  $('tPrint').addEventListener('click', printSheet);
+}
+function printSheet() {
+  const h = STAR[state.home];
+  const others = STARS.filter(s => s.id !== state.home);
+  const stars = STARS.map(s => `<path d="${STAR_D}" transform="translate(${s.x},${s.y}) scale(1.4)" fill="#fff" stroke="#000" stroke-width="2"/>`).join('');
+  $('sheet').innerHTML = `<h2>田辺市の方位（ほうい）</h2>
+    <div class="nm">　　年　　組　名前（　　　　　　　　　　　）</div>
+    <ol><li>5つの地区の名前を、地図に書こう。</li>
+      <li>${h.name}の★に、方位記号をかこう。</li>
+      <li>${h.name}から見て、ほかの地区はどの方位かな？ 下の表に書こう。</li></ol>
+    <svg viewBox="40 40 930 952" preserveAspectRatio="xMidYMid meet">
+      ${M.neighbors.map(n => `<path d="${n.d}" fill="#fff" stroke="#bbb" stroke-width="1"/>`).join('')}
+      ${M.areas.map(a => `<path d="${a.d}" fill="#fff" stroke="#000" stroke-width="2.5" fill-rule="evenodd"/>`).join('')}
+      ${M.rivers.filter(r => r.lv === 1).map(r => `<path d="${r.d}" fill="none" stroke="#999" stroke-width="1.5"/>`).join('')}
+      ${stars}
+      <g transform="translate(930,90)"><text x="0" y="-8" text-anchor="middle" font-size="22" font-weight="bold">北</text><path d="M0,0 L10,44 L0,36 L-10,44 Z" fill="#000"/></g>
+    </svg>
+    <table>${others.map(s => `<tr><td style="width:62%">${h.name}から見て、${s.name}は</td><td>（　　　　　）</td></tr>`).join('')}</table>`;
+  window.print();
+}
+
+// ---------- オプション ----------
+$('optKana').addEventListener('change', e => { document.body.classList.toggle('hide-kana', !e.target.checked); svg.classList.toggle('hide-kana', !e.target.checked); });
+
+applyView();
+showStart();
+</script>
+</body>
+</html>
