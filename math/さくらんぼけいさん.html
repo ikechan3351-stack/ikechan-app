@@ -281,7 +281,7 @@
   .teacher { padding: 16px; font-size: 1rem; }
   .teacher h2 { margin: 0 0 6px; color: var(--accent-dark); text-align: center; }
   .t-note { color: #6d4c41; font-size: 0.9rem; line-height: 1.6; margin: 6px 0; }
-  .t-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-top: 12px; }
+  .t-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
   .t-box { border: 2px solid #ffe0b2; border-radius: 14px; padding: 10px 12px; background: #fffdf7; margin-top: 12px; }
   .t-grid .t-box { margin-top: 0; }
   .t-box h3 { margin: 0 0 8px; font-size: 1.05rem; color: var(--accent-dark); }
@@ -1429,18 +1429,21 @@ async function finish(my) {
   SFX.fanfare();
   let words = finishWords();
   if (P.learn) { bubble('🎉 ' + words, 'yatta', false); return words; }
-  if (P.ok) { words += '　シール ゲット！'; setTimeout(() => SFX.sticker(), 700); }
+  const already = !!session.results[session.idx];   // 「さいしょから」で とき なおした ときは、きろく・シールを ふやさない
+  if (P.ok && !already) { words += '　シール ゲット！'; setTimeout(() => SFX.sticker(), 700); }
   bubble((P.ok ? '🎉 ' : '👍 ') + words, 'yatta');
   // きろく（正答・時間・ヒントの だん・つまずいた ところ）
-  const rec = {
-    d: Date.now(), s: session.step, q: P.kind === 'ten' ? `${P.a}と□で10` : `${P.a}${P.kind === 'add' ? '+' : '-'}${P.b}`,
-    m: P.method || 'ten', ok: P.ok, sec: Math.round((Date.now() - P.t0) / 1000), hint: P.maxHint, miss: P.miss,
-  };
-  store.log.push(rec);
-  if (P.ok) store.stickers++;
-  saveStore();
-  if (!P.ok) addSimilar();   // できなかったら、うしろに にた もんだいを 1つ
-  session.results[session.idx] = rec;
+  if (!already) {
+    const rec = {
+      d: Date.now(), s: session.step, q: P.kind === 'ten' ? `${P.a}と□で10` : `${P.a}${P.kind === 'add' ? '+' : '-'}${P.b}`,
+      m: P.method || 'ten', ok: P.ok, sec: Math.round((Date.now() - P.t0) / 1000), hint: P.maxHint, miss: P.miss,
+    };
+    store.log.push(rec);
+    if (P.ok) store.stickers++;
+    saveStore();
+    if (!P.ok) addSimilar();   // できなかったら、うしろに にた もんだいを 1つ
+    session.results[session.idx] = rec;
+  }
   renderDots();
   $('#btnNext').hidden = false;
   $('#btnNext').textContent = session.idx >= session.list.length - 1 ? 'けっかを みる ▶' : 'つぎへ ▶';
@@ -1658,7 +1661,13 @@ document.addEventListener('click', e => {
 $('#btnPlayBack').onclick = () => { session ? goMap() : goHome(); };
 $('#btnNext').onclick = nextProblem;
 $('#btnHint').onclick = onHintBtn;
-$('#btnRetry').onclick = () => { if (P && !P.learn) loadProblem(session.list[session.idx]); };
+// さいしょから：まちがい・ヒントの きろくは ひきつぐ（やりなおしで「1かいで できた」に ならないように）
+$('#btnRetry').onclick = () => {
+  if (!P || P.learn) return;
+  const keepMiss = { ...P.miss }, keepHint = P.maxHint;
+  loadProblem(session.list[session.idx]);
+  P.miss = keepMiss; P.maxHint = keepHint;
+};
 $('#btnSay').onclick = () => { if (lastSay) say(lastSay); };
 $('#btnDemo').onclick = () => { ac(); restartLearn({ kind: P.kind, a: P.a, b: P.b }); };
 $('#btnChant').onclick = () => { ac(); tok++; hush(); run(my => chant(my)); };

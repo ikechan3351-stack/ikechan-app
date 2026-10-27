@@ -546,7 +546,9 @@
     type: 'compose', mode: 'flip', setting: 'mix', extra: null, tempo: 'manual', speed: 'normal',
     card: null, revealed: false, lastKey: '', input: '',
     autoTimer: null, autoRunning: false,
-    qi: 0, miss: 0, tries: 0, wrong: [], playing: false, lock: false, startT: 0, timerId: null
+    qi: 0, miss: 0, tries: 0, wrong: [], playing: false, lock: false, startT: 0, timerId: null,
+    quizTimer: null,   // クイズのつぎの問題へ進む予約(とちゅうで切りかえたら取り消す)
+    sound: true        // 音のチェックの状態(HUDを作り直してももどらないように)
   };
   const T = () => TYPES[st.type];
 
@@ -635,6 +637,7 @@
   // ===== クイズモード =====
   function renderQuizStart() {
     stopAuto();
+    st.playing = false;
     if (T().inputMode === 'choice') { $('controlCard').innerHTML = ''; }
     else { $('controlCard').innerHTML = buildKeypad(); bindKeypad(); }
     newCard(); drawCard(false);
@@ -681,7 +684,7 @@
       $('mark').textContent = '⭕ せいかい!';
       $('mark').className = 'mark ok';
       st.lock = true;
-      setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 800);
+      st.quizTimer = setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 800);
     } else {
       sndNG();
       st.miss++; st.tries++;
@@ -697,7 +700,7 @@
         drawCard(true);
         $('mark').textContent = `❌ こたえは「${T().answer(c)}」`;
         $('mark').className = 'mark ng';
-        setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1600);
+        st.quizTimer = setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1600);
       } else {
         $('mark').textContent = '❌ もういちど!';
         $('mark').className = 'mark ng';
@@ -710,8 +713,9 @@
       <span>もんだい <span class="val">${Math.min(st.qi + 1, ROUND)}/${ROUND}</span></span>
       <span>ミス <span class="val">${st.miss}</span></span>
       <span>タイム <span class="val" id="hudTime">0:00</span></span>
-      <label><input type="checkbox" id="chkSound" checked> 音</label>`;
+      <label><input type="checkbox" id="chkSound" ${st.sound ? 'checked' : ''}> 音</label>`;
   }
+  $('hud').addEventListener('change', (ev) => { if (ev.target.id === 'chkSound') st.sound = ev.target.checked; });
   function buildKeypad() {
     let rows;
     if (T().inputMode === 'entry') rows = [['7', '8', '9'], ['4', '5', '6'], ['1', '2', '3'], ['0', 'del', 'ok']];
@@ -753,7 +757,7 @@
       $('mark').textContent = '⭕ せいかい!';
       $('mark').className = 'mark ok';
       st.lock = true;
-      setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 700);
+      st.quizTimer = setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 700);
     } else {
       sndNG();
       st.miss++; st.tries++;
@@ -765,7 +769,7 @@
         drawCard(true);
         $('mark').textContent = `❌ こたえは ${ans}`;
         $('mark').className = 'mark ng';
-        setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1500);
+        st.quizTimer = setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1500);
       } else {
         $('mark').textContent = '❌ もういちど!';
         $('mark').className = 'mark ng';
@@ -836,8 +840,11 @@
   // ===== モード切りかえ =====
   function applyMode() {
     const isFlip = st.mode === 'flip';
+    // クイズのとちゅうで切りかえたら、クイズを止めてタイマーと予約を取り消す
+    st.playing = false; st.lock = true;
+    clearInterval(st.timerId); clearTimeout(st.quizTimer);
     $('tempoRow').style.display = isFlip ? '' : 'none';
-    if (isFlip) { $('hud').innerHTML = `<label><input type="checkbox" id="chkSound" checked> 音</label>`; renderFlip(); }
+    if (isFlip) { $('hud').innerHTML = `<label><input type="checkbox" id="chkSound" ${st.sound ? 'checked' : ''}> 音</label>`; renderFlip(); }
     else renderQuizStart();
   }
   document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
