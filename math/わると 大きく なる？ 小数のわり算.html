@@ -167,6 +167,8 @@
   .fb.ok::before { content: "◎ "; }
   .fb.ng { background: var(--warn-bg); color: var(--warn); border: 3px solid #f48fb1; }
   .fb.ng::before { content: "△ "; }
+  .fb.info { background: #fffde7; color: #5d4037; border: 3px solid #ffd54f; }
+  .fb.info::before { content: "✏️ "; }
   .trip { border: 4px solid #ab47bc; background: #faf3fc; border-radius: 16px; padding: 6px 12px; line-height: 1.8; }
   .trip h4 { margin: 0; color: #6a1b9a; font-size: 1.05rem; }
   .trip h4::before { content: "🔎 "; }
@@ -349,6 +351,8 @@ function fmt(d) {
   return `${s.slice(0, -d.p)}.${s.slice(-d.p)}`;
 }
 const fmtH = (d) => fmt(d).replace('.', '<span class="p">.</span>');
+// 1/10の位までの 概数は、1/10の位が 0 でも「3.0」と 書く（どこまでの 概数かを しめす ため）
+const fmtR = (d) => (fmt(d).includes('.') ? fmt(d) : fmt(d) + '.0');
 const scaled = (d) => d.n * 10 ** (8 - d.p);              // 1億分の1 を 単位に した 整数
 const fromScaled = (v) => D(v, 8);
 const cmp = (a, b) => Math.sign(scaled(a) - scaled(b));
@@ -919,7 +923,7 @@ VIEWS.quiz = (() => {
     if (q.kind === 'cmp') return `${q.c > 0 ? '大きい' : '小さい'}（わる数 ${fmt(q.b)} が 1 より ${q.c > 0 ? '小さい' : '大きい'}）`;
     if (q.kind === 'exact') return `${fmt(q.dv.quot)}`;
     if (q.kind === 'rem') return `${fmt(q.dv.quot)} あまり ${fmt(q.dv.remTrue)}`;
-    if (q.kind === 'round') return `${fmt(q.ans)}（${fmt(q.a)} ÷ ${fmt(q.b)} ＝ ${fmt(q.h)}… の 1/100の位を 四捨五入）`;
+    if (q.kind === 'round') return `${fmtR(q.ans)}（${fmt(q.a)} ÷ ${fmt(q.b)} ＝ ${fmt(q.h)}… の 1/100の位を 四捨五入）`;
     return `${fmt(q.ans)}${q.form === 'times' ? '倍' : 'm'}`;
   }
   function load() {
@@ -1015,6 +1019,12 @@ VIEWS.quiz = (() => {
     const need = q.kind === 'rem' ? [0, 1] : [0];
     for (const i of need) if (!inp[i] || inp[i] === '.') { say(i ? 'あまりも 入れてね' : 'こたえを 入れてね', 'warn'); target = i; drawBox(); shake($('#qB' + i)); return; }
     const v0 = parseD(inp[0]), v1 = parseD(inp[1]);
+    // 概数で「3」と 書いたら、×に しないで「3.0」と 書きなおして もらう
+    if (q.kind === 'round' && v0 && scaled(v0) === scaled(q.ans) && !/\.\d/.test(inp[0])) {
+      say(`1/10の位までの ${R('概数', 'がいすう')}だから、${fmtR(q.ans)} と 書こう`, 'warn');
+      $('#qFb').innerHTML = `<p class="fb info">おしい！ 1/10の位までの ${R('概数', 'がいすう')}だから、1/10の位の 0も 書いて <b>${fmtR(q.ans)}</b> と 書くよ</p>`;
+      shake($('#qPadWrap')); return;
+    }
     tries++;
     let ok = false, t = '', extra = '';
     if (q.kind === 'exact') {
@@ -1035,7 +1045,9 @@ VIEWS.quiz = (() => {
     }
     if (ok) {
       const pretty = q.kind === 'rem' ? `${fmt(q.dv.quot)} あまり ${fmt(q.dv.remTrue)}` : answerText();
-      const tidy = [inp[0], inp[1]].some((s) => /\.\d*0$/.test(s) || /\.$/.test(s)) ? `<br>（おしりの 0 や さいごの ${SHOUSUUTEN}は 消して 書くよ）` : '';
+      const tidy = q.kind === 'round'
+        ? (/^\d+\.\d$/.test(inp[0]) ? '' : `<br>（1/10の位までの ${R('概数', 'がいすう')}は ${fmtR(q.ans)} と 書くよ）`)
+        : [inp[0], inp[1]].some((s) => /\.\d*0$/.test(s) || /\.$/.test(s)) ? `<br>（おしりの 0 や さいごの ${SHOUSUUTEN}は 消して 書くよ）` : '';
       if (q.kind === 'bai') {
         const ex = { times: `${fmt(q.comp)} ÷ ${fmt(q.base)} ＝ ${fmt(q.k)}（${BAI}）`, comp: `${fmt(q.base)} × ${fmt(q.k)} ＝ ${fmt(q.comp)}（m）`, base: `□ × ${fmt(q.k)} ＝ ${fmt(q.comp)} → □ ＝ ${fmt(q.comp)} ÷ ${fmt(q.k)} ＝ ${fmt(q.base)}（m）` }[q.form];
         correct(`${ex}${tidy}`);
