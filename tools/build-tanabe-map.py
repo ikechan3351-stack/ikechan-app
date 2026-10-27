@@ -85,6 +85,9 @@ for pref,src in (('和歌山県',n24),('奈良県',n24n),('三重県',[])):
         if g.is_empty: continue
         lp=lab(g)
         nb.append(dict(name=nm,pref=pref,d=dpoly(g,0.8,2),lab=lp,touch=g.buffer(0.002).intersects(tan),km2=round(km2(g))))
+# すさみ町・高野町は田辺市ととなり合っているが、境界の計算でとなりと判定されないので、ここで直す
+for n in nb:
+    if n['name'] in ('すさみ町','高野町'): n['touch']=True
 print([ (n['name'],n['touch']) for n in nb])
 # rivers
 MAJOR={'日高川','日置川','富田川','熊野川','左会津川','右会津川','会津川','芳養川','大塔川','四村川','前ノ川','十津川','丹生ノ川','丹生川'}

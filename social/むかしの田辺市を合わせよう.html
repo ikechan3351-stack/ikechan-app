@@ -168,10 +168,11 @@
   @media (max-width: 820px) {
     .main { flex-direction: column; }
     .side { width: 100%; }
-    svg#board { height: 62vh; }
+    svg#board { height: auto; aspect-ratio: 950 / 980; min-height: 0; max-height: 62vh; }
     .qbar .q { font-size: 1.1rem; }
-    .dock { width: 116px; }
-    .dock .pc { width: 100px; height: 100px; }
+    /* スマホ・タブレットでは、形の置き場を地図の下に出して、地図にかさならないようにする */
+    .dock { position: static; width: auto; margin: 0 8px 8px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .dock .pc { width: 90px; height: 90px; margin: 0; }
   }
 </style>
 </head>
@@ -369,7 +370,9 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.fl
 function setQ(html, prog) { $('qbar').innerHTML = `<div class="q">${html}</div>${prog ? `<div class="prog">${prog}</div>` : ''}`; }
 
 // 地図の見た目：merged=true でむかしの境目のない「いまの田辺市」
+let oneTimer = null;   // 完成のあと、1つの色にかえるタイマー
 function drawMap(mode) {
+  clearTimeout(oneTimer);   // ほかの見た目にかえたら、まだ動いていないタイマーは止める
   IDS.forEach(id => {
     const placed = state.placed.includes(id);
     slotEls[id].classList.remove('hintme');
@@ -415,7 +418,7 @@ function startPuzzle() {
   state.miss = {};
   drawMap('pieces');
   $('card').innerHTML = `<h2>合わせよう</h2>
-    <div>左上の形を、地図の正しい場所までドラッグしよう。</div>
+    <div>出てきた形を、地図の正しい場所までドラッグしよう。</div>
     <div class="note">★は、むかしの役場（いまの市役所・行政局）。川の流れも手がかりになるよ。</div>`;
   renderMeter();
   nextPiece();
@@ -441,12 +444,13 @@ function nextPiece() {
 // ドラッグ（ピースは地図と同じ大きさで動く。地区の名前の位置を指の下に持ってくる）
 let drag = null;
 $('dockPc').addEventListener('pointerdown', e => {
+  if (drag) return;   // ドラッグ中に2本目の指がふれたときは、何もしない
   if (state.phase !== 'puzzle' || !cur()) return;
   e.preventDefault();
   const id = cur(), a = AREA[id];
   const g = el('g', { class: 'piece-drag' }, $('dragLayer'));
   el('path', { d: a.d, fill: COLOR[id], stroke: DEEP[id], 'stroke-width': 3, 'vector-effect': 'non-scaling-stroke', 'fill-rule': 'evenodd' }, g);
-  drag = { id, g, tx: 0, ty: 0 };
+  drag = { id, g, tx: 0, ty: 0, sx: e.clientX, sy: e.clientY };
   moveDrag(e);
   window.addEventListener('pointermove', moveDrag);
   window.addEventListener('pointerup', endDrag);
@@ -465,9 +469,12 @@ function endDrag(e) {
   window.removeEventListener('pointermove', moveDrag);
   window.removeEventListener('pointerup', endDrag);
   window.removeEventListener('pointercancel', endDrag);
-  const { id, g, tx, ty } = drag;
+  const { id, g, tx, ty, sx, sy } = drag;
   drag = null;
   g.remove();
+  if (Math.hypot(e.clientX - sx, e.clientY - sy) < 10) return;   // ドラッグせずにタップしただけ
+  const dr = $('dock').getBoundingClientRect();
+  if (e.clientX >= dr.left && e.clientX <= dr.right && e.clientY >= dr.top && e.clientY <= dr.bottom) return;   // 置き場の上ではなした
   const r = svg.getBoundingClientRect();
   if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;   // 地図の外ではなした
   if (Math.hypot(tx, ty) < SNAP) return place(id);
@@ -558,7 +565,7 @@ function finish() {
   setQ('5つの市町村が、1つになった！', '5 / 5');
   sndDone();
   // 少しだけ5色を見せてから、1つの色の田辺市へ
-  setTimeout(() => drawMap('one'), 900);
+  oneTimer = setTimeout(() => drawMap('one'), 900);
   const g = state.guess;
   const home = state.home;
   $('card').innerHTML = `<h2>2005年5月1日　新しい田辺市</h2>

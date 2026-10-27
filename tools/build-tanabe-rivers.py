@@ -62,8 +62,15 @@ CUT_FROM = {'kumano': (135.745, 33.96)}
 TRIB_KANA = {'左会津川': 'さあいづがわ', '稲成川': 'いなりがわ',
              '中川': 'なかがわ', '鍛冶屋川': 'かじやがわ', '岡川': 'おかがわ', '生馬川': 'いくまがわ',
              '野中川': 'のなかがわ', '安川': 'やすかわ', '前ノ川': 'まえのかわ', '将軍川': 'しょうぐんがわ',
-             '丹生川': 'にゅうがわ', '初湯川': 'うぶゆがわ',
+             '丹生川': 'にゅうのかわ', '初湯川': 'うぶゆがわ',
              '音無川': 'おとなしがわ', '大塔川': 'おおとうがわ', '北山川': 'きたやまがわ', '赤木川': 'あかぎがわ'}
+
+# 元データの名前と、地元でのよび方がちがう支流（元データの名前 → 表示する名前）
+TRIB_NAME = {'丹生川': '丹生ノ川'}
+# 合流点を直す支流（元データの線の端では、合流する地区がちがって出るもの）
+#   ('near', 経度, 緯度)：本流の線の上で、この点にいちばん近い所で合流させる（日置川の野中川は中辺路町の近露）
+#   ('town', 名前)：本流がこの町に入った所で合流させる（日置川の将軍川は白浜町＝旧日置川町の川）
+TRIB_AT = {('hiki', '野中川'): ('near', 135.602, 33.807), ('hiki', '将軍川'): ('town', '白浜町')}
 
 # 見える範囲（地図の座標）。この外の上流は切る
 VIEW = box(-330, -120, 1290, 1180)
@@ -158,8 +165,16 @@ for rid, name, kana, names, mouth, note in RIVERS:
         ls = [geo] if geo.geom_type == 'LineString' else list(getattr(geo, 'geoms', []))
         t['d'] = ''.join('M' + ' '.join(f'{x:.1f},{y:.1f}' for x, y in l.coords) for l in ls if l.length > 1)
     tl = sorted([t for t in tribs.values() if t['km'] >= 4 and t['name'] in TRIB_KANA], key=lambda t: -t['km'])[:4]
+    for t in tl:
+        fix = TRIB_AT.get((rid, t['name']))
+        if fix and fix[0] == 'near':
+            x, y = P(fix[1], fix[2])
+            t['i'] = min(range(len(pts)), key=lambda k: math.dist(pts[k], (x, y)))
+        elif fix and fix[0] == 'town':
+            t['i'] = next(r['i'] for r in clean if r['name'] == fix[1])
     tl.sort(key=lambda t: t['i'])
     for t in tl: t['kana'] = TRIB_KANA.get(t['name'], '')
+    for t in tl: t['name'] = TRIB_NAME.get(t['name'], t['name'])
     out.append(dict(id=rid, name=name, kana=kana, note=note,
                     km=round(g.length / M['km']), pts=[v for q in pts for v in q],
                     places=clean, tribs=tl))

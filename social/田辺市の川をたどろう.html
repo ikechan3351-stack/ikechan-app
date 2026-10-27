@@ -671,20 +671,20 @@ function announce(r) {
     const p = r.places[state.told++];
     if (state.told === 1) say = { html: `${placeRuby(p)}の山から、スタート！`, cls: 'info' };
     else if (p === r.out) {
-      say = { html: `田辺市を出たよ！ ${placeRuby(p)}に入った<br>雲が晴れるよ`, cls: 'wow' };
+      say = { html: `田辺市を出たよ！ ${placeRuby(p)}に入った<br>雲が晴れるよ。<span style="color:#ff9800">●</span>まで指を動かして、つづけよう`, cls: 'wow' };
     } else say = { html: `${placeRuby(p)}に入ったよ`, cls: 'info' };
   }
   while (state.toldTrib < r.tribs.length && r.tribs[state.toldTrib].i <= state.head) {
     const t = r.tribs[state.toldTrib++];
     if (!say) say = { html: `${nameRuby(t.name, t.kana)}が<ruby>合流<rt>ごうりゅう</rt></ruby>。水がふえたよ`, cls: 'info' };
   }
-  if (say) { sndOpen(); toast(say.html, say.cls, 2200); }
+  if (say) { sndOpen(); toast(say.html, say.cls, say.cls === 'wow' ? 3500 : 2200); }
   renderTrace();
   if (!state.cleared && state.head >= r.exit && r.exit < r.n - 1) clearFog(r);
 }
 function clearFog(r) {
   state.cleared = true;
-  tracing = false;
+  catchUp = true;   // 地図が広がって●の位置が変わるので、指が●にとどくまで待つ（指ははなさなくてよい）
   fog(false);
   $('tribLayer').removeAttribute('clip-path');
   sndWow();
@@ -693,7 +693,7 @@ function clearFog(r) {
 }
 
 // 指でなぞる（川の近くなら、川にそって進む。上流へはもどらない）
-let tracing = false, farWarn = 0;
+let tracing = false, farWarn = 0, catchUp = false;
 svg.addEventListener('pointerdown', e => {
   if (state.phase !== 'trace') return;
   const r = RIV[state.cur];
@@ -701,6 +701,7 @@ svg.addEventListener('pointerdown', e => {
   const [hx, hy] = r.P(state.head);
   if (Math.hypot(x - hx, y - hy) / pxUnit <= 48) {
     tracing = true;
+    catchUp = false;
     svg.setPointerCapture && svg.setPointerCapture(e.pointerId);
   } else {
     toast('光っている<span style="color:#ff9800">●</span>から、指でなぞろう', 'info', 1800);
@@ -710,6 +711,11 @@ svg.addEventListener('pointermove', e => {
   if (!tracing || state.phase !== 'trace') return;
   const r = RIV[state.cur];
   const [x, y] = toMap(e.clientX, e.clientY);
+  if (catchUp) {
+    const [hx, hy] = r.P(state.head);
+    if (Math.hypot(x - hx, y - hy) / pxUnit > 40) return;
+    catchUp = false;
+  }
   // 今の先頭から、画面で 70px ぶん先までの中で、指にいちばん近い点
   const ahead = Math.ceil(70 * pxUnit / 2) + 2;
   let best = state.head, bd = 1e9;
