@@ -92,7 +92,7 @@
     display: flex; flex-direction: column; gap: 8px; min-width: 0;
   }
   .card h3 { margin: 0; font-size: clamp(1rem, 2vmin, 1.15rem); color: var(--accent-dark); }
-  .note { margin: 0; font-size: 0.95rem; font-weight: bold; text-align: center; line-height: 1.7; color: #455a64; }
+  .note { margin: 0; font-size: 1rem; font-weight: bold; text-align: center; line-height: 1.7; color: #455a64; }
 
   /* ===== □ と ○ の 記号（色だけで なく 形でも 区別） ===== */
   .sq, .ci { display: inline-flex; align-items: center; justify-content: center; font-weight: 900; min-width: 1.4em; height: 1.4em; padding: 0 0.15em; vertical-align: middle; line-height: 1; }
@@ -150,7 +150,7 @@
   /* ===== もんだい ===== */
   .qhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .progress { font-weight: 900; font-size: 1.15rem; color: var(--accent-dark); }
-  .qtag { font-weight: 900; background: #f3e5f5; color: #6a1b9a; border-radius: 999px; padding: 2px 12px; font-size: 0.9rem; }
+  .qtag { font-weight: 900; background: #f3e5f5; color: #6a1b9a; border-radius: 999px; padding: 2px 12px; font-size: 1rem; }
   .qlead { margin: 0; text-align: center; font-weight: 900; font-size: clamp(1.15rem, 3vmin, 1.6rem); line-height: 1.7; }
   .pad { display: flex; flex-direction: column; gap: 8px; max-width: 420px; width: 100%; margin: 0 auto; }
   .pad-box { min-height: 1.6em; border: 4px solid var(--accent); border-radius: 14px; background: #fffde7; text-align: right; padding: 0 12px; font-weight: 900; font-size: clamp(1.8rem, 5vmin, 2.6rem); line-height: 1.5; }
@@ -342,13 +342,13 @@ const SCENES = {
   water: {
     icon: '🚰', name: `水そうに 水を ${R('入', 'い')}れる`,
     x: { name: '時間', unit: '分' }, y: { name: `水の ${R('深', 'ふか')}さ`, unit: 'cm' },
-    rate: 2, rateMin: 1, rateMax: 3, rateText: (r) => `1分間に ${r}cm ずつ ${R('深', 'ふか')}く なる`,
+    rate: 2, rateText: (r) => `1分間に ${r}cm ずつ ${R('深', 'ふか')}く なる`,
     f: (x, r) => r * x, prop: true, max: 10,
   },
   block: {
     icon: '🧱', name: 'ブロックを つむ',
     x: { name: 'こ数', unit: 'こ' }, y: { name: `${R('重', 'おも')}さ`, unit: 'g' },
-    rate: 20, rateMin: 5, rateMax: 50, rateText: (r) => `1こ ${r}g の ブロック`,
+    rate: 20, rateText: (r) => `1こ ${r}g の ブロック`,
     f: (x, r) => r * x, prop: true, max: 10,
   },
   square: {
@@ -522,7 +522,7 @@ function setMode(m) {
    8. 🧊 ふやして しらべる
    ========================================================= */
 VIEWS.free = (() => {
-  let sk = 'water', x = 1, hist = [], seen = new Set([1]), table, auto = false;
+  let sk = 'water', x = 1, hist = [], seen = new Set([1]), table, auto = false, autoId = 0;   // autoId：じどうで ふやす ループの 番号（2つ 同時に 動かない ように）
   const S = () => SCENES[sk];
   const yOf = (v) => S().f(v, S().rate);
   function show(stage) {
@@ -547,7 +547,7 @@ VIEWS.free = (() => {
       </div>
       <div class="card"><h3>${HYOU}（しらべた ところが うまる）</h3><div id="vTable"></div></div>`;
     table = new RatioTable($('#vTable'), { x: S().x, y: S().y, arrows: false, onPick: (c) => setX(c + 1) });
-    stage.querySelectorAll('[data-scene]').forEach((b) => b.addEventListener('click', () => { sk = b.dataset.scene; x = 1; hist = []; seen = new Set([1]); auto = false; show(stage); }));
+    stage.querySelectorAll('[data-scene]').forEach((b) => b.addEventListener('click', () => { sk = b.dataset.scene; x = 1; hist = []; seen = new Set([1]); auto = false; table.destroy(); show(stage); }));
     $('#vMinus').addEventListener('click', () => setX(x - 1));
     $('#vPlus').addEventListener('click', () => setX(x + 1));
     $('#vNum').addEventListener('change', (ev) => setX(Math.round(+ev.target.value) || 1));
@@ -597,7 +597,8 @@ VIEWS.free = (() => {
       const maxY = s.f(s.max, s.rate), H = 200, top = 30, left = 90, W = 200;
       const h = (y / maxY) * H;
       let ticks = '';
-      const step = maxY <= 20 ? 2 : maxY <= 40 ? 5 : 10;
+      // 目もりが 多すぎて 数字が かさならない ように、ふかさに あわせて 間を かえる（先生モードで 100cm/分 まで）
+      const step = maxY <= 20 ? 2 : maxY <= 40 ? 5 : maxY <= 100 ? 10 : maxY <= 200 ? 20 : maxY <= 500 ? 50 : 100;
       for (let v = 0; v <= maxY; v += step) {
         const ty = top + H - (v / maxY) * H;
         ticks += `<line x1="${left - 10}" y1="${ty}" x2="${left}" y2="${ty}" stroke="#78909c" stroke-width="2"/><text x="${left - 14}" y="${ty + 6}" font-size="16" text-anchor="end" fill="#546e7a">${v}</text>`;
@@ -626,10 +627,12 @@ VIEWS.free = (() => {
     }
   }
   async function autoPlay() {
-    if (auto) { auto = false; return; }
+    if (auto) { auto = false; $('#tAuto').textContent = '▶ じどうで ふやす'; return; }
+    const id = ++autoId;   // 前の ループが まだ 待って いても、番号が ちがえば そこで やめる
     auto = true; $('#tAuto').textContent = '■ とめる';
     x = 1; seen = new Set([1]); draw(); await wait(700);
-    while (auto && x < S().max) { setX(x + 1); await wait(700); }
+    while (auto && id === autoId && x < S().max) { setX(x + 1); await wait(700); }
+    if (id !== autoId) return;
     auto = false; const b = $('#tAuto'); if (b) b.textContent = '▶ じどうで ふやす';
   }
   return { show, stop: () => { auto = false; if (table) table.destroy(); } };
@@ -658,7 +661,7 @@ VIEWS.table = (() => {
       </div>
       <div class="card"><h3>見つけた こと</h3><ul class="finds" id="tFinds"></ul><p class="concl" id="tConcl" hidden></p></div>`;
     table = new RatioTable($('#tTable'), { x: S().x, y: S().y, onPick });
-    stage.querySelectorAll('[data-scene]').forEach((b) => b.addEventListener('click', () => { sk = b.dataset.scene; clear(); show(stage); }));
+    stage.querySelectorAll('[data-scene]').forEach((b) => b.addEventListener('click', () => { sk = b.dataset.scene; clear(); table.destroy(); show(stage); }));
     $('#tUndo').addEventListener('click', () => { if (waiting) { waiting = null; arrows.pop(); } else if (finds.length) { finds.pop(); arrows.pop(); } else { say('もどせる ものが ないよ'); return; } picks = []; draw(); sfx.tap(); });
     $('#tReset').addEventListener('click', () => { clear(); draw(); });
     if (TEACHER) $('#tAll').addEventListener('click', () => {
@@ -770,11 +773,13 @@ VIEWS.quiz = (() => {
       if (key === prevKey) continue;
       const ys = xs.map((v) => a * v);
       const ans = ys[bi];
-      // たし算で 考えた ときの 答え（ちがう 数に なる もんだいだけ 出す）
+      // たし算で 考えた ときの 答え（○に 同じ 数を たす 考え方では 答えが ずれる もんだいだけ 出す）
       const d = ys[1] - ys[0];
-      const adds = new Set([ys[bi - 1] + d, ys[0] + d * bi, ys[bi - 1] + (ys[bi - 1] - ys[bi - 2]), ys[bi - 1] + (xs[bi] - xs[bi - 1])]);
+      const sameAdd = [ys[bi - 1] + d, ys[0] + d * bi, ys[bi - 1] + (ys[bi - 1] - ys[bi - 2])];
+      if (sameAdd.includes(ans)) continue;   // □が 1,2,3 と つづく ところなど、たし算でも 合って しまう もんだいは 出さない
+      // つまずきの 見つけ方には「□の ふえた 数を ○に たす」まちがいも 入れる
+      const adds = new Set([...sameAdd, ys[bi - 1] + (xs[bi] - xs[bi - 1])]);
       adds.delete(ans);
-      if (!adds.size) continue;
       prevKey = key;
       return { kind: 'fill', s, a, xs, ys, bi, ans, adds };
     }
@@ -822,7 +827,7 @@ VIEWS.quiz = (() => {
     $('#qRestart').addEventListener('click', () => { newSet(); load(); });
     if (TEACHER) $('#qAns').addEventListener('click', () => {
       $('#qT').innerHTML = q.kind === 'judge'
-        ? `<p class="ans-t">こたえ：${q.j.prop ? '比例する' : '比例しない'}（${SQ(1)}→${SQ(2)} で ${CI(q.ys[0])}→${CI(q.ys[1])}）</p>`
+        ? `<p class="ans-t">こたえ：${q.j.prop ? `${HIREI}する` : `${HIREI}しない`}（${SQ(1)}→${SQ(2)} で ${CI(q.ys[0])}→${CI(q.ys[1])}）</p>`
         : `<p class="ans-t">こたえ：${q.ans}（${SQ()} ${q.xs[0]}→${q.xs[q.bi]} で ×${q.xs[q.bi] / q.xs[0]}、${q.ys[0]}×${q.xs[q.bi] / q.xs[0]}）</p>`;
     });
     load();
@@ -877,7 +882,7 @@ VIEWS.quiz = (() => {
     tries++;
     if (yes === q.j.prop) { correct(q.j.prop ? `${SQ()} が 2${BAI}、3${BAI}に なると ${CI()} も 2${BAI}、3${BAI}に なって いるね` : `${SQ()} が 2${BAI}に なっても ${CI()} は 2${BAI}に なって いないね`); return; }
     sfx.soft(); shake($('#qTable'));
-    let html = `<p class="fb ng">ざんねん… こたえは「${q.j.prop ? '比例する' : '比例しない'}」</p>`;
+    let html = `<p class="fb ng">ざんねん… こたえは「${q.j.prop ? `${HIREI}する` : `${HIREI}しない`}」</p>`;
     if (yes && q.j.grow) html += trip('grow');
     answered = true;
     $('#qFb').innerHTML = html;
