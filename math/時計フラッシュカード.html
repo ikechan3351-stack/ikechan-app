@@ -150,7 +150,7 @@
     <div class="ht-sub">「はじめる ▶」でカードがはじまります。あとからでも、上の「❓ 先生へ」でいつでも読めます。</div>
     <ul class="ht-list">
       <li><span class="ht-key">ねらい</span><b>短針(赤)と長針(青)を分けて読む</b>力をつけます。とけい→じかん、じかん→とけいの両方向で確かめられます。</li>
-      <li><span class="ht-key">レベルの順序</span><b>ちょうど → 30ぷん → 5ふんごと → 1ぷんごと</b>。小1は「ちょうど・半」まで、小2で「5分ごと・1分ごと」に進みます。</li>
+      <li><span class="ht-key">レベルの順序</span><b>ちょうど → はん(30ぷん) → 5ふんごと → 1ぷんごと</b>。小1で「ちょうど → はん → 何時何分」まで学びます。午前・午後や時間の計算は小2です。</li>
       <li><span class="ht-key">ここを見せる</span>「4じ50ぷん」では短針がほぼ5に近づきます。長針だけでなく<b>短針が数字と数字のどこにあるか</b>を読ませると、読みまちがいが減ります。</li>
       <li><span class="ht-key">4択</span>「じかん→とけい」の向きは、よく似た時こくが並ぶので、短針をよく見ないと選べません。</li>
       <li><span class="ht-key">学年</span>小1「なんじなんじはん」、小2「時こくと時間」。※<b>「時こく」と「時間(長さ)」の区別</b>は、このアプリでは扱いません。</li>
@@ -310,7 +310,10 @@
   }
 
   // ===== とけい(アナログ時計 SVG) =====
-  const clockTimeText = (h, m) => m === 0 ? `${h}じ` : `${h}じ${m}ふん`;
+  // 分の よみ：一の位が 1・3・4・6・8・0 は「ぷん」、2・5・7・9 は「ふん」
+  const fun = (m) => [1, 3, 4, 6, 8, 0].includes(m % 10) ? 'ぷん' : 'ふん';
+  // han：「30ぷん」レベルでは 30分を「○じはん」と よむ（1年の 教科書の よみかた）
+  const clockTimeText = (h, m, han) => m === 0 ? `${h}じ` : han && m === 30 ? `${h}じはん` : `${h}じ${m}${fun(m)}`;
   function clockSVG(h, m) {
     const cx = 100, cy = 100, R = 88;
     let out = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="#fff" stroke="#37474f" stroke-width="5"/>`;
@@ -339,7 +342,7 @@
   function drawClockFace(c, reveal) {
     const face = $('face');
     if (c.dir === 'time2clock' && !reveal) {
-      const t = clockTimeText(c.h, c.m);
+      const t = clockTimeText(c.h, c.m, c.han);
       const w = Math.max(230, t.length * 36);
       face.setAttribute('viewBox', `0 0 ${w} 200`);
       face.innerHTML =
@@ -508,7 +511,7 @@
         label: 'レベル',
         options: [
           { key: 'oclock', label: 'ちょうど(◯じ)', default: true },
-          { key: 'half', label: '30ぷん' },
+          { key: 'half', label: 'はん(30ぷん)' },
           { key: 'five', label: '5ふんごと' },
           { key: 'any', label: '1ぷんごと' }
         ]
@@ -523,14 +526,14 @@
         const set = new Set([`${h}:${m}`]);
         let guard = 0;
         while (set.size < 4 && guard++ < 300) set.add(`${rnd(1, 12)}:${minOf()}`);
-        return { kind: 'clock', h, m, target: `${h}:${m}`, dir, choices: shuffle([...set]) };
+        return { kind: 'clock', h, m, target: `${h}:${m}`, dir, choices: shuffle([...set]), han: lv === 'half' };
       },
       draw: drawClockFace,
-      answer: (c) => clockTimeText(c.h, c.m),
-      text: (c) => clockTimeText(c.h, c.m),
+      answer: (c) => clockTimeText(c.h, c.m, c.han),
+      text: (c) => clockTimeText(c.h, c.m, c.han),
       choiceButton: (c, key) => {
         const [h, m] = key.split(':').map(Number);
-        return c.dir === 'clock2time' ? clockTimeText(h, m)
+        return c.dir === 'clock2time' ? clockTimeText(h, m, c.han)
           : `<svg viewBox="0 0 200 200" width="76" height="76">${clockSVG(h, m)}</svg>`;
       },
       wordCount: (c) => c.dir === 'clock2time' ? 'なんじ なんぷん?' : 'この時こくの とけいは どれ?',
@@ -545,8 +548,19 @@
     type: 'compose', mode: 'flip', setting: 'mix', extra: null, tempo: 'manual', speed: 'normal',
     card: null, revealed: false, lastKey: '', input: '',
     autoTimer: null, autoRunning: false,
-    qi: 0, miss: 0, tries: 0, wrong: [], playing: false, lock: false, startT: 0, timerId: null
+    qi: 0, miss: 0, tries: 0, wrong: [], playing: false, lock: false, startT: 0, timerId: null,
+    quizId: 0   // クイズを はじめる／やめるたびに ふえる（古い setTimeout を むしする）
   };
+  // まだ 同じ クイズの とちゅうか
+  const quizAlive = (qid) => st.mode === 'quiz' && st.playing && qid === st.quizId;
+  // クイズを とちゅうで やめる
+  function stopQuiz() {
+    st.playing = false;
+    st.quizId++;
+    clearInterval(st.timerId);
+  }
+  // 「音」の チェックボックス（作りなおしても いまの ON/OFF を ひきつぐ）
+  const soundBox = () => `<label><input type="checkbox" id="chkSound" ${!$('chkSound') || $('chkSound').checked ? 'checked' : ''}> 音</label>`;
   const T = () => TYPES[st.type];
 
   function newCard() {
@@ -644,7 +658,7 @@
       <div class="go">タップ(スペースキー)でスタート!</div>`, startQuiz);
   }
   function startQuiz() {
-    st.qi = 0; st.miss = 0; st.wrong = []; st.playing = true; st.lock = false;
+    st.qi = 0; st.miss = 0; st.wrong = []; st.playing = true; st.lock = false; st.quizId++;
     st.startT = Date.now();
     clearInterval(st.timerId);
     st.timerId = setInterval(() => {
@@ -680,7 +694,8 @@
       $('mark').textContent = '⭕ せいかい!';
       $('mark').className = 'mark ok';
       st.lock = true;
-      setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 800);
+      const qid = st.quizId;
+      setTimeout(() => { if (!quizAlive(qid)) return; st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 800);
     } else {
       sndNG();
       st.miss++; st.tries++;
@@ -696,7 +711,8 @@
         drawCard(true);
         $('mark').textContent = `❌ こたえは「${T().answer(c)}」`;
         $('mark').className = 'mark ng';
-        setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1600);
+        const qid = st.quizId;
+        setTimeout(() => { if (!quizAlive(qid)) return; st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1600);
       } else {
         $('mark').textContent = '❌ もういちど!';
         $('mark').className = 'mark ng';
@@ -709,7 +725,7 @@
       <span>もんだい <span class="val">${Math.min(st.qi + 1, ROUND)}/${ROUND}</span></span>
       <span>ミス <span class="val">${st.miss}</span></span>
       <span>タイム <span class="val" id="hudTime">0:00</span></span>
-      <label><input type="checkbox" id="chkSound" checked> 音</label>`;
+      ${soundBox()}`;
   }
   function buildKeypad() {
     let rows;
@@ -752,7 +768,8 @@
       $('mark').textContent = '⭕ せいかい!';
       $('mark').className = 'mark ok';
       st.lock = true;
-      setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 700);
+      const qid = st.quizId;
+      setTimeout(() => { if (!quizAlive(qid)) return; st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 700);
     } else {
       sndNG();
       st.miss++; st.tries++;
@@ -764,7 +781,8 @@
         drawCard(true);
         $('mark').textContent = `❌ こたえは ${ans}`;
         $('mark').className = 'mark ng';
-        setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1500);
+        const qid = st.quizId;
+        setTimeout(() => { if (!quizAlive(qid)) return; st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1500);
       } else {
         $('mark').textContent = '❌ もういちど!';
         $('mark').className = 'mark ng';
@@ -809,7 +827,8 @@
 
   // ===== 設定行(むき/レベル/出し方 + 九九の段)を種類ごとに作る =====
   function reRenderCurrent() {
-    if (st.mode === 'flip') renderFlip(); else if (!st.playing) renderQuizStart();
+    if (st.mode === 'flip') renderFlip();
+    else { stopQuiz(); renderQuizStart(); }   // クイズ中に レベル・むきを かえたら さいしょから
   }
   function renderSettingRow() {
     const t = T();
@@ -836,7 +855,8 @@
   function applyMode() {
     const isFlip = st.mode === 'flip';
     $('tempoRow').style.display = isFlip ? '' : 'none';
-    if (isFlip) { $('hud').innerHTML = `<label><input type="checkbox" id="chkSound" checked> 音</label>`; renderFlip(); }
+    stopQuiz();   // クイズの とちゅうで きりかえたら、クイズは おわり
+    if (isFlip) { $('hud').innerHTML = soundBox(); renderFlip(); }
     else renderQuizStart();
   }
   document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
@@ -852,7 +872,7 @@
     const t = T();
     st.setting = (t.settings.find(s => s.default) || t.settings[0]).key;
     st.extra = t.extra ? (t.extra.options.find(o => o.default) || t.extra.options[0]).key : null;
-    st.playing = false;
+    stopQuiz();
     renderSettingRow();
     applyMode();
   }

@@ -367,7 +367,7 @@
           <li><b>テープで くらべる</b>（間接比較）：動かせない「つくえの よこ」と「たなの たかさ」を、テープに長さをうつして比べます。テープを当てないうちに答えると「テープを つかって しらべて みよう」と出ます。</li>
           <li>ときどき「おなじ」長さの問題も出ます。</li>
         </ul></li>
-      <li><b>いくつぶん？（1年）</b>：「ならべる」（または机をタップ）で、ブロック・クリップ・けしゴムを左はしからすきまなく並べ、「□こぶん」と答えます。同じものを2種類の単位で測り、<b>単位によって数が変わること</b>を最後にまとめて表示します。</li>
+      <li><b>いくつぶん？（1年）</b>：「ならべる」（または机をタップ）で、ブロック・クリップ・けしゴムを左はしからすきまなく並べ、「□こぶん」と答えます。「はかって みよう」では同じものを2種類の単位で測り、<b>単位によって数が変わること</b>を最後にまとめて表示します。「くらべて みよう」では2本を同じもので測り、「どちらが ながい？」「□こぶん ながい」まで答えます（ちがいの部分が光ります）。</li>
       <li><b>ものさしで はかろう（2年）</b>：ものさしを動かし、はかるものの下にくっつけます。<b>0の目もりが左はしに近づくと、ピタッと吸いつきます。</b>右の「大きく見る」に、はしの部分が拡大されます（1cm＝長い赤の線、5mm＝中くらいの青の線、1mm＝短い線）。「□cm □mm」を数字ボタンで入れて答えます。パソコンでは、ものさしを選んで矢印キーでも動かせます（Shift＋矢印で1cmずつ）。</li>
       <li><b>せんを ひこう（2年）</b>：「6cm 3mm の せんを ひこう」と出題されます。ものさしの上を指でなぞって線をひき、端の丸をつまむと長さを直せます。「大きく見る」で終わりの目もりを確かめて「できた！」を押します。0以外から引き始めると、0の目もりが光ります。</li>
       <li><b>cmと mm（2年）</b>
@@ -882,9 +882,10 @@ function keyIn(d) {
   const k = state.cur, s = state.ans[k];
   if (d === 'del') state.ans[k] = '';
   else if (k === 'cm') {
-    // 1cm〜15cm：「1」の あとなら 2けたに できる
-    state.ans.cm = s === '1' && +(s + d) <= 15 ? s + d : String(d);
-    if (+state.ans.cm >= 2) state.cur = 'mm';           // もう 2けたに ならない ので、mm へ すすむ
+    // こたえが 10cm いじょう：「1」の あとなら 2けたに できる。9cm いかの もんだいは 1けたで mm へ すすむ
+    const two = state.q.L >= 100;
+    state.ans.cm = two && s === '1' && +(s + d) <= 15 ? s + d : String(d);
+    if (!two || +state.ans.cm >= 2) state.cur = 'mm';   // もう 2けたに ならない ので、mm へ すすむ
   } else state.ans.mm = String(d);
   sfx.tap();
   renderMeasure();
@@ -1276,6 +1277,7 @@ FREE.compare = {
       const [lo, hi] = q.A.L <= q.B.L ? [q.A, q.B] : [q.B, q.A];
       hi.x = rnd(24, 36);
       lo.x = Math.min(hi.x + (hi.L - lo.L) + rnd(5, 14), 196 - lo.L);
+      q.home = { A: q.A.x, B: q.B.x };                       // 「はじめの いちに」で もどす いち
       say(`ゆびで うごかせるよ。どちらが ながいかな？`);
     } else {
       q.tape = null;
@@ -1370,7 +1372,8 @@ FREE.compare = {
     const q = G.q;
     if (a === 'next') return nextOrResult(() => [...qStats().slice(0, 1), ['そろえる まえに こたえた', `${G.stats.early}かい`]]);
     if (G.solved) return;
-    if (a === 'reset') { sfx.tap(); this.load(); return; }
+    // いちだけ もどす（まちがえた かず・×・色は そのまま）
+    if (a === 'reset') { sfx.tap(); q.A.x = q.home.A; q.B.x = q.home.B; say('はじめの いちに もどしたよ。ひだりの はしを そろえて みよう'); return this.render(); }
     if (a === 'tapeA') { q.tape = 'A'; sfx.snap(); say('テープを あてて、つくえの はしの ところに しるしを つけたよ'); return this.render(); }
     if (a === 'tapeB') { q.tape = 'B'; sfx.snap(); say('テープを たなに あてたよ。しるしと たなの いちばん <ruby>上<rt>うえ</rt></ruby>を くらべよう'); return this.render(); }
     if (a !== 'pick') return;
@@ -1427,12 +1430,19 @@ function unitSvg(kind, x, top, i, num, cls = '') {
   return `<g class="${cls}">${s}</g>`;
 }
 FREE.units = {
+  kind: 'measure',   // measure：1つを 2しゅるいで はかる　compare：おなじ もので 2つを くらべる
   start() {
-    G.list = Array.from({ length: settings.qcount }, () => { const [u1, u2, Ls] = pick(PAIRS); return { u: [u1, u2], L: pick(Ls), item: pick(['tape', 'pencil', 'straw']) }; });
+    subTabs([['measure', '📎 はかって みよう'], ['compare', '⚖️ くらべて みよう']], this.kind);
+    G.list = Array.from({ length: settings.qcount }, () => {
+      if (this.kind === 'compare') return this.cMake();
+      const [u1, u2, Ls] = pick(PAIRS); return { u: [u1, u2], L: pick(Ls), item: pick(['tape', 'pencil', 'straw']) };
+    });
     G.idx = 0; G.stats = { first: 0, hints: 0 };
     this.load();
   },
+  sub(v) { this.kind = v; clearTimers(); this.start(); },
   load() {
+    if (this.kind === 'compare') return this.cLoad();
     const b = G.list[G.idx];
     G.q = { ...b, step: 0, counts: [0, 0], ok: [false, false], x0: 10 };
     G.tries = 0; G.solved = false; G.hint = 0;
@@ -1443,6 +1453,7 @@ FREE.units = {
   unit() { return UNITS[G.q.u[G.q.step]]; },
   full() { const q = G.q; return q.counts[q.step] * this.unit().len >= q.L; },
   render() {
+    if (this.kind === 'compare') return this.cRender();
     const q = G.q, u = this.unit(), name = ITEMS[q.item].name;
     setBoard(`${name}の ながさは、${u.name} いくつぶん？`, `${u.name}を ${name}の ひだりの はしから、すきま なく ならべよう`);
     const svg = $('#svg2');
@@ -1469,8 +1480,13 @@ FREE.units = {
     if (G.solved) ctl += `<div class="sum-card">${UNITS[q.u[0]].name}だと <b>${q.counts[0]}こぶん</b>、${UNITS[q.u[1]].name}だと <b>${q.counts[1]}こぶん</b><br>おなじ ${name}なのに、かずが ちがうね！</div><div class="btn-col">${nextBtn()}</div>`;
     $('#ctl2').innerHTML = ctl;
   },
-  down() { if (!G.solved && !G.q.ok[G.q.step]) this.act('add'); return false; },   // つくえを タップしても ならべられる
-  act(a) {
+  down() {   // つくえを タップしても ならべられる
+    const q = G.q;
+    if (!G.solved && (this.kind !== 'compare' || q.step <= 1) && !q.ok[q.step]) this.act('add');
+    return false;
+  },
+  act(a, pv) {
+    if (this.kind === 'compare') return this.cAct(a, pv);
     const q = G.q, u = this.unit(), name = ITEMS[q.item].name;
     if (a === 'next') return nextOrResult(qStats);
     if (G.solved) return;
@@ -1492,6 +1508,136 @@ FREE.units = {
     q.ok[q.step] = true;
     if (q.step === 0) { pad.done = true; sfx.correct(); say(`せいかい！ ${u.name} <b>${n}こぶん</b>。こんどは ${UNITS[q.u[1]].name}で はかって みよう`, 'good'); this.render(); }
     else solvedOk(`せいかい！ ${UNITS[q.u[0]].name}だと ${q.counts[0]}こぶん、${u.name}だと ${n}こぶん。はかる ものが ちがうと、かずも ちがうね`);
+  },
+
+  /* ---- ⚖️ くらべて みよう：おなじ もの（ブロックなど）の いくつぶんで 2つを くらべる ----
+     すすみかた（q.step）：0 うえの ものを かぞえる → 1 したの ものを かぞえる → 2 どちらが ながい？ → 3 □こぶん ながい */
+  cMake() {
+    const u = pick(Object.keys(UNITS)), maxN = Math.floor(180 / UNITS[u].len);   // がめんに はいる ながさ（180mm）まで
+    const a = rnd(2, maxN);
+    let b = a;
+    if (Math.random() >= 0.15) {                            // ときどき「おなじ」
+      do { b = rnd(2, maxN); } while (b === a || Math.abs(a - b) > 4);
+    }
+    return { u, n: [a, b], item: pick(['pencil', 'tape']) };
+  },
+  cLoad() {
+    const b = G.list[G.idx];
+    const [ca, cb] = Math.random() < 0.5 ? ['red', 'blue'] : ['blue', 'red'];
+    G.q = { ...b, col: [ca, cb], step: 0, counts: [0, 0], ok: [false, false], picked: null, bad: [], showDiff: false, x0: 10,
+      ans: b.n[0] === b.n[1] ? 'same' : b.n[0] > b.n[1] ? '0' : '1' };
+    G.tries = 0; G.solved = false; G.hint = 0;
+    padSet([{ max: 20 }]);
+    say(`${this.cName(0)}の ながさを ${UNITS[b.u].name}で はかろう。「ならべる」で ならべて みよう`);
+    this.render();
+  },
+  cName(r) { const q = G.q; return `${COLORS[q.col[r]].label} ${ITEMS[q.item].name}`; },
+  cFull(r) { const q = G.q; return q.counts[r] >= q.n[r]; },
+  cRender() {
+    const q = G.q, u = UNITS[q.u], r = q.step, len = u.len;
+    const ROWS = [{ bot: 12, top: 14, lab: 28 }, { bot: 38, top: 40, lab: 54 }];
+    const long = q.ans === 'same' ? null : +q.ans, d = Math.abs(q.n[0] - q.n[1]);
+    if (r <= 1) setBoard(`${this.cName(r)}は、${u.name} いくつぶん？`, `${u.name}を ひだりの はしから、すきま なく ならべよう`);
+    else if (r === 2) setBoard('どちらが ながい？', `${this.cName(0)}は ${q.n[0]}こぶん、${this.cName(1)}は ${q.n[1]}こぶん。かずで くらべよう`);
+    else setBoard(`${this.cName(long)}の ほうが、${u.name} いくつぶん ながい？`, `${u.name}の かずを くらべよう`);
+    // つくえ：2つの ものと、ならべた ブロックなど
+    const svg = $('#svg2');
+    svg.setAttribute('viewBox', '0 0 200 58');
+    let s = deskBg(200, 58) + `<line x1="${q.x0}" y1="3" x2="${q.x0}" y2="56" stroke="#e65100" stroke-width="0.35" stroke-dasharray="1.2 0.8"/>`;
+    for (let k = 0; k < 2; k++) {
+      const R0 = ROWS[k], L = q.n[k] * len, c = COLORS[q.col[k]];
+      s += objSvg(q.item, q.x0, L, { bot: R0.bot, c })
+        + `<line x1="${q.x0 + L}" y1="${R0.bot - 9}" x2="${q.x0 + L}" y2="${R0.top + 11}" stroke="${c.line}" stroke-width="0.35" stroke-dasharray="1.2 0.8"/>`;
+      // ちがいの ところ（ながい ほうの はみだした ぶん）を ひからせる
+      if (q.showDiff && k === long) {
+        for (let i = q.n[1 - k]; i < q.n[k]; i++) s += `<rect x="${q.x0 + i * len}" y="${R0.top - 2}" width="${len}" height="12.5" rx="1.2" fill="rgba(255,152,0,0.28)" stroke="#e65100" stroke-width="0.5" stroke-dasharray="1 0.6"/>`;
+      }
+      for (let i = 0; i < q.counts[k]; i++) {
+        const showNum = q.ok[k] || (k === r && G.hint > 0);
+        s += unitSvg(q.u, q.x0 + i * len, R0.top, i, showNum, k === r && i === q.counts[k] - 1 && !q.ok[k] ? 'pop' : '');
+      }
+      if (q.ok[k]) s += `<text x="${q.x0}" y="${R0.lab}" font-size="3.4" font-weight="900" fill="#e65100">${u.name} ${q.counts[k]}こぶん</text>`;
+    }
+    svg.innerHTML = s;
+    // ボタン
+    let ctl = '';
+    if (G.solved) {
+      ctl = `<div class="sum-card">${this.cName(0)} <b>${q.n[0]}こぶん</b>、${this.cName(1)} <b>${q.n[1]}こぶん</b><br>`
+        + (long === null ? 'どちらも おなじ かず。おなじ ながさ だね！' : `${this.cName(long)}の ほうが <b>${u.name} ${d}こぶん</b> ながい！`)
+        + `</div><div class="btn-col">${nextBtn()}</div>`;
+    } else if (r <= 1) {
+      ctl = `<div class="btn-col"><button class="act-btn b-done" data-act="add">＋ ${u.name}を<br>ならべる</button>
+          <button class="act-btn b-reset" data-act="remove">− 1こ とる</button></div>
+        <div class="card eq">${u.name} ${slotHtml(0)} こぶん</div>${keypadHtml()}
+        <div class="btn-col">${hintBtn()}${checkBtn()}</div>`;
+    } else if (r === 2) {
+      const choice = (v, label) => `<button class="choice${q.bad.includes(v) ? ' bad' : ''}" data-act="pick" data-v="${v}">${label}</button>`;
+      ctl = `<div class="choices">${choice('0', `${COLORS[q.col[0]].mark} ${this.cName(0)}`)}${choice('1', `${COLORS[q.col[1]].mark} ${this.cName(1)}`)}${choice('same', '🟰 おなじ')}</div>
+        <div class="btn-col">${hintBtn()}</div>`;
+    } else {
+      ctl = `<div class="card eq">${u.name} ${slotHtml(0)} こぶん ながい</div>${keypadHtml()}
+        <div class="btn-col">${hintBtn()}${checkBtn()}</div>`;
+    }
+    $('#ctl2').innerHTML = ctl;
+  },
+  cAct(a, v) {
+    const q = G.q, u = UNITS[q.u], r = q.step;
+    if (a === 'next') return nextOrResult(qStats);
+    if (G.solved) return;
+    const long = q.ans === 'same' ? null : +q.ans, d = Math.abs(q.n[0] - q.n[1]);
+    if (a === 'add' || a === 'remove') {
+      if (r > 1 || q.ok[r]) return;
+      if (a === 'remove') { if (q.counts[r] > 0) { q.counts[r]--; sfx.tap(); this.render(); } return; }
+      if (this.cFull(r)) { sfx.no(); say(`もう ${this.cName(r)}の はしまで ならんだよ。いくつぶん かな？`, 'warn'); return; }
+      q.counts[r]++; sfx.snap();
+      say(this.cFull(r) ? `ぴったり はしまで ならんだね。${u.name} いくつぶん かな？` : `${u.name}を すきま なく ならべよう`, this.cFull(r) ? 'good' : '');
+      return this.render();
+    }
+    if (a === 'hint') {
+      if (G.hint === 0) G.stats.hints++;
+      G.hint = 1; sfx.tap();
+      if (r <= 1) say(`ヒント：${u.name}に ばんごうを つけたよ`);
+      else if (r === 2) say('ヒント：かずが おおい ほうが ながいよ。おなじ かずなら、おなじ ながさ');
+      else { q.showDiff = true; say(`ヒント：${this.cName(long)}の はみだした ところの ${u.name}を ひからせたよ`); }
+      return this.render();
+    }
+    if (a === 'pick') {
+      if (r !== 2) return;
+      if (v === q.ans) {
+        q.picked = v;
+        if (q.ans === 'same') return solvedOk(`せいかい！ どちらも ${u.name} ${q.n[0]}こぶん。おなじ ながさ だね`);
+        q.step = 3; G.hint = 0; padSet([{ max: 9 }]); sfx.correct();
+        say(`せいかい！ ${this.cName(long)}の ほうが ながいね。${u.name} いくつぶん ながい かな？`, 'good');
+        return this.render();
+      }
+      G.tries++; q.bad.push(v); sfx.no();
+      say(q.ans === 'same' ? `どちらも ${q.n[0]}こぶん。かずが おなじ なら、ながさも おなじ だよ`
+        : `かずが おおい ほうが ながいよ。${q.n[0]}こと ${q.n[1]}こ、どちらが おおい？`, 'warn');
+      return this.render();
+    }
+    if (a !== 'check') return;
+    if (r <= 1) {
+      if (!this.cFull(r)) { say('さいごまで ならべてから かぞえよう', 'warn'); sfx.no(); return; }
+      if (padEmpty()) { say('かずを 入れよう', 'warn'); return; }
+      const val = padNum(0), n = q.n[r];
+      if (val !== n) return missed(Math.abs(val - n) === 1 ? 'おしい！ 1つずつ ゆびで さして かぞえよう' : 'もう いちど かぞえよう。ヒントも つかえるよ');
+      q.ok[r] = true; sfx.correct();
+      if (r === 0) {
+        q.step = 1; G.hint = 0; padSet([{ max: 20 }]);
+        say(`せいかい！ ${u.name} <b>${n}こぶん</b>。こんどは ${this.cName(1)}を はかろう`, 'good');
+      } else {
+        q.step = 2; G.hint = 0; pad.slots = [];
+        say(`せいかい！ ${u.name} <b>${n}こぶん</b>。どちらが ながい かな？`, 'good');
+      }
+      return this.render();
+    }
+    if (r !== 3) return;
+    if (padEmpty()) { say('かずを 入れよう', 'warn'); return; }
+    const val = padNum(0);
+    q.showDiff = true;
+    if (val === d) return solvedOk(`せいかい！ ${this.cName(long)}の ほうが ${u.name} <b>${d}こぶん</b> ながい`);
+    if (val === q.n[0] + q.n[1]) return missed('あわせた かずでは なくて、ちがいだよ。ひかって いる ところを かぞえよう');
+    return missed(`${Math.max(...q.n)}こと ${Math.min(...q.n)}こ、いくつ ちがう？ ひかって いる ${u.name}を かぞえよう`);
   },
 };
 
@@ -1518,7 +1664,8 @@ FREE.cmmm = {
   load() {
     const q = G.list[G.idx];
     G.q = q; G.tries = 0; G.solved = false; G.hint = 0;
-    padSet(q.t === 'toCm' ? [{ max: 15 }, { max: 9 }] : [{ max: 150 }]);
+    // cmの こたえが 1けた（100mm みまん）なら、cmの わくも 1けたに して すぐ mm へ すすむ
+    padSet(q.t === 'toCm' ? [{ max: q.L >= 100 ? 15 : 9 }, { max: 9 }] : [{ max: 150 }]);
     say(q.t === 'toCm' ? '10mmで 1cm だよ' : '1cmは 10mm だよ');
     this.render();
   },

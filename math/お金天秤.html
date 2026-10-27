@@ -201,7 +201,7 @@
         <li><span class="no">1</span><span>ひだりの皿には、もう お金が のっているよ</span></li>
         <li><span class="no">2</span><span><b>みぎのおさいふ</b>から お金をのせて、つりあわせよう</span></li>
         <li><span class="no">3</span><span>つかえない お金は <b>うすく</b>なって おせないよ</span></li>
-        <li><span class="no">4</span><span>ぜんぶで <b>10問</b>。3回まちがえると 答えが出るよ</span></li>
+        <li><span class="no">4</span><span>ぜんぶで <b>10問</b>。「どちらが多い？」の もんだいでは、3回まちがえると 答えが出るよ</span></li>
       </ul>
       <div class="ht-note">「どちらが多い？」の問題も出るよ。<br>
         <b>まい数が多いほうが 金額も多い</b>とは かぎらないから 気をつけて!</div>
@@ -209,8 +209,8 @@
     </div>
 
     <div class="chip-row" id="lvRow">
-      <button class="chip sm active" data-lv="easy">やさしい（〜1000円）</button>
-      <button class="chip sm" data-lv="normal">ふつう（〜10000円）</button>
+      <button class="chip sm active" data-lv="easy">やさしい（〜1000円）（2年）</button>
+      <button class="chip sm" data-lv="normal">ふつう（〜10000円）（3年）</button>
     </div>
 
     <div class="hud">
@@ -250,7 +250,7 @@
       <li><b>①</b>は自由に置いて試す場、<b>②</b>は両替・金額づくり・最小まい数・大小比べの4種類を10問出します。</li>
       <li>操作はすべて<b>タップ</b>です（ドラッグなし）。タブレットで確実に動くことを優先しました。</li>
       <li>お金の絵は本物の複製ではなく、<b>額面と色・形が分かる図案</b>にしています。</li>
-      <li>小1〜小3の「お金」「たし算」「数のまとまり」でつかえます。</li>
+      <li>小2〜小3の「お金」「たし算」「数のまとまり」でつかえます。小1は「おみせやさんで おかいもの」（100円まで）をつかってください。</li>
     </ul>
   </div>
 
@@ -511,7 +511,7 @@
   const bal2 = createBalance('sc2', 'b');
   bal2.lock('L', true);
   const ROUND = 10;
-  const Q = { list: [], i: 0, miss: 0, qMiss: 0, cur: null, lock: false, t0: 0, timer: null, wrong: [] };
+  const Q = { list: [], i: 0, miss: 0, qMiss: 0, cur: null, lock: false, t0: 0, timer: null, wrong: [], nextT: null };
 
   // 日本の硬貨・紙幣は貪欲法で最小まい数になる
   function minCount(amount) {
@@ -592,6 +592,7 @@
   function startQuiz() {
     const lv = document.querySelector('#lvRow .chip.active').dataset.lv;
     Q.list = []; for (let i = 0; i < ROUND; i++) Q.list.push(makeQ(lv));
+    clearTimeout(Q.nextT);   // 前の「次の問題へ」の待ちを取り消す（とちゅうで はじめから・レベル切りかえ）
     Q.i = 0; Q.miss = 0; Q.wrong = [];
     Q.t0 = performance.now();
     clearInterval(Q.timer);
@@ -614,6 +615,8 @@
     $('qMark').textContent = ''; $('qMark').className = 'mark';
     $('qPicks').innerHTML = '';
 
+    // 「どちらが多い？」では右の皿もさわれないようにする（問題が変わらないように）
+    bal2.lock('R', q.type === 'compare');
     bal2.setPan('L', q.left);
     bal2.setPan('R', q.type === 'compare' ? q.right : {});
     // 「どちらが多い？」は、答えるまで金額と かたむきを ふせる
@@ -641,6 +644,7 @@
 
   function answerCompare(btn, choice) {
     if (Q.lock) return;
+    if (btn.classList.contains('bad')) return;   // 同じまちがいは2回数えない
     const L = bal2.total('L'), R = bal2.total('R');
     const ans = L === R ? 'S' : (L > R ? 'L' : 'R');
     if (choice === ans) {
@@ -649,7 +653,7 @@
       bal2.setMasked(false);            // 金額とかたむきを見せる
       $('qMark').innerHTML = `⭕ せいかい！　ひだり ${yen(L)} ／ みぎ ${yen(R)}`;
       $('qMark').className = 'mark ok';
-      setTimeout(nextQ, 2000);
+      Q.nextT = setTimeout(nextQ, 2000);
     } else {
       btn.classList.add('bad');
       Q.miss++; Q.qMiss++; $('qMiss').textContent = Q.miss;
@@ -660,7 +664,7 @@
         bal2.setMasked(false);
         Q.wrong.push(`どちらが多い？ → ひだり ${yen(L)} ／ みぎ ${yen(R)}`);
         $('qMark').innerHTML = `こたえ： ひだり ${yen(L)} ／ みぎ ${yen(R)}`;
-        setTimeout(nextQ, 2600);
+        Q.nextT = setTimeout(nextQ, 2600);
       }
     }
   }
@@ -679,9 +683,10 @@
       return;
     }
     Q.lock = true;
+    bal2.lock('R', true);   // 待ち時間中は右の皿もさわれない
     $('qMark').innerHTML = `⭕ つりあった！　${yen(q.target)}`;
     $('qMark').className = 'mark ok';
-    setTimeout(nextQ, 1400);
+    Q.nextT = setTimeout(nextQ, 1400);
   };
 
   function nextQ() {
