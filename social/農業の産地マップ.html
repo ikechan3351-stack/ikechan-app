@@ -172,7 +172,7 @@
 
   <div class="credit">
     地図データ: Geolonia japanese-prefectures (MIT License)<br>
-    生産量: 農林水産省「作物統計調査」「畜産統計」「牛乳乳製品統計」ほか(令和4年〈2022年〉ごろ)の<b>おおよその数</b>です。<br>
+    生産量など: 令和4年(2022年)ごろの農林水産省などの統計をもとにした、<b>おおよその数</b>です。<br>
     順位はほとんど変わりませんが、数は年によって動きます。最新の数字は農林水産省のホームページでたしかめよう。
   </div>
 
@@ -232,18 +232,25 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     { k:'beef',    c:'live', e:'🐄', n:'肉用牛(飼っている数)', u:'万頭', all:261, t:[[1,55.3],[46,33.8],[45,25.5],[43,13.5],[3,8.9]] },
     { k:'milk',    c:'live', e:'🥛', n:'牛乳(生乳)',     u:'万t',  all:761, t:[[1,427.0],[9,34.8],[43,25.0],[3,21.0],[10,20.9]] },
     { k:'pig',     c:'live', e:'🐖', n:'ぶた(飼っている数)',   u:'万頭', all:895, t:[[46,119.9],[45,76.4],[1,72.8],[10,60.5],[12,58.3]] },
-    { k:'chicken', c:'live', e:'🐓', n:'にわとり(肉用)', u:'百万羽', all:719, t:[[45,103.0],[46,101.0],[3,74.0],[2,39.0],[1,27.0]] },
+    { k:'chicken', c:'live', e:'🐓', n:'にわとり・肉用(1年に出荷した数)', u:'百万羽', all:719, t:[[45,103.0],[46,101.0],[3,74.0],[2,39.0],[1,27.0]] },
     { k:'egg',     c:'live', e:'🥚', n:'たまご',         u:'万t', all:259, t:[[8,22.4],[12,18.5],[46,18.0],[33,15.7],[34,13.9]] },
 
     { k:'tea',     c:'other', e:'🍵', n:'茶',            u:'万t', all:7.7, t:[[22,2.8],[46,2.7],[24,0.5],[45,0.4],[26,0.3]] }
   ];
   const itemByKey = Object.fromEntries(ITEMS.map(i => [i.k, i]));
+  // 数のくらべ方: 'keep'=飼っている数(肉用牛・ぶた) / 'ship'=1年に出荷した数(にわとり肉用) / null=生産量
+  const countKind = (it) => it.k === 'chicken' ? 'ship' : /頭/.test(it.u) ? 'keep' : null;
+  const SHARE_VERB = { keep: '飼っています', ship: '出荷しています' };
+  // 同じ数なら同じ順位(例: 1.9 と 1.9 はどちらも1位)
+  const rankAt = (it, i) => it.t.findIndex(([, v]) => v === it.t[i][1]) + 1;
+  // 1位の県(同じ数の県もふくむ)
+  const winners = (it) => it.t.filter(([, v]) => v === it.t[0][1]).map(([c]) => c);
 
   // ===== 都道府県ごとの特産メモ =====
   const MEMO = {
     1:'農業も漁業もさかん。じゃがいも・たまねぎ・小麦・牛乳は日本一。広い土地を生かした大きな農業。',
     2:'りんごの生産量が日本一。にんにく・ながいももさかん。八戸港は水あげが多い。',
-    3:'広い牧場で肉用牛やにわとりを育てる。わかめの養殖も日本一。',
+    3:'広い牧場で肉用牛やにわとりを育てる。わかめの養殖も全国有数。',
     4:'ひとめぼれなどの米どころ。かき・ほや・わかめの養殖もさかん。',
     5:'あきたこまちの米どころ。米の生産量は全国3位。',
     6:'さくらんぼ(おうとう)の生産量が日本一。西洋なし・米もさかん。',
@@ -285,7 +292,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     42:'じゃがいも・びわが有名。あじ・さばの水あげが多い。',
     43:'トマト・すいか・いぐさ(たたみ表)が日本一。',
     44:'かぼす・乾しいたけが日本一。関さば・関あじも有名。',
-    45:'きゅうり・にわとり(肉用)が日本一。ピーマン・マンゴーもさかん。',
+    45:'きゅうりの生産量と、にわとり(肉用)の出荷数が日本一。ピーマン・マンゴーもさかん。',
     46:'さつまいも・ぶたが日本一。肉用牛・にわとりも多い。茶もさかん。',
     47:'さとうきび・パイナップル・ゴーヤーの産地。あたたかい気候を生かす。'
   };
@@ -372,7 +379,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     cat: 'all', item: 'mikan', pick: null,
     prefSel: 30,
     qmode: 'mix', qs: [], qi: 0, tries: 0, miss: 0, wrong: [], playing: false, lock: false,
-    startT: 0, timerId: null
+    startT: 0, timerId: null, nextT: null
   };
   let board = null;
 
@@ -418,27 +425,27 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
       g.setAttribute('stroke', r === undefined ? '#b0aca1' : '#ffffff');
       g.setAttribute('stroke-width', r === undefined ? '1' : '1.5');
     }
-    putBadges(board, it.t.map(([code], i) => [code, i + 1]), ramp[0]);
+    putBadges(board, it.t.map(([code], i) => [code, rankAt(it, i)]), ramp[0]);
 
     const max = it.t[0][1];
     const sum = it.t.reduce((a, [, v]) => a + v, 0);
     const share = Math.round(sum / it.all * 100);
     $('side').innerHTML = `
       <div class="item-head">${it.e} ${esc(it.n)}の産地
-        <small>令和4年(2022年)ごろ・全国あわせて ${it.all}${it.u}</small></div>
+        <small>令和4年(2022年)ごろの統計をもとにした、おおよその数・全国あわせて ${it.all}${it.u}</small></div>
       <div class="bars">
         ${it.t.map(([code, v], i) => `
           <div class="bar-row">
-            <span class="bar-rank" style="background:${ramp[0]}">${i + 1}</span>
+            <span class="bar-rank" style="background:${ramp[0]}">${rankAt(it, i)}</span>
             <span class="bar-name">${esc(shortName(byCode[code].n))}</span>
             <span class="bar-track"><span class="bar-fill" style="width:${(v / max * 100).toFixed(1)}%;background:${ramp[i]}"></span></span>
             <span class="bar-val">${v}${it.u}</span>
           </div>`).join('')}
       </div>
-      <div class="share">上位5県だけで、全国の <b>やく${share}%</b> をつくっています。<br>
+      <div class="share">上位5県だけで、全国の <b>やく${share}%</b> を${SHARE_VERB[countKind(it)] || 'つくっています'}。<br>
         <span style="font-size:0.84rem;color:#557">${share >= 60 ? '➡ 少しの県に集まっているね。どうしてだろう?' : '➡ 全国に広がっているね。どうしてだろう?'}</span></div>
       <div class="legend">
-        ${it.t.map((_, i) => `<span><span class="sw" style="background:${ramp[i]}"></span>${i + 1}位</span>`).join('')}
+        ${it.t.map((_, i) => `<span><span class="sw" style="background:${ramp[i]}"></span>${rankAt(it, i)}位</span>`).join('')}
         <span><span class="sw" style="background:${OFF}"></span>そのほか</span>
       </div>`;
     drawPick();
@@ -455,7 +462,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     const i = it.t.findIndex(([code]) => code === st.pick);
     if (i >= 0) {
       const v = it.t[i][1];
-      box.innerHTML = `<span class="pi-name">${esc(p.n)}</span><span class="pi-rank">${it.n} 全国${i + 1}位</span>
+      box.innerHTML = `<span class="pi-name">${esc(p.n)}</span><span class="pi-rank">${it.n} 全国${rankAt(it, i)}位</span>
         <div>${v}${it.u} … 全国(${it.all}${it.u})の <b>やく${(v / it.all * 100).toFixed(1)}%</b></div>
         <div style="font-size:0.86rem;color:#556;margin-top:3px">💡 ${esc(MEMO[p.c])}</div>`;
     } else {
@@ -503,7 +510,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     const hits = [];
     for (const it of ITEMS) {
       const i = it.t.findIndex(([c]) => c === code);
-      if (i >= 0) hits.push({ it, rank: i + 1, v: it.t[i][1] });
+      if (i >= 0) hits.push({ it, rank: rankAt(it, i), v: it.t[i][1] });
     }
     hits.sort((a, b) => a.rank - b.rank);
     $('side').innerHTML = `
@@ -552,14 +559,15 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     }));
     $('overlay').addEventListener('pointerdown', () => { if (!st.playing) newRound(); });
   }
-  function stopQuiz() { st.playing = false; clearInterval(st.timerId); }
+  function stopQuiz() { st.playing = false; clearInterval(st.timerId); clearTimeout(st.nextT); }
+  function goNext(ms) { clearTimeout(st.nextT); st.nextT = setTimeout(nextQ, ms); }
   function newRound() {
     st.qs = shuffle([...ITEMS]).slice(0, ROUND).map(it => ({
       it, dir: st.qmode === 'mix' ? (Math.random() < 0.5 ? 'where' : 'what') : st.qmode
     }));
     st.qi = 0; st.miss = 0; st.wrong = []; st.playing = true; st.lock = false;
     st.startT = Date.now();
-    clearInterval(st.timerId);
+    clearInterval(st.timerId); clearTimeout(st.nextT);
     st.timerId = setInterval(() => {
       const s = Math.floor((Date.now() - st.startT) / 1000);
       $('hudTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -575,7 +583,11 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     $('hudWord').textContent = `${st.qi + 1}/${ROUND}`;
     $('mark').textContent = ''; $('mark').className = 'mark';
     if (q.dir === 'where') {
-      $('qArea').innerHTML = `<div class="q-ask">${it.e} ${esc(it.n)} の生産量が<br><b>全国1位</b>の都道府県はどこ?</div>
+      const kind = countKind(it);
+      const ask = kind === 'keep' ? `${esc(it.n.replace('(飼っている数)', ''))} を飼っている数が`
+        : kind === 'ship' ? `${esc(it.n.replace('(1年に出荷した数)', ''))} を1年に出荷した数が`
+        : `${esc(it.n)} の生産量が`;
+      $('qArea').innerHTML = `<div class="q-ask">${it.e} ${ask}<br><b>全国1位</b>の都道府県はどこ?</div>
         <div class="q-sub">地図をタップして答えよう</div>
         <div class="qmap" id="qBoard"></div>`;
       const qb = makeBoard($('qBoard'));
@@ -587,16 +599,18 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
       st.qb = qb;
     } else {
       const p = byCode[top1];
-      const others = shuffle(ITEMS.filter(x => x.k !== it.k && x.t[0][0] !== top1)).slice(0, 3);
+      // その県が1位(同じ数の1位をふくむ)の品目は、まちがいの選択肢に入れない
+      const others = shuffle(ITEMS.filter(x => x.k !== it.k && !winners(x).includes(top1))).slice(0, 3);
       const opts = shuffle([it, ...others]);
-      $('qArea').innerHTML = `<div class="q-ask">${esc(p.n)} が生産量<b>全国1位</b>なのは、つぎのどれ?</div>
+      $('qArea').innerHTML = `<div class="q-ask">${esc(p.n)} が<b>全国1位</b>なのは、つぎのどれ?</div>
+        <div class="q-sub">作物は生産量、牛・ぶたは飼っている数、にわとり(肉用)は1年に出荷した数でくらべます</div>
         <div class="choices" id="choices">
           ${opts.map(o => `<button class="choice" data-k="${o.k}" ${o.k === it.k ? 'data-ok="1"' : ''}>${o.e} ${esc(o.n)}</button>`).join('')}
         </div>`;
       document.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => answerBtn(b)));
     }
   }
-  function nextQ() { st.qi++; st.qi >= ROUND ? finish() : loadQ(); }
+  function nextQ() { if (!st.playing) return; st.qi++; st.qi >= ROUND ? finish() : loadQ(); }
   function missCommon(q) {
     sndNG(); st.miss++; st.tries++;
     $('hudMiss').textContent = st.miss;
@@ -606,26 +620,27 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
   }
   function answerMap(code, qb) {
     if (!st.playing || st.lock) return;
-    const q = st.qs[st.qi], it = q.it, ans = it.t[0][0];
-    if (code === ans) {
+    const q = st.qs[st.qi], it = q.it, ans = it.t[0][0], wins = winners(it);
+    const winNames = wins.map(c => byCode[c].n).join('・');
+    if (wins.includes(code)) {
       sndOK();
-      qb.prefG[ans].setAttribute('fill', '#43a047');
-      $('mark').innerHTML = `⭕ せいかい! <span style="font-size:0.9rem;font-weight:normal">${esc(byCode[ans].n)}(${it.t[0][1]}${it.u})</span>`;
+      wins.forEach(c => qb.prefG[c].setAttribute('fill', '#43a047'));
+      $('mark').innerHTML = `⭕ せいかい! <span style="font-size:0.9rem;font-weight:normal">${esc(winNames)}(${it.t[0][1]}${it.u})${wins.length > 1 ? ' 同じ数で1位' : ''}</span>`;
       $('mark').className = 'mark ok';
       st.lock = true;
-      setTimeout(nextQ, 1100);
+      goNext(1100);
     } else {
       missCommon(q);
       qb.prefG[code].setAttribute('fill', '#ef9a9a');
       setTimeout(() => { if (qb.prefG[code]) qb.prefG[code].setAttribute('fill', OFF); }, 700);
       if (st.tries >= 3) {
-        qb.prefG[ans].setAttribute('fill', '#ffa726');
-        $('mark').textContent = `❌ せいかいは「${byCode[ans].n}」`;
+        wins.forEach(c => qb.prefG[c].setAttribute('fill', '#ffa726'));
+        $('mark').textContent = `❌ せいかいは「${winNames}」`;
         $('mark').className = 'mark ng';
         st.lock = true;
-        setTimeout(nextQ, 2000);
+        goNext(2000);
       } else {
-        $('mark').textContent = `❌ ちがうよ。ヒント:${byCode[ans].n}は${['北海道','東北','関東','中部','近畿','中国','四国','九州・沖縄'][['hokkaido','tohoku','kanto','chubu','kinki','chugoku','shikoku','kyushu-okinawa'].indexOf(byCode[ans].r)]}地方`;
+        $('mark').textContent = `❌ ちがうよ。ヒント:1位の県は${['北海道','東北','関東','中部','近畿','中国','四国','九州・沖縄'][['hokkaido','tohoku','kanto','chubu','kinki','chugoku','shikoku','kyushu-okinawa'].indexOf(byCode[ans].r)]}地方にあるよ`;
         $('mark').className = 'mark ng';
       }
     }
@@ -639,7 +654,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
       $('mark').textContent = '⭕ せいかい!';
       $('mark').className = 'mark ok';
       st.lock = true;
-      setTimeout(nextQ, 800);
+      goNext(800);
     } else {
       missCommon(q);
       btn.classList.add('wrong');
@@ -649,7 +664,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
         $('mark').textContent = `❌ せいかいは「${q.it.n}」`;
         $('mark').className = 'mark ng';
         st.lock = true;
-        setTimeout(nextQ, 1900);
+        goNext(1900);
       } else {
         $('mark').textContent = '❌ もういちど!';
         $('mark').className = 'mark ng';
@@ -670,7 +685,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     if (st.wrong.length) {
       rv.style.display = '';
       rv.innerHTML = '<b>ふりかえり</b>' + st.wrong.map(it =>
-        `<span>${it.e} ${esc(it.n)} → 1位は ${esc(byCode[it.t[0][0]].n)}</span>`).join('');
+        `<span>${it.e} ${esc(it.n)} → 1位は ${esc(winners(it).map(c => byCode[c].n).join('・'))}</span>`).join('');
     } else rv.style.display = 'none';
     $('overlay').classList.remove('hidden');
     sndDone();

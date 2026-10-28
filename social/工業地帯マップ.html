@@ -110,6 +110,7 @@
   .choice:active { transform: translateY(1px); }
   .choice.correct { background: #c8e6c9; border-color: #2e7d32; }
   .choice.wrong { background: #ffcdd2; border-color: #c62828; }
+  .choice:disabled { cursor: default; color: #333; opacity: 1; }
   .qmap { width: 100%; max-width: 520px; background: #dfeff6; border-radius: 14px; padding: 4px; }
   .qmap svg { width: 100%; height: auto; display: block; }
   .qmap svg g[data-code] { cursor: pointer; }
@@ -172,7 +173,7 @@
 
   <div class="credit">
     地図データ: Geolonia japanese-prefectures (MIT License)<br>
-    出荷額・割合: 経済産業省「工業統計調査」／総務省・経済産業省「経済センサス」(2019〜2020年ごろ)の<b>おおよその数</b>です。<br>
+    出荷額・割合: 経済産業省などの<b>2019〜2020年ごろの統計をもとにした、おおよその数</b>です。<br>
     工業地帯・工業地域にふくむ県のわけ方は、教科書によって少しちがうことがあります。
   </div>
 
@@ -227,7 +228,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     { k:'keiyo', n:'京葉工業地域', kana:'けいよう', c:'#7b1fa2', belt:true,
       prefs:[12], v:11.9, r:[21,13,40,15,0,11],
       d:'千葉県の東京湾ぞい。<b>化学が4割</b>と、ほかにない高い割合。石油化学コンビナートや製鉄所がならびます。' },
-    { k:'kitakyushu', n:'北九州工業地帯', kana:'きたきゅうしゅう', c:'#5d4037', belt:true,
+    { k:'kitakyushu', n:'北九州工業地帯（地域）', sn:'北九州', kana:'きたきゅうしゅう', c:'#5d4037', belt:true,
       prefs:[40], v:9.9, r:[16,46,6,17,1,14],
       d:'1901年の<b>八幡製鉄所</b>から発展。鉄鋼の勢いは弱まり、今は自動車や<b>食料品</b>の工場が多くなっています。' }
   ];
@@ -273,13 +274,22 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
   function stackBar(r, thin) {
     return `<div class="stack ${thin ? 'thin' : ''}">${
       r.map((v, i) => {
-        // はばに入る分だけ文字を出す(はみ出すと読めないため)
-        const lab = (!thin && v >= 16) ? KINDS[i].n + v + '%' : (v >= (thin ? 10 : 8) ? v + '%' : '');
+        // 文字は fitSegs() で、はばに入る分だけ出す(はみ出すと読めないため)
         return v <= 0 ? '' :
-          `<div class="seg" style="width:${v}%;background:${KINDS[i].c}" title="${KINDS[i].n} ${v}%">${lab}</div>`;
+          `<div class="seg" style="width:${v}%;background:${KINDS[i].c}" title="${KINDS[i].n} ${v}%"
+            data-full="${thin ? '' : KINDS[i].n + v + '%'}" data-pct="${v}%"><span></span></div>`;
       }).join('')
     }</div>`;
   }
+  // 帯の文字:「名前+%」が入れば名前つき、入らなければ%だけ、それも入らなければ出さない
+  function fitSegs() {
+    document.querySelectorAll('.stack .seg').forEach(seg => {
+      const sp = seg.firstElementChild, room = seg.clientWidth - 4;
+      const cands = [seg.dataset.full, seg.dataset.pct, ''].filter((t, i) => t || i === 2);
+      for (const t of cands) { sp.textContent = t; if (sp.offsetWidth <= room) break; }
+    });
+  }
+  window.addEventListener('resize', fitSegs);
   const kindLegend = () => `<div class="kind-legend">${KINDS.map(k => `<span><span class="sw" style="background:${k.c}"></span>${k.n}</span>`).join('')}</div>`;
 
   // ===== 地図 =====
@@ -327,7 +337,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     }
     const [x, y] = zoneCenter(board, z);
     board.badgeLayer.innerHTML = `<text x="${x}" y="${y - 26}" text-anchor="middle" font-size="26" font-weight="bold"
-      fill="${z.c}" stroke="#fff" stroke-width="5" paint-order="stroke">${z.n}</text>`;
+      fill="${z.c}" stroke="#fff" stroke-width="5" paint-order="stroke">${esc(z.sn || z.n)}</text>`;
   }
   function paintBelt(board) {
     const belt = ZONES.filter(z => z.belt);
@@ -344,8 +354,8 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
   // ===== 状態 =====
   const st = {
     mode: 'map', zone: 'chukyo', belt: false,
-    qmode: 'mix', qs: [], qi: 0, tries: 0, miss: 0, wrong: [], playing: false, lock: false,
-    startT: 0, timerId: null
+    qmode: 'mix', qs: [], qi: 0, tries: 0, tapped: [], miss: 0, wrong: [], playing: false, lock: false,
+    startT: 0, timerId: null, nextT: null
   };
   let board = null;
 
@@ -374,6 +384,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     document.querySelectorAll('[data-zone]').forEach(b => b.addEventListener('click', () => { st.zone = b.dataset.zone; st.belt = false; renderMap(); }));
     document.querySelector('[data-belt]').addEventListener('click', () => { st.belt = !st.belt; renderMap(); });
     st.belt ? drawBelt() : drawZone();
+    fitSegs();
   }
   function drawZone() {
     const z = zoneByKey[st.zone];
@@ -389,6 +400,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
         <div style="font-size:0.86rem;font-weight:bold;color:#455a64;margin-bottom:4px">何工業が多い?(出荷額の割合)</div>
         ${stackBar(z.r)}
         ${kindLegend()}
+        <div style="font-size:0.76rem;color:#607d8b;margin-top:4px">※出荷額・割合は2019〜2020年ごろの統計をもとにした、おおよその数</div>
       </div>
       <div class="desc-box">💡 ${z.d}</div>
       <div class="desc-box" style="background:#e8f0fe">➡ いちばん多いのは <b style="color:${top.c}">${top.n}工業</b>(${Math.max(...z.r)}%)。ほかの地いきとくらべてみよう。</div>`;
@@ -416,7 +428,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     const maxV = sorted[0].v;
     $('content').innerHTML = `
       <div class="card">
-        <div class="item-head">📊 9つの地いきをくらべる<small>出荷額の多い順・2019〜2020年ごろのおおよその数</small></div>
+        <div class="item-head">📊 9つの地いきをくらべる<small>出荷額の多い順・2019〜2020年ごろの統計をもとにした、おおよその数</small></div>
         ${kindLegend()}
         <div style="margin-top:12px">
           ${sorted.map(z => `
@@ -432,7 +444,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
           👀 <b>見くらべてみよう</b><br>
           ・<b>中京</b>は青(機械)が69%とずばぬけて長い … <b>自動車</b>のまちだから<br>
           ・<b>京葉</b>だけ紫(化学)が40%と長い … <b>石油化学コンビナート</b>があるから<br>
-          ・<b>北九州</b>と<b>関東内陸</b>は橙(食料品)が多め … 大きな都市の近くで食べ物をつくるから<br>
+          ・<b>北九州</b>と<b>関東内陸</b>は橙(食料品)のわりあいが比較的大きい<br>
           ・<b>北陸</b>は桃(せんい)が少し残っている … 昔からの<b>地場産業</b>があるから
         </div>
       </div>`;
@@ -442,7 +454,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
   function renderChart() {
     $('content').innerHTML = `
       <div class="card">
-        <div class="item-head">📉 日本の工業のうつりかわり<small>全国の出荷額にしめる割合(%)・おおよその数</small></div>
+        <div class="item-head">📉 日本の工業のうつりかわり<small>全国の出荷額にしめる割合(%)・経済産業省などの統計をもとにした、おおよその数</small></div>
         ${kindLegend()}
         <div style="margin-top:12px">
           ${ERA.map(e => `
@@ -498,7 +510,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     document.querySelectorAll('[data-qm]').forEach(b => b.addEventListener('click', () => { st.qmode = b.dataset.qm; stopQuiz(); renderQuizShell(); }));
     $('overlay').addEventListener('pointerdown', () => { if (!st.playing) newRound(); });
   }
-  function stopQuiz() { st.playing = false; clearInterval(st.timerId); }
+  function stopQuiz() { st.playing = false; clearInterval(st.timerId); clearTimeout(st.nextT); }
   function newRound() {
     const dirs = ['where', 'graph', 'kind'];
     const pool = shuffle([...ZONES]);
@@ -508,7 +520,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     }
     st.qi = 0; st.miss = 0; st.wrong = []; st.playing = true; st.lock = false;
     st.startT = Date.now();
-    clearInterval(st.timerId);
+    clearInterval(st.timerId); clearTimeout(st.nextT);
     st.timerId = setInterval(() => {
       const s = Math.floor((Date.now() - st.startT) / 1000);
       $('hudTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -518,7 +530,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     loadQ();
   }
   function loadQ() {
-    st.tries = 0; st.lock = false;
+    st.tries = 0; st.lock = false; st.tapped = [];
     const q = st.qs[st.qi], z = q.z;
     $('wordCount').textContent = `もんだい ${st.qi + 1} / ${ROUND}`;
     $('hudWord').textContent = `${st.qi + 1}/${ROUND}`;
@@ -536,11 +548,12 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
       const opts = shuffle([z, ...others]);
       $('qArea').innerHTML = `<div class="q-ask">この帯グラフは、どの工業地いき?</div>
         <div class="q-graph">${stackBar(z.r)}${kindLegend()}
-          <div style="font-size:0.85rem;color:#607d8b;margin-top:6px">出荷額 ${z.v}兆円</div></div>
+          <div style="font-size:0.85rem;color:#607d8b;margin-top:6px">出荷額 ${z.v}兆円(2019〜2020年ごろの統計をもとにした、おおよその数)</div></div>
         <div class="choices" id="choices">
           ${opts.map(o => `<button class="choice" data-k="${o.k}" ${o.k === z.k ? 'data-ok="1"' : ''} style="font-size:0.9rem">${esc(o.n)}</button>`).join('')}
         </div>`;
       document.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => answerBtn(b)));
+      fitSegs();
     } else {
       const ansIdx = z.r.indexOf(Math.max(...z.r));
       const opts = shuffle([ansIdx, ...shuffle(KINDS.map((_, i) => i).filter(i => i !== ansIdx && i !== 5)).slice(0, 3)]);
@@ -552,13 +565,19 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
       document.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => answerBtn(b)));
     }
   }
-  function nextQ() { st.qi++; st.qi >= ROUND ? finish() : loadQ(); }
+  function nextQ() { if (!st.playing) return; st.qi++; st.qi >= ROUND ? finish() : loadQ(); }
   function missCommon(q) {
     sndNG(); st.miss++; st.tries++;
     $('hudMiss').textContent = st.miss;
     const stage = $('stage');
     stage.classList.remove('miss-flash'); void stage.offsetWidth; stage.classList.add('miss-flash');
-    const label = `${q.z.n} → ${q.z.prefs.map(c => byCode[c].n).join('・')}`;
+    const z = q.z, top = z.r.indexOf(Math.max(...z.r));
+    let label;
+    if (q.dir === 'where') label = `${z.n} → ${z.prefs.map(c => byCode[c].n).join('・')}`;
+    else if (q.dir === 'graph') {
+      const two = z.r.map((v, i) => [v, i]).filter(a => a[1] !== 5).sort((a, b) => b[0] - a[0]).slice(0, 2);
+      label = `帯グラフ(${two.map(a => KINDS[a[1]].n + a[0] + '%').join('・')}…) → ${z.n}`;
+    } else label = `${z.n} → いちばん多いのは${KINDS[top].n}工業(${z.r[top]}%)`;
     if (!st.wrong.includes(label)) st.wrong.push(label);
   }
   function answerMap(code, qb) {
@@ -569,19 +588,24 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
       for (const c of z.prefs) qb.prefG[c].setAttribute('fill', '#43a047');
       $('mark').innerHTML = `⭕ せいかい! <span style="font-size:0.9rem;font-weight:normal">${z.prefs.map(c => esc(byCode[c].n)).join('・')}</span>`;
       $('mark').className = 'mark ok';
-      st.lock = true; setTimeout(nextQ, 1300);
+      st.lock = true; st.nextT = setTimeout(nextQ, 1300);
     } else {
+      const other = ZONES.find(zz => zz.prefs.includes(code));
+      const msg = other ? `❌ そこは「${other.n}」だよ` : '❌ そこは工業地帯・工業地域に入っていないよ';
+      if (st.tapped.includes(code)) {  // 同じ県は2回目から数えない
+        $('mark').textContent = msg; $('mark').className = 'mark ng';
+        return;
+      }
+      st.tapped.push(code);
       missCommon(q);
-      qb.prefG[code].setAttribute('fill', '#ef9a9a');
-      setTimeout(() => { if (qb.prefG[code]) qb.prefG[code].setAttribute('fill', OFF); }, 700);
+      qb.prefG[code].setAttribute('fill', '#ef9a9a');  // まちがえた県は赤のまま
       if (st.tries >= 3) {
         for (const c of z.prefs) qb.prefG[c].setAttribute('fill', '#ffa726');
         $('mark').textContent = `❌ せいかいは ${z.prefs.map(c => byCode[c].n).join('・')}`;
         $('mark').className = 'mark ng';
-        st.lock = true; setTimeout(nextQ, 2300);
+        st.lock = true; st.nextT = setTimeout(nextQ, 2300);
       } else {
-        const other = ZONES.find(zz => zz.prefs.includes(code));
-        $('mark').textContent = other ? `❌ そこは「${other.n}」だよ` : '❌ そこは工業地帯・工業地域に入っていないよ';
+        $('mark').textContent = msg;
         $('mark').className = 'mark ng';
       }
     }
@@ -593,17 +617,16 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
       sndOK(); btn.classList.add('correct');
       $('mark').textContent = '⭕ せいかい!';
       $('mark').className = 'mark ok';
-      st.lock = true; setTimeout(nextQ, 800);
+      st.lock = true; st.nextT = setTimeout(nextQ, 800);
     } else {
       missCommon(q);
-      btn.classList.add('wrong');
-      setTimeout(() => btn.classList.remove('wrong'), 700);
+      btn.classList.add('wrong'); btn.disabled = true;  // 同じボタンは2回目から押せない(赤のまま)
       if (st.tries >= 3) {
         const ok = document.querySelector('.choice[data-ok]');
         ok.classList.add('correct');
         $('mark').textContent = `❌ せいかいは「${ok.textContent}」`;
         $('mark').className = 'mark ng';
-        st.lock = true; setTimeout(nextQ, 1900);
+        st.lock = true; st.nextT = setTimeout(nextQ, 1900);
       } else {
         $('mark').textContent = '❌ もういちど!';
         $('mark').className = 'mark ng';
@@ -638,6 +661,7 @@ const BOUNDARY_LINES = ["<line x1=\"320.227\" y1=\"361.996\" x2=\"582.351\" y2=\
     else if (st.mode === 'cmp') renderCmp();
     else if (st.mode === 'chart') renderChart();
     else renderQuizShell();
+    fitSegs();
   }
   document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
     st.mode = b.dataset.mode;
