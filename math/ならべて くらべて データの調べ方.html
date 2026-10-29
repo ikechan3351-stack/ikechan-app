@@ -1480,8 +1480,9 @@ const defaultQ = () => (/ソフトボール/.test(state.topic) ? 'どちらの�
 function buildCompare(W, H, opt = {}) {
   const fs = opt.fs || clamp(Math.min(W, H * 1.4) / 36, 12, FSMAX());
   if (!state.groups.every((gr) => gr.items.length)) return svgText(W / 2, H / 2, ['2つの グループに データを 入れよう'], fs * 1.1, '#90a4ae');
-  const hist = CMP.view === 'hist';
   const all = allValues(), C = classInfo(), rng = plotRange(all, W, fs);
+  // ぜんぶ 同じ 値の ときは 階級が つくれない（C が null）ので、柱状グラフは かかずに ドットプロットに する
+  const hist = CMP.view === 'hist' && !!C;
   const lo = hist ? C.start : rng.lo, hi = hist ? C.end : rng.hi;
   const mxL = fs * 3.4, mxR = fs * 2.8;
   const X = (v) => mxL + (v - lo) / (hi - lo) * (W - mxL - mxR);
@@ -1489,7 +1490,7 @@ function buildCompare(W, H, opt = {}) {
   const maxC = Math.max(4, ...state.groups.flatMap((gr) => [...Stats.counts(gr.items.map((i) => i.v)).values()]));
   const unitPx = X(lo + rng.unit) - X(lo);
   const r = clamp(Math.min(Math.max(unitPx * 0.47, fs * 0.45), (laneH - fs * 7) / (2.08 * maxC + 0.4)), 2.5, fs);
-  const histMax = Math.max(...[0, 1].flatMap((g) => C.of(g).map((c) => c.count)));
+  const histMax = hist ? Math.max(...[0, 1].flatMap((g) => C.of(g).map((c) => c.count))) : 0;
   let ticks = [];
   if (hist) ticks = [...C.of(0).map((c) => c.lo), C.end];
   else for (let v = rng.lo; v <= rng.hi + 1e-9; v += rng.step) ticks.push(Stats.key(v));
@@ -1528,12 +1529,16 @@ function buildCompare(W, H, opt = {}) {
 }
 
 function compareToolbarHTML() {
-  return `<button class="act-btn sm ${CMP.view === 'dot' ? 'on' : ''}" data-act="cview" data-v="dot">⚫ ドットプロット</button>
-    <button class="act-btn sm ${CMP.view === 'hist' ? 'on' : ''}" data-act="cview" data-v="hist">📶 ${R('柱状', 'ちゅうじょう')}グラフ</button>
+  // データが ぜんぶ 同じ 値だと 階級が つくれないので、柱状グラフの ボタンは つかえない
+  const canHist = !!classInfo();
+  const hist = CMP.view === 'hist' && canHist;
+  return `<button class="act-btn sm ${!hist ? 'on' : ''}" data-act="cview" data-v="dot">⚫ ドットプロット</button>
+    <button class="act-btn sm ${hist ? 'on' : ''}" data-act="cview" data-v="hist" ${canHist ? '' : 'disabled'}>📶 ${R('柱状', 'ちゅうじょう')}グラフ</button>
+    ${canHist ? '' : `<span class="note" style="font-weight:bold">（ぜんぶ ${R('同', 'おな')}じ ${ATAI}なので ${R('柱状', 'ちゅうじょう')}グラフは かけない）</span>`}
     <span class="sep"></span>
     <button class="act-btn sm b-mean ${state.show.mean ? 'on' : ''}" data-act="show" data-v="mean">▲ ${HEIKIN}</button>
     <button class="act-btn sm b-median ${state.show.median ? 'on' : ''}" data-act="show" data-v="median">┆ ${CHUOU}</button>
-    ${CMP.view === 'dot' ? `<button class="act-btn sm b-mode ${state.show.mode ? 'on' : ''}" data-act="show" data-v="mode">▮ ${SAIHIN}</button>` : ''}`;
+    ${!hist ? `<button class="act-btn sm b-mode ${state.show.mode ? 'on' : ''}" data-act="show" data-v="mode">▮ ${SAIHIN}</button>` : ''}`;
 }
 // 2つの グループの 代表値の 表（PPDACノートでも つかう）
 function compareTableHTML() {
@@ -1671,7 +1676,8 @@ function snapshotSVG() {
 /* =========================================================
    15. 先生モード（電子黒板で 1つずつ 見せる）
    ========================================================= */
-const TC = { step: 0, input: false, auto: false, timer: 0 };
+// token … じどうで すすむ ための 番号（点を 落とす・ならべる アニメが seq を 進めても 止まらない ように 別に もつ）
+const TC = { step: 0, input: false, auto: false, timer: 0, token: 0 };
 const TSTEPS = [
   `${R('数直線', 'すうちょくせん')}を ${R('用意', 'ようい')}する`,
   `${TEN}を ならべる（ドットプロット）`,
@@ -1686,7 +1692,7 @@ function tcGo(step, anim = true) {
   clearTimeout(TC.timer);
   resetExperiments();
   TC.step = clamp(step, 0, tcLast());
-  const s2 = TC.step, my = seq;
+  const s2 = TC.step, my = seq, tok = ++TC.token;
   state.show = { mean: s2 >= 4, median: s2 >= 3, mode: s2 >= 2 };
   G().items.forEach((it) => { it.drop = 1; });
   if (s2 === 6) CMP.view = 'dot';
@@ -1725,7 +1731,7 @@ function tcGo(step, anim = true) {
     } else say(`${HEIKIN}は ${meanHTML(st.mean, dec)}${u}（${GOUKEI} ${fmt(st.sum)} ÷ ${st.n}${R('人', 'にん')}）`);
   }
   if (s2 === 5 && anim) { FQ.grow = 0; tween(FQ, 'grow', 1, 900); }
-  if (TC.auto && s2 < tcLast()) TC.timer = setTimeout(() => { if (my === seq) tcGo(TC.step + 1); }, [3500, 4500, 4000, 7500, 6000, 5000][s2] || 4000);
+  if (TC.auto && s2 < tcLast()) TC.timer = setTimeout(() => { if (TC.auto && tok === TC.token && state.mode === 'teacher') tcGo(TC.step + 1); }, [3500, 4500, 4000, 7500, 6000, 5000][s2] || 4000);
   else if (TC.auto) { TC.auto = false; refresh(); }
 }
 function teacherToolbarHTML() {
@@ -1759,6 +1765,7 @@ function teacherRightHTML() {
 const ACTS = {};
 function setMode(m) {
   resetExperiments();
+  clearTimeout(TC.timer); TC.token++;   // 先生モードの じどうを 止める
   state.mode = m;
   if (m === 'make') {
     state.show = { mean: false, median: false, mode: false };
@@ -1913,6 +1920,7 @@ ACTS.sort = () => {
 ACTS.outlier = () => {
   const gr = G();
   if (OUT.on) {
+    seq++;   // 落ちている とちゅうの 声かけを 出さない ため
     gr.items = gr.items.filter((i) => !i.out);
     OUT.on = false; OUT.before = null;
     SORT.phase = 'idle'; SORT.p = 0; SORT.elim = 0;
@@ -1934,7 +1942,9 @@ ACTS.outlier = () => {
   state.show.mean = true; state.show.median = true;
   sfx.big();
   refreshLeft(); refresh();
+  const my = seq;
   tween(it, 'drop', 1, 800, true).then(() => {
+    if (my !== seq || !OUT.on) return;   // とちゅうで モードを かえた・とった ときは 声かけを 出さない
     const now = Stats.all(valuesOf(state.g));
     say(`${fmtV(ov)}${esc(state.unit)}の とびぬけた ${ATAI}を 1つ 入れたら… ${HEIKIN}は ${R('大', 'おお')}きく ${R('動', 'うご')}いたけど、${CHUOU}は あまり ${R('動', 'うご')}かないね${now.n % 2 === 0 ? `（データが ${R('偶数', 'ぐうすう')}こに なったので、${CHUOU}は ${MANNAKA} 2つの ${R('平均', 'へいきん')}）` : ''}`, 'good');
   });

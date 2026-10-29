@@ -314,6 +314,15 @@
     if (f.type === 'quad') return { min: -3, max: 3, step: 0.25 };
     return { min: -5, max: 5, step: 0.5 };
   }
+  // a を スライダーの はんいに おさめ、きざみ(step)に まるめる。
+  // a＝0 は 比例・反比例・一次関数・二次関数の どれでも ないので とばす（dir … 動かした 向き）
+  function fixA(f, a, dir = 1) {
+    const sp = sliderSpec(f);
+    a = Math.min(sp.max, Math.max(sp.min, Math.round(a / sp.step) * sp.step));
+    a = +a.toFixed(2);
+    if (a === 0) a = dir < 0 ? -sp.step : sp.step;
+    return a;
+  }
   function buildControls() {
     const list = $('fnList');
     list.innerHTML = '';
@@ -349,7 +358,12 @@
         if (!sl) continue;
         sl.min = spec.min; sl.max = spec.max; sl.step = spec.step; sl.value = f[k];
         sl.addEventListener('input', () => {
-          f[k] = +sl.value;
+          if (k === 'a') {
+            const v = +sl.value;
+            // 0 に きたら、動かした 向きの となりへ とばす
+            f.a = v === 0 ? fixA(f, 0, f.a > 0 ? -1 : 1) : fixA(f, v);
+            sl.value = f.a;
+          } else f[k] = +sl.value;
           $(`fml${i}`).textContent = formulaText(f);
           drawGraph(); buildTable();
         });
@@ -363,6 +377,7 @@
       f.type = sel.value;
       if (f.type === 'inv' && (f.a === 0 || Math.abs(f.a) < 1)) f.a = 6;
       if (f.type === 'quad' && Math.abs(f.a) > 3) f.a = 1;
+      f.a = fixA(f, f.a);   // 新しい 種類の はんい・きざみに あわせる（式と スライダーが ずれない ように）
       renderAll();
     }));
     list.querySelectorAll('.del-btn').forEach(b => b.addEventListener('click', () => {
@@ -372,7 +387,13 @@
     list.querySelectorAll('.mini-btn').forEach(b => b.addEventListener('click', () => {
       const f = st.fns[+b.dataset.i], k = b.dataset.k;
       const spec = sliderSpec(f);
-      f[k] = Math.min(spec.max, Math.max(spec.min, +(f[k] + spec.step * +b.dataset.v).toFixed(2)));
+      const dir = +b.dataset.v;
+      if (k === 'a') {
+        let a = +(f.a + spec.step * dir).toFixed(2);
+        if (a === 0) a += spec.step * dir;            // 0 は とばす
+        if (a < spec.min || a > spec.max) a = f.a;    // はしでは 動かない
+        f.a = fixA(f, a, dir);
+      } else f[k] = Math.min(spec.max, Math.max(spec.min, +(f[k] + spec.step * dir).toFixed(2)));
       const sl = $(k === 'a' ? `slA${b.dataset.i}` : `slB${b.dataset.i}`);
       if (sl) sl.value = f[k];
       $(`fml${b.dataset.i}`).textContent = formulaText(f);

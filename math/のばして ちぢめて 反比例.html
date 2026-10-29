@@ -228,6 +228,8 @@
   .qlines { font-weight: bold; line-height: 1.9; }
   .b-teacher { background: #fff3e0; border-color: #ffb74d; }
   .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 0 12px; font-size: 0.85rem; font-weight: bold; }
+  /* 「発展」の 札（教科書の 範囲を こえる 説明に つける。ほかの 教材と 同じ 形） */
+  .hatten { display: inline-block; background: #ede7f6; color: #4527a0; border: 2px solid #9575cd; border-radius: 8px; padding: 0 6px; font-size: .8rem; font-weight: bold; line-height: 1.5; vertical-align: middle; }
   .footer-links { display: flex; gap: 8px 16px; flex-wrap: wrap; justify-content: center; font-size: 0.9rem; margin-top: 4px; }
   .footer-links a { color: var(--accent-dark, #00695c); font-weight: bold; }
 </style>
@@ -356,6 +358,7 @@ const HANPIREI = R('反比例', 'はんぴれい'), HIREI = R('比例', 'ひれ�
 const CHOUHOU = R('長方形', 'ちょうほうけい'), BAI = R('倍', 'ばい'), HYOU = R('表', 'ひょう'), SHIKI = R('式', 'しき');
 const KAKU = R('角', 'かど'), TEN = R('点', 'てん'), CHOKU = R('直線', 'ちょくせん'), KYOKU = R('曲線', 'きょくせん');
 const KIMATTA = `きまった ${R('数', 'かず')}`, ONA = R('同', 'おな') + 'じ', NAGA = R('長', 'なが');
+const HATTEN = '<span class="hatten">発展</span>';   // 教科書の 範囲を こえる 説明に つける 札
 const TOORU = R('通', 'とお'), CHIKA = R('近', 'ちか'), MAJI = R('交', 'まじ'), GYOU = R('行', 'ぎょう');
 
 /* =========================================================
@@ -384,7 +387,7 @@ Worksheet.init({
   summaryHint: '「x が 2倍・3倍に なると、y は 1/2倍・1/3倍に なる」「x×y は いつも きまった 数」「y＝きまった 数÷x」「グラフは 0を 通らない 曲線」のように 書いて みよう。',
   teacher: {
     hint: '面積が一定の長方形の角を動かし、よこが2倍・3倍になるとたてが1/2倍・1/3倍になること、x×yがいつも同じ数になることを表で確かめる。比例の考え（xが2倍ならyも2倍）で答える子には、表の上下の矢印で×2と×1/2を対比させる。「一方がふえると他方がへる」だけの関係（和が一定）は反比例ではないことを、x×yの行がそろわないことで確かめる。グラフは点を直線で結ばず、間の点を打って曲線になることを見せる。',
-    answer: '面積24cm²：よこ1・2・3・4・6のとき、たて24・12・8・6・4。x×y＝24、y＝24÷x。12kmの道のりを時速x kmで進むとき、かかる時間 y＝12÷x（時速4kmなら3時間）。おこづかいの使った金額とのこりは、和が一定なので反比例ではない。グラフは0を通らない曲線で、じくに近づくが交わらない。'
+    answer: '面積24cm²：よこ1・2・3・4・6のとき、たて24・12・8・6・4。x×y＝24、y＝24÷x。12kmの道のりを時速x kmで進むとき、かかる時間 y＝12÷x（時速4kmなら3時間）。おこづかいの使った金額とのこりは、和が一定なので反比例ではない。グラフは0を通らない曲線。（発展）じくに近づくが交わらない。'
   }
 });
 const OLD_KEY = 'nobashite-chijimete-hanpirei-settings';   // まえの ほぞん場所（せっていを ひきつぐ）
@@ -579,7 +582,7 @@ function invPath(G, k, a, b, n = 160) {
    ========================================================= */
 const AREAS = [12, 18, 24, 36];
 const EXP = { rel: { type: 'inv', k: 24 }, x: 4, rows: [], trail: [4, 4], drag: false, touched: false,
-  mis: 0, prop: false, pa: 1, sel: [], fresh: null, flash: false, busy: false, edgeSaid: '' };
+  mis: 0, prop: false, pa: 1, sel: [], fresh: null, flash: false, busy: false, edgeSaid: '', gen: 0 };   // gen：作りなおすたびに ふやす（とちゅうの アニメを すてる）
 const expM = () => EXP.rel.k + 1;                       // 平面の 大きさ（0〜k＋1）
 const expG = () => plane(expM());
 const expRange = () => { const M = expM() - 0.3; return [EXP.rel.k / M, M]; };   // 角が 動ける x の はんい（平面から はみ出さない）
@@ -587,6 +590,7 @@ const expNice = () => nicePoints(EXP.rel.k, DEC(), ...expRange());
 const xyText = (v) => fmtA(v);
 
 function expLoad(k = EXP.rel.k) {
+  EXP.gen++;   // とちゅうの アニメの つづきは もう 使わない
   stopTweens();
   const areas = AREAS.filter((a) => a <= KMAX());
   if (!areas.includes(k)) k = areas.includes(24) ? 24 : areas[areas.length - 1];
@@ -616,7 +620,9 @@ async function expSnap() {
   const k = EXP.rel.k, cand = expNice();
   const target = cand.reduce((b, c) => ((c - EXP.x) ** 2 + (k / c - k / EXP.x) ** 2 < (b - EXP.x) ** 2 + (k / b - k / EXP.x) ** 2 ? c : b), cand[0]);
   EXP.busy = true;
+  const gen = EXP.gen;
   await tween(EXP, 'x', target, 260);
+  if (gen !== EXP.gen) return;   // はじめから・面積の きりかえ・モードの きりかえが あった
   expSetX(target);
   EXP.busy = false;
   expAddRow(target);
@@ -652,10 +658,10 @@ function expEdge() {
   const [lo, hi] = expRange(), k = EXP.rel.k;
   if (EXP.x <= lo * 1.02 && EXP.edgeSaid !== 'lo') {
     EXP.edgeSaid = 'lo';
-    say(`よこを 0に ${CHIKA}づけるほど、たては どんどん ${NAGA}く なる。でも よこは 0に できない（${MENSEKI}が ${k}に ならない）。グラフは たての じくと ${MAJI}わらない`, 'warn');
+    say(`よこを 0に ${CHIKA}づけるほど、たては どんどん ${NAGA}く なる。でも よこは 0に できない（${MENSEKI}が ${k}に ならない）。${HATTEN} グラフは たての じくと ${MAJI}わらない`, 'warn');
   } else if (EXP.x >= hi * 0.98 && EXP.edgeSaid !== 'hi') {
     EXP.edgeSaid = 'hi';
-    say(`よこを ${NAGA}く するほど、たては 0に ${CHIKA}づく。でも たては 0に ならない。グラフは よこの じくと ${MAJI}わらない`, 'warn');
+    say(`よこを ${NAGA}く するほど、たては 0に ${CHIKA}づく。でも たては 0に ならない。${HATTEN} グラフは よこの じくと ${MAJI}わらない`, 'warn');
   } else if (EXP.x > lo * 1.2 && EXP.x < hi * 0.9) EXP.edgeSaid = '';
 }
 
@@ -828,8 +834,8 @@ const SCENES = [
     x: { p: `1${R('分', 'ぷん')}あたりの ${R('量', 'りょう')}`, t: '1分あたりの量', u: 'L' }, y: { p: `かかる ${R('時間', 'じかん')}`, t: 'かかる時間', u: '分' },
     xs: [1, 2, 3, 4, 5, 6, 10], dec: [8], ask: 12 },
   { id: 'cards', icon: '🃏', short: `24まいの カード`, rel: { type: 'inv', k: 24 },
-    story: `24まいの カードを ${R('同', 'おな')}じ ${KAZU_()}ずつ ${R('分', 'わ')}ける ときの、${R('人数', 'にんずう')}と 1${R('人分', 'にんぶん')}の まい${R('数', 'すう')}`,
-    x: { p: R('人数', 'にんずう'), t: '人数', u: '人' }, y: { p: `1${R('人分', 'にんぶん')}`, t: '1人分', u: 'まい' },
+    story: `24まいの カードを ${R('同', 'おな')}じ ${KAZU_()}ずつ ${R('分', 'わ')}ける ときの、${R('人数', 'にんずう')}と 1${R('人', 'り')}${R('分', 'ぶん')}の まい${R('数', 'すう')}`,
+    x: { p: R('人数', 'にんずう'), t: '人数', u: '人' }, y: { p: `1${R('人', 'り')}${R('分', 'ぶん')}`, t: '1人分', u: 'まい' },
     xs: [1, 2, 3, 4, 6], dec: [], ask: 8 },
   { id: 'para', icon: '▱', short: `${R('面積', 'めんせき')} 18cm²`, rel: { type: 'inv', k: 18 },
     story: `${R('面積', 'めんせき')}が 18cm² の ${R('平行四辺形', 'へいこうしへんけい')}の、${R('底辺', 'ていへん')}と ${R('高', 'たか')}さ`,
@@ -857,8 +863,8 @@ const SCENES = [
     story: `1000${R('円', 'えん')} ${R('持', 'も')}って いる ときの、${R('使', 'つか')}った お${R('金', 'かね')}と のこりの お${R('金', 'かね')}`,
     x: { p: `${R('使', 'つか')}った お${R('金', 'かね')}`, t: '使ったお金', u: '円' }, y: { p: `のこりの お${R('金', 'かね')}`, t: 'のこり', u: '円' }, xs: [100, 200, 300, 400, 500, 600] },
   { id: 'ohajiki', icon: '🔵', short: `15この おはじき`, rel: { type: 'sum', k: 15 },
-    story: `15この おはじきを 2${R('人', 'にん')}で ${R('分', 'わ')}ける ときの、1${R('人', 'にん')}めの ${R('数', 'かず')}と 2${R('人', 'にん')}めの ${R('数', 'かず')}`,
-    x: { p: `1${R('人', 'にん')}め`, t: '1人め', u: 'こ' }, y: { p: `2${R('人', 'にん')}め`, t: '2人め', u: 'こ' }, xs: [1, 2, 3, 4, 5, 6] },
+    story: `15この おはじきを 2${R('人', 'り')}で ${R('分', 'わ')}ける ときの、1${R('人', 'り')}めの ${R('数', 'かず')}と 2${R('人', 'り')}めの ${R('数', 'かず')}`,
+    x: { p: `1${R('人', 'り')}め`, t: '1人め', u: 'こ' }, y: { p: `2${R('人', 'り')}め`, t: '2人め', u: 'こ' }, xs: [1, 2, 3, 4, 5, 6] },
   { id: 'age', icon: '👭', short: `3さい ちがいの ${R('姉妹', 'しまい')}`, rel: { type: 'diff', k: 3 },
     story: `${R('姉', 'あね')}は ${R('妹', 'いもうと')}より 3さい ${R('年上', 'としうえ')}。${R('妹', 'いもうと')}の ${R('年', 'ねん')}れいと ${R('姉', 'あね')}の ${R('年', 'ねん')}れい`,
     x: { p: `${R('妹', 'いもうと')}`, t: '妹', u: 'さい' }, y: { p: `${R('姉', 'あね')}`, t: '姉', u: 'さい' }, xs: [1, 2, 3, 4, 5, 6] },
@@ -1267,9 +1273,9 @@ const VIEW_FORMULA = {
       <p class="fml-sub">x × y ＝ <span class="kv">${k}</span></p>
       <div class="sgrp" style="justify-content:center"><span class="slabel">${KIMATTA}</span><input type="range" class="kslider" id="kslider" min="1" max="${KMAX()}" step="1" value="${k}" aria-label="きまった数"></div>
       ${FM.prop ? `<div class="cmpbox">
-        <div class="inv"><span class="lineswatch" style="border-top:5px solid var(--inv)"></span><b>${HANPIREI}</b><br>y ＝ <span class="kv">${k}</span> ÷ x<br>0を ${TOORU}らない ${KYOKU}<br>じくに ${CHIKA}づくが ${MAJI}わらない</div>
+        <div class="inv"><span class="lineswatch" style="border-top:5px solid var(--inv)"></span><b>${HANPIREI}</b><br>y ＝ <span class="kv">${k}</span> ÷ x<br>0を ${TOORU}らない ${KYOKU}<br>${HATTEN} じくに ${CHIKA}づくが ${MAJI}わらない</div>
         <div class="prop"><span class="lineswatch" style="border-top:5px dashed var(--prop)"></span><b>${HIREI}</b><br>y ＝ ${fmt(FM.pa)} × x<br>0を ${TOORU}る ${CHOKU}</div></div>` : ''}
-      <p class="note">${KIMATTA}が ${R('大', 'おお')}きいほど、${KYOKU}は 0から はなれる（${R('右上', 'みぎうえ')}に うつる）。どの ${KYOKU}も じくには ${MAJI}わらない。</p>`;
+      <p class="note">${KIMATTA}が ${R('大', 'おお')}きいほど、${KYOKU}は 0から はなれる（${R('右上', 'みぎうえ')}に うつる）。${HATTEN} どの ${KYOKU}も じくには ${MAJI}わらない。</p>`;
   },
   draw() {
     if (FM.sub === 'make') {
@@ -1313,6 +1319,7 @@ function tcSteps(sc) {
   list.push(`x が 2${BAI}に なると、y は？`);
   if (t === 'inv') list.push(`${TEN}を ${CHOKU}で むすぶと？`, `${R('間', 'あいだ')}に ${TEN}を うつと… ${CHOKU}から ずれる`, `なめらかな ${KYOKU} → y ＝ ${k} ÷ x`);
   else if (t === 'prop') list.push(`0を ${TOORU}る ${CHOKU} → y ＝ ${k} × x`);
+  else if (t === 'diff') list.push(`ふえていく ${CHOKU}（0を ${TOORU}らない）。${HANPIREI}の ${KYOKU}では ない（どちらでも ない）`);
   else list.push(`へっていく ${CHOKU}。${HANPIREI}の ${KYOKU}では ない（どちらでも ない）`);
   return list;
 }
@@ -1417,6 +1424,7 @@ function renderSay() {
   if (el.innerHTML !== state.say.html) el.innerHTML = state.say.html;
 }
 function setMode(mode) {
+  EXP.gen++;   // 長方形の アニメの つづきを すてる
   stopTweens();
   curView()?.leave?.();
   state.mode = mode; state.input = '';
@@ -1457,8 +1465,8 @@ ACTS.expstep = (b) => {
   i = d > 0 ? i : nice.findLastIndex((c) => c < EXP.x - 1e-9);
   if (i < 0) { expSetX(EXP.x); expEdge(); if (!EXP.edgeSaid) say('もう はしだよ', 'warn'); render(); EXP.edgeSaid = ''; return; }
   EXP.touched = true; EXP.busy = true; render();
-  const to = nice[i];
-  tween(EXP, 'x', to, 320).then(() => { expSetX(to); EXP.busy = false; expAddRow(to); });
+  const to = nice[i], gen = EXP.gen;
+  tween(EXP, 'x', to, 320).then(() => { if (gen !== EXP.gen) return; expSetX(to); EXP.busy = false; expAddRow(to); });
   // 動いて いる あいだも あとを のこす
   const from = EXP.x; EXP.trail = [Math.min(EXP.trail[0], from, to), Math.max(EXP.trail[1], from, to)];
 };
@@ -1499,17 +1507,19 @@ ACTS.expprop = () => {
 ACTS.exppa = (b) => { EXP.pa = clamp(EXP.pa + Number(b.dataset.v), 0.5, 4); sfx.tap(); say(`${HIREI} y＝${fmt(EXP.pa)}×x。かたむきが かわっても 0を ${TOORU}る ${CHOKU}`); render(); };
 ACTS.expauto = async () => {
   if (EXP.busy) return;
-  const nice = expNice(), mode = state.mode;
+  const nice = expNice(), mode = state.mode, gen = EXP.gen;
   EXP.touched = true; EXP.busy = true; EXP.sel = []; render();
   for (const c of nice) {
-    if (state.mode !== mode || !EXP.busy) return;
+    if (state.mode !== mode || !EXP.busy || gen !== EXP.gen) return;
     const from = EXP.x;
     EXP.trail = [Math.min(EXP.trail[0], from, c), Math.max(EXP.trail[1], from, c)];
     await tween(EXP, 'x', c, 420);
+    if (gen !== EXP.gen) return;
     EXP.x = c;
     expAddRow(c, true); sfx.row();
     await wait(220);
   }
+  if (gen !== EXP.gen) return;
   EXP.busy = false;
   sfx.correct();
   say(`x × y は どれも ${EXP.rel.k}。${KAKU}の あとは ${HANPIREI}の グラフ（${KYOKU}）に なったね`, 'good');
@@ -1677,8 +1687,8 @@ const divsOf = (k) => Array.from({ length: k }, (_, i) => i + 1).filter((d) => k
 const QZ_SCENES = [
   { k: [12, 24, 36], x: R('時速', 'じそく'), xu: 'km', y: `かかる ${R('時間', 'じかん')}`, yu: R('時間', 'じかん'),
     lead: (k, x) => `🚲 ${k}km の ${R('道', 'みち')}のりを ${R('時速', 'じそく')} ${x}km で ${R('進', 'すす')}むと、${R('何', 'なん')}${R('時間', 'じかん')} かかる？` },
-  { k: [24, 30, 36], x: R('人数', 'にんずう'), xu: '人', y: `1${R('人分', 'にんぶん')}`, yu: 'まい',
-    lead: (k, x) => `🃏 ${k}まいの カードを ${x}${R('人', 'にん')}で ${ONA} ${R('数', 'かず')}ずつ ${R('分', 'わ')}けると、1${R('人分', 'にんぶん')}は ${R('何', 'なん')}まい？` },
+  { k: [24, 30, 36], x: R('人数', 'にんずう'), xu: '人', y: `1${R('人', 'り')}${R('分', 'ぶん')}`, yu: 'まい',
+    lead: (k, x) => `🃏 ${k}まいの カードを ${x}${x === 2 ? R('人', 'り') : R('人', 'にん')}で ${ONA} ${R('数', 'かず')}ずつ ${R('分', 'わ')}けると、1${R('人', 'り')}${R('分', 'ぶん')}は ${R('何', 'なん')}まい？` },
   { k: [60, 48, 72], x: `1${R('分', 'ぷん')}に ${R('入', 'い')}れる ${R('量', 'りょう')}`, xu: 'L', y: `かかる ${R('時間', 'じかん')}`, yu: R('分', 'ふん'),
     lead: (k, x) => `🛁 ${k}L ${R('入', 'はい')}る ${R('水', 'みず')}そうに、1${R('分', 'ぷん')}に ${x}L ずつ ${R('水', 'みず')}を ${R('入', 'い')}れると、${R('何', 'なん')}${R('分', 'ぷん')}で いっぱいに なる？` },
 ];

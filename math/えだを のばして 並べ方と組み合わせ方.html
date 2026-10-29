@@ -286,6 +286,8 @@
   .qlines { font-weight: bold; line-height: 1.9; margin: 0; }
   .b-teacher { background: #fff3e0; border-color: #ffb74d; }
   .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 0 12px; font-size: 0.85rem; font-weight: bold; }
+  /* 「発展」の 札（教科書の 範囲を こえる ところに つける。ほかの 教材と 同じ 形） */
+  .hatten { display: inline-block; background: #ede7f6; color: #4527a0; border: 2px solid #9575cd; border-radius: 8px; padding: 0 6px; font-size: .8rem; font-weight: bold; line-height: 1.5; vertical-align: middle; }
   .footer-links { display: flex; gap: 8px 16px; flex-wrap: wrap; justify-content: center; font-size: 0.9rem; margin-top: 4px; }
   .footer-links a { color: var(--accent-dark, #283593); font-weight: bold; }
 </style>
@@ -310,7 +312,7 @@
     <button class="mode-btn" data-mode="perm">🏃 <ruby>並<rt>なら</rt></ruby>べ<ruby>方<rt>かた</rt></ruby></button>
     <button class="mode-btn" data-mode="comb">🤝 <ruby>組<rt>く</rt></ruby>み<ruby>合<rt>あ</rt></ruby>わせ<ruby>方<rt>かた</rt></ruby></button>
     <button class="mode-btn" data-mode="which">❓ どちらかな？</button>
-    <button class="mode-btn" data-mode="rule">🔍 きまりを <ruby>見<rt>み</rt></ruby>つけよう</button>
+    <button class="mode-btn" data-mode="rule">🔍 きまりを <ruby>見<rt>み</rt></ruby>つけよう <span class="hatten">発展</span></button>
     <button class="mode-btn" data-mode="quiz">✏️ もんだい</button>
     <button class="mode-btn" data-mode="teacher">🧑‍🏫 <ruby>先生<rt>せんせい</rt></ruby>モード</button>
   </div>
@@ -378,7 +380,7 @@
     <h3>❓ どちらかな？</h3>
     <ul><li>文章題10問を読んで、並べ方か組み合わせかをえらびます。まちがえたときは「2つを入れかえると、ちがうものになる？」と問いかけ、もう一度えらべます。</li>
       <li>答えたあと、入れかえた2つが「ちがう／同じ」になる様子と理由が出ます。「カードで しらべる」で、その問題のまま並べ方・組み合わせ方のモードに移って調べられます。</li></ul>
-    <h3>🔍 きまりを 見つけよう</h3>
+    <h3>🔍 きまりを 見つけよう <span class="hatten">発展</span></h3>
     <ul><li>人数を2人〜5人にして樹形図をのばし、並べ方の数を表に入れていきます（2→6→24→120）。「きまりを 見る」で、式（3×2×1）と前の人数との関係（×3、×4…）が出ます。6人のときを予想して「たしかめる」で確かめます（720通り）。</li>
       <li>「組み合わせ（2人を選ぶ）」に切りかえると、1→3→6→10 と、ふえ方が＋2、＋3…になることを調べられます（6人は15通り）。</li></ul>
     <h3>✏️ もんだい</h3>
@@ -405,9 +407,12 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 // ルビつきの 漢字
 const R = (kanji, kana, keep = false) => `<ruby${keep ? ' class="keep"' : ''}>${kanji}<rt>${kana}</rt></ruby>`;
+const HATTEN = '<span class="hatten">発展</span>';   // 教科書の 範囲を こえる ところ（計算の きまりで もとめる）に つける 札
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const sleep = (ms) => new Promise((r) => setTimeout(r, calm() ? 0 : ms));
+// 全角の 数字（１２）を 半角（12）に なおす
+const toHalf = (s) => String(s).replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
 const fact = (k) => (k <= 1 ? 1 : k * fact(k - 1));
 
 // よく つかう ことば（6年生までの 漢字＋ふりがな）
@@ -731,13 +736,14 @@ const S = {
   zoom: 1,
 };
 const TS = { T: 0 };          // 樹形図の のび（0＝何も ない → endOf＝ぜんぶ）
-const CX = { k: 0 };          // 並べ方から 消す：何組 消したか
+const CX = { k: 0, gen: 0 };  // 並べ方から 消す：何組 消したか（gen：もどす・場面の きりかえで ふやす）
 const CT = { half: false };   // 表：ななめ 半分を 消す
 const GR = { sel: -1, all: false };  // 点と線の図
 const RU = { kind: 'perm', n: 0, vals: { perm: {}, comb: {} }, show: false, pred: { perm: null, comb: null } };  // きまり
 const TC = { kind: 'perm', set: 'kana', n: 3, r: 3, order: 'one', auto: false };                               // 先生モード
 const WH = { i: 0, picked: [], res: [] };   // どちらかな？
 let growing = false;
+let growGen = 0;   // たたむ・やりなおす・場面や モードの きりかえで ふやす（とちゅうの のびを すてる）
 
 const kind = () => S.sc.kind;
 const isMake = () => S.mode === 'perm' || S.mode === 'comb';
@@ -767,6 +773,7 @@ function loadScene(sc) {
 function resetWork() {
   S.slots = Array(S.r).fill(-1);
   S.records = []; S.hist = []; S.made = new Set(); S.firstMade = {}; S.grouped = false; S.newest = ''; S.hintStep = 0; S.orderHinted = false; S.asking = null;
+  growGen++; CX.gen++;
   TS.T = 0; CX.k = 0; CT.half = false; GR.sel = -1; GR.all = false; growing = false; S.zoom = 1;
 }
 
@@ -932,7 +939,7 @@ function crossModel() {
   const op = (o) => `<span class="op">${o}</span>`;
   const left2 = total - pos.filter((q) => !q.keeper && frac(q.ci) >= 0.95).length;
   const formula = done
-    ? term(total, NARABEKATA) + op('÷') + term(g, `${ONAJI} ものの ${KAZU}${r > 2 ? `（${Array.from({ length: r }, (_, i) => r - i).join('×')}）` : ''}`) + op('＝') + term(combs.length, KUMIAWASE, 'ans') + `<span class="op" style="font-size:0.6em">${unitH()}</span>`
+    ? (r > 2 ? `<span class="op">${HATTEN}</span>` : '') + term(total, NARABEKATA) + op('÷') + term(g, `${ONAJI} ものの ${KAZU}${r > 2 ? `（${Array.from({ length: r }, (_, i) => r - i).join('×')}）` : ''}`) + op('＝') + term(combs.length, KUMIAWASE, 'ans') + `<span class="op" style="font-size:0.6em">${unitH()}</span>`
     : CX.k > 0 ? `<span class="ph">${NARABEKATA} ${total}${TOORI} → のこり ${left2}${TOORI}</span>`
     : `<span class="ph">${NARABEKATA}は ${total}${TOORI}。${ONAJI} ${KUMIAWASE}を ${SEN}で ${R('結', 'むす')}んで ${R('消', 'け')}すと？</span>`;
   return { w: W, h: H, svg: s, formula, minFit: 0.4 };
@@ -1403,9 +1410,11 @@ ACTS.grow = async () => {
   if (TS.T >= endOf(T, 'level')) { say(`もう ${ZENBU} のびて いるよ。「たたむ」で はじめから のばせるよ`); return; }
   if (growing) { stopTweens(); return; }
   growing = true;
+  const gen = growGen;
   const next = Math.floor(TS.T + 1e-6) + 1;
   sfx.grow(next / T.r);
   await tween(TS, 'T', next, 1000);
+  if (gen !== growGen) return;   // たたんだ・きりかえた
   growing = false;
   afterGrow(next);
 };
@@ -1413,16 +1422,18 @@ ACTS.growall = async () => {
   const T = curTree();
   if (growing) return;
   growing = true;
-  while (TS.T < T.r && curTree() === T) {
+  const gen = growGen;
+  while (TS.T < T.r && curTree() === T && gen === growGen) {
     const next = Math.floor(TS.T + 1e-6) + 1;
     sfx.grow(next / T.r);
     await tween(TS, 'T', next, 800);
     await sleep(250);
   }
+  if (gen !== growGen) return;   // たたんだ・やりなおした・きりかえた
   growing = false;
   if (curTree() === T) afterGrow(T.r);
 };
-ACTS.fold = () => { stopTweens(); growing = false; TS.T = 0; S.newest = ''; draw(); if (isMake()) sayStart(); };
+ACTS.fold = () => { growGen++; stopTweens(); growing = false; TS.T = 0; S.newest = ''; draw(); if (isMake()) sayStart(); };
 ACTS.zoom = (b) => {
   const v = Number(b.dataset.v);
   S.zoom = v === 0 ? 1 : clamp(S.zoom * (v > 0 ? 1.25 : 0.8), 0.4, 3);
@@ -1490,26 +1501,29 @@ ACTS.cxstep = async () => {
   const ci = Math.round(aim(CX, 'k')), c = combs[ci];   // うごいて いる とちゅうなら その つぎ
   if (!c) return;
   sfx.cross();
+  const gen = CX.gen;
   const others = permutations(S.n, S.r).filter((p) => keyOf(sorted(p)) === keyOf(c) && keyOf(p) !== keyOf(c));
   say(S.r === 2
     ? `「${arrTextH(c)}」と「${arrTextH(others[0])}」は ${ONAJI} ${KUMIAWASE}。「${arrTextH(others[0])}」を ${R('消', 'け')}すよ`
     : `「${arrTextH(c)}」と ${ONAJI} ${KUMIAWASE}が ほかに ${others.length}つ。${R('消', 'け')}すよ`);
   await tween(CX, 'k', ci + 1, 900);
+  if (gen !== CX.gen) return;   // もどした・きりかえた
   if (CX.k >= combs.length) cxDone();
 };
 ACTS.cxall = async () => {
-  const combs = combinations(S.n, S.r);
-  while (CX.k < combs.length && S.mode === 'comb' && S.view === 'cross') {
+  const combs = combinations(S.n, S.r), gen = CX.gen;
+  while (CX.k < combs.length && S.mode === 'comb' && S.view === 'cross' && gen === CX.gen) {
     sfx.cross();
     await tween(CX, 'k', Math.floor(CX.k + 1e-6) + 1, 500);
   }
+  if (gen !== CX.gen) return;
   if (CX.k >= combs.length) cxDone();
 };
-ACTS.cxreset = () => { stopTweens(); CX.k = 0; sfx.back(); draw(); };
+ACTS.cxreset = () => { CX.gen++; stopTweens(); CX.k = 0; sfx.back(); draw(); };
 function cxDone() {
   const total = permutations(S.n, S.r).length, c = combinations(S.n, S.r).length, g = fact(S.r);
   sfx.good();
-  say(`${ONAJI} ものが ${g}つずつ あったから、${total} ÷ ${g} ＝ ${c}。${KUMIAWASE}は ${c}${unitH()}だね`, 'good');
+  say(`${S.r > 2 ? HATTEN + ' ' : ''}${ONAJI} ものが ${g}つずつ あったから、${total} ÷ ${g} ＝ ${c}。${KUMIAWASE}は ${c}${unitH()}だね`, 'good');
 }
 ACTS.half = () => {
   CT.half = !CT.half; sfx.tap();
@@ -1588,8 +1602,8 @@ function ruleHTML() {
   return `<div class="card left" id="left">
       <div class="nr">
         <button class="chip${k === 'perm' ? ' active' : ''}" data-act="rkind" data-v="perm">🏃 ${NARABEKATA}（${ZENBU}${R('員', 'いん')}を ${NARABE}る）</button>
-        <button class="chip${k === 'comb' ? ' active' : ''}" data-act="rkind" data-v="comb">🤝 ${KUMIAWASE}（2${R('人', 'にん')}を ${ERA}ぶ）</button></div>
-      <div class="task">${k === 'perm' ? `リレーの ${R('人', 'にん')}${KAZU}が ふえると、${R('走', 'はし')}る ${JUNBAN}は どう ふえるかな？` : `${R('人', 'にん')}${KAZU}が ふえると、2${R('人', 'にん')}の ${ERA}び${KATA}は どう ふえるかな？`}<br>
+        <button class="chip${k === 'comb' ? ' active' : ''}" data-act="rkind" data-v="comb">🤝 ${KUMIAWASE}（2${R('人', 'り')}を ${ERA}ぶ）</button></div>
+      <div class="task">${HATTEN} ${k === 'perm' ? `リレーの ${R('人', 'にん')}${KAZU}が ふえると、${R('走', 'はし')}る ${JUNBAN}は どう ふえるかな？` : `${R('人', 'にん')}${KAZU}が ふえると、2${R('人', 'り')}の ${ERA}び${KATA}は どう ふえるかな？`}<br>
         「しらべる」で ${JUKEIZU}を のばそう</div>
       <div id="ruleTable"></div>
       <div class="toolbar"><button class="act-btn${RU.show ? ' on' : ''}" data-act="rshow">🔍 きまりを ${R('見', 'み')}る</button></div>
@@ -1609,7 +1623,7 @@ function refreshRule() {
   let h = `<table class="rtable"><tr><th>${NINZUU}</th><th>${k === 'perm' ? NARABEKATA : ERA + 'び' + KATA}</th>${RU.show ? `<th>${R('式', 'しき')}</th><th>${R('前', 'まえ')}と くらべて</th>` : ''}<th></th></tr>`;
   for (const n of RULE_NS) {
     const v = vals[n];
-    h += `<tr class="${RU.n === n ? 'cur' : ''}"><td>${n}${R('人', 'にん')}</td>
+    h += `<tr class="${RU.n === n ? 'cur' : ''}"><td>${n}${n === 2 ? R('人', 'り') : R('人', 'にん')}</td>
       <td class="${v != null ? 'val' : 'q'}">${v != null ? `${v}${TOORI}` : '？'}</td>
       ${RU.show ? `<td>${v != null ? expr(n) : ''}</td><td class="rt">${rel(n)}</td>` : ''}
       <td>${n <= 5 ? `<button class="act-btn" data-act="rgo" data-v="${n}">しらべる</button>` : '🤔'}</td></tr>`;
@@ -1619,17 +1633,17 @@ function refreshRule() {
   const p = RU.pred[k];
   $('#pred').innerHTML = ready
     ? `6${R('人', 'にん')}だと ${R('何', 'なん')}${TOORI}？ <input id="predIn" inputmode="numeric" value="${p ?? ''}" aria-label="よそう"> <button class="act-btn b-main" data-act="rcheck">たしかめる</button>`
-    : `<span class="q">2${R('人', 'にん')}〜5${R('人', 'にん')}を しらべたら、6${R('人', 'にん')}の ときを よそうしよう</span>`;
+    : `<span class="q">2${R('人', 'り')}〜5${R('人', 'にん')}を しらべたら、6${R('人', 'にん')}の ときを よそうしよう</span>`;
   const lg = $('#ruleLegend');
   if (lg) lg.innerHTML = RU.n ? legendHTML(S.cards, RU.n) : '';
 }
-ACTS.rkind = (b) => { RU.kind = b.dataset.v; RU.n = 0; TS.T = 0; sfx.tap(); render(); sayRule(); };
+ACTS.rkind = (b) => { growGen++; stopTweens(); growing = false; RU.kind = b.dataset.v; RU.n = 0; TS.T = 0; sfx.tap(); render(); sayRule(); };
 ACTS.rshow = () => { RU.show = !RU.show; sfx.tap(); render(); if (RU.show) say(RU.kind === 'perm' ? `${R('人', 'にん')}${KAZU}が 1${R('人', 'り')} ふえると、${R('前', 'まえ')}の ${KAZU}の ${R('何', 'なん')}${R('倍', 'ばい')}に なって いるかな？` : `${R('人', 'にん')}${KAZU}が 1${R('人', 'り')} ふえると、いくつ ふえて いるかな？`); };
 ACTS.rgo = async (b) => {
-  stopTweens(); growing = false;
+  growGen++; stopTweens(); growing = false;
   RU.n = Number(b.dataset.v); TS.T = 0; S.zoom = 1; sfx.tap();
   refreshRule(); draw();
-  say(`${RU.n}${R('人', 'にん')}の ${JUKEIZU}を のばすよ`);
+  say(`${RU.n}${RU.n === 2 ? R('人', 'り') : R('人', 'にん')}の ${JUKEIZU}を のばすよ`);
   await ACTS.growall();
 };
 function ruleDone() {
@@ -1637,10 +1651,10 @@ function ruleDone() {
   RU.vals[RU.kind][RU.n] = T.leaves.length;
   sfx.good();
   refreshRule();
-  say(`${RU.n}${R('人', 'にん')}の ときは ${T.leaves.length}${TOORI}。${R('表', 'ひょう')}に ${R('入', 'はい')}ったよ`, 'good');
+  say(`${RU.n}${RU.n === 2 ? R('人', 'り') : R('人', 'にん')}の ときは ${T.leaves.length}${TOORI}。${R('表', 'ひょう')}に ${R('入', 'はい')}ったよ`, 'good');
 }
 ACTS.rcheck = () => {
-  const k = RU.kind, v = Number(($('#predIn')?.value || '').replace(/[^\d]/g, ''));
+  const k = RU.kind, v = Number(toHalf($('#predIn')?.value || '').replace(/[^\d]/g, ''));
   RU.pred[k] = v || null;
   const ans = ruleVal(k, 6);
   if (v === ans) {
@@ -1746,7 +1760,7 @@ addEventListener('keydown', (e) => {
    18. モード・まど・せってい
    ========================================================= */
 function setMode(m) {
-  stopTweens(); growing = false; TC.auto = false;
+  growGen++; CX.gen++; stopTweens(); growing = false; TC.auto = false;
   S.mode = m;
   if (m === 'perm' || m === 'comb') {
     loadScene(S.lastScene[m]);
@@ -1829,7 +1843,7 @@ reduceMQ.addEventListener?.('change', () => render());
         mata   …「同じ ものを また つかう」：一度 使った ものを また 使って 4×4 と した
    ========================================================= */
 const TRIP = {
-  kasane: { name: '入れかえを べつに 数える', tip: () => `${KUMIAWASE}は、アイ と イア を ${ONAJI} 1つと ${R('数', 'かぞ')}えるよ。${NARABE}${KATA}の ${KAZU} ÷ 2（3つ ${ERA}ぶ ときは ÷ 6）で もとめられる。` },
+  kasane: { name: '入れかえを べつに 数える', tip: () => `${KUMIAWASE}は、アイ と イア を ${ONAJI} 1つと ${R('数', 'かぞ')}えるよ。${NARABE}${KATA}の ${KAZU} ÷ 2（${HATTEN} 3つ ${ERA}ぶ ときは ÷ 6）で もとめられる。` },
   tasu: { name: 'えだの 数を たす', tip: () => `${JUKEIZU}は、1${BANME}の えだ それぞれから 2${BANME}の えだが のびるね。だから たし${R('算', 'ざん')}では なく かけ${R('算', 'ざん')}（4 × 3 × 2 × 1）だよ。` },
   mata: { name: '同じ ものを また つかう', tip: () => `1${R('回', 'かい')} ${R('使', 'つか')}った カード（${R('人', 'ひと')}）は もう ${R('使', 'つか')}えないよ。2${BANME}は 1つ へって、4 × 3 の ように なる。` },
 };
@@ -1844,14 +1858,15 @@ const nPr = (n, r) => Array.from({ length: r }, (_, i) => n - i).reduce((x, y) =
 const mulText = (n, r) => Array.from({ length: r }, (_, i) => n - i).join(' × ');
 // えらぶ ものの 場面（組み合わせ）
 const QZ_CHOOSE = [
-  { what: `くだもの`, u: '種類', items: ['りんご', 'みかん', 'ぶどう', 'もも', 'なし'], verb: `${R('買', 'か')}う` },
-  { what: `アイスの あじ`, u: '種類', items: ['バニラ', 'いちご', 'チョコ', 'メロン', 'ラムネ'], verb: `${R('選', 'えら')}ぶ` },
-  { what: `${R('当番', 'とうばん')}`, u: '人', items: ['あおい', 'けんた', 'さくら', 'だいち', 'えみ'], verb: `${R('決', 'き')}める` },
+  { what: `くだもの`, u: '種類', items: ['りんご', 'みかん', 'ぶどう', 'もも', 'なし'], verb: `${R('買', 'か')}う`, obj: '', cnt: () => 'つ' },
+  { what: `アイスの あじ`, u: '種類', items: ['バニラ', 'いちご', 'チョコ', 'メロン', 'ラムネ'], verb: `${R('選', 'えら')}ぶ`, obj: '', cnt: () => 'つ' },
+  { what: `${R('当番', 'とうばん')}`, u: '人', items: ['あおい', 'けんた', 'さくら', 'だいち', 'えみ'], verb: `${R('決', 'き')}める`,
+    obj: `、${R('当番', 'とうばん')}を`, cnt: (r) => (r === 2 ? R('人', 'り') : R('人', 'にん')) },   // 人は「つ」で なく「人」で 数える
 ];
 // 並べ方か 組み合わせか
 const QZ_WHICH = [
-  { kind: 'perm', text: () => `4${R('人', 'にん')}から、${R('班長', 'はんちょう')}と ${R('副班長', 'ふくはんちょう')}を 1${R('人', 'にん')}ずつ ${R('決', 'き')}める ${R('決', 'き')}め${KATA}` },
-  { kind: 'comb', text: () => `4${R('人', 'にん')}から、そうじ ${R('当番', 'とうばん')}を 2${R('人', 'にん')} ${R('決', 'き')}める ${R('決', 'き')}め${KATA}` },
+  { kind: 'perm', text: () => `4${R('人', 'にん')}から、${R('班長', 'はんちょう')}と ${R('副班長', 'ふくはんちょう')}を 1${R('人', 'り')}ずつ ${R('決', 'き')}める ${R('決', 'き')}め${KATA}` },
+  { kind: 'comb', text: () => `4${R('人', 'にん')}から、そうじ ${R('当番', 'とうばん')}を 2${R('人', 'り')} ${R('決', 'き')}める ${R('決', 'き')}め${KATA}` },
   { kind: 'perm', text: () => `1・2・3・4 の カードで つくる 2けたの ${SEISUU}` },
   { kind: 'comb', text: () => `5チームが どの チームとも 1${R('回', 'かい')}ずつ する ${SHIAI}` },
   { kind: 'perm', text: () => `3${R('人', 'にん')}が 1${R('列', 'れつ')}に ${R('並', 'なら')}んで しゃしんを とる ${R('並', 'なら')}び${KATA}` },
@@ -1864,7 +1879,7 @@ function qzBuild(slot) {
   if (kind === 'relay') {
     const n = qRnd(3, 5);
     return { kind, key: `r${n}`, n, r: n, ans: fact(n), unit: TOORI, wrong: { tasu: [n * (n + 1) / 2], mata: [n ** n] },
-      lead: `${n}${R('人', 'にん')}で リレーを します。${R('走', 'はし')}る ${JUNBAN}は ${R('全部', 'ぜんぶ')}で ${NAN}${TOORI}？`,
+      lead: `${n === 5 ? HATTEN + ' ' : ''}${n}${R('人', 'にん')}で リレーを します。${R('走', 'はし')}る ${JUNBAN}は ${R('全部', 'ぜんぶ')}で ${NAN}${TOORI}？`,
       how: `1${BANME} ${n}${TOORI}、2${BANME} ${n - 1}${TOORI}…と えだが のびるので ${mulText(n, n)} ＝ ${fact(n)}${TOORI}` };
   }
   if (kind === 'num') {
@@ -1883,8 +1898,8 @@ function qzBuild(slot) {
   if (kind === 'choose') {
     const P = qPick(QZ_CHOOSE), n = qRnd(4, 5), r = qPick([2, 3]), ans = nPr(n, r) / fact(r);
     return { kind, key: `c${P.what}${n}${r}`, n, r, ans, unit: TOORI, wrong: { kasane: [nPr(n, r)] },
-      lead: `${P.items.slice(0, n).join('・')} の ${n}${P.u}から ${r}つ ${P.verb}とき、${ERA}び${KATA}は ${R('全部', 'ぜんぶ')}で ${NAN}${TOORI}？（${JUNBAN}は ${KANKEI} ない）`,
-      how: `${NARABE}${KATA}は ${mulText(n, r)} ＝ ${nPr(n, r)}。${ONAJI} ${KUMIAWASE}が ${fact(r)}こずつ あるので ÷ ${fact(r)} → ${ans}${TOORI}` };
+      lead: `${n === 5 && r === 3 ? HATTEN + ' ' : ''}${P.items.slice(0, n).join('・')} の ${n}${P.u}から${P.obj} ${r}${P.cnt(r)} ${P.verb}とき、${ERA}び${KATA}は ${R('全部', 'ぜんぶ')}で ${NAN}${TOORI}？（${JUNBAN}は ${KANKEI} ない）`,
+      how: `${r === 3 ? HATTEN + ' ' : ''}${NARABE}${KATA}は ${mulText(n, r)} ＝ ${nPr(n, r)}。${ONAJI} ${KUMIAWASE}が ${fact(r)}こずつ あるので ÷ ${fact(r)} → ${ans}${TOORI}` };
   }
   // which：並べ方か 組み合わせか
   const pool = slot.similar === 'kasane' ? QZ_WHICH.filter((w) => w.kind === 'comb') : QZ_WHICH;
@@ -1976,7 +1991,7 @@ function qzResultHTML() {
 }
 Object.assign(ACTS, {
   qzOk() {
-    const raw = ($('#qzIn')?.value || '').replace(/[^\d]/g, '');
+    const raw = toHalf($('#qzIn')?.value || '').replace(/[^\d]/g, '');
     if (!raw) { sfx.soft(); say(`${KAZU}を ${R('入', 'い')}れてから「たしかめる」を おそう`, 'warn'); return; }
     qzCheck(Number(raw));
   },
