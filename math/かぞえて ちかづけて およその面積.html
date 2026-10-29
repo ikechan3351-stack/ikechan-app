@@ -545,7 +545,7 @@ const ex3 = (v) => String(+v.toFixed(3));   // 計算の 答えを そのまま�
       およその 面積 ＝ ぜんぶの マス ＋ かかっている マス × 1/2（× 1マスの 面積）
    ========================================================= */
 VIEWS.grid = (() => {
-  let sk = 'hyoutan', size = 1, map = false, marks = [], hist = [], auto = false, est = { 1: null, 0.5: null };
+  let sk = 'hyoutan', size = 1, map = false, marks = [], hist = [], auto = false, autoId = 0, est = { 1: null, 0.5: null };
   const U = 40;   // 1cm を 40px で かく
   const nx = () => Math.round(GW / size), ny = () => Math.round(GH / size);
   const unit = () => (map ? 'km' : 'cm');
@@ -580,19 +580,21 @@ VIEWS.grid = (() => {
       </div>
       <div class="card" id="gCmp"></div>`;
     stage.querySelectorAll('[data-shape]').forEach((b) => b.addEventListener('click', () => { sk = b.dataset.shape; clearAll(); sfx.tap(); render(stage); }));
-    stage.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { size = +b.dataset.size; marks = []; hist = []; sfx.tap(); render(stage); }));
+    stage.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { stopAuto(); size = +b.dataset.size; marks = []; hist = []; sfx.tap(); render(stage); }));
     stage.querySelector('[data-map]').addEventListener('click', () => { map = !map; est = { 1: null, 0.5: null }; sfx.tap(); render(stage); });
     $('#gFig').addEventListener('click', (ev) => { const r = ev.target.closest('[data-c]'); if (r) tapCell(+r.dataset.c); });
     $('#gAuto').addEventListener('click', autoMark);
-    $('#gUndo').addEventListener('click', () => { if (!hist.length) { say('もどせる ものが ないよ'); return; } marks = hist.pop(); sfx.tap(); draw(); });
-    $('#gReset').addEventListener('click', () => { auto = false; marks = []; hist = []; $('#gFb').innerHTML = ''; draw(); say(startMsg()); });
+    $('#gUndo').addEventListener('click', () => { if (!hist.length) { say('もどせる ものが ないよ'); return; } stopAuto(); marks = hist.pop(); sfx.tap(); draw(); });
+    $('#gReset').addEventListener('click', () => { stopAuto(); marks = Array(nx() * ny()).fill(''); hist = []; $('#gFb').innerHTML = ''; draw(); say(startMsg()); });
     $('#gCheck').addEventListener('click', check);
     $('#gAns').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') check(); });
     if (!marks.length) marks = Array(nx() * ny()).fill('');
     draw();
     say(startMsg());
   }
-  function clearAll() { marks = []; hist = []; est = { 1: null, 0.5: null }; auto = false; }
+  function clearAll() { marks = []; hist = []; est = { 1: null, 0.5: null }; stopAuto(); }
+  // アプリが 分けて いる とちゅうで 止める（番号を すすめると、とちゅうの ループは 何も しないで おわる）
+  function stopAuto() { auto = false; autoId++; }
   const startMsg = () => (size === 1
     ? `マスを タップして、ぜんぶ 入る マス（1）と かかって いる マス（${FH(1, 2)}）に 分けよう`
     : `こまかい 方眼は マスが 多いので「🤖 アプリが 分ける」を つかおう`);
@@ -605,14 +607,15 @@ VIEWS.grid = (() => {
   }
   async function autoMark() {
     if (auto) return;
-    const cls = classify(sk, size);
+    const cls = classify(sk, size), id = ++autoId;
     hist.push([...marks]);
     auto = true;
     // 1だんずつ ぬって いく（うごきを へらす ときは いっぺんに）
-    for (let j = 0; j < ny() && auto; j++) {
+    for (let j = 0; j < ny(); j++) {
       for (let i = 0; i < nx(); i++) marks[j * nx() + i] = cls[j * nx() + i];
       draw();
       if (!calm()) await wait(size === 1 ? 70 : 35);
+      if (id !== autoId) return;   // とちゅうで 画面や 方眼が かわった
     }
     auto = false; draw();
     say(`アプリが 分けたよ。ぜんぶ 入る マスと、かかって いる マスの 数から、およその 面積を 計算しよう`);
@@ -655,8 +658,10 @@ VIEWS.grid = (() => {
     if (eq(right)) {
       sfx.correct(); cheer('せいかい！');
       html = `<p class="fb ok">せいかい！ ${full} ＋ ${part}×${FH(1, 2)} ＝ ${ex3(full + part / 2)}${size === 1 ? '' : `（マス）、× 0.25 ＝ ${ex3(right)}`} → およそ ${n1(right)} ${unit()}²</p>`;
-      est[size] = right;
-      drawCmp();
+      // マスの 分け方が アプリと 同じ ときだけ、くらべる 表に 入れる
+      const cls = classify(sk, size);
+      if (marks.every((m, i) => m === cls[i])) { est[size] = right; drawCmp(); }
+      else html += `<p class="fb ng" style="margin-top:6px">計算は 合って いるよ。でも マスの 分け方が アプリと ちがう ところが あるよ。「🤖 アプリが 分ける」で くらべて みよう</p>`;
     } else {
       sfx.soft(); shake($('#gAns'));
       html = `<p class="fb ng">もう いちど 計算して みよう</p>`;
@@ -676,7 +681,7 @@ VIEWS.grid = (() => {
       (est[1] !== null && est[0.5] !== null ? `<p class="concl">方眼を こまかく すると、見つもりは ほんとうの 面積に 近づく！</p>` : `<p class="note">どちらの 方眼でも「こたえる」で せいかい すると、ここに たまるよ</p>`);
   }
 
-  return { show: render, stop: () => { auto = false; } };
+  return { show: render, stop: stopAuto };
 })();
 
 /* =========================================================
@@ -736,7 +741,7 @@ VIEWS.fit = (() => {
     $('#fReset').addEventListener('click', () => { P = FIT[ft].init(); hist = []; $('#fFb').innerHTML = ''; drawArea(); });
     $('#fCheck').addEventListener('click', checkArea);
     $('#fAns').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') checkArea(); });
-    if (TEACHER) $('#fShow').addEventListener('click', () => { const m = measure(); $('#fFb').innerHTML = `<p class="ans-t">こたえ：${m.calc} ＝ ${n1(m.area)} cm²</p>`; });
+    if (TEACHER) $('#fShow').addEventListener('click', () => { const m = measure(); $('#fFb').innerHTML = `<p class="ans-t">こたえ：${m.calc} ＝ ${ex3(m.area)} → およそ ${n1(m.area)} cm²</p>`; });
     // ドラッグ（マウスでも タッチでも）
     const svg = $('#fFig');
     svg.addEventListener('pointerdown', (ev) => {
@@ -803,7 +808,7 @@ VIEWS.fit = (() => {
     if (eq(m.area)) {
       const A = SHAPES[sk].area, gap = Math.abs(m.area - A) / A * 100;
       sfx.correct(); cheer('せいかい！');
-      html = `<p class="fb ok">せいかい！ ${m.calc} ＝ ${n1(m.area)} cm²。ほんとうの 面積との ずれは ${n1(gap)}％ ${gap <= 10 ? '— よく 合って いるね！' : '— 点を うごかして、もっと 近づけて みよう'}</p>`;
+      html = `<p class="fb ok">せいかい！ ${m.calc} ＝ ${ex3(m.area)} → およそ ${n1(m.area)} cm²。ほんとうの 面積との ずれは ${n1(gap)}％ ${gap <= 10 ? '— よく 合って いるね！' : '— 点を うごかして、もっと 近づけて みよう'}</p>`;
     } else {
       sfx.soft(); shake($('#fAns'));
       html = `<p class="fb ng">もう いちど 計算して みよう（${m.formula}）</p>`;

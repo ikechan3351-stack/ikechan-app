@@ -1118,10 +1118,12 @@ function rightPanel() {
 // つむ・とる
 async function stackOne() {
   if (K.n >= K.H) return false;
+  const m = state.mode;
   K.n++; K.drop = 3.5; K.t = Math.min(K.t, K.n);
   sfx.tap();
   render();
   await tween(K, 'drop', 0, 420, easeDrop);
+  if (state.mode !== m) return false;   // とちゅうで モードを かえた ときは ここで おわる
   sfx.put();
   const A = kBase().area;
   if (K.n === 1) say(`${TAKA} 1cm の ${ITA}の ${TAISEKI}は ${fmt(A)}cm³。${TEIMENSEKI}（${fmt(A)}cm²）と ${ONA}じ ${KAZU}だね`, 'good');
@@ -1221,8 +1223,8 @@ function diagnose(ans) {
   if (near(ans, A)) return 'noH';
   if (B.key === 'circle') {
     const r = dm.r, d = 2 * r;
-    if (near(ans, d * d * pi * H) || near(ans, d * d * pi)) return 'diamAsR';
-    if (near(ans, (r / 2) * (r / 2) * pi * H)) return 'rAsDiam';
+    if (CH.diam && (near(ans, d * d * pi * H) || near(ans, d * d * pi))) return 'diamAsR';   // 図に 直径が 出て いる とき
+    if (!CH.diam && near(ans, (r / 2) * (r / 2) * pi * H)) return 'rAsDiam';             // 図に 半径が 出て いる とき
     if (near(ans, d * pi * H) || near(ans, r * pi * H)) return 'circ';
     if (near(ans, r * r * H) || near(ans, d * d * H)) return 'noPi';
   }
@@ -1330,8 +1332,10 @@ async function c1Add(kind) {
   C1.busy = true;
   C1.dropFrom = C1.n; C1.n = to; C1.drop = 2.5;
   sfx.tap(); render();
+  const m = state.mode;
   await tween(C1, 'drop', 0, 380, easeDrop);
   C1.busy = false;
+  if (state.mode !== m) return;   // とちゅうで モードを かえた ときは ここで おわる
   kind === 'layer' || kind === 'row' ? sfx.put() : sfx.cube();
   const done = Math.floor(C1.n / L);
   if (C1.n === tot) {
@@ -1445,10 +1449,13 @@ function whereRight_correct() {
 }
 // たてに おこして 見せる
 async function standUp() {
+  const m = state.mode, q = Q.list[Q.i], stale = () => state.mode !== m || Q.list[Q.i] !== q;   // モードや 問題が かわったら おわる
   Q.busy = true; render();
   await wait(900);
+  if (stale()) return;
   sfx.turn();
   await tween(Q, 'phi', 0, 1400);
+  if (stale()) return;
   Q.picked = null; Q.busy = false;
   say(`${R('立', 'た')}てて みると…上と 下に ${ONA}じ ${KATACHI}の 面が ${MUKAI}。これが ${TEIMEN}。上の 面を タップしよう`, 'warn');
   render();
@@ -1457,7 +1464,7 @@ function whereTap(hit) {
   if (Q.state !== 'ask' || Q.busy || !hit) return;
   if (hit.id === 'c0' || hit.id === 'c1') { whereRight_correct(); return; }
   Q.miss++; Q.picked = hit.id; sfx.soft();
-  say(`${tripTag('teimen')}その 面は ${SOKUMEN}（${R('長方形', 'ちょうほうけい')}）。${ONA}じ ${KATACHI}の 面が ${MUKAI} ところは ある？ ほかの 面も 見て みよう`, 'warn');
+  say(`${tripTag('teimen')}その 面は ${SOKUMEN}（${Q.list[Q.i].B.smooth ? 'まがった 面' : R('長方形', 'ちょうほうけい')}）。${ONA}じ ${KATACHI}の 面が ${MUKAI} ところは ある？ ほかの 面も 見て みよう`, 'warn');
   if (Q.miss >= 2 && Q.phi > 0.1) { say(`${ONA}じ ${KATACHI}で ${MUKAI} 面は？ ${R('立', 'た')}てて みるよ`, 'warn'); standUp(); }
   render();
 }
@@ -1543,7 +1550,7 @@ function sceneNet() {
     ring(g.polys[g.polys.length - 2].pts); ring(g.polys[g.polys.length - 1].pts);
   }
   if (N.t > 0.97) {
-    const per = g.len.reduce((a, b) => a + b, 0), q0 = g.qs[0], qm = g.qs[g.qs.length - 1];
+    const per = B.smooth ? 4 * PI() : g.len.reduce((a, b) => a + b, 0), q0 = g.qs[0], qm = g.qs[g.qs.length - 1];
     const zb = -g.depth - 0.9;
     dimLine(sc, [q0[0], q0[1], zb], [qm[0], qm[1], zb], [0, -0.01, -0.5], `${B.smooth ? '直径×円周率' : '底面の まわりの 長さ'} ${fmt(per)}cm`, '#1565c0', { far: 1.8 });
     dimLine(sc, [qm[0], qm[1], 0], [qm[0], qm[1], N.H], [0.7, 0, 0], `高さ ${N.H}cm`, '#d84315', { far: 1.8 });
@@ -1597,8 +1604,10 @@ async function netOpen() {
   N.busy = true; sfx.turn(); render();
   const to = N.t > 0.5 ? 0 : 1;
   if (to === 1) turnView({ yaw: -0.25, pitch: 0.35 }, 800);
+  const m = state.mode;
   await tween(N, 't', to, 1800, ease);
   N.busy = false;
+  if (state.mode !== m) return;   // とちゅうで モードを かえた ときは ここで おわる
   if (to === 1) say(`${SOKUMEN}を まっすぐ のばすと 1まいの ${R('長方形', 'ちょうほうけい')}。よこの 長さは ${TEIMEN}の まわりの 長さと ${ONA}じ`, 'good');
   else say(`${TENKAI}を くみたてると もとの 立体に もどる`);
   render();
@@ -1609,9 +1618,12 @@ async function netView(kind, v) {
   const ok = v === netAnswer(kind);
   ok ? sfx.correct() : sfx.soft();
   N.busy = true; render();
+  const m = state.mode;
   if (N.t > 0) await tween(N, 't', 0, 700);
+  if (state.mode !== m) { N.busy = false; return; }   // とちゅうで モードを かえた ときは ここで おわる
   await turnView(VIEW_Q[kind].view, 900);
   N.busy = false;
+  if (state.mode !== m) return;
   const name = kind === 'top' ? `${R('真上', 'まうえ')}から` : `${R('正面', 'しょうめん')}から`;
   if (ok) say(`せいかい！ ${name} ${MI}ると ${kind === 'top' ? `${TEIMEN}と ${ONA}じ ${KATACHI}` : `${R('長方形', 'ちょうほうけい')}（${SOKUMEN}）`}に ${MI}える`, 'good');
   else say(`${name} ${MI}ると…図を ${MI}て たしかめよう。${kind === 'top' ? `${TEIMEN}が ${MI}える` : `${SOKUMEN}が ${MI}える`}`, 'warn');
