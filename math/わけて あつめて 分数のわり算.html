@@ -466,7 +466,7 @@ function setMode(m) {
       ② あつめる：1/d dL 分を d こ 集めて 1dL 分（a×d マス）→ (a×d)/(b×c)
    ========================================================= */
 VIEWS.split = (() => {
-  let a = 2, b = 5, c = 3, d = 4, step = 1, hist = [], logs = [], auto = false;
+  let a = 2, b = 5, c = 3, d = 4, step = 1, hist = [], logs = [], auto = false, autoGen = 0;   // autoGen：じどう再生の 実行番号（連打で 前の 再生が まざらない ように）
 
   function render(stage) {
     stage.innerHTML = `
@@ -613,9 +613,11 @@ VIEWS.split = (() => {
   async function autoPlay() {
     if (auto) { auto = false; return; }
     auto = true;
-    const run = async () => { step = 1; render($('#stage')); await wait(2200); if (!auto) return; step = 2; render($('#stage')); await wait(2200); };
+    const my = ++autoGen;   // この 再生の 番号。あとから 新しい 再生が 始まったら、この 再生は 止める
+    const alive = () => auto && my === autoGen;
+    const run = async () => { step = 1; render($('#stage')); await wait(2200); if (!alive()) return; step = 2; render($('#stage')); await wait(2200); };
     await run();
-    auto = false;
+    if (my === autoGen) auto = false;
   }
 
   return { show: render, stop: () => { auto = false; } };
@@ -843,7 +845,13 @@ VIEWS.rule = (() => {
     const hasDec = ex.some((t, i) => i % 2 === 0 && typeof t[0] === 'string');
     const f = allFracs();
     const lines = [];
-    lines.push([`${orig}`, hasDec ? `小数や ${SEISUU}は ${BUNSUU}に なおそう（0.6＝${FH(6, 10)}＝${FH(3, 5)}、6＝${FX(6, 1)}）` : `わり算と かけ算が まじった ${SIKI}`]);
+    // 式に ある 小数・整数だけを 分数に なおして 見せる（例：0.4＝4/10＝2/5、6＝6/1）
+    const conv = ex.filter((t, i) => i % 2 === 0 && (typeof t[0] === 'string' || !t[1] || t[1] === 1)).map((t) => {
+      if (typeof t[0] !== 'string') return `${t[0]}＝${FX(t[0], 1)}`;
+      const k = (t[0].split('.')[1] || '').length, rn = parseInt(t[0].replace('.', ''), 10), rd = 10 ** k, F0 = toF(t);
+      return `${t[0]}＝${FH(rn, rd)}` + (F0.n !== rn ? `＝${FrH(F0)}` : '');
+    }).join('、');
+    lines.push([`${orig}`, hasDec ? `小数や ${SEISUU}は ${BUNSUU}に なおそう（${conv}）` : `わり算と かけ算が まじった ${SIKI}`]);
     lines.push([`＝ ${f.map((x, i) => (i > 0 && ex[2 * i - 1] === '÷' ? `<span class="cg">${FH(x.n, x.d)}</span>` : FH(x.n, x.d))).join(' × ')}`, `わり算は、わる 数の ${GYAKU}を かける かけ算に（緑が ${GYAKU}に した 数）`]);
     if (exStep >= 2) lines.push([`＝ ${canc.html()}`, canc.can() ? `${BUNSHI}の 数と ${BUNBO}の 数を タップして、とちゅうで ${YAKUBUN}しよう` : `もう ${YAKUBUN}できる 組は ないね`]);
     if (exStep >= 3) { const [n, d2] = canc.result(); lines.push([`＝ <span class="ans">${FH(n, d2)}</span>${new Fraction(n, d2).n !== n ? ` ＝ <span class="ans">${FrH(val)}</span>` : ''}`, `答えは ${FrH(val)}`]); }
@@ -891,10 +899,13 @@ function baiSVG(base, cmp, unk) {
 }
 
 VIEWS.quiz = (() => {
-  let qs = [], qi = 0, q = null, inp = ['', ''], target = 0, tries = 0, firstOK = 0, trips = {}, answered = false, prevKey = '';
+  let qs = [], qi = 0, q = null, inp = ['', ''], target = 0, tries = 0, firstOK = 0, trips = {}, answered = false, prevKey = '', answeredAt = 0;   // answeredAt：答えが 出た 時こく（連打で すぐ 次へ 進まない ため）
   function makeQ(slot) {
     for (let t = 0; t < 100; t++) { const r = build(slot); if (r && r.key !== prevKey) { prevKey = r.key; return r; } }
-    return build(slot);
+    // 同じ 問題を さけられなかった ときも、null に ならない まで つくり なおす（three でも 1回 約8% で できる）
+    let r = null;
+    while (!r) r = build(slot);
+    prevKey = r.key; return r;
   }
   const fr1 = (lo = 2) => { const d = rnd(lo, 9), n = rnd(1, 9); return n !== d && gcd(n, d) === 1 ? [n, d] : null; };
   function build(slot) {
@@ -999,7 +1010,8 @@ VIEWS.quiz = (() => {
   }
   function key(k) {
     if (!q.pad) return;
-    if (k === 'ok') { if (answered) next(); else padAns(); return; }
+    // 答えが 出てから 600ms は「こたえる」/Enter で 次へ 進まない（連打で せいかい・こたえの 表示が すぐ 消えない ように）
+    if (k === 'ok') { if (answered) { if (Date.now() - answeredAt >= 600) next(); } else padAns(); return; }
     if (answered) return;
     // けす：いまの わくが 空なら、もう 一方の わくに うつって けす（分子が 空でも 分母が けせる）
     if (k === 'del') { if (!inp[target] && inp[1 - target]) target = 1 - target; inp[target] = inp[target].slice(0, -1); }
@@ -1032,7 +1044,7 @@ VIEWS.quiz = (() => {
     if (q.wrongs && q.wrongs.some((w) => f.equals(w))) t = q.kind === 'bai' ? 'base' : 'inv';
     if (t && !q.tripHTML) q.tripHTML = trip(t);
     let html = `<p class="fb ng">${tries >= 2 ? 'ざんねん…' : 'おしい！ もう いちど 考えよう'}</p>` + q.tripHTML;
-    if (tries >= 2) { answered = true; html += `<p class="fb ok" style="margin-top:6px">こたえは ${FrH(q.ans)}（${explain()}）</p>`; $('#qNext').hidden = false; $('#qHint').hidden = true; }
+    if (tries >= 2) { answered = true; answeredAt = Date.now(); html += `<p class="fb ok" style="margin-top:6px">こたえは ${FrH(q.ans)}（${explain()}）</p>`; $('#qNext').hidden = false; $('#qHint').hidden = true; }
     else { inp = ['', '']; target = 0; drawBox(); }
     $('#qFb').innerHTML = html;
   }
@@ -1057,7 +1069,7 @@ VIEWS.quiz = (() => {
     $('#qNext').hidden = false; $('#qHint').hidden = true;
   }
   function correct(msg) {
-    answered = true;
+    answered = true; answeredAt = Date.now();
     if (tries === 1) firstOK++;
     sfx.correct(); cheer('せいかい！');
     $('#qFb').innerHTML = `<p class="fb ok">せいかい！ ${msg || explain()}</p>` + q.tripHTML;

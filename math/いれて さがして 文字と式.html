@@ -325,7 +325,7 @@
 <div class="modal" id="modalHowto" role="dialog" aria-modal="true">
   <div class="modal-card">
     <h2>❓ 先生へ（つかい方）</h2>
-    <p>6年「文字と式」（東京書籍 新しい算数 6年 24〜31ページ）の教材です。いろいろな数のかわりに <i>x</i> を使って式に表し、<i>x</i> に数を入れて式の値を求めること、<i>x</i> と <i>y</i> の関係を式に表すこと、<i>y</i> の値から <i>x</i> を求めることを、場面の絵と矢印の図で見ていきます。6年なので × ははぶかずに <i>x</i>×4 と書きます（はぶく書き方は中1）。</p>
+    <p>6年「文字と式」（東京書籍 新しい算数 6年）の教材です。いろいろな数のかわりに <i>x</i> を使って式に表し、<i>x</i> に数を入れて式の値を求めること、<i>x</i> と <i>y</i> の関係を式に表すこと、<i>y</i> の値から <i>x</i> を求めることを、場面の絵と矢印の図で見ていきます。6年なので × ははぶかずに <i>x</i>×4 と書きます（はぶく書き方は中1）。</p>
     <h3>✋ x に いれて みよう</h3>
     <ul>
       <li>場面は3つ：正方形のまわりの長さ（<i>x</i>×4）／テープをつなぐ（<i>x</i>＋25）／ケーキ5こと箱代80円（<i>x</i>×5＋80）。</li>
@@ -781,13 +781,15 @@ VIEWS.put = (() => {
     const nb = $('#pNext');
     if (nb) nb.addEventListener('click', () => { reached = Math.max(reached, step + 1); goStep(step + 1); });
   }
+  let autoId = 0;   // じどうの 回の 番号（とめて すぐ また おしても、前の 回が うごき つづけない ように）
   async function autoPlay() {
-    if (auto) { auto = false; return; }
-    const s = S(), b = $('#pAuto');
+    if (auto) { auto = false; autoId++; const b0 = $('#pAuto'); if (b0) b0.textContent = '▶ じどうで いれる'; return; }
+    const s = S(), b = $('#pAuto'), my = ++autoId;
     auto = true; b.textContent = '■ とめる';
     const list = s.dec ? [3, 5, 8, 10, 2.5] : [s.start, s.start + 50, s.start + 100, s.start - 50];
     const vals = sk === 'square' ? list : sk === 'tape' ? [10, 20, 35, 50, 12.5] : list;
-    for (const v of vals) { if (!auto) break; setX(T(v)); await wait(1100); }
+    for (const v of vals) { if (!auto || my !== autoId) break; setX(T(v)); await wait(1100); }
+    if (my !== autoId) return;   // あとから はじまった 回に まかせる
     auto = false; const b2 = $('#pAuto'); if (b2) b2.textContent = '▶ じどうで いれる';
   }
 
@@ -900,7 +902,7 @@ VIEWS.put = (() => {
     drawSeek();
   }
 
-  return { show: render, stop: () => { auto = false; } };
+  return { show: render, stop: () => { auto = false; autoId++; } };
 })();
 
 /* =========================================================
@@ -983,10 +985,10 @@ const TRIP_POS = { name: 'かける数の いちちがい', tip: () => `かっ�
 VIEWS.read = (() => {
   let sub = 'read', ri = 0, tapped = [], cur = -1;            // よむ
   let round = null, sel = null, pairs = [], tripHTML = '', lastKeys = '';   // むすぶ
-  let stageEl = null, onResize = null;
+  let stageEl = null, onResize = null, autoId = 0;   // autoId：「じどうで よむ」の 回の 番号
 
   function render(stage) {
-    stageEl = stage;
+    stageEl = stage; autoId++;
     stage.innerHTML = `
       <div class="card"><div class="steps">
         <button class="step ${sub === 'read' ? 'active' : ''}" data-sub="read">👀 ${SIKI}を よむ</button>
@@ -1025,14 +1027,19 @@ VIEWS.read = (() => {
     $('#rPrev').addEventListener('click', () => goRead(ri - 1));
     $('#rNext').addEventListener('click', () => goRead(ri + 1));
     if (TEACHER) $('#rAuto').addEventListener('click', async () => {
+      const my = ++autoId, myRi = ri;   // とちゅうで 式や 画面を かえたら やめる
       tapped = []; cur = -1; drawRead();
-      for (let i = 0; i < READS[ri].tokens.length; i++) { await wait(900); tapTok(i); }
+      for (let i = 0; i < READS[myRi].tokens.length; i++) {
+        await wait(900);
+        if (my !== autoId || ri !== myRi || sub !== 'read' || !$('#rTok')) return;
+        tapTok(i);
+      }
     });
     drawRead();
     say(readMsg());
   }
   const readMsg = () => `${SIKI}の ${X} や「×3」「＋120」の ような かけらを、1つずつ タップ しよう`;
-  function goRead(n) { ri = (n + READS.length) % READS.length; tapped = []; cur = -1; sfx.tap(); showRead(); }
+  function goRead(n) { autoId++; ri = (n + READS.length) % READS.length; tapped = []; cur = -1; sfx.tap(); showRead(); }
   function tapTok(i) {
     if (!tapped.includes(i)) tapped.push(i);
     cur = i; sfx.up(); drawRead();
@@ -1152,7 +1159,7 @@ VIEWS.read = (() => {
     }).join('');
   }
 
-  return { show: render, stop: () => { if (onResize) window.removeEventListener('resize', onResize); onResize = null; } };
+  return { show: render, stop: () => { autoId++; if (onResize) window.removeEventListener('resize', onResize); onResize = null; } };
 })();
 
 /* =========================================================
