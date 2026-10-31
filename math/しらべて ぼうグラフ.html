@@ -775,9 +775,11 @@ const state = {
   resetArm: false,   // 「ぜんぶ 0に」を 1回 おした ところ
   m2: null, m3: null, m5: null,
   m4: { src: 'big', view: 'one', step: 1, pick: null, timer: 0 },
+  sayBy: {},        // モードごとの さいごの ひとこと（もどった ときに 出しなおす）
 };
 const stage = $('#stage');
 function say(html, kind = '') { state.say = { html, kind }; renderSay(); }
+const resay = (mode) => { const s = state.sayBy[mode]; if (s) say(s.html, s.kind); };
 function renderSay() {
   const el = $('#say');
   el.className = `say ${state.say.kind}`;
@@ -795,6 +797,7 @@ function graphSetupHTML() {
 const VIEWS = {};
 function setMode(mode) {
   clearTimeout(state.m4.timer); state.m4.timer = 0;
+  state.sayBy[state.mode] = state.say;
   state.mode = mode;
   state.resetArm = false;
   VIEWS[mode].enter?.();
@@ -815,7 +818,7 @@ const renderSetup = () => { $('#setupBar').innerHTML = VIEWS[state.mode].setup?.
    ========================================================= */
 function surveyGraphOpt() {
   const G = settings.graph, d = settings.survey;
-  const items = ordered(d.items, G.order).map((it) => ({ key: `p${it.pat}`, name: it.name, n: it.n, pat: it.pat }));
+  const items = ordered(d.items, G.order).map((it) => ({ key: `i${it.i}`, name: it.name, n: it.n, pat: it.pat }));
   const max = Math.max(0, ...items.map((it) => it.n));
   const lab = LABEL_EVERY[G.step];
   const axisMax = Math.max(G.step * 10, Math.ceil(max / lab) * lab);
@@ -987,7 +990,7 @@ function m2MakeChoices(f) {
   return { q: `ここに ${HAI}る ${SUU}${JI}は？（0から ${ME}もり ${k}こ${R('分', 'ぶん')}）`, right: v, list: shuffle([v, ...[...new Set(wrong)].slice(0, 2)]) };
 }
 VIEWS.draw = {
-  enter() { if (!state.m2) m2New(); else say(state.say.html); },
+  enter() { if (!state.m2) m2New(); else resay('draw'); },
   setup() {
     const M = state.m2;
     return `<span class="progress">${M.no}${MON}め</span>
@@ -1186,7 +1189,7 @@ function m3Start() {
 }
 const m3Q = () => state.m3.qs[state.m3.idx];
 VIEWS.read = {
-  enter() { if (!state.m3) m3Start(); },
+  enter() { if (!state.m3) m3Start(); else resay('read'); },
   setup: () => `<span class="progress">${state.m3.idx + 1} / ${state.m3.qs.length} ${MON}</span>
     <button class="mini-btn" data-act="m3restart">🔄 はじめから</button>`,
   build() {
@@ -1323,7 +1326,7 @@ function m4Data() {
   if (src === 'class') {
     const d = settings.survey;
     if (sum(d.items.map((it) => it.n)) > 0) {
-      return { title: d.title, unit: d.unit, items: ordered(d.items, 'desc').map((it) => ({ key: `p${it.pat}`, name: it.name, n: it.n, pat: it.pat })) };
+      return { title: d.title, unit: d.unit, items: ordered(d.items, 'desc').map((it) => ({ key: `i${it.i}`, name: it.name, n: it.n, pat: it.pat })) };
     }
   }
   const s = SCALE_SETS[src === 'class' ? 'small' : src];
@@ -1335,7 +1338,10 @@ function scaleJudge(max, step) {
   return { k: 'good', t: `${KAMI}に ${HAI}って、ちがいも よく わかる` };
 }
 const DA = R('出', 'だ');
-const m4Best = (max) => [1, 2, 5, 10].find((s) => max <= s * M4_CELLS) || 10;
+// 1・2・5 の 中で「ちょうど よい」に なる いちばん 小さい 目もり。
+// 数が 小さくて どれも みじかい ときは 1、どれも はみ出す ときは null（正解を 出さない）
+const m4Best = (max) => [1, 2, 5].find((s) => scaleJudge(max, s).k === 'good')
+  ?? (scaleJudge(max, 1).k === 'short' ? 1 : null);
 VIEWS.scale = {
   enter() { say(`${ONA}じ データを、${ONA}じ ${R('大', 'おお')}きさの ${KAMI}（${M4_CELLS}${ME}もり）に かくよ。1${ME}もりを かえると どう なるかな？`); },
   setup() {
@@ -1407,7 +1413,7 @@ function m4Pick(s) {
   else {
     sfx.soft();
     const j = scaleJudge(max, s);
-    say(`1${ME}もり ${s}だと、${j.t}。${R('黄', 'き')}色い わくの グラフと くらべて みよう`, 'warn');
+    say(`1${ME}もり ${s}だと、${j.t}。${best != null ? `${R('黄', 'き')}色い わくの グラフと くらべて みよう` : `この データでは、どの グラフも ちょうど よいとは いえないね`}`, 'warn');
   }
   render();
 }
@@ -1448,7 +1454,7 @@ function m5New() {
 }
 const m5Key = (r, c) => `${r}:${c}`;
 VIEWS.merge = {
-  enter() { if (!state.m5) m5New(); },
+  enter() { if (!state.m5) m5New(); else resay('merge'); },
   setup: () => `<span class="progress">${esc(state.m5.set.title)}</span><button class="mini-btn" data-act="m5new">🔄 べつの ${MON}だい</button>`,
   build() {
     stage.className = 'stage cols2';

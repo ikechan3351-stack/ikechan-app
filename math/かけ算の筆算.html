@@ -236,7 +236,7 @@
       <li>×2けたは<b>2段階</b>です。部分積の2だんが合うまで<b>合計の行は入力できません</b>。手順どおりに進められます。</li>
       <li><b>✏️えんぴつ</b>にすると、盤面に指やペンで<b>くり上がりのメモ</b>が書けます。<b>メモは採点しません</b>（考えた跡を残すためのものです）。</li>
       <li>手書きの数字を読み取る機能は付けていません。ブラウザの手書き認識はChromeOS・英語のみでiPadでは動かず、自作の認識も子どもの指書きでは誤判定が多いためです。<b>位をそろえる練習はマス目のほうが確実に指導できます。</b></li>
-      <li>やさしい＝2けた×1けた、ふつう＝3けた×1けた（ともに小3）、むずかしい＝2〜3けた×2けた（小4）です。</li>
+      <li>やさしい＝2けた×1けた、ふつう＝3けた×1けた（ともに小3）、むずかしい＝2〜3けた×2けた（小3・かけ算の筆算(2)）です。</li>
       <li>たし算版・ひき算版もあります。手書きの仕組みは3本とも同じものを使っています。</li>
     </ul>
   </div>
@@ -414,7 +414,7 @@
 
     const ink = setupInk($(id('Ink')), $(id('Wrap')));
     const S = { list: [], i: 0, miss: 0, qMiss: 0, cur: null, lock: false,
-                cols: 0, cells: [], active: -1, t0: 0, timer: null, wrong: [] };
+                cols: 0, cells: [], active: -1, t0: 0, timer: null, wrong: [], nextT: 0 };
 
     /* ---- ボードを組む ---- */
     function buildBoard() {
@@ -531,8 +531,10 @@
     $(id('ClearInk')).onclick = () => ink.clear();
     $(id('ClearNum')).onclick = () => {
       if (S.lock) return;
+      // 合計の だんに すすんだ あとは、たしかめずみの 部分積は けさない
+      const keep = S.multi && S.phase === 'sum';
       S.cells.forEach(c => {
-        if (c.classList.contains('locked')) return;
+        if (c.classList.contains('locked') || (keep && c.dataset.row !== 'S')) return;
         c.textContent = ''; c.classList.remove('filled', 'ok', 'ng');
       });
       setActive(S.phase === 'sum' && S.multi ? rowCells('S').slice(-1)[0].dataset.idx | 0 : firstActive());
@@ -553,7 +555,7 @@
         S.lock = true;
         mk.textContent = `⭕ せいかい！ くらいが そろっているよ`;
         mk.className = 'mark ok';
-        setTimeout(next, 1300);
+        S.nextT = setTimeout(next, 1300);
         return;
       }
       S.miss++; S.qMiss++; ui.miss.textContent = S.miss;
@@ -577,7 +579,7 @@
           c.textContent = v ?? ''; c.classList.toggle('filled', v !== null);
         });
         mk.innerHTML = `こたえ： このように そろえるよ`;
-        setTimeout(next, 2400);
+        S.nextT = setTimeout(next, 2400);
       }
     }
 
@@ -645,7 +647,7 @@
           S.wrong.push(`${q.a} × ${q.b} ＝ ${q.ans}（だんのずらし）`);
           revealAll();
           mk.innerHTML = `こたえ： このように ずらすよ（合計 <b>${q.ans}</b>）`;
-          setTimeout(next, 3000);
+          S.nextT = setTimeout(next, 3000);
         }
         return;
       }
@@ -656,7 +658,7 @@
         S.lock = true;
         mk.textContent = `⭕ せいかい！ ${q.a} × ${q.b} ＝ ${q.ans}`;
         mk.className = 'mark ok';
-        setTimeout(next, 1400);
+        S.nextT = setTimeout(next, 1400);
         return;
       }
       S.miss++; S.qMiss++; ui.miss.textContent = S.miss;
@@ -667,7 +669,7 @@
         S.wrong.push(`${q.a} × ${q.b} ＝ ${q.ans}`);
         revealAll();
         mk.innerHTML = `こたえ： <b>${q.ans}</b>`;
-        setTimeout(next, 2400);
+        S.nextT = setTimeout(next, 2400);
       }
     }
 
@@ -691,7 +693,7 @@
         // （88×33 のように同じ桁数だと、右づめでも左づめでも同じになり練習にならない）
         do { q = makeQ(lv, mode === 'place'); }
         while (`${q.a}x${q.b}` === lastKey && ++g < 20);
-        lastKey = `${q.a}+${q.b}`;
+        lastKey = `${q.a}x${q.b}`;
         S.list.push(q);
       }
       S.i = 0; S.miss = 0; S.wrong = []; S.t0 = 0;
@@ -706,6 +708,7 @@
     }
 
     function draw() {
+      clearTimeout(S.nextT);   // 前の もんだいの「つぎへ」が のこって いたら とめる
       const q = S.cur = S.list[S.i];
       S.lock = false; S.qMiss = 0;
       ui.now.textContent = S.i + 1;
