@@ -200,7 +200,7 @@
   // ===== 効果音 =====
   let audioCtx = null;
   function beep(seq) {
-    if (!$('chkSound') || !$('chkSound').checked) return;
+    if (!st.sound) return;   // 音のON/OFFは st.sound におぼえておく(HUDを作りなおしてももどらない)
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const t0 = audioCtx.currentTime;
     for (const [freq, start, len, type, vol] of seq) {
@@ -445,7 +445,8 @@
       make(setting, extra) {
         const dan = (!extra || extra === 'all') ? rnd(1, 9) : +extra;
         const other = rnd(1, 9);
-        const danLeft = Math.random() < 0.5;
+        // 段をしぼったときは、段をかけられる数(左)にする。「ぜんぶ」のときだけ左右をまぜる
+        const danLeft = (!extra || extra === 'all') ? Math.random() < 0.5 : true;
         const a = danLeft ? dan : other;
         const b = danLeft ? other : dan;
         const result = a * b;
@@ -546,7 +547,9 @@
     type: 'compose', mode: 'flip', setting: 'mix', extra: null, tempo: 'manual', speed: 'normal',
     card: null, revealed: false, lastKey: '', input: '',
     autoTimer: null, autoRunning: false,
-    qi: 0, miss: 0, tries: 0, wrong: [], playing: false, lock: false, startT: 0, timerId: null
+    qi: 0, miss: 0, tries: 0, wrong: [], playing: false, lock: false, startT: 0, timerId: null,
+    round: 0,      // 回の番号。切りかえるたびにふやし、古い回の待っている処理を止める
+    sound: true    // 音のON/OFF
   };
   const T = () => TYPES[st.type];
 
@@ -645,6 +648,7 @@
       <div class="go">タップ(スペースキー)でスタート!</div>`, startQuiz);
   }
   function startQuiz() {
+    st.round++;
     st.qi = 0; st.miss = 0; st.wrong = []; st.playing = true; st.lock = false;
     st.startT = Date.now();
     clearInterval(st.timerId);
@@ -671,6 +675,11 @@
     $('controlCard').innerHTML = `<div class="choices">${html}</div>`;
     document.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => judgeChoice(b)));
   }
+  // 正解・答え表示のあとに次へ進む処理。切りかえで回の番号が変わっていたら何もしない
+  function nextQuizQ() {
+    const r = st.round;
+    return () => { if (r !== st.round || !st.playing) return; st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); };
+  }
   function judgeChoice(btn) {
     if (!st.playing || st.lock) return;
     const c = st.card;
@@ -681,7 +690,7 @@
       $('mark').textContent = '⭕ せいかい!';
       $('mark').className = 'mark ok';
       st.lock = true;
-      setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 800);
+      setTimeout(nextQuizQ(), 800);
     } else {
       sndNG();
       st.miss++; st.tries++;
@@ -697,7 +706,7 @@
         drawCard(true);
         $('mark').textContent = `❌ こたえは「${T().answer(c)}」`;
         $('mark').className = 'mark ng';
-        setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1600);
+        setTimeout(nextQuizQ(), 1600);
       } else {
         $('mark').textContent = '❌ もういちど!';
         $('mark').className = 'mark ng';
@@ -710,7 +719,7 @@
       <span>もんだい <span class="val">${Math.min(st.qi + 1, ROUND)}/${ROUND}</span></span>
       <span>ミス <span class="val">${st.miss}</span></span>
       <span>タイム <span class="val" id="hudTime">0:00</span></span>
-      <label><input type="checkbox" id="chkSound" checked> 音</label>`;
+      <label><input type="checkbox" id="chkSound" ${st.sound ? 'checked' : ''}> 音</label>`;
   }
   function buildKeypad() {
     let rows;
@@ -753,7 +762,7 @@
       $('mark').textContent = '⭕ せいかい!';
       $('mark').className = 'mark ok';
       st.lock = true;
-      setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 700);
+      setTimeout(nextQuizQ(), 700);
     } else {
       sndNG();
       st.miss++; st.tries++;
@@ -765,7 +774,7 @@
         drawCard(true);
         $('mark').textContent = `❌ こたえは ${ans}`;
         $('mark').className = 'mark ng';
-        setTimeout(() => { st.qi++; st.qi >= ROUND ? finishQuiz() : loadQuizQ(); }, 1500);
+        setTimeout(nextQuizQ(), 1500);
       } else {
         $('mark').textContent = '❌ もういちど!';
         $('mark').className = 'mark ng';
@@ -802,6 +811,7 @@
     if (overlayHandler) { const h = overlayHandler; overlayHandler = null; h(); }
   }
   $('overlay').addEventListener('pointerdown', fireOverlay);
+  $('hud').addEventListener('change', (ev) => { if (ev.target.id === 'chkSound') st.sound = ev.target.checked; });
   window.addEventListener('keydown', (ev) => {
     if (st.mode === 'quiz' && ev.key === ' ' && !st.playing && !$('overlay').classList.contains('hidden')) {
       ev.preventDefault(); fireOverlay();
@@ -834,10 +844,16 @@
   }
 
   // ===== モード切りかえ =====
+  function stopQuiz() {   // クイズを止める(タイマーと待っている処理も)
+    st.round++;
+    st.playing = false; st.lock = false;
+    clearInterval(st.timerId);
+  }
   function applyMode() {
+    stopQuiz();
     const isFlip = st.mode === 'flip';
     $('tempoRow').style.display = isFlip ? '' : 'none';
-    if (isFlip) { $('hud').innerHTML = `<label><input type="checkbox" id="chkSound" checked> 音</label>`; renderFlip(); }
+    if (isFlip) { $('hud').innerHTML = `<label><input type="checkbox" id="chkSound" ${st.sound ? 'checked' : ''}> 音</label>`; renderFlip(); }
     else renderQuizStart();
   }
   document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
@@ -853,7 +869,7 @@
     const t = T();
     st.setting = (t.settings.find(s => s.default) || t.settings[0]).key;
     st.extra = t.extra ? (t.extra.options.find(o => o.default) || t.extra.options[0]).key : null;
-    st.playing = false;
+    stopQuiz();
     renderSettingRow();
     applyMode();
   }

@@ -558,6 +558,9 @@ function applyLook() {
 function setMode(m) {
   stopTimer(); reciteStop(); stopSpeak();
   clearTimeout(state.pair.timer); clearTimeout(state.mush.timer);
+  // タイマーを とめたので、めくった カード・こたえを 見せている マスの じょうたいも もどす（もどってきた ときに うごかなく ならない ように）
+  Object.assign(state.pair, { open: [], lock: false, just: null });
+  Object.assign(state.mush, { lock: false, show: null });
   state.mode = m;
   if (m === 'ta' || m === 'weak') { state.ta.kind = m; state.ta.phase = 'setup'; }
   if (m === 'mushikui' && !state.mush.holes.length) newMushikui();
@@ -832,7 +835,7 @@ function onCorrect(q) {
   }
   (c >= 3 && c % 5 === 0 ? sfx.combo : sfx.ok)();
   setSay(pick(['せいかい！', 'いいね！', 'その ちょうし！', 'ばっちり！']) + (q.retry ? ' こんどは できたね！' : ''), 'good');
-  setTimeout(nextTA, calm() ? 500 : 650);
+  A.nextTimer = setTimeout(nextTA, calm() ? 500 : 650);
 }
 
 // まちがえた とき：せめずに こたえを 見せ、すこし あとで もういちど 出す
@@ -850,11 +853,12 @@ function onWrong(q, timeout) {
   speak(yomi(q.a, q.b));
   // 2もん あとに もういちど 出す（のこりが すくなければ さいごに）
   A.qs.splice(Math.min(A.qi + 3, A.qs.length), 0, { a: q.a, b: q.b, retry: true });
-  setTimeout(nextTA, 2600);
+  A.nextTimer = setTimeout(nextTA, 2600);
 }
 
 function nextTA() {
   const A = state.ta;
+  A.nextTimer = null;
   if (state.mode !== (A.kind === 'weak' ? 'weak' : 'ta') || A.phase !== 'play') return;
   A.qi++;
   if (A.qi >= A.qs.length) return finishTA();
@@ -879,7 +883,10 @@ function updateBar() {
   const rest = A.lock ? 0 : Math.max(0, 1 - (performance.now() - A.qStartT) / (limitSec() * 1000));
   bar.style.width = `${rest * 100}%`;
 }
-function stopTimer() { if (state.ta.timer) { clearInterval(state.ta.timer); state.ta.timer = null; } }
+function stopTimer() {
+  if (state.ta.timer) { clearInterval(state.ta.timer); state.ta.timer = null; }
+  clearTimeout(state.ta.nextTimer); state.ta.nextTimer = null;   // つぎの もんだいへの まちも とめる（やめて すぐ スタートしても 1もんめが とばない）
+}
 
 function finishTA() {
   const A = state.ta;
@@ -1456,7 +1463,13 @@ $$('.mode-btn').forEach((b) => b.onclick = () => setMode(b.dataset.mode));
 
 // キーボード：数字・Backspace・Enter で こたえる
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeModals(); return; }
+  if (e.key === 'Escape') {
+    const resultOpen = $('#modalResult').classList.contains('open');
+    closeModals();
+    // タイムアタック・にがての けっかを とじたら、えらぶ がめんに もどす（おわった もんだいの がめんに のこらない ように）
+    if (resultOpen && (state.mode === 'ta' || state.mode === 'weak') && state.ta.phase === 'done') { state.ta.phase = 'setup'; renderTA(); }
+    return;
+  }
   if ($('.modal.open')) return;
   const m = state.mode;
   // テンキーを つかう モード
@@ -1475,7 +1488,8 @@ document.addEventListener('keydown', (e) => {
 });
 reduceMQ.addEventListener?.('change', applyLook);
 
-setMode('table');
+// ?teacher=1 で開くと、はじめから先生モードにする
+setMode(new URLSearchParams(location.search).get('teacher') === '1' ? 'teacher' : 'table');
 </script>
 </body>
 </html>

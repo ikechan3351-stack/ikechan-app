@@ -37,12 +37,15 @@
   /* ===== 九九のひょう ===== */
   table.kuku { border-collapse: collapse; margin: 0 auto; }
   table.kuku th, table.kuku td {
-    width: 44px; height: 40px; text-align: center; font-weight: bold; font-size: 1rem;
+    width: min(44px, 7.6vw); height: 40px; text-align: center; font-weight: bold; font-size: 1rem;
     border: 1.5px solid #eee; cursor: pointer; user-select: none;
   }
   table.kuku th { background: #fff3e0; color: #e65100; border-color: #ffe0b2; }
   table.kuku td { color: #444; }
   table.kuku td.hl { background: #fff9c4; }
+  @media (max-width: 480px) {   /* スマホ幅:ひょうがはみ出さないように小さくする */
+    table.kuku th, table.kuku td { height: 32px; font-size: 0.85rem; padding: 0; }
+  }
   table.kuku td.sel { background: #f57f17; color: #fff; border-radius: 8px; }
   .say-card {
     text-align: center; margin-top: 10px; padding: 12px; border-radius: 12px; background: #fff8e1;
@@ -189,7 +192,7 @@
   // ===== 効果音・読み上げ =====
   let audioCtx = null;
   function beep(seq) {
-    if (!$('chkSound') || !$('chkSound').checked) return;
+    if (!st.sound) return;   // 音のON/OFFは st.sound におぼえておく(画面を作りなおしてももどらない)
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const t0 = audioCtx.currentTime;
     for (const [freq, start, len, type, vol] of seq) {
@@ -237,7 +240,9 @@
     selDan: 2, selCell: null, reciting: false,
     // チャレンジ
     cDan: 2, cMode: 'agari', qs: [], qi: 0, input: '', tries: 0,
-    miss: 0, startT: 0, timerId: null, lock: false, playing: false
+    miss: 0, startT: 0, timerId: null, lock: false, playing: false,
+    round: 0,      // 回の番号。切りかえるたびにふやし、古い回の待っている処理を止める
+    sound: true    // 音のON/OFF
   };
 
   // ===== 九九のひょう画面 =====
@@ -308,7 +313,7 @@
           <span>もんだい <span class="val" id="hudWord">-</span></span>
           <span>ミス <span class="val" id="hudMiss">0</span></span>
           <span>タイム <span class="val" id="hudTime">0:00</span></span>
-          <label><input type="checkbox" id="chkSound" checked> 音</label>
+          <label><input type="checkbox" id="chkSound" ${st.sound ? 'checked' : ''}> 音</label>
         </div>
         <div class="stage" id="stage">
           <div class="word-count" id="wordCount"></div>
@@ -324,6 +329,7 @@
         <div class="keypad" id="keypad"></div>
       </div>`;
     buildKeypad();
+    $('chkSound').addEventListener('change', (ev) => { st.sound = ev.target.checked; });
     document.querySelectorAll('[data-dan]').forEach(b => b.addEventListener('click', () => {
       st.cDan = +b.dataset.dan; stopRound(); renderChallenge();
     }));
@@ -333,6 +339,7 @@
     $('overlay').addEventListener('pointerdown', () => { if (!st.playing) newRound(); });
   }
   function stopRound() {
+    st.round++;   // 待っている処理(正解・答え表示のあと)を無効にする
     st.playing = false; clearInterval(st.timerId);
   }
   function newRound() {
@@ -342,6 +349,7 @@
       const j = Math.floor(Math.random() * (i + 1)); [bs[i], bs[j]] = [bs[j], bs[i]];
     }
     st.qs = bs.map(b => ({ a: st.cDan, b, ans: st.cDan * b }));
+    st.round++;
     st.qi = 0; st.miss = 0; st.playing = true; st.startT = 0; st.lock = false;
     clearInterval(st.timerId);
     $('hudTime').textContent = '0:00'; $('hudMiss').textContent = '0';
@@ -373,7 +381,8 @@
       $('mark').textContent = '⭕';
       $('mark').className = 'mark ok';
       st.lock = true;
-      setTimeout(() => { st.qi++; st.qi >= 9 ? finish() : loadQ(); }, 350);
+      const r = st.round;
+      setTimeout(() => { if (r !== st.round || !st.playing) return; st.qi++; st.qi >= 9 ? finish() : loadQ(); }, 350);
     } else {
       sndNG();
       st.miss++; st.tries++;
@@ -385,7 +394,8 @@
         $('mark').textContent = `❌ こたえは ${q.ans}(${YOMI[q.a][q.b - 1]})`;
         $('mark').className = 'mark ng';
         st.lock = true;
-        setTimeout(() => { st.qi++; st.qi >= 9 ? finish() : loadQ(); }, 1800);
+        const r = st.round;
+        setTimeout(() => { if (r !== st.round || !st.playing) return; st.qi++; st.qi >= 9 ? finish() : loadQ(); }, 1800);
       } else {
         $('mark').textContent = '❌ もういちど!';
         $('mark').className = 'mark ng';
@@ -441,9 +451,10 @@
     if (st.mode !== 'challenge') return;
     if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     if (ev.key === ' ') { ev.preventDefault(); if (!st.playing) newRound(); return; }
-    if (ev.key === 'Enter') { pressKey('ok'); return; }
+    // Enter・数字でフォーカスのあるボタン(モードのタブなど)が押されないように preventDefault する
+    if (ev.key === 'Enter') { ev.preventDefault(); pressKey('ok'); return; }
     if (ev.key === 'Backspace') { pressKey('del'); return; }
-    if (/^[0-9]$/.test(ev.key)) pressKey(ev.key);
+    if (/^[0-9]$/.test(ev.key)) { ev.preventDefault(); pressKey(ev.key); }
   });
 
   // ===== シールちょう画面 =====

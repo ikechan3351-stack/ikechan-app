@@ -930,6 +930,8 @@ function resetAll() {
 }
 
 /* かぞえる：入れもの ごとに 3、6、9、12… と たしていく */
+/* もんだいモードで、いまの もんだいを もう 正解して いるか */
+const quizSolved = () => !!(state.quiz && state.quiz.solved && ['shiki', 'make', 'story'].includes(state.mode));
 function startCount(onDone = null) {
   if (!total()) return;
   stopCount();
@@ -940,7 +942,7 @@ function startCount(onDone = null) {
     if (!c) return;
     const so = state.contents.slice(0, c.upto + 1).reduce((a, b) => a + b, 0);
     sfx.tick(c.upto + 1);
-    say(`${c.upto + 1}${it().group}めまでで ${k3(so)}`);
+    if (!quizSolved()) say(`${c.upto + 1}${it().group}めまでで ${k3(so)}`);   // 正解した あとは 正解の せつめいを のこす
     render();
     countTimer = setTimeout(() => {
       if (c.upto < plateCount() - 1) { c.upto++; step(); }
@@ -953,6 +955,7 @@ function finishCount(onDone) {
   const I = it();
   const per = perPlate(), n = plateCount(), sum = total();
   state.count = { upto: n - 1, done: true };
+  if (quizSolved()) { render(); if (onDone) onDone(); return; }   // かぞえる とちゅうで 正解した：せつめいを 上書きしない
   if (per !== null) {
     say(n > 1
       ? `${n1(per)}を ${n2(n)}かい たすのと おなじだから、かけ${SAN}で ${n1(per)}${OP('×')}${n2(n)} と かけるよ`
@@ -976,7 +979,7 @@ const A = (t) => `<span class="phrA">${t}</span>`, B = (t) => `<span class="phrB
 const N = (n) => `<b class="n">${n}</b>`;
 const STORIES = [
   { item: 'cake', text: (a, b) => `ケーキが ${A(`1はこに ${N(a)}こ`)} ${HAI}って います。${B(`${N(b)}はこ`)} では、ケーキは ぜんぶで ${NAN}こ ですか。` },
-  { item: 'car', text: (a, b) => `${A(`1${DAI}の ${KURUMA}に タイヤが ${N(a)}こ`)} ついて います。${B(`${KURUMA} ${N(b)}${DAI}`)} では、タイヤは ぜんぶで ${NAN}こ ですか。` },
+  { item: 'car', ok: (a) => a === 4, text: (a, b) => `${A(`1${DAI}の ${KURUMA}に タイヤが ${N(a)}こ`)} ついて います。${B(`${KURUMA} ${N(b)}${DAI}`)} では、タイヤは ぜんぶで ${NAN}こ ですか。` },
   { item: 'flower', text: (a, b) => `${A(`${HANA}びらが ${N(a)}まいの ${HANA}`)}が ${B(`${N(b)}つ`)} さいて います。${HANA}びらは ぜんぶで ${NAN}まい ですか。` },
   { item: 'bag', text: (a, b) => `ふくろが ${B(`${N(b)}つ`)} あります。${A(`1ふくろに みかんが ${N(a)}こずつ`)} ${HAI}って います。みかんは ぜんぶで ${NAN}こ ですか。` },
   { item: 'apple', text: (a, b) => `おさらが ${B(`${N(b)}まい`)} あります。${A(`1さらに りんごを ${N(a)}こずつ`)} のせます。りんごは ぜんぶで ${NAN}こ ですか。` },
@@ -1452,7 +1455,7 @@ document.addEventListener('keydown', (e) => {
   if (state.mode === 'teacher' && e.key === 'ArrowLeft') teacherStep(-1);
   if (state.mode === 'shiki' && /^[0-9]$/.test(e.key)) keyIn(e.key);
   if (state.mode === 'shiki' && e.key === 'Backspace') keyIn('del');
-  if (state.mode === 'shiki' && e.key === 'Enter' && !state.quiz.solved) checkShiki();
+  if (state.mode === 'shiki' && e.key === 'Enter') { e.preventDefault(); if (!state.quiz.solved) checkShiki(); }   // ボタンの クリックと 2重に ならない ように
 });
 
 function openModal(id) { $(id).classList.add('open'); }
@@ -1553,7 +1556,8 @@ $$('[data-set]').forEach((b) => {
 window.addEventListener('resize', () => { if (state.mode === 'array') renderArray(); else layoutPlates(); });
 document.addEventListener('fullscreenchange', () => setTimeout(() => render(), 120));
 reduceMQ.addEventListener?.('change', render);
-setMode('free');
+// ?teacher=1 で開くと、はじめから先生モードにする
+setMode(new URLSearchParams(location.search).get('teacher') === '1' ? 'teacher' : 'free');
 </script>
 </body>
 </html>
