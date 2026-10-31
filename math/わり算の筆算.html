@@ -256,7 +256,7 @@
       <li><b>ひく</b>のとき、ひいた答えが0でも<b>0を書かせています</b>。書かない指導をされている場合はお知らせください、変更できます。</li>
       <li><b>✏️えんぴつ</b>にすると、盤面に指やペンでメモが書けます。<b>メモは採点しません</b>（考えた跡を残すためのものです）。</li>
       <li>手書きの数字を読み取る機能は付けていません。ブラウザの手書き認識はChromeOS・英語のみでiPadでは動かず、自作の認識も子どもの指書きでは誤判定が多いためです。</li>
-      <li>やさしい＝2けた÷1けた、ふつう＝3けた÷1けた、むずかしい＝<b>2けたでわる</b>（小4）です。</li>
+      <li>やさしい＝2けた÷1けた、ふつう＝3けた÷1けた、むずかしい＝<b>2けたでわる</b>（小4）です。むずかしいは 3けた÷2けたが中心で、5問めと10問めだけ 4けた÷2けたが出ます（教科書の範囲をこえるので、問題に「発展」と出ます）。</li>
       <li><b>商のとちゅうに0が立つ形</b>（123÷4＝30あまり3 など）は、行の作りが変わるため今回は出していません。必要になったらお知らせください。</li>
       <li>たし算・ひき算・かけ算版もあります。手書きの仕組みは4本とも同じものを使っています。</li>
     </ul>
@@ -311,12 +311,13 @@
   /* =========================================================
      もんだいづくり（わり算・あまりあり）
   ========================================================= */
-  function makeQ(level) {
+  // big＝true のときだけ 4けた÷2けた（発展）を出す
+  function makeQ(level, big = false) {
     for (let t = 0; t < 900; t++) {
       let v, D;
       if (level === 'easy') { v = rnd(2, 9); D = rnd(10, 99); }
       else if (level === 'normal') { v = rnd(2, 9); D = rnd(100, 999); }
-      else { v = rnd(11, 99); D = rnd(100, 9999); }
+      else { v = rnd(11, 99); D = big ? rnd(1000, 9999) : rnd(100, 999); }
       if (D < v) continue;
       const steps = divSteps(D, v);
       if (steps.length < 2) continue;                       // 1ステップだけだと筆算の練習にならない
@@ -616,7 +617,7 @@
         S.lock = true;
         mk.textContent = `⭕ せいかい！ ${q.D} ÷ ${q.v} の形に なったよ`;
         mk.className = 'mark ok';
-        setTimeout(next, 1300);
+        S.tm = setTimeout(next, 1300);
         return;
       }
       S.miss++; S.qMiss++; ui.miss.textContent = S.miss;
@@ -637,7 +638,7 @@
           c.textContent = expD[i] ?? ''; c.classList.toggle('filled', expD[i] !== undefined);
         });
         mk.innerHTML = `こたえ： このように 書くよ`;
-        setTimeout(next, 2400);
+        S.tm = setTimeout(next, 2400);
       }
     }
 
@@ -699,6 +700,12 @@
       if (S.lock) return;
       const q = S.cur, mk = $(id('Mark'));
       const { row, exp } = expectOf(S.phase, S.step);
+      // いま 入れられる マスが ぜんぶ 空なら、判定しない（連打や 空のまま おしたときに ミスに しない）
+      const openCells = S.cells.filter(c => !c.classList.contains('locked'));
+      if (openCells.length && openCells.every(c => c.textContent === '')) {
+        mk.innerHTML = '数字を 入れてから おしてね'; mk.className = 'mark';
+        return;
+      }
 
       if (markRow(row, exp)) {
         // つぎの段階へ
@@ -709,7 +716,7 @@
           mk.innerHTML = `⭕ せいかい！ ${q.D} ÷ ${q.v} ＝ <b>${q.q}</b>` +
             (q.r ? ` あまり <b>${q.r}</b>` : '（あまりなし）');
           mk.className = 'mark ok';
-          setTimeout(next, 1800);
+          S.tm = setTimeout(next, 1800);
           return;
         }
         const i = PHASE_ORDER.indexOf(S.phase);
@@ -736,7 +743,7 @@
         S.wrong.push(`${q.D} ÷ ${q.v} ＝ ${q.q}${q.r ? ' あまり ' + q.r : ''}`);
         revealAll();
         mk.innerHTML = `こたえ： <b>${q.q}</b>${q.r ? ' あまり <b>' + q.r + '</b>' : ''}`;
-        setTimeout(next, 3200);
+        S.tm = setTimeout(next, 3200);
       }
     }
 
@@ -756,11 +763,12 @@
       let lastKey = '';
       for (let i = 0; i < ROUND; i++) {
         let q, g = 0;
-        do { q = makeQ(lv); }
+        do { q = makeQ(lv, i === 4 || i === 9); }   // むずかしいの 5問めと 10問めだけ 発展
         while (`${q.D}/${q.v}` === lastKey && ++g < 20);
         lastKey = `${q.D}/${q.v}`;
         S.list.push(q);
       }
+      clearTimeout(S.tm); S.tm = null;
       S.i = 0; S.miss = 0; S.wrong = []; S.t0 = 0;
       clearInterval(S.timer); S.timer = null;
       ui.time.textContent = '0:00'; ui.miss.textContent = '0';
@@ -780,6 +788,8 @@
       $(id('Q')).innerHTML = mode === 'place'
         ? `<b>${q.D} ÷ ${q.v}</b><br><span style="font-size:.9rem;color:#00838f">筆算の形に ならべよう（どちらを 外に 書く？）</span>`
         : `<b>${q.D} ÷ ${q.v}</b>`;
+      // 4けた÷2けたは 4年の 教科書の 範囲を こえるので「発展」と 書く
+      if (q.D >= 1000) $(id('Q')).innerHTML += ` <span style="font-size:.85rem;color:#fff;background:#8e24aa;border-radius:8px;padding:2px 8px;vertical-align:middle">発展</span>`;
       buildBoard();
     }
 

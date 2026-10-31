@@ -1085,7 +1085,7 @@ const ACTS = {
     // ぜんぶ しく： れつごとに じゅんに しいて いく
     const M = state.m1, todo = m1Lines().filter((l) => !lineFull(l));
     if (!todo.length) return;
-    runSteps(todo.length, 260, (i) => { todo[i].forEach(([x, y]) => m1Put(x, y)); drawM1(); sfx.tile(); },
+    runSteps(todo.length, 260, (i) => { todo[i].forEach(([x, y]) => m1Put(x, y)); drawM1(); m1Panel(); sfx.tile(); },
       () => { m1AfterChange(); });
   },
   m1clear: () => { const M = state.m1; M.tiles = []; M.doneShown = false; sfx.tap(); animStop(); drawM1(); m1Panel(); say(`タイルを とったよ`); },
@@ -1707,7 +1707,8 @@ function m4WhyGo() {
   const M = state.m4, from = Math.max(1, M.whyN);
   const steps = 100 - from;
   runSteps(steps, 30, (i) => { M.whyN = from + i + 1; drawZoom(-1); if (i % 10 === 9) sfx.tick(); }, () => {
-    M.whyN = 100; drawZoom(-1); m4Panel();
+    M.whyN = 100; drawZoom(-1);
+    if (M.sub === 'quiz') m4qDraw(); else m4Panel();   // 問題の とちゅうなら 問題の 画面に もどす
     sfx.done(); cheer('10000こ！');
     say(`100こが 100れつ で 10000こ。1m² ＝ 10000cm²（100${R('倍', 'ばい')}では ないよ）`, 'good');
   });
@@ -1766,6 +1767,7 @@ function m4qAnswer() {
   const M = state.m4, Q = M.q, q = Q.qs[Q.i], v = Number(Q.input);
   if (!Q.input) return;
   if (v === q.a) {
+    animStop();   // 「つづけて しく」の アニメを とめる
     Q.solved = true; Q.score++; M.why = false;
     sfx.correct(); cheer(`${q.a}`);
     say(`${SEIKAI}！ ${stripRuby(q.t).replace('□', q.a)}`, 'good');
@@ -1797,6 +1799,7 @@ function m4qGive() {
 }
 function m4qNext() {
   const Q = state.m4.q;
+  animStop();   // 「つづけて しく」の アニメを とめる
   if (Q.i + 1 < Q.qs.length) { Q.i++; m4qLoad(); m4qDraw(); return; }
   showResult(Q.score, Q.qs.length, Q.hints, 'm4qagain');
 }
@@ -1927,6 +1930,9 @@ VIEWS.teacher = {
     M.w = Math.min(M.w, mw); M.h = Math.min(M.h, mh);
     M.L.W = Math.min(M.L.W, mw); M.L.H = Math.min(M.L.H, mh);
     M.L.cw = Math.min(M.L.cw, M.L.W - 1); M.L.ch = Math.min(M.L.ch, M.L.H - 1);
+    // 方眼を 小さく した ときは、方眼の 外に 出た マスを のぞく
+    const d = gridDim();
+    M.free = M.free.filter((k) => { const [x, y] = k.split(',').map(Number); return x >= 0 && y >= 0 && x < d.c && y < d.r; });
     M.open = false;
     say(`${ZUKEI}を きめて ${MI}せましょう。${KOTA}えは「${KOTA}えを ${MI}る」まで かくれます`);
   },
@@ -2010,7 +2016,7 @@ Object.assign(ACTS, {
   },
   m2clr: () => { const M = state.m2; M.rows = []; M.told = false; sfx.tap(); m2Panel(); },
   // ふくざつな 形
-  m3shape: (b) => { const M = state.m3, n = shapes3().length; M.idx = (M.idx + +b.dataset.v + n) % n; m3Reset(); sfx.tap(); animStop(); renderSetup(); drawM3(); m3Panel(); m3Intro(); },
+  m3shape: (b) => { tweenStop(); const M = state.m3, n = shapes3().length; M.idx = (M.idx + +b.dataset.v + n) % n; m3Reset(); sfx.tap(); animStop(); renderSetup(); drawM3(); m3Panel(); m3Intro(); },
   m3method: (b) => { const M = state.m3; M.method = b.dataset.v; tweenStop(); animStop(); sfx.tap(); renderSetup(); drawM3(); m3Panel(); m3Intro(); },
   m3undo: () => { state.m3.lines.pop(); sfx.tick(); animStop(); drawM3(); m3Panel(); if (state.m3.lines.length) m3SplitCheck(); else m3Intro(); },
   m3clear: () => { state.m3.lines = []; sfx.tap(); animStop(); drawM3(); m3Panel(); m3Intro(); },
@@ -2048,7 +2054,7 @@ Object.assign(ACTS, {
   m4sub: (b) => { state.m4.sub = b.dataset.v; tweenStop(); setMode('big'); },
   m4step: (b) => { const M = state.m4; tweenStop(); animStop(); M.why = false; const to = +b.dataset.v; if (to === M.step + 1 || to === M.step - 1) { renderSetup(); m4Go(to - M.step); } else { M.step = to; $('#fig').setAttribute('viewBox', ZFULL.join(' ')); render(true); } },
   m4go: (b) => m4Go(+b.dataset.v),
-  m4why: () => { const M = state.m4; M.why = true; M.whyN = 1; sfx.tap(); renderSetup(); drawZoom(-1); m4Panel(); say(`1cm²を よこに 100こ ならべると 100cm²。でも これは まだ 1れつ だけ！`, 'warn'); },
+  m4why: () => { const M = state.m4; tweenStop(); $('#fig')?.setAttribute('viewBox', ZFULL.join(' ')); M.why = true; M.whyN = 1; sfx.tap(); renderSetup(); drawZoom(-1); m4Panel(); say(`1cm²を よこに 100こ ならべると 100cm²。でも これは まだ 1れつ だけ！`, 'warn'); },
   m4whyGo: () => m4WhyGo(),
   m4whyEnd: () => { const M = state.m4; animStop(); M.why = false; sfx.tap(); renderSetup(); drawZoom(M.step); m4Panel(); },
   m4qkey: (b) => m4qKey(b.dataset.k),

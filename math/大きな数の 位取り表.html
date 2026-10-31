@@ -623,6 +623,7 @@ const VIEWS = {};
 const curView = () => VIEWS[state.mode];
 function setMode(mode) {
   state.busy = false;
+  state.gen = (state.gen || 0) + 1;     // アニメの とちゅうで モードが かわったら、のこりの うごきを やめる 目じるし
   state.mode = mode;
   curView().enter?.();
   render(true);
@@ -851,9 +852,11 @@ async function timesTen(dir) {
     return;
   }
   state.busy = true;
+  const gen = state.gen;
   const before = F.d.slice();
   dir > 0 ? sfx.up() : sfx.down();
   await slideDigits('pt', F.d, dir);
+  if (gen !== state.gen) return;         // とちゅうで モードが かわった
   F.d = dir > 0 ? [0, ...F.d.slice(0, PLACES - 1)] : [...F.d.slice(1), 0];
   F.log.unshift(`${toMixed(before)} <span class="${dir > 0 ? 'op-up' : 'op-down'}">${dir > 0 ? '×10' : '÷10'}</span> ＝ ${toMixed(F.d)}`);
   F.log = F.log.slice(0, 6);
@@ -878,6 +881,7 @@ async function cutAnimation() {
   const t = topIndex(F.d);
   if (t < 4) { sfx.soft(); say(`5けたより ${R('大', 'おお')}きい ${KAZU}で ためそう（「1${OKU}」や「🎲」を おしてみて）`, 'warn'); return; }
   state.busy = true;
+  const gen = state.gen;
   const box = $('#bigDigits');
   box.innerHTML = digitsBigHTML(F.d, 0);
   say(`${MIGI}から 4けたずつ ${KAZO}えて、${R('線', 'せん')}を ひこう`);
@@ -888,11 +892,13 @@ async function cutAnimation() {
       box.innerHTML = digitsBigHTML(F.d, g - 1, (g - 1) * 4 + k);
       sfx.tick();
       await wait(220);
+      if (gen !== state.gen) return;     // とちゅうで モードが かわった
     }
     box.innerHTML = digitsBigHTML(F.d, g);
     sfx.cut();
     say(`4けた ${KAZO}えたら ${R('線', 'せん')}。ここから ${R('左', 'ひだり')}が「${rubyBig(BIG[g])}」の まとまり`);
     await wait(step);
+    if (gen !== state.gen) return;       // とちゅうで モードが かわった
   }
   state.busy = false;
   render();
@@ -1115,7 +1121,7 @@ VIEWS.read = {
     let msg;
     if (w && nz(tStr) === nz(aStr) && aStr.length < tStr.length) {
       msg = `0の ${KURAI}を とばして いないかな？ ${R('答', 'こた')}えは ${tStr.length}けた、きみの ${KAZU}は ${aStr.length}けた。${R('表', 'ひょう')}に 入れて たしかめよう`;
-    } else if (w && nz(tStr) === nz(aStr)) {
+    } else if (w && nz(tStr) === nz(aStr) && aStr.length > tStr.length) {
       msg = `0が ${R('多', 'おお')}すぎるみたい。${R('答', 'こた')}えは ${tStr.length}けた、きみの ${KAZU}は ${aStr.length}けた`;
     } else {
       const bad = [3, 2, 1, 0].filter((g) => g * 4 < MAXP() && groupVal(fromBig(val) || zeros(), g) !== groupVal(q.d, g));
@@ -1209,14 +1215,16 @@ Object.assign(ACTS, {
     const M = state.m3, Q = M.Q, q = Q.list[Q.i];
     if (M.busy || Q.done || M.pred < 0) return;
     M.busy = true; $('#m3go').disabled = true;
+    const gen = state.gen, same = () => gen === state.gen && state.m3.Q === Q && Q.list[Q.i] === q;
     const t = topIndex(q.d), dir = Math.sign(q.op.shift);
     $$('#pt3 .dg').forEach((c) => c.classList.remove('hit'));
     for (let k = 0; k < Math.abs(q.op.shift); k++) {
       dir > 0 ? sfx.up() : sfx.down();
       await slideDigits('pt3', M.d, dir);
+      if (!same()) return;               // とちゅうで モード・問題が かわった
       M.d = dir > 0 ? [0, ...M.d.slice(0, PLACES - 1)] : [...M.d.slice(1), 0];
       updateTable(M.d, 'pt3', [t + dir * (k + 1)]);
-      if (calm()) await wait(300);
+      if (calm()) { await wait(300); if (!same()) return; }
     }
     M.busy = false;
     const goal = t + q.op.shift, after = toBig(M.d);
@@ -1461,6 +1469,11 @@ VIEWS.calc = {
       return;
     }
     Q.tries++; sfx.soft();
+    if (v === 0n) {       // 0 で わる 計算を しないように
+      say(`ちがうみたい。「${R('考', 'かんが')}え${R('方', 'かた')}」を 見てみよう`, 'warn');
+      if (Q.tries >= 2) { Q.done = true; this.reveal(); }
+      return;
+    }
     const r = v > q.ans ? v / q.ans : q.ans / v, exact = v > q.ans ? v % q.ans === 0n : q.ans % v === 0n;
     if (v && exact && /^10+$/.test(r.toString())) say(`${SUUJI}は あって いるよ。0の ${KAZU}（${KURAI}）を もう いちど たしかめよう`, 'warn');
     else say(`ちがうみたい。「${R('考', 'かんが')}え${R('方', 'かた')}」を 見てみよう`, 'warn');
@@ -1544,7 +1557,11 @@ ACTS.topicLoad = (b) => {
 state.m6 = { d: zeros(), hide: { table: false, digits: false, kanji: true, mixed: true, kana: true }, text: '' };
 const HIDE_LABELS = { table: `${KURAI}取り${R('表', 'ひょう')}`, digits: SUUJI, kanji: KANSUUJI, mixed: `${SUUJI}と${R('漢字', 'かんじ')}`, kana: `${YOMI}み${R('方', 'かた')}` };
 VIEWS.teacher = {
-  enter() { say(`${KAZU}を 入れて「${R('表示', 'ひょうじ')}」。${R('答', 'こた')}えを かくして、${R('子', 'こ')}どもに ${YOMI}ませる ことも できます`); },
+  enter() {
+    // 「億まで」に したら、表に 出ない 上の 位は 0 に する（表と 漢数字が くいちがわない ように）
+    const M = state.m6;
+    if (M.d.some((v, i) => i >= MAXP() && v)) { M.d = M.d.map((v, i) => (i < MAXP() ? v : 0)); M.text = ''; }
+    say(`${KAZU}を 入れて「${R('表示', 'ひょうじ')}」。${R('答', 'こた')}えを かくして、${R('子', 'こ')}どもに ${YOMI}ませる ことも できます`); },
   setup() {
     const H = state.m6.hide;
     return `<div class="sgrp"><span class="slabel">かくす</span>${Object.keys(HIDE_LABELS).map((k) => chip('m6hide', k, HIDE_LABELS[k], H[k])).join('')}</div>`;
