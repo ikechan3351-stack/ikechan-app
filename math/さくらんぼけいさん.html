@@ -248,6 +248,8 @@
 
   /* あいことば */
   .chant-card { padding: 12px 14px; }
+  .step-btn { margin: 0 0 10px; }   /* まなぶ の「つぎへ」：ふきだしの すぐ下 */
+  .step-btn:disabled { opacity: 0.35; cursor: default; animation: none; }
   .chant-title { font-weight: 900; color: var(--accent-dark); margin-bottom: 6px; }
   .chant { font-size: clamp(1.15rem, 3vmin, 1.6rem); font-weight: 900; line-height: 1.7; }
   .chant span { display: inline-block; padding: 0 2px; border-radius: 6px; transition: background 0.2s, color 0.2s; }
@@ -367,6 +369,7 @@
           <div class="bubble" id="bubble"></div>
           <button class="say-btn" id="btnSay" title="もういちど きく">🔊</button>
         </div>
+        <button class="next-btn step-btn" id="btnStep" hidden>つぎへ ▶</button>
         <div class="card rows-card" id="rowsCard"><div id="rows"></div></div>
       </div>
       <div class="col">
@@ -850,7 +853,7 @@ function show(id) {
   ['scrHome', 'scrMap', 'scrPlay', 'scrResult', 'scrTeacher'].forEach(s => { $('#' + s).hidden = s !== id; });
   window.scrollTo(0, 0);
 }
-function stopAll() { tok++; hush(); demoMode = false; clearInterval(timerId); }
+function stopAll() { tok++; hush(); demoMode = false; clearInterval(timerId); stepBtn(null); }
 
 function goHome() {
   stopAll();
@@ -1562,9 +1565,23 @@ function goLearn(idx = 0, spec) {
   loadProblem({ ...(spec || L.ex), method: L.key, learn: true });
   $('#scenes').innerHTML = SCENES[L.key].map((s, i) => `<div class="scene" data-sc="${i}">${W(s)}</div>`).join('');
   $('#chant').innerHTML = chantOf(L.key).map(s => `<span>${s}</span>`).join(' ');
-  bubble('「▶ はじめから」を おしてね。', '', false);
+  bubble('「▶ はじめから」を おしてね。「つぎへ ▶」を おすと、1つずつ すすむよ。', '', false);
 }
 function scene(i) { $$('.scene').forEach((el, j) => { el.classList.toggle('on', j === i); el.classList.toggle('done', j < i); }); }
+/* ===== まなぶ は「つぎへ ▶」を おすと 1つずつ すすむ ===== */
+let nextRes = null;
+// state：null＝かくす、'wait'＝おせる、'busy'＝うごいている あいだ（おせない）
+function stepBtn(state) {
+  const bt = $('#btnStep');
+  bt.hidden = !state; bt.disabled = state !== 'wait';
+  if (state !== 'wait') nextRes = null;
+}
+function waitNext(my) {
+  if (my !== tok) return Promise.reject(ABORT);
+  stepBtn('wait');
+  return new Promise(res => { nextRes = res; }).then(() => { if (my !== tok) throw ABORT; stepBtn('busy'); });
+}
+function pressNext() { if (nextRes) { const r = nextRes; nextRes = null; r(); } }
 async function tell(text, my) { bubble(text, '', false); await say(text); if (my !== tok) throw ABORT; await pause(250, my); }
 
 // まなぶ の せりふ（じゅんばんに よむ）
@@ -1605,7 +1622,7 @@ function demoLines() {
   ];
 }
 async function demo(my) {
-  demoMode = true;
+  demoMode = true; stepBtn('busy');
   const { a, b } = P, m = P.method, L = demoLines();
   // ① さくらんぼで わける
   scene(0);
@@ -1614,55 +1631,70 @@ async function demo(my) {
   splitColors(); render(); await pause(600, my);
   if (m === 'gogo') {
     // ② 5と 5で ガッチャンコ ③ のこりを あわせる ④ 10と あわせる
+    await waitNext(my);
     scene(1);
     await tell(L[1], my);
     P.phase = 'make'; P.busy = true;
     await doSausage(my);
+    await waitNext(my);
     await tell(L[2], my);
     P.phase = 'rows'; P.rows[0].val = 10; SFX.pop(); render(); await pause(500, my);
+    await waitNext(my);
     scene(2);
     await tell(L[3], my);
     P.rows[1].val = P.rows[1].want; SFX.pop(); render(); await pause(400, my);
+    await waitNext(my);
     scene(3);
     await tell(L[4], my);
     P.rows[2].val = a + b; SFX.pop(); render(); await pause(400, my);
   } else if (P.kind === 'add') {
     // ② ソーセージを つくる ③ ジュージュー やく
+    await waitNext(my);
     scene(1);
     await tell(L[1], my);
     P.phase = 'make'; P.busy = true;
     scene(2);
     await doSausage(my);
+    await waitNext(my);
     await tell(L[2], my);
     P.phase = 'rows'; P.rows[0].val = 10; SFX.pop(); render(); await pause(500, my);
     // ④ のこりと あわせる
+    await waitNext(my);
     scene(3);
     await tell(L[3], my);
     P.rows[1].val = a + b; SFX.pop(); render(); await pause(400, my);
   } else if (m === 'genka') {
+    await waitNext(my);
     scene(1);
     await tell(L[1], my);
     P.phase = 'make'; P.busy = true; render();
     await eat('pack', b, my);
+    await waitNext(my);
     await tell(L[2], my);
     P.phase = 'rows'; P.rows[0].val = 10 - b; SFX.pop(); render(); await pause(400, my);
+    await waitNext(my);
     scene(2);
     await tell(L[3], my);
     await gather(my);
+    await waitNext(my);
     await tell(L[4], my);
     P.rows[1].val = a - b; SFX.pop(); render(); await pause(400, my);
     scene(3);
   } else {
     const k = a - 10;
+    await waitNext(my);
     scene(1);
     await tell(L[1], my);
     P.phase = 'make'; P.busy = true; render();
     await eat('bara', k, my);
+    await waitNext(my);
     await tell(L[2], my);
     P.phase = 'rows'; P.rows[0].val = 10; SFX.pop(); render(); await pause(400, my);
+    await waitNext(my);
     scene(2);
     await tell(L[3], my);
     await eat('pack', b - k, my);
+    await waitNext(my);
     await tell(L[4], my);
     P.rows[1].val = a - b; SFX.pop(); render(); await pause(400, my);
     scene(3);
@@ -1670,9 +1702,10 @@ async function demo(my) {
   P.busy = false;
   await say(await finish(my));
   if (my !== tok) throw ABORT;
-  await pause(500, my);
+  await waitNext(my);
   await chant(my);
   demoMode = false;
+  stepBtn(null);
 }
 /* ===== 音声ファイルを つくる ための、しゃべる 文の 一覧 =====
    すべての もんだい・やり方・だんかいで 言う 文を あつめる（tools/さくらんぼ音声.py に わたす）。
@@ -1762,7 +1795,8 @@ $('#btnRetry').onclick = () => {
 };
 $('#btnSay').onclick = () => { if (lastSay) say(lastSay); };
 $('#btnDemo').onclick = () => { ac(); restartLearn({ kind: P.kind, a: P.a, b: P.b }); };
-$('#btnChant').onclick = () => { ac(); tok++; hush(); run(my => chant(my)); };
+$('#btnChant').onclick = () => { ac(); tok++; hush(); stepBtn(null); run(my => chant(my)); };
+$('#btnStep').onclick = () => { ac(); pressNext(); };
 $('#btnOther').onclick = () => {
   ac();
   const pool = LEARN[learnIdx].pool().filter(p => !(p.a === P.a && p.b === P.b));
@@ -1776,7 +1810,7 @@ document.addEventListener('keydown', e => {
   if ($('#scrPlay').hidden || !P) return;
   if (/^[0-9]$/.test(e.key)) typeDigit(e.key);
   else if (e.key === 'Backspace') typeDigit('del');
-  else if (e.key === 'Enter') { if (!$('#btnNext').hidden) nextProblem(); else typeDigit('ok'); }
+  else if (e.key === 'Enter') { if (P.learn) pressNext(); else if (!$('#btnNext').hidden) nextProblem(); else typeDigit('ok'); }
 });
 
 // しきの 上の タップ：さくらんぼを つける かずを えらぶ／えだを えらぶ／ひきざんの たべる ところ
