@@ -116,6 +116,7 @@
     min-height: 1.3em; transition: padding-bottom 0.3s;
   }
   .eq.has-cherry { padding-bottom: 1.45em; }
+  .eq.has-cherry.two { padding-bottom: 1.9em; }   /* 5と5：さくらんぼの 下に「10」の しるし */
   .eq .op, .eq .word { color: #6d4c41; padding: 0 0.06em; }
   .eq .word { font-size: 0.6em; align-self: center; }
   .tok { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
@@ -164,6 +165,7 @@
   .saus-body { fill: rgba(239, 154, 104, 0.22); stroke: #c0592b; stroke-width: 6; stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 0.8s ease, fill 0.6s; }
   .saus.drawn .saus-body { stroke-dashoffset: 0; }
   .saus.grilled .saus-body { fill: rgba(191, 87, 44, 0.25); stroke: #8d3a14; }
+  .saus .saus-body.saus-link, .saus.grilled .saus-body.saus-link { fill: none; }
   .saus.sizzle .saus-in { animation: sizzle 0.12s infinite; }
   @keyframes sizzle { 50% { transform: translate(1.5px, -1.5px); } }
   .grill line { stroke: #6d2f12; stroke-width: 5; stroke-linecap: round; opacity: 0; transition: opacity 0.5s; }
@@ -420,13 +422,14 @@
       <div class="t-box"><h3>設定</h3>
         <label class="set-row">たし算：前の数を分ける（被加数分解 3+9 の 3を分ける） <input type="checkbox" id="tHika"></label>
         <label class="set-row">ひき算：バラから先に取る（減減法 12−3） <input type="checkbox" id="tGengen"></label>
+        <label class="set-row">たし算：5と5で10をつくる（6+6 の両方を「5といくつ」に分ける） <input type="checkbox" id="tGogo"></label>
         <label class="set-row">食べもののたとえを使う（オフ＝ブロックだけ：「10をつくる・10からとる」） <input type="checkbox" id="tFood"></label>
         <label class="set-row">声で読み上げる <input type="checkbox" id="tVoice"></label>
         <label class="set-row">効果音 <input type="checkbox" id="tSfx"></label>
         <label class="set-row">動き
           <select id="tMotion"><option value="auto">自動（端末の設定に合わせる）</option><option value="normal">ふつう</option><option value="less">減らす</option></select>
         </label>
-        <p class="t-note">オフにしたやり方は、さくらんぼをつける数を選ぶ場面で使われなくなり、「まなぶ」のタブとステップ6（減減法）がお休みになります。</p>
+        <p class="t-note">オフにしたやり方は、さくらんぼをつける数を選ぶ場面で使われなくなり、「まなぶ」のタブと、そのステップ（減減法・5と5）がお休みになります。</p>
       </div>
       <div class="t-box"><h3>記録</h3>
         <div class="t-btns">
@@ -468,7 +471,7 @@
 'use strict';
 /* =========================================================
    さくらんぼけいさん（小学1年 くりあがり・くりさがり）
-   - たしざん：加数分解（8+3 の 3を わける）・被加数分解（3+9 の 3を わける）
+   - たしざん：加数分解（8+3 の 3を わける）・被加数分解（3+9 の 3を わける）・5と5（6+6 を 5と1・5と1に わける）
    - ひきざん：減加法（14-8 の 14を 10と4に）・減減法（12-3 の 3を 2と1に）
    - あいことば：たしざん＝ソーセージを つくって ジュージュー やく
                  ひきざん＝10の パックから パクッと たべる
@@ -513,7 +516,7 @@ function loadStore() {
   return {};
 }
 const store = Object.assign({ steps: {}, stickers: 0, log: [], titles: [] }, loadStore());
-store.settings = Object.assign({ voice: true, sfx: true, motion: 'auto', food: true, hika: true, gengen: true }, store.settings);
+store.settings = Object.assign({ voice: true, sfx: true, motion: 'auto', food: true, hika: true, gengen: true, gogo: true }, store.settings);
 function saveStore() {
   if (store.log.length > 600) store.log = store.log.slice(-600);
   try {
@@ -665,6 +668,7 @@ const SFX = {
 /* ===== もんだいの データ（たしざん36もん・ひきざん36もん） ===== */
 const ADD = [], SUB = [];
 for (let a = 2; a <= 9; a++) for (let b = 2; b <= 9; b++) if (a + b >= 11) ADD.push({ kind: 'add', a, b });
+const GOGO = ADD.filter(p => p.a >= 6 && p.b >= 6);   // 5と5で 10：どちらも 6いじょう（16もん）
 for (let m = 11; m <= 18; m++) for (let n = 2; n <= 9; n++) if (n > m - 10) SUB.push({ kind: 'sub', a: m, b: n });
 
 function shuffle(arr) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
@@ -682,22 +686,26 @@ function pickN(pool, n = 10) {
   return out;
 }
 
-/* ===== 7つの ステップ =====
-   method：null＝こどもが さくらんぼを つける かずを えらぶ／きまった やり方 */
+/* ===== 8つの ステップ =====
+   method：null＝こどもが さくらんぼを つける かずを えらぶ／きまった やり方
+   no は きろくの ための ばんごう（あとから たした「5と5」は no:8）。ちずの ばんごうは ならびの じゅん（dispNo） */
 const STEPS = [
   { no: 1, name: 'あと いくつで 10？', ex: '7と □で 10', pool: () => [1,2,3,4,5,6,7,8,9].map(a => ({ kind: 'ten', a })) },
   { no: 2, name: 'さくらんぼで わけよう', ex: '8＋3 の 3を □と □に', pool: () => ADD.map(p => ({ ...p, method: 'kasu', splitOnly: true })) },
   { no: 3, name: 'ソーセージを やこう', ex: '9＋4、8＋5', pool: () => ADD.filter(p => p.a >= 7 && p.b <= p.a).map(p => ({ ...p, method: 'kasu' })) },
   { no: 4, name: 'たしざん ぜんぶ', ex: '3＋9、7＋6', pool: () => ADD },
+  { no: 8, name: '5と 5で ガッチャンコ', ex: '6＋6、7＋8', pool: () => GOGO.map(p => ({ ...p, method: 'gogo' })) },
   { no: 5, name: 'パックから パクッ', ex: '14−8', pool: () => SUB.map(p => ({ ...p, method: 'genka' })) },
   { no: 6, name: 'バラから さきに たべる', ex: '12−3', pool: () => SUB.filter(p => p.b - (p.a - 10) <= 2).map(p => ({ ...p, method: 'gengen' })) },
   { no: 7, name: 'チャレンジ', ex: '15−7、6＋8（ブロックなし）', pool: () => ADD.concat(SUB).map(p => ({ ...p, noBlocks: true })),
     make: () => shuffle(pickN(ADD, 5).concat(pickN(SUB, 5))).map(p => ({ ...p, noBlocks: true })) },
 ];
 STEPS.forEach(s => { if (!s.make) s.make = () => pickN(s.pool()); });
+const stepOf = no => STEPS.find(s => s.no === no);
+const dispNo = no => STEPS.indexOf(stepOf(no)) + 1;   // ちずに 出す ばんごう
 // どの ステップも さいしょから えらべる（クリアは めやす。地図に ✅ が つく）。
-// ただし 減減法を せっていで オフに したら ステップ6は おやすみ
-const isOpen = no => no !== 6 || store.settings.gengen;
+// ただし 減減法・5と5を せっていで オフに したら、その ステップは おやすみ
+const isOpen = no => (no !== 6 || store.settings.gengen) && (no !== 8 || store.settings.gogo);
 const sameQ = (x, y) => x.kind === y.kind && x.a === y.a && (x.kind === 'ten' || x.b === y.b);
 
 /* ===== つまずきに あわせた 出題 =====
@@ -723,7 +731,7 @@ function weakFor(no) {
     .map(r => parseQ(r.q)).filter(Boolean).slice(0, 3);
 }
 function makeList(no) {
-  const st = STEPS[no - 1], list = st.make(), pool = st.pool();
+  const st = stepOf(no), list = st.make(), pool = st.pool();
   const weak = weakFor(no).map(w => pool.find(p => sameQ(p, w))).filter(Boolean);
   const slots = shuffle(list.map((_, i) => i));
   weak.forEach((w, j) => {
@@ -733,7 +741,7 @@ function makeList(no) {
   return list;
 }
 function similarTo(spec) {
-  const pool = STEPS[session.step - 1].pool();
+  const pool = stepOf(session.step).pool();
   const c = pool.filter(p => p.kind === spec.kind && !sameQ(p, spec) && (p.a === spec.a || (p.b !== undefined && p.b === spec.b) || (p.kind === 'ten' && Math.abs(p.a - spec.a) === 1)));
   return c.length ? { ...c[Math.floor(Math.random() * c.length)], similar: true } : null;
 }
@@ -750,7 +758,7 @@ function addSimilar() {
 /* ===== しょうごう（ステップを はじめて クリアした ときに もらえる） ===== */
 const TITLES = {
   1: ['10の はかせ'], 2: ['さくらんぼ めいじん'], 3: ['ソーセージやさん', '10づくり めいじん'], 4: ['たしざん マスター'],
-  5: ['パックめいじん', '10から とる めいじん'], 6: ['バラから たべる めいじん', 'バラから とる めいじん'], 7: ['さくらんぼ チャンピオン'],
+  5: ['パックめいじん', '10から とる めいじん'], 6: ['バラから たべる めいじん', 'バラから とる めいじん'], 7: ['さくらんぼ チャンピオン'], 8: ['ガッチャンコ めいじん'],
 };
 const titleOf = no => food() ? TITLES[no][0] : (TITLES[no][1] || TITLES[no][0]);
 const titleSay = no => `しょうごう「${titleOf(no)}」を もらったよ！`;
@@ -759,6 +767,7 @@ const titleSay = no => `しょうごう「${titleOf(no)}」を もらったよ�
 const LEARN = [
   { key: 'kasu',   label: 'たしざん',             ex: { kind: 'add', a: 8, b: 3 },  pool: () => ADD.filter(p => p.a >= p.b) },
   { key: 'hika',   label: 'たしざん（まえを わける）', ex: { kind: 'add', a: 3, b: 9 },  pool: () => ADD.filter(p => p.a < p.b) },
+  { key: 'gogo',   label: 'たしざん（5と 5で）',     ex: { kind: 'add', a: 6, b: 6 },  pool: () => GOGO },
   { key: 'genka',  label: 'ひきざん（パックから）',   ex: { kind: 'sub', a: 14, b: 8 }, pool: () => SUB },
   { key: 'gengen', label: 'ひきざん（バラから）',     ex: { kind: 'sub', a: 12, b: 3 }, pool: () => SUB.filter(p => p.b - (p.a - 10) <= 2) },
 ];
@@ -766,21 +775,24 @@ const SCENES = {
   kasu:   ['① さくらんぼで わける', '② ソーセージを つくる', '③ ジュージュー やく', '④ のこりと あわせる'],
   genka:  ['① さくらんぼで わける', '② パックから パクッ', '③ のこりと バラを あわせる', '④ ごちそうさま'],
   gengen: ['① さくらんぼで わける', '② バラを さきに たべる', '③ パックから パクッ', '④ ごちそうさま'],
+  gogo:   ['① 5と のこりに わける', '② 5と 5で ガッチャンコ', '③ のこりを あわせる', '④ 10と あわせる'],
 };
 SCENES.hika = SCENES.kasu;
 const CHANTS = {
   add:    ['さくらんぼで わけて、', 'ソーセージを つくって', 'ジュージュー やく！', '10が やけたら', 'のこりと あわせて', 'できあがり！'],
   genka:  ['さくらんぼで わけて、', '10の パックから', 'パクッと たべる！', 'のこりと バラを あわせて', 'ごちそうさま！'],
   gengen: ['さくらんぼで わけて、', 'まず バラを たべて、', 'たりない ぶんは', 'パックから パクッ！', 'ごちそうさま！'],
+  gogo:   ['どちらも 5と のこりに わけて、', '5と 5で', 'ガッチャンコ！', 'のこりを あわせて', '10と あわせて', 'できあがり！'],
 };
 // たべもの なしの あいことば
 const CHANTS_BLOCK = {
   add:    ['さくらんぼで わけて、', '10を つくって', 'のこりと あわせる！'],
   genka:  ['さくらんぼで わけて、', '10から とって', 'のこりと バラを あわせる！'],
   gengen: ['さくらんぼで わけて、', 'まず バラを とって、', 'たりない ぶんは', '10から とる！'],
+  gogo:   ['どちらも 5と のこりに わけて、', '5と 5で 10！', 'のこりを あわせて', '10と あわせる！'],
 };
 const chantOf = m => { const C = food() ? CHANTS : CHANTS_BLOCK; return (m === 'kasu' || m === 'hika') ? C.add : C[m]; };
-const learnOn = x => (x.key !== 'hika' || store.settings.hika) && (x.key !== 'gengen' || store.settings.gengen);
+const learnOn = x => (x.key !== 'hika' || store.settings.hika) && (x.key !== 'gengen' || store.settings.gengen) && (x.key !== 'gogo' || store.settings.gogo);
 const STICKERS = ['🍒', '🌭', '🍓', '⭐', '🍙', '🍩', '🍦', '🌈', '🍰', '🎈'];
 
 /* =========================================================
@@ -820,6 +832,12 @@ function setMethod(m) {
     const k = a - 10;
     P.on = 'B'; P.br = [{ want: k, role: 'rest' }, { want: b - k, role: 'pair' }]; P.order = [0, 1];
     P.rows = [{ l: [a, '−', k], c: ['', '', 'rest'], want: 10 }, { l: [10, '−', b - k], c: ['ten', '', 'pair'], want: a - b }];
+  } else if (m === 'gogo') {   // 6+6 → 6を 5と1、6を 5と1に → 5+5=10 → 1+1=2 → 10+2=12（えだは 0,1＝まえ、2,3＝うしろ）
+    const p = a - 5, q = b - 5;
+    P.on = 'AB'; P.br = [{ want: 5, role: 'pair' }, { want: p, role: 'rest' }, { want: 5, role: 'pair' }, { want: q, role: 'rest' }];
+    P.order = [0, 1, 2, 3]; P.ring = ['c0', 'c2'];
+    P.rows = [{ l: [5, '+', 5], c: ['pair', '', 'pair'], want: 10 }, { l: [p, '+', q], c: ['rest', '', 'rest'], want: p + q },
+      { l: [10, '+', p + q], c: ['ten', '', 'rest'], want: a + b }];
   }
   P.br.forEach(x => { x.val = null; });
   P.rows.forEach(x => { x.val = null; });
@@ -850,7 +868,7 @@ function goMap() {
     const score = !open ? '<span class="ex">（いまは おやすみ）</span>'
       : r ? `<span class="score">${r.cleared ? '✅ クリア　' : ''}いちばん：${r.best} / 10${r.bestSec ? `（${fmtSec(r.bestSec)}）` : ''}</span>` : '';
     return `<button class="step-card ${open ? '' : 'rest'} ${r && r.cleared ? 'cleared' : ''}" data-step="${s.no}">
-      <span class="no">${s.no}</span>${W(s.name)}<span class="ex">れい：${s.ex}</span>${score}</button>`;
+      <span class="no">${dispNo(s.no)}</span>${W(s.name)}<span class="ex">れい：${s.ex}</span>${score}</button>`;
   }).join('');
   show('scrMap');
 }
@@ -859,10 +877,10 @@ function goMap() {
 let timerId = 0;
 function startSession(no) {
   stopAll();
-  const st = STEPS[no - 1];
+  const st = stepOf(no);
   session = { step: no, list: makeList(no), idx: 0, results: [], t0: Date.now() };
   $('#learnBar').hidden = true; $('#chantCard').hidden = true; $('#padCard').hidden = false;
-  $('#playTitle').textContent = `ステップ${no}　${W(st.name)}`;
+  $('#playTitle').textContent = `ステップ${dispNo(no)}　${W(st.name)}`;
   $('#btnPlayBack').textContent = '← ちず';
   $('#timer').hidden = no !== 7;
   if (no === 7) { const upd = () => { $('#timer').textContent = '⏱ ' + fmtSec((Date.now() - session.t0) / 1000); }; upd(); timerId = setInterval(upd, 500); }
@@ -925,7 +943,8 @@ function buildEq() {
   }
 }
 const numEl = k => $(`#tok${k} .num`);
-const cboxEl = i => P.on ? $(`#tok${P.on} .cbox[data-i="${i}"]`) : null;
+// 5と5 は さくらんぼが 2つ（えだ 0,1＝まえの かず、2,3＝うしろの かず）
+const cboxEl = i => !P.on ? null : P.on === 'AB' ? $(`#tok${i < 2 ? 'A' : 'B'} .cbox[data-i="${i % 2}"]`) : $(`#tok${P.on} .cbox[data-i="${i}"]`);
 const isActive = (t, i) => P.active && P.active.t === t && (i === undefined || P.active.i === i);
 const typing = () => P.input === '' ? '<span class="caret"></span>' : P.input;
 
@@ -939,6 +958,7 @@ function render() {
     box.innerHTML = done ? answer() : isActive('ten') ? (P.ghost && P.input === '' ? answer() : typing()) : '';
   } else {
     eq.classList.toggle('has-cherry', !!P.on);
+    eq.classList.toggle('two', P.on === 'AB');
     ['A', 'B'].forEach(k => {
       const n = numEl(k);
       const pick = P.phase === 'choose';
@@ -947,7 +967,7 @@ function render() {
       n.classList.toggle('pair', !!pairTok);
       n.classList.toggle('sel', P.sel.has(k));
       n.classList.toggle('blink', P.blinkOn && P.ring && P.ring.includes(k));
-      $(`#tok${k} .cherry`).hidden = P.on !== k;
+      $(`#tok${k} .cherry`).hidden = !(P.on && P.on.includes(k));
     });
     if (P.on) {
       P.br.forEach((br, i) => {
@@ -972,13 +992,13 @@ function render() {
 function renderRows() {
   if ($('#rowsCard').hidden) return;
   const ready = P.rows && P.splitDone;
-  const rows = ready ? P.rows : [{ l: ['□', '', '□'], c: [] }, { l: ['□', '', '□'], c: [] }];
+  const rows = ready ? P.rows : Array.from({ length: P.method === 'gogo' ? 3 : 2 }, () => ({ l: ['□', '', '□'], c: [] }));
   $('#rows').innerHTML = rows.map((r, i) => {
     const act = isActive('row', i);
     const ghost = act && P.ghost && P.input === '';
     const val = r.val !== null && r.val !== undefined ? r.val : act ? (ghost ? r.want : typing()) : '';
     const dim = !ready || (P.phase !== 'rows' && P.phase !== 'done') || (P.phase === 'rows' && !act && r.val == null);
-    return `<div class="row ${act ? 'on' : ''} ${dim ? 'dim' : ''}"><span class="rno">${'①②'[i]}</span>`
+    return `<div class="row ${act ? 'on' : ''} ${dim ? 'dim' : ''}"><span class="rno">${'①②③'[i]}</span>`
       + `<span class="${r.c[0] || ''}">${r.l[0]}</span><span class="op">${r.l[1] || '　'}</span><span class="${r.c[2] || ''}">${r.l[2]}</span>`
       + `<span class="op">=</span><button class="rbox ${r.val != null ? 'filled' : ''} ${act ? 'active' : ''} ${ghost ? 'ghost' : ''}" data-r="${i}">${val}</button></div>`;
   }).join('');
@@ -1009,7 +1029,7 @@ function placeBlocks() {
   P.blocks.forEach(bk => {
     const own = bk.id[0], i = +bk.id.slice(1);
     bk.z = own === base ? 0 : 1; bk.i = i;
-    if (P.method && own === base) bk.cls = 'pair';
+    if (P.method && P.method !== 'gogo' && own === base) bk.cls = 'pair';
   });
 }
 const otherKey = () => P.method === 'hika' ? 'a' : 'b';   // たしざんで さくらんぼを つける ほうの ブロック
@@ -1037,7 +1057,9 @@ function renderBlocks() {
   let deco = box.querySelector('.deco');
   if (!deco) { deco = document.createElement('div'); deco.className = 'deco'; box.prepend(deco); }
   const sub = P.kind === 'sub';
-  const labels = sub ? [W('10こ いり パック'), 'バラ'] : P.kind === 'ten' ? ['10の わく', ''] : ['10の わく', P.splitDone ? 'のこり' : 'たす かず'];
+  const labels = sub ? [W('10こ いり パック'), 'バラ'] : P.kind === 'ten' ? ['10の わく', '']
+    : P.method === 'gogo' && !P.sausage ? [`${P.a}`, `${P.b}`]   // 5と5：ガッチャンコ までは それぞれの かず
+    : ['10の わく', P.splitDone ? 'のこり' : 'たす かず'];
   let html = '';
   [0, 1].forEach(z => {
     if (z === 1 && P.kind === 'ten') return;
@@ -1089,9 +1111,16 @@ function promptText() {
     if (P.method === 'hika') return first ? `${b}は あと いくつで 10？ さくらんぼに かこう。` : `${a}は ${P.br[1].want}と いくつ？`;
     if (P.method === 'genka') return first ? `${a}を「10の パック」と「バラ」に わけよう。パックは いくつ？` : `${a}は 10と いくつ？`;
     if (P.method === 'gengen') return first ? `${a}の バラは いくつ？ さくらんぼに かこう。` : `${b}は ${P.br[0].want}と いくつ？`;
+    if (P.method === 'gogo') {
+      const x = P.bi < 2 ? a : b;
+      if (P.bi === 0) return `${a}を 5と のこりに わけよう。まず 5を かこう。`;
+      if (P.bi === 2) return `${b}も 5と のこりに わけよう。まず 5を かこう。`;
+      return `${x}は 5と いくつ？`;
+    }
     return '';
   }
   if (P.phase === 'make') {
+    if (P.method === 'gogo') return '5と 5を、ゆびで なぞって かこもう。ガッチャンコして 10を つくるよ！';
     if (P.kind === 'add') return '10に なる 2つの かずを、ゆびで なぞって かこもう。ソーセージを つくるよ！';
     const k = a - 10;
     if (P.method === 'genka') return `バラの ${k}こから ${b}こ たべられるかな？ どこから たべる？ タップしてね。`;
@@ -1100,6 +1129,7 @@ function promptText() {
   if (P.phase === 'rows') {
     const r = P.rows[P.active.i], [x, op, y] = r.l;
     if (P.active.i === 0) return P.kind === 'add' ? `${x} たす ${y}は？` : `${x} ひく ${y}は？`;
+    if (P.method === 'gogo' && P.active.i === 1) return `のこりの ${x}と ${y}を あわせると？`;
     if (P.kind === 'add') return `10と ${y}で いくつ？`;
     if (P.method === 'genka') return `のこりの ${x}こと バラの ${y}こを あわせると？`;
     return `10 ひく ${y}は？`;
@@ -1115,16 +1145,19 @@ function hintText() {
   if (P.phase === 'split') {
     const first = P.bi === 0;
     if (P.method === 'kasu' || P.method === 'hika') return first ? `10の わくの あいている ところは いくつ？` : `ブロックで かぞえよう。わくに 入らない のこりは いくつ？`;
+    if (P.method === 'gogo') return P.bi % 2 === 0 ? 'ブロックの 上の 1れつが 5こだよ。' : 'ブロックの 下の れつは いくつ？';
     if (P.method === 'genka') return first ? `10の まとまりが パックだよ。` : `${a}は 10と、バラが いくつ？`;
     return first ? `${a}は 10と いくつ？ その いくつが バラだよ。` : `${b}から バラの ${P.br[0].want}を とると、のこりは？`;
   }
   if (P.phase === 'make') {
+    if (P.method === 'gogo') return '5と 5で 10に なるね。さくらんぼの 5を 2つ さがそう。';
     if (P.kind === 'add') { const x = P.method === 'kasu' ? a : b; return `${x}と あわせて 10に なる かずは どれかな？`; }
     if (P.method === 'genka') return `バラは ${k}こしか ないよ。10の パックから たべよう。`;
     return P.eatStage === 0 ? 'さきに バラを ぜんぶ たべるよ。' : 'バラは もう ないね。パックから たべよう。';
   }
   if (P.phase === 'rows') {
     const i = P.active.i;
+    if (P.method === 'gogo') return ['5と 5で、10の わくが いっぱいに なったね。', 'のこりの ブロックを かぞえよう。', '10と のこりを あわせるよ。のこりを わすれずに！'][i];
     if (P.kind === 'add') return i === 0 ? '10の わくが いっぱいに なったね。' : '10と のこりを あわせるよ。のこりを わすれずに！';
     if (P.method === 'genka') return i === 0 ? 'パックに のこった ブロックを かぞえよう。' : 'パックの のこりと バラを あわせるよ。';
     return i === 0 ? 'バラを ぜんぶ たべたら、10が のこるね。' : 'パックに のこった ブロックを かぞえよう。';
@@ -1139,13 +1172,17 @@ function blinkTargets() {
   return P.eatStage === 0 ? ['bara', 'c0'] : ['pack', 'c1'];
 }
 function glowForHint() {
-  if (P.phase === 'split' && P.kind === 'add') {
+  if (P.phase === 'split' && P.method === 'gogo') {   // 5は 上の れつ、のこりは 下の れつ
+    const own = P.bi < 2 ? 'a' : 'b';
+    glow(b => b.id[0] === own && (P.bi % 2 === 0 ? +b.id.slice(1) < 5 : +b.id.slice(1) >= 5));
+  } else if (P.phase === 'split' && P.kind === 'add') {
     const ok = otherKey(), p = P.br.find(x => x.role === 'pair').want;
     glow(b => b.id[0] === ok && (P.bi === 0 ? +b.id.slice(1) < p : +b.id.slice(1) >= p));
   } else if (P.phase === 'split') {
     glow(b => P.method === 'genka' && P.bi === 0 ? b.z === 0 : b.z === 1);
   } else if (P.phase === 'rows') {
     if (P.active.i === 0) glow(b => b.z === 0 && !b.eaten);
+    else if (P.method === 'gogo' && P.active.i === 1) glow(b => b.z === 1);
     else glow(b => !b.eaten);
   } else glow(() => false);
 }
@@ -1204,7 +1241,8 @@ function check() {
     if (v === r.want) run(my => rowDone(act.i, my));
     else if (act.i === 0) miss(2, 'おしい！');
     else {
-      const forgot = v === P.rows[0].want || v === 10;   // のこりを あわせわすれた かも
+      const last = act.i === P.rows.length - 1;
+      const forgot = last && (v === P.rows[act.i - 1].want || v === 10);   // のこりを あわせわすれた かも
       miss(3, forgot ? 'おしい！ のこりを あわせるのを わすれていないかな？' : 'おしい！ ブロックを みてみよう。');
     }
   }
@@ -1214,7 +1252,7 @@ function check() {
 async function brDone(i, my) {
   P.br[i].val = P.br[i].want; P.input = ''; SFX.pop(); resetHint();
   P.bi++;
-  if (P.bi < 2) { P.active = { t: 'br', i: P.order[1] }; render(); prompt(); return; }
+  if (P.bi < P.order.length) { P.active = { t: 'br', i: P.order[P.bi] }; render(); prompt(); return; }
   P.active = null; P.busy = true;
   splitColors(); render();
   await pause(500, my);
@@ -1226,6 +1264,10 @@ async function brDone(i, my) {
 function splitColors() {
   P.splitDone = true;
   if (P.kind !== 'add') return;
+  if (P.method === 'gogo') {   // 5の まとまりは オレンジ（まえ＝ぬり、うしろ＝てんせん）、のこりは 青
+    P.blocks.forEach(b => { b.cls = +b.id.slice(1) >= 5 ? 'rest' : b.id[0] === 'a' ? 'pair' : 'pair2'; });
+    return;
+  }
   const ok = otherKey(), p = P.br.find(x => x.role === 'pair').want;
   P.blocks.forEach(b => { if (b.id[0] === ok) b.cls = +b.id.slice(1) < p ? 'pair2' : 'rest'; });
 }
@@ -1239,11 +1281,11 @@ async function makeDone(my) {
 }
 async function rowDone(i, my) {
   P.rows[i].val = P.rows[i].want; P.input = ''; SFX.pop(); resetHint();
-  if (i === 0) {
+  if (i < P.rows.length - 1) {
     P.active = null; P.busy = true; render();
     if (P.method === 'genka') await gather(my); else await pause(300, my);
     P.busy = false;
-    P.active = { t: 'row', i: 1 }; render(); prompt();
+    P.active = { t: 'row', i: i + 1 }; render(); prompt();
   } else await finish(my);
 }
 async function tenDone(my) {
@@ -1256,6 +1298,15 @@ async function tenDone(my) {
 /* ===== うごき（アニメ） ===== */
 // たしざん：10に なる ぶんの ブロックを わくへ
 async function moveToFrame(my) {
+  if (P.method === 'gogo') {   // うしろの 5を わくの 下の れつへ、まえの のこりを となりの わくへ
+    let li = 0;
+    P.blocks.forEach(b => {
+      const i = +b.id.slice(1);
+      if (i < 5) { b.z = 0; b.i = b.id[0] === 'a' ? i : 5 + i; } else { b.z = 1; b.i = li++; }
+    });
+    render(); await pause(700, my);
+    P.frameFull = true; render(); return;
+  }
   const ok = otherKey(), base = P.method === 'hika' ? P.b : P.a;
   let fi = base, li = 0;
   P.blocks.filter(b => b.id[0] === ok).forEach(b => { if (b.cls === 'pair2') { b.z = 0; b.i = fi++; } else { b.z = 1; b.i = li++; } });
@@ -1293,6 +1344,13 @@ function relRect(el) {
 const candEl = k => k[0] === 'c' ? cboxEl(+k[1]) : numEl(k);
 function sausageSVG(state) {
   const [r1, r2] = P.ring.map(k => relRect(candEl(k)));
+  if (P.method === 'gogo') {   // 5と5：あいだの かずを かこまないよう、5を 1つずつ まるで かこみ、下で つなぐ
+    const rad = Math.max(r1.w, r1.h) / 2 + 6, yb = Math.max(r1.cy, r2.cy) + rad, mx = (r1.cx + r2.cx) / 2;
+    return `<g class="saus ${state}"><circle class="saus-body" pathLength="100" cx="${r1.cx}" cy="${r1.cy}" r="${rad}"/>`
+      + `<circle class="saus-body" pathLength="100" cx="${r2.cx}" cy="${r2.cy}" r="${rad}"/>`
+      + `<path class="saus-body saus-link" pathLength="100" d="M ${r1.cx} ${yb} Q ${mx} ${yb + 30} ${r2.cx} ${yb}"/></g>`
+      + `<g class="badge10 ${state.includes('grilled') ? 'on' : ''}" transform="translate(${mx} ${yb + 15})"><circle r="19"/><text>10</text></g>`;
+  }
   const dx = r2.cx - r1.cx, dy = r2.cy - r1.cy, L = Math.hypot(dx, dy), ang = Math.atan2(dy, dx);
   const rad = Math.max(Math.min(r1.w, r1.h), Math.min(r2.w, r2.h)) / 2 + 8;
   const mx = (r1.cx + r2.cx) / 2, my = (r1.cy + r2.cy) / 2;
@@ -1312,6 +1370,15 @@ async function doSausage(my) {
   ov.querySelector('.saus').classList.add('drawn');
   await pause(850, my);
   // ジュージュー やく（たべもの なしの ときは「10が できた！」だけ）
+  if (P.method === 'gogo') {   // 5と 5は ガッチャンコ（ジュージューは しない）
+    bubble('ガッチャンコ！', '', false); say('ガッチャンコ！'); SFX.paku();
+    ov.querySelector('.saus').classList.add('grilled');
+    ov.querySelector('.badge10').classList.add('on');
+    P.sausage = true;
+    await pause(900, my);
+    if (!P.noBlocks) await moveToFrame(my); else P.frameFull = true;
+    return;
+  }
   bubble('ジュージュー！', '', false);
   say('ジュージュー！');
   if (food()) SFX.sizzle();
@@ -1344,7 +1411,7 @@ function inPoly(p, poly) {
   }
   return ins;
 }
-function cands() { return ['A', 'B', 'c0', 'c1'].filter(k => k[0] !== 'c' || P.on).map(k => ({ k, r: relRect(candEl(k)) })); }
+function cands() { return ['A', 'B', 'c0', 'c1', 'c2', 'c3'].filter(k => k[0] !== 'c' || +k[1] < P.br.length).filter(k => k[0] !== 'c' || P.on).map(k => ({ k, r: relRect(candEl(k)) })); }
 function hit(r, p, m = 8) { return p.x >= r.x - m && p.x <= r.x + r.w + m && p.y >= r.y - m && p.y <= r.y + r.h + m; }
 function endStroke() {
   const pts = stroke; stroke = null;
@@ -1418,7 +1485,7 @@ function finishWords() {
   const ans = answer();
   if (P.kind === 'ten') return `${P.a}と ${ans}で 10。`;
   if (P.splitOnly) return `${P.b}は ${P.br[0].want}と ${P.br[1].want}。さくらんぼ できたね！`;
-  if (P.kind === 'add') return `10と ${P.rows[1].l[2]}で ${ans}。できあがり！`;
+  if (P.kind === 'add') return `10と ${P.rows[P.rows.length - 1].l[2]}で ${ans}。できあがり！`;
   return `こたえは ${ans}。ごちそうさま！`;
 }
 async function finish(my) {
@@ -1464,14 +1531,14 @@ function showResult() {
   if (newTitle) store.titles.push(no);
   if (score >= 8) { rec.cleared = true; if (no === 7) rec.bestSec = rec.bestSec ? Math.min(rec.bestSec, Math.round(sec)) : Math.round(sec); }
   store.steps[no] = rec; saveStore();
-  $('#resTitle').textContent = `ステップ${no}　おわり！`;
+  $('#resTitle').textContent = `ステップ${dispNo(no)}　おわり！`;
   $('#resScore').textContent = `${score} / 10 もん${no === 7 ? `　⏱ ${fmtSec(sec)}` : ''}`;
   $('#resStickers').innerHTML = session.results.map((r, i) => r.ok ? `<span style="animation-delay:${i * 0.12}s">${STICKERS[i % STICKERS.length]}</span>` : '').join('');
   // つまずいた ところを ひとこと
   const sum = { 1: 0, 2: 0, 3: 0 };
   session.results.forEach(r => { if (r.miss) [1, 2, 3].forEach(t => { sum[t] += r.miss[t]; }); });
   const worst = [1, 2, 3].sort((x, y) => sum[y] - sum[x])[0];
-  let msg = score >= 8 ? (no < 7 ? `クリア！ つぎは ステップ${no + 1}に チャレンジしよう！` : 'クリア！ すごいね！') : 'あと すこし！ もういちど やってみよう。';
+  let msg = score >= 8 ? (dispNo(no) < STEPS.length ? `クリア！ つぎは ステップ${dispNo(no) + 1}に チャレンジしよう！` : 'クリア！ すごいね！') : 'あと すこし！ もういちど やってみよう。';
   if (newTitle) msg += `<br>🏅 ${W(titleSay(no))}`;
   if (sum[worst] > 0) msg += `<br><small>ちゅうい：「${MISS_NAME[worst]}」で とまった ことが あったよ。</small>`;
   $('#resMsg').innerHTML = msg;
@@ -1512,6 +1579,16 @@ function demoLines() {
       `10と、のこりの ${q}を あわせて ${a + b}。`,
     ];
   }
+  if (m === 'gogo') {
+    const p = a - 5, q = b - 5;
+    return [
+      `${a}を 5と ${p}、${b}を 5と ${q}に わけよう。`,
+      `5と 5を ゆびで なぞって かこむと、ガッチャンコ！`,
+      `5 たす 5で 10。`,
+      `のこりの ${p}と ${q}を あわせて ${p + q}。`,
+      `10と ${p + q}で ${a + b}。`,
+    ];
+  }
   if (m === 'genka') return [
     `${a}は 10と ${k}。10こ いりの パックと、バラが ${k}こ。`,
     `バラの ${k}こから ${b}こは たべられないね。パックから ${b}こ パクッ！`,
@@ -1535,7 +1612,21 @@ async function demo(my) {
   await tell(L[0], my);
   for (const i of P.order) { P.br[i].val = P.br[i].want; SFX.pop(); render(); await pause(500, my); }
   splitColors(); render(); await pause(600, my);
-  if (P.kind === 'add') {
+  if (m === 'gogo') {
+    // ② 5と 5で ガッチャンコ ③ のこりを あわせる ④ 10と あわせる
+    scene(1);
+    await tell(L[1], my);
+    P.phase = 'make'; P.busy = true;
+    await doSausage(my);
+    await tell(L[2], my);
+    P.phase = 'rows'; P.rows[0].val = 10; SFX.pop(); render(); await pause(500, my);
+    scene(2);
+    await tell(L[3], my);
+    P.rows[1].val = P.rows[1].want; SFX.pop(); render(); await pause(400, my);
+    scene(3);
+    await tell(L[4], my);
+    P.rows[2].val = a + b; SFX.pop(); render(); await pause(400, my);
+  } else if (P.kind === 'add') {
     // ② ソーセージを つくる ③ ジュージュー やく
     scene(1);
     await tell(L[1], my);
@@ -1587,7 +1678,7 @@ async function demo(my) {
    すべての もんだい・やり方・だんかいで 言う 文を あつめる（tools/さくらんぼ音声.py に わたす）。
    文を ふやしたら、ここにも たす。 */
 const STATIC_PHRASES = [
-  'さくらんぼを つける かずを タップしてね。', 'ジュージュー！', 'いっしょに やってみよう。',
+  'さくらんぼを つける かずを タップしてね。', 'ジュージュー！', 'ガッチャンコ！', 'いっしょに やってみよう。',
   'おしい！', 'おしい！ さくらんぼを もういちど みてみよう。', 'おしい！ ブロックを みてみよう。',
   'おしい！ のこりを あわせるのを わすれていないかな？', 'おしい！ その 2つで 10に なるかな？', 'おしい！ まず バラから たべよう。',
   'ひかっている ところを よく みてね。', 'ひかっている ところを みてね。', 'うすく みえている かずを かいてみよう。',
@@ -1613,17 +1704,18 @@ function collectOnce(add) {
   for (let a = 1; a <= 9; a++) specs.push({ kind: 'ten', a });
   ADD.forEach(p => { specs.push({ ...p, method: 'kasu' }, { ...p, method: 'hika' }, { ...p, method: 'kasu', splitOnly: true }); });
   SUB.forEach(p => { specs.push({ ...p, method: 'genka' }, { ...p, method: 'gengen' }); });
+  GOGO.forEach(p => { specs.push({ ...p, method: 'gogo' }); });
   for (const sp of specs) {
     P = newP(sp);
     if (sp.kind === 'ten') { P.phase = 'ten'; add(promptText()); add(hintText()); add(finishWords()); continue; }
     setMethod(sp.method);
-    for (let bi = 0; bi < 2; bi++) { P.phase = 'split'; P.bi = bi; P.active = { t: 'br', i: P.order[bi] }; add(promptText()); add(hintText()); }
+    for (let bi = 0; bi < P.order.length; bi++) { P.phase = 'split'; P.bi = bi; P.active = { t: 'br', i: P.order[bi] }; add(promptText()); add(hintText()); }
     P.splitDone = true;
     if (sp.splitOnly) { add(finishWords()); continue; }
     P.phase = 'make'; P.active = null;
     for (let st = 0; st < 2; st++) { P.eatStage = st; add(promptText()); add(hintText()); }
     if (P.kind === 'sub') add(`おしい！ バラの ${P.a - 10}こからは ${P.b}こ たべられないね。`);
-    for (let i = 0; i < 2; i++) { P.phase = 'rows'; P.active = { t: 'row', i }; add(promptText()); add(hintText()); }
+    for (let i = 0; i < P.rows.length; i++) { P.phase = 'rows'; P.active = { t: 'row', i }; add(promptText()); add(hintText()); }
     P.learn = true; demoLines().forEach(add); add(finishWords());
   }
 }
@@ -1755,16 +1847,18 @@ function captureWs() {
   if (!P || P.phase !== 'done') { bubble('もんだいを さいごまで といてから きろくしよう。'); return null; }
   const op = P.kind === 'add' ? '＋' : '−';
   if (P.kind === 'ten') return { q: `${P.a}と □で 10`, split: '', r1: '', r2: '', ans: answer() };
-  const q = `${P.a}${op}${P.b}`, split = `${P.on === 'A' ? P.a : P.b} → ${P.br[0].val}と ${P.br[1].val}`;
+  const q = `${P.a}${op}${P.b}`;
+  const split = P.on === 'AB' ? `${P.a} → ${P.br[0].val}と ${P.br[1].val}、${P.b} → ${P.br[2].val}と ${P.br[3].val}`
+    : `${P.on === 'A' ? P.a : P.b} → ${P.br[0].val}と ${P.br[1].val}`;
   if (P.splitOnly) return { q, split, r1: '', r2: '', ans: '' };
   const row = r => `${r.l[0]}${r.l[1] === '+' ? '＋' : '−'}${r.l[2]}＝${r.want}`;
-  return { q, split, r1: row(P.rows[0]), r2: row(P.rows[1]), ans: answer() };
+  return { q, split, r1: row(P.rows[0]), r2: P.rows.slice(1).map(row).join('、'), ans: answer() };
 }
 
 /* =========================================================
    おうちの方・先生の 画面
    ========================================================= */
-const METHOD_NAME = { kasu: '加数分解', hika: '被加数分解', genka: '減加法', gengen: '減減法', ten: '10の合成' };
+const METHOD_NAME = { kasu: '加数分解', hika: '被加数分解', gogo: '5と5で10', genka: '減加法', gengen: '減減法', ten: '10の合成' };
 const MISS_ADULT = { 1: '① 分け方', 2: '② 10をつくる・10からとる', 3: '③ のこりとあわせる' };
 const MISS_ADVICE = {
   1: 'さくらんぼの枝の数や「あといくつで10？」で止まっています。ステップ1（10の合成）にもどり、1と9・2と8…をすらすら言えるか確かめてください。',
@@ -1782,7 +1876,7 @@ function renderTeacher() {
       const avg = n ? Math.round(rs.reduce((a, r) => a + r.sec, 0) / n) + '秒' : '−';
       const withRows = st.no >= 3 ? rs.length : 0;
       const forgot = rs.filter(r => r.miss && r.miss[3] > 0).length;
-      return `<tr><td>${st.no}</td><td>${W(st.name)}${isOpen(st.no) ? '' : '（お休み）'}</td><td>${rec ? rec.tries : 0}回</td><td>${n}</td>`
+      return `<tr><td>${dispNo(st.no)}</td><td>${W(st.name)}${isOpen(st.no) ? '' : '（お休み）'}</td><td>${rec ? rec.tries : 0}回</td><td>${n}</td>`
         + `<td>${pct(rs.filter(r => r.ok).length, n)}</td><td>${avg}</td><td>${pct(rs.filter(r => r.hint >= 2).length, n)}</td>`
         + `<td>${withRows ? pct(forgot, withRows) : '−'}</td><td>${rec ? `${rec.best}/10${rec.cleared ? ' ✅' : ''}` : '−'}</td></tr>`;
     }).join('');
@@ -1807,7 +1901,7 @@ function renderTeacher() {
   }).join('') + '</ol><p class="t-note">苦手な問題は、次の練習で多めに出ます（1回に3問まで）。</p>' : '<p class="t-note">まだありません。</p>';
   // 設定
   const st = store.settings;
-  $('#tHika').checked = st.hika; $('#tGengen').checked = st.gengen; $('#tFood').checked = st.food;
+  $('#tHika').checked = st.hika; $('#tGengen').checked = st.gengen; $('#tGogo').checked = st.gogo; $('#tFood').checked = st.food;
   $('#tVoice').checked = st.voice; $('#tSfx').checked = st.sfx; $('#tMotion').value = st.motion;
   $('#tCsv').hidden = true; $('#tCopyMsg').textContent = '';
 }
@@ -1816,11 +1910,11 @@ function toCsv() {
   const d2 = n => String(n).padStart(2, '0');
   return [head].concat(store.log.map(r => {
     const d = new Date(r.d);
-    return [`${d.getFullYear()}/${d2(d.getMonth() + 1)}/${d2(d.getDate())} ${d2(d.getHours())}:${d2(d.getMinutes())}`, r.s, qShow(r.q), METHOD_NAME[r.m] || r.m,
+    return [`${d.getFullYear()}/${d2(d.getMonth() + 1)}/${d2(d.getDate())} ${d2(d.getHours())}:${d2(d.getMinutes())}`, stepOf(r.s) ? dispNo(r.s) : r.s, qShow(r.q), METHOD_NAME[r.m] || r.m,
       r.ok ? '○' : '', r.sec, r.hint, r.miss[1], r.miss[2], r.miss[3]].join(',');
   })).join('\n');
 }
-[['tHika', 'hika'], ['tGengen', 'gengen'], ['tFood', 'food'], ['tVoice', 'voice'], ['tSfx', 'sfx']].forEach(([id, k]) => {
+[['tHika', 'hika'], ['tGengen', 'gengen'], ['tGogo', 'gogo'], ['tFood', 'food'], ['tVoice', 'voice'], ['tSfx', 'sfx']].forEach(([id, k]) => {
   $('#' + id).onchange = e => { store.settings[k] = e.target.checked; saveStore(); syncTools(); renderTeacher(); };
 });
 $('#tMotion').onchange = e => { store.settings.motion = e.target.value; saveStore(); syncTools(); };
