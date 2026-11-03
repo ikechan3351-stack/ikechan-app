@@ -160,6 +160,11 @@
 
   /* ソーセージ（なぞった線と、かこんだ形） */
   .ov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  /* まなぶ（ひきざん）の かきこみ：えんぴつで かいたような やじるし・ななめ線・すうじ */
+  .mk .mark { fill: none; stroke: #616161; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 0.7s ease; }
+  .mk.drawn .mark { stroke-dashoffset: 0; }
+  .mk .mark-num { fill: #616161; font-size: 40px; font-weight: 700; opacity: 0; transition: opacity 0.5s; }
+  .mk.drawn .mark-num { opacity: 1; }
   .ov .stroke { fill: none; stroke: #f48fb1; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
   .saus-in { transform-box: fill-box; transform-origin: center; }
   .saus-body { fill: rgba(239, 154, 104, 0.22); stroke: #c0592b; stroke-width: 6; stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 0.8s ease, fill 0.6s; }
@@ -1397,6 +1402,51 @@ async function doSausage(my) {
 }
 function redrawSausage() { if (P && P.sausage) $('#ov').innerHTML = sausageSVG('drawn grilled'); }
 
+/* ===== まなぶ（ひきざん）の かきこみ =====
+   パックから：ひく かずから 10へ やじるし → 10に ななめ線 → 10 ひいた こたえを 10の 左下に かく
+   バラから　：まえの かずの 一のくらいと、さくらんぼの バラを まるで かこむ → 一のくらいに ななめ線 → 10と かく */
+function onesRange() {   // まえの かず（14 など）の 一のくらいの 1もじ
+  const t = numEl('A').firstChild, rg = document.createRange();
+  rg.setStart(t, t.length - 1); rg.setEnd(t, t.length);
+  return rg;
+}
+function markSVG(m, state) {
+  const pack = P.method === 'genka';
+  const tg = relRect(pack ? cboxEl(0) : onesRange());   // ななめ線を ひく ところ
+  let d = '', num = null;
+  if (m === 'arrow') {          // ひく かず → 10の パック
+    const s = relRect(numEl('B')), e = relRect(cboxEl(0));
+    const x1 = s.x + s.w * 0.15, y1 = s.cy + s.h * 0.1, x2 = e.cx + e.w * 0.3, y2 = e.y + e.h * 0.05;
+    const ang = Math.atan2(y2 - y1, x2 - x1), hl = 18, hp = (a) => `${x2 - hl * Math.cos(ang + a)} ${y2 - hl * Math.sin(ang + a)}`;
+    d = `M ${x1} ${y1} L ${x2} ${y2} M ${hp(0.5)} L ${x2} ${y2} L ${hp(-0.5)}`;
+  } else if (m === 'loop') {    // 一のくらい と さくらんぼの バラ を まるで かこむ
+    const r1 = tg, r2 = relRect(cboxEl(0));
+    const dx = r2.cx - r1.cx, dy = r2.cy - r1.cy, L = Math.hypot(dx, dy), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+    const rx = L / 2 + Math.max(r1.w, r2.w) / 2 + 10, ry = Math.max(r2.w, r2.h) / 2 + 10;
+    const mx = (r1.cx + r2.cx) / 2, my = (r1.cy + r2.cy) / 2;
+    d = `M ${-rx} 0 A ${rx} ${ry} 0 1 1 ${rx} 0 A ${rx} ${ry} 0 1 1 ${-rx} 0`;
+    return `<g class="mk ${state}" transform="translate(${mx} ${my}) rotate(${ang})"><path class="mark" pathLength="100" d="${d}"/></g>`;
+  } else if (m === 'strike') {  // ななめ線
+    const iy = pack ? 0.08 : 0.22;
+    d = `M ${tg.x + tg.w * 0.05} ${tg.y + tg.h * iy} L ${tg.x + tg.w * 0.95} ${tg.y + tg.h * (1 - iy)}`;
+  } else if (m === 'write') {   // こたえを かきこむ
+    const ra = relRect(numEl('A')), fs = Math.round(Math.min(40, ra.h * 0.42));   // しきの 大きさに あわせる
+    num = pack
+      ? `<text class="mark-num" style="font-size:${fs}px" x="${Math.max(tg.x - 4, fs * 0.7)}" y="${tg.y + tg.h + 8}" text-anchor="end">${10 - P.b}</text>`
+      : `<text class="mark-num" style="font-size:${fs}px" x="${ra.x}" y="${ra.y + ra.h + fs * 0.85}">10</text>`;
+  }
+  return `<g class="mk ${state}">${d ? `<path class="mark" pathLength="100" d="${d}"/>` : ''}${num || ''}</g>`;
+}
+async function addMark(m, my) {
+  (P.marks = P.marks || []).push(m);
+  const ov = $('#ov');
+  ov.insertAdjacentHTML('beforeend', markSVG(m, ''));
+  const g = ov.lastElementChild;
+  await pause(40, my); g.classList.add('drawn'); SFX.pop();
+  await pause(800, my);
+}
+function redrawMarks() { if (P && P.marks) $('#ov').innerHTML = P.marks.map(m => markSVG(m, 'drawn')).join(''); }
+
 /* ===== なぞる（ソーセージの かこみ）の はんてい ===== */
 let stroke = null;
 function ptOf(e) { const c = $('#eqCard').getBoundingClientRect(); return { x: e.clientX - c.left, y: e.clientY - c.top }; }
@@ -1674,9 +1724,11 @@ async function demo(my) {
     scene(1);
     await tell(L[1], my);
     P.phase = 'make'; P.busy = true; render();
+    await addMark('arrow', my);
     await eat('pack', b, my);
     await waitNext(my);
     await tell(L[2], my);
+    await addMark('strike', my); await addMark('write', my);
     P.phase = 'rows'; P.rows[0].val = 10 - b; SFX.pop(); render(); await pause(400, my);
     await waitNext(my);
     scene(2);
@@ -1692,9 +1744,11 @@ async function demo(my) {
     scene(1);
     await tell(L[1], my);
     P.phase = 'make'; P.busy = true; render();
+    await addMark('loop', my);
     await eat('bara', k, my);
     await waitNext(my);
     await tell(L[2], my);
+    await addMark('strike', my); await addMark('write', my);
     P.phase = 'rows'; P.rows[0].val = 10; SFX.pop(); render(); await pause(400, my);
     await waitNext(my);
     scene(2);
@@ -1877,7 +1931,7 @@ function toast(t) {
   say(t); setTimeout(() => el.remove(), 2600);
 }
 let rsz = 0;
-window.addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { if (P && !$('#scrPlay').hidden) { renderBlocks(); redrawSausage(); } }, 120); });
+window.addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { if (P && !$('#scrPlay').hidden) { renderBlocks(); redrawSausage(); redrawMarks(); } }, 120); });
 reduceMQ.addEventListener?.('change', applyCalm);
 
 /* =========================================================
