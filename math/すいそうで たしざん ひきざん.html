@@ -1328,8 +1328,9 @@ function renderStory() {
     const op = p.type === 'add' ? '+' : MINUS;
     if (state.make.phase === 'done') story = makeStoryHTML(p);
     else story = 'しきに あう おはなしを、さかなを うごかして つくろう。';
-    say = state.make.phase === 'a' ? `まず、すいそうに さかなを ${H(p.a)} いれよう。`
-      : state.make.phase === 'b' ? `つぎは「${op} ${p.b}」。さかなを どう うごかすかな？ できたら「できた！」を おしてね。`
+    const fishA = p.type === 'add' ? `${RED}い さかな` : 'さかな';
+    say = state.make.phase === 'a' ? `まず、すいそうに ${fishA}を ${H(p.a)} いれよう。`
+      : state.make.phase === 'b' ? `つぎは「${op} ${p.b}」。${p.type === 'add' ? `${BLUE}い さかなを どう` : 'さかなを どう'} うごかすかな？ できたら「できた！」を おしてね。`
       : 'すてきな おはなしが できたね！';
   } else {
     const st = state.steps[state.step];
@@ -1633,7 +1634,8 @@ function startProblem(p) {
   state.problem = p;
   if (state.mode === 'make') {
     const w = newWorld();
-    for (let i = 0; i < 20; i++) addFish(w, 'orange', 'pond');
+    // たしざんは 赤い さかなに 青い さかなを たす（はじめは 赤、つぎに 青に かわる）
+    for (let i = 0; i < 20; i++) addFish(w, p.type === 'add' ? 'red' : 'orange', 'pond');
     state.world = w; state.steps = []; state.step = 0;
     state.make = { phase: 'a', added: 0, removed: 0 };
   } else {
@@ -1716,6 +1718,7 @@ function makeDone() {
   if (mk.phase === 'a') {
     if (n === p.a) {
       mk.phase = 'b'; mk.added = 0; mk.removed = 0;
+      if (p.type === 'add') recolorOutside('blue');
       setMsg(`${H(p.a)} いれたね！`, 'good'); sfx.tap();
     } else { state.tries++; setMsg(`かぞえて みよう。${H(p.a)} に なって いるかな？`, 'soft'); sfx.soft(); startCount(); return; }
     render(); return;
@@ -1732,13 +1735,22 @@ function makeDone() {
   state.tries++;
   if (plus && mk.removed > 0 && n < goal) setMsg('「+」は ふえる ことだよ。さかなを いれて みよう。', 'soft');
   else if (!plus && mk.added > 0 && n > goal) setMsg(`「${MINUS}」は へる ことだよ。さかなを だして みよう。`, 'soft');
-  else setMsg(`もういちど かぞえて みよう。「${plus ? '+' : MINUS} ${p.b}」に なって いるかな？`, 'soft');
+  else if (plus) setMsg(`もういちど かぞえて みよう。${BLUE}い さかなは ${H(p.b)} はいったかな？`, 'soft');
+  else setMsg(`もういちど かぞえて みよう。${H(p.b)} でて いったかな？`, 'soft');
   sfx.soft();
   startCount();
 }
+// すいそうの そとの さかなの いろを かえる（おはなしを つくろう の たしざん）
+function recolorOutside(color) {
+  for (const f of state.world.fish) {
+    if (f.place === 'tank') continue;
+    f.color = color;
+    sprites.get(f.id)?.el.querySelector('.fb use').setAttribute('href', `#fish-${color}`);
+  }
+}
 function makeStoryHTML(p) {
   if (p.type === 'add') {
-    return `すいそうに さかなが ${H(p.a)} いました。` + (p.b > 0 ? `${H(p.b)} ${kw('in', 'はいって きました')}。` : `1ぴきも ${kw('in', 'はいって きませんでした')}。`) +
+    return `すいそうに ${RED}い さかなが ${H(p.a)} いました。` + (p.b > 0 ? `${BLUE}い さかなが ${H(p.b)} ${kw('in', 'はいって きました')}。` : `${BLUE}い さかなは 1ぴきも ${kw('in', 'はいって きませんでした')}。`) +
       `${kw('all', 'ぜんぶで')} ${H(p.ans)} に なりました。`;
   }
   return `すいそうに さかなが ${H(p.a)} いました。` + (p.b > 0 ? `${H(p.b)} ${kw('out', 'でて いきました')}。` : `1ぴきも ${kw('out', 'でて いきませんでした')}。`) +
@@ -1775,7 +1787,8 @@ function hint() {
   state.hintsThis++;
   const m = state.mode, p = state.problem;
   if (m === 'make') {
-    if (state.hintLv === 1) setMsg(state.make.phase === 'a' ? `しきの さいしょの かずは ${p.a}。すいそうに ${H(p.a)} いれよう。` : `「${p.type === 'add' ? '+' : MINUS}」は ${p.type === 'add' ? 'ふえる' : 'へる'} こと。${H(p.b)} うごかそう。`, 'info');
+    const add = p.type === 'add';
+    if (state.hintLv === 1) setMsg(state.make.phase === 'a' ? `しきの さいしょの かずは ${p.a}。すいそうに ${add ? `${RED}い さかなを ` : ''}${H(p.a)} いれよう。` : `「${add ? '+' : MINUS}」は ${add ? 'ふえる' : 'へる'} こと。${add ? `${BLUE}い さかなを ` : ''}${H(p.b)} ${add ? 'いれよう' : 'うごかそう'}。`, 'info');
     else { setMsg('1ぴきずつ かぞえて みよう。', 'info'); startCount(); return; }
     render(); return;
   }
