@@ -6,8 +6,10 @@
 
 ノートの ▼ここから下 〜 ▲ここまで にはさまれた部分だけを書きかえます。
 frontmatter・場所とURL・決めごと・手書きのメモはそのまま残ります。
+授業すすめボードが使う教材の一覧 tool/app-list.js も、同じ表から作り直します。
 """
 
+import json
 import re
 import sys
 import urllib.parse
@@ -91,6 +93,27 @@ def build(index_html, repo):
     return head + '\n' + '\n'.join(lines).rstrip() + '\n', total, warnings
 
 
+def write_app_list(index_html, repo):
+    """授業すすめボードが教材をさがすための一覧 tool/app-list.js を、アプリの表から作る。"""
+    data = DATA_RE.search(index_html)
+    if not data:
+        sys.exit('index.html にアプリの表（const D=[...]）が見つかりません')
+    rows = []
+    for line in data.group(1).splitlines():
+        m = ROW_RE.match(line)
+        if m:
+            row = values(m.group(1))
+            # 先生用ツールと、ほかのサイトの教材は、ボードの教材にしない
+            if len(row) == 9 and row[0] != 't' and not row[6].startswith(('http://', 'https://')):
+                rows.append(json.dumps(row, ensure_ascii=False, separators=(',', ':')))
+    body = ('// tools/update-obsidian-note.py が index.html から自動で作ります。手で直しても次の実行で消えます\n'
+            'window.IKECHAN_APPS=[\n' + ',\n'.join(rows) + '\n];\n')
+    path = repo / 'tool' / 'app-list.js'
+    if not path.exists() or path.read_text(encoding='utf-8') != body:
+        path.write_text(body, encoding='utf-8')
+        print(f'✅ 教材一覧を更新しました（{len(rows)}件）: {path}')
+
+
 def note_candidates():
     """脳メモ（Obsidian保管庫）の置き場所の候補。上から順に探す。"""
     home = Path.home()
@@ -108,6 +131,7 @@ def find_note():
 def main():
     repo = Path(__file__).resolve().parent.parent
     index_path = repo / 'index.html'
+    write_app_list(index_path.read_text(encoding='utf-8'), repo)
     if len(sys.argv) > 1:
         note_path = Path(sys.argv[1])
     else:
