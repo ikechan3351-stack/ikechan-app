@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>みんなで さくらんぼけいさん</title>
+<style>
+  /* ===== 色の きまり（さくらんぼけいさん.html と おなじ） =====
+     10を つくる くみ＝オレンジの まる（じっせん／てんせん）
+     のこり・バラ＝青の しかく（てんせん）。色だけに たよらず、形と線でも 区別する。 */
+  :root {
+    --pair: #ffb74d; --pair-edge: #e65100;
+    --rest: #90caf9; --rest-edge: #1565c0;
+    --plain: #eceff1; --plain-edge: #90a4ae;
+    --ink: #4e342e; --accent: #ef6c00; --accent-dark: #e65100; --soft: #ffb74d;
+    --stem: #558b2f; --mark: #fff59d; --mark-edge: #f9a825;
+    --u: 60px;      /* ブロック 1つの 大きさ。画面に あわせて layout() が きめる */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #fff8e1 0%, #ffe0b2 100%);
+    height: 100vh; height: 100dvh; overflow: hidden; padding: 8px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  button { font-family: inherit; color: inherit; touch-action: manipulation; }
+  [hidden] { display: none !important; }
+  .card { background: #fff; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+  /* ===== 上の ボタン ===== */
+  .topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    min-height: 60px; padding: 0 18px; border-radius: 14px; border: 3px solid var(--soft); background: #fffdf7;
+    font-size: clamp(1.05rem, 2.4vmin, 1.6rem); font-weight: 900; cursor: pointer; white-space: nowrap;
+    display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: var(--ink);
+  }
+  .btn:active:not(:disabled) { transform: translateY(2px); }
+  .btn:disabled { opacity: 0.35; cursor: default; }
+  .seg { display: inline-flex; border-radius: 16px; border: 3px solid var(--accent-dark); overflow: hidden; }
+  .seg button { min-height: 60px; padding: 0 26px; border: none; background: #fff; font-size: clamp(1.15rem, 2.8vmin, 1.8rem); font-weight: 900; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent-dark); color: #fff; }
+  .spacer { flex: 1; }
+
+  /* ===== さくらんぼの しき ===== */
+  .eq-card { flex: 44 1 0; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; gap: 0.3em; overflow: hidden; font-size: 100px; }
+  /* 1em＝しきの すうじの 大きさ。layout() が カードの 大きさから きめる */
+  .eq { position: relative; display: flex; align-items: flex-start; padding-bottom: 1.45em; line-height: 1.1; font-weight: 900; }
+  .tok { position: relative; width: 1.6em; display: flex; justify-content: center; }
+  .eq.sub #tokA { width: 2.1em; }   /* ひきざんの まえの かずは 2けた */
+  .op { width: 1em; display: flex; justify-content: center; color: #6d4c41; }   /* − は 字の はばが 広いので、まんなかに そろえる */
+  .num { border: none; background: none; padding: 0 0.06em; margin: 0; font: inherit; line-height: inherit; color: var(--ink); border-radius: 0.14em; transition: color 0.3s, background 0.3s; }
+  button.num { cursor: default; }
+  .num.pair { color: var(--pair-edge); }
+  .num.pick { cursor: pointer; }
+  .res { color: #d81b60; }
+  .res.empty { color: #b0bec5; }
+
+  .cherry { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: 4.3em; height: 3.2em; font-size: 0.45em; }
+  .cherry .stem { position: absolute; left: 0; top: 0; width: 100%; height: 1.3em; overflow: visible; }
+  .cherry .stem path { stroke: var(--stem); stroke-width: 6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .cbox {
+    position: absolute; top: 1.2em; width: 1.95em; height: 1.95em;
+    border-radius: 50%; border: 0.12em solid var(--pair-edge); background: #fff3e0; color: var(--pair-edge);
+    font-weight: 900; line-height: 1; display: flex; align-items: center; justify-content: center;
+  }
+  .cbox.i0 { left: 0; }
+  .cbox.i1 { right: 0; }
+  .cbox.rest { border-color: var(--rest-edge); border-style: dashed; border-radius: 28%; background: #e3f2fd; color: var(--rest-edge); }
+
+  /* 問いかける ところを 光らせる（動きを へらす 設定でも 色は のこる） */
+  .mark { background: var(--mark) !important; box-shadow: 0 0 0 0.07em var(--mark-edge); animation: glow 1s infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 0 0.16em var(--mark-edge); } }
+
+  /* 5と5 ボタン（どちらも 6いじょうの ときだけ、えらぶ 場面に 出る） */
+  .gogo-holder { position: absolute; left: 0; width: 4.2em; bottom: 0.25em; display: flex; justify-content: center; }
+  .gogo-btn { font-size: 0.42em; line-height: 1.2; padding: 0.15em 0.7em; border-radius: 0.4em; border: 0.08em solid var(--pair-edge); background: var(--mark); color: var(--pair-edge); font-weight: 900; cursor: pointer; }
+
+  /* けいさんの しき（①②③） */
+  .rows { width: 2.5em; min-height: 1.6em; font-size: 1em; display: flex; flex-direction: column; justify-content: center; gap: 0.04em; }
+  .row { font-size: 0.42em; font-weight: 900; line-height: 1.3; white-space: nowrap; animation: rowin 0.4s; }
+  .row .no { font-size: 0.75em; color: #8d6e63; margin-right: 0.2em; }
+  @keyframes rowin { from { opacity: 0; transform: translateX(0.3em); } }
+
+  /* ===== 10の わくと ブロック ===== */
+  .blocks-card { flex: 56 1 0; min-height: 0; position: relative; overflow: hidden; }
+  .blocks { position: absolute; inset: 0; }
+  .zone { position: absolute; border-radius: calc(var(--u) * 0.24); border: calc(var(--u) * 0.08) solid #ffcc80; background: #fff8e1; }
+  .zone.loose { border-style: dashed; border-color: #90caf9; background: #f5fbff; }
+  .zone.mark { font-size: var(--u); background: var(--mark) !important; }
+  .zlabel, .zcount { position: absolute; text-align: center; font-weight: 900; line-height: 1.1; }
+  .zlabel { font-size: calc(var(--u) * 0.46); color: #8d6e63; }
+  .zcount { font-size: calc(var(--u) * 0.62); }
+  .ztag { position: absolute; padding: 0 0.4em; border-radius: 999px; background: var(--pair-edge); color: #fff; font-weight: 900; font-size: calc(var(--u) * 0.46); line-height: 1.3; }
+  .slot { position: absolute; border-radius: 50%; border: calc(var(--u) * 0.04) dashed #ffcc80; }
+  .slot.mark { font-size: var(--u); }
+  .blk {
+    position: absolute; border-radius: 50%; border: calc(var(--u) * 0.07) solid var(--plain-edge); background: var(--plain);
+    transition: left 0.6s ease, top 0.6s ease, transform 0.35s ease, opacity 0.35s ease, background 0.4s, border-color 0.4s, border-radius 0.4s;
+  }
+  .blk.pair { background: var(--pair); border-color: var(--pair-edge); }
+  .blk.pair2 { background: var(--pair); border-color: var(--pair-edge); border-style: dashed; }
+  .blk.rest { background: var(--rest); border-color: var(--rest-edge); border-style: dashed; border-radius: 22%; }
+  .blk.gone { transform: scale(0); opacity: 0; }
+  .blk.glow { box-shadow: 0 0 0 calc(var(--u) * 0.09) var(--mark-edge); animation: blkglow 1s infinite; }
+  @keyframes blkglow { 50% { box-shadow: 0 0 0 calc(var(--u) * 0.16) var(--mark-edge); } }
+
+  /* ===== 下の ボタン ===== */
+  .controls { display: flex; justify-content: center; gap: 14px; }
+  .controls .btn { min-height: 80px; font-size: clamp(1.3rem, 3.4vmin, 2.2rem); flex: 1 1 0; max-width: 420px; }
+  .next-btn { background: #43a047; color: #fff; border-color: #2e7d32; box-shadow: 0 4px 0 #2e7d32; flex-grow: 2 !important; max-width: 640px !important; }
+
+  /* ===== もんだいを かえる ===== */
+  .picker-back { position: fixed; inset: 0; z-index: 10; background: rgba(62, 39, 35, 0.5); display: flex; align-items: center; justify-content: center; padding: 12px; }
+  .picker { width: min(1200px, 100%); max-height: 100%; overflow: auto; padding: clamp(10px, 2.5vmin, 28px); display: flex; flex-direction: column; gap: clamp(6px, 1.6vmin, 16px); }
+  .pick-eq { text-align: center; font-weight: 900; font-size: clamp(2.6rem, 11vmin, 6.5rem); line-height: 1.1; }
+  .pick-eq .blank { color: #b0bec5; }
+  .pick-title { font-weight: 900; font-size: clamp(1.1rem, 3vmin, 1.8rem); color: #8d6e63; }
+  .pick-nums { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .pick-nums button { min-height: clamp(60px, 11vmin, 104px); border-radius: 14px; border: 3px solid var(--soft); background: #fffdf7; font-weight: 900; font-size: clamp(1.5rem, 5vmin, 3rem); cursor: pointer; }
+  .pick-nums button[aria-pressed="true"] { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .pick-nums button:disabled { opacity: 0.25; cursor: default; }
+  .pick-actions { display: flex; gap: 12px; justify-content: center; }
+  .pick-actions .btn { min-height: 76px; min-width: 200px; font-size: clamp(1.2rem, 3.2vmin, 2rem); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .blk { transition: none; }
+    .mark, .blk.glow, .row { animation: none; }
+  }
+</style>
+</head>
+<body>
+<h1 class="sr">みんなで さくらんぼけいさん</h1>
+
+<div class="topbar">
+  <a class="btn" href="../index.html">◀ もどる</a>
+  <span class="seg" role="group" aria-label="けいさんの しゅるい">
+    <button id="kindAdd">たしざん</button><button id="kindSub">ひきざん</button>
+  </span>
+  <button class="btn" id="changeBtn">もんだいを かえる</button>
+  <button class="btn" id="randomBtn">べつの もんだい</button>
+  <span class="spacer"></span>
+  <button class="btn" id="fullBtn">ぜんがめん</button>
+</div>
+
+<div class="card eq-card" id="eqCard">
+  <div class="eq" id="eq">
+    <span class="tok" id="tokA"><button class="num" id="numA"></button><span class="cherry" id="cherryA" hidden><svg class="stem" viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M50 4 L22 38 M50 4 L78 38"/></svg><span class="cbox i0"></span><span class="cbox i1"></span></span></span>
+    <span class="op" id="opSign"></span>
+    <span class="tok" id="tokB"><button class="num" id="numB"></button><span class="cherry" id="cherryB" hidden><svg class="stem" viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M50 4 L22 38 M50 4 L78 38"/></svg><span class="cbox i0"></span><span class="cbox i1"></span></span></span>
+    <span class="op">=</span>
+    <span class="tok"><span class="num res" id="res"></span></span>
+    <span class="gogo-holder" id="gogoHolder" hidden><button class="gogo-btn" id="gogoBtn">5と 5</button></span>
+  </div>
+  <div class="rows" id="rows" aria-live="polite"></div>
+</div>
+
+<div class="card blocks-card"><div class="blocks" id="blocks"><div id="deco"></div></div></div>
+
+<div class="controls">
+  <button class="btn" id="prevBtn">◀ まえ</button>
+  <button class="btn next-btn" id="nextBtn">つぎ ▶</button>
+  <button class="btn" id="resetBtn">↺ さいしょから</button>
+</div>
+
+<div class="picker-back" id="pickerBack" hidden>
+  <div class="card picker" role="dialog" aria-label="もんだいを かえる">
+    <div class="pick-eq" id="pickEq"></div>
+    <div class="pick-title">まえの かず</div>
+    <div class="pick-nums" id="pickA"></div>
+    <div class="pick-title">うしろの かず</div>
+    <div class="pick-nums" id="pickB"></div>
+    <div class="pick-actions">
+      <button class="btn" id="pickClose">とじる</button>
+      <button class="btn next-btn" id="pickOk">これに する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   みんなで さくらんぼけいさん（電子黒板の 説明専用）
+   画面は 図と ボタンだけ。ことばは 先生が 話す。
+   音声・記録・通信は ない。
+   ========================================================= */
+const $ = s => document.querySelector(s);
+
+/* ---------- もんだい（くりあがり・くりさがりに なる 組だけ） ---------- */
+const POOL = { add: [], sub: [] };
+for (let a = 2; a <= 9; a++) for (let b = 2; b <= 9; b++) if (a + b >= 11) POOL.add.push({ a, b });
+for (let a = 11; a <= 18; a++) for (let b = 2; b <= 9; b++) if (b > a - 10) POOL.sub.push({ a, b });
+const isValid = (kind, a, b) => POOL[kind].some(p => p.a === a && p.b === b);
+const canGogo = (kind, a, b) => kind === 'add' && a >= 6 && b >= 6;   // 5と5は どちらも 6いじょう
+
+/* いまの ようす。この 5つから 画面ぜんぶを かき直す（「まえ」で もどっても ずれない）
+   method：kasu＝うしろを 分ける／hika＝まえを 分ける／gogo＝5と5
+           genka＝ひかれる数を 分ける（10から とる）／gengen＝ひく数を 分ける（バラから とる）
+           null＝まだ えらんでいない */
+const st = { kind: 'add', a: 8, b: 3, method: null, step: 0 };
+const saved = { add: { a: 8, b: 3 }, sub: { a: 13, b: 8 } };   // しゅるいごとの いまの もんだい
+let frames = [];
+
+// 数字を タップしないで「つぎ」を おしたときの 解き方
+function defaultMethod() {
+  if (st.kind === 'sub') return 'genka';
+  return st.a >= st.b ? 'kasu' : 'hika';   // たしざんは 小さいほうの かずを 分ける
+}
+
+/* =========================================================
+   場面の 表
+   解き方ごとに、場面を 上から じゅんに 書く。
+   snap() で 1場面として きろくする。光らせる 指定（hl・slots・zones・glow）は
+   その場面だけで 消える。
+   hl の 名前：'A' 'B'＝式の 数字、'cA0'＝A の 下の 左の □、'cB1'＝B の 下の 右の □
+   ========================================================= */
+const METHODS = {
+  kasu: c => splitAdd(c, 'A'),   // 前の数を わくに 入れ、うしろを 分ける（8+3 → 2と1）
+  hika: c => splitAdd(c, 'B'),   // うしろの数を わくに 入れ、まえを 分ける（3+9 → 2と1）
+
+  gogo({ S, snap, group, glow, a, b }) {   // 7+8 → 5と2・5と3
+    const A = group('a'), B = group('b');
+    const p = a - 5, q = b - 5;
+    S.ch.A = { vals: [null, null], roles: ['pair', 'rest'] };
+    S.ch.B = { vals: [null, null], roles: ['pair', 'rest'] };
+    S.hl = ['cA0']; snap();
+    S.ch.A.vals[0] = 5; A.slice(0, 5).forEach(x => x.cls = 'pair'); snap();
+    S.hl = ['cA1']; glow(A.slice(5)); snap();
+    S.ch.A.vals[1] = p; A.slice(5).forEach(x => x.cls = 'rest'); snap();
+    S.hl = ['cB0']; glow(B.slice(0, 5)); snap();
+    S.ch.B.vals[0] = 5; B.slice(0, 5).forEach(x => x.cls = 'pair2'); snap();
+    S.hl = ['cB1']; glow(B.slice(5)); snap();
+    S.ch.B.vals[1] = q; B.slice(5).forEach(x => x.cls = 'rest'); snap();
+    S.hl = ['cA0', 'cB0']; glow(A.slice(0, 5)); glow(B.slice(0, 5)); snap();
+    // うしろの 5を わくの 下の 列へ、のこりを となりへ
+    B.slice(0, 5).forEach((x, i) => { x.z = 0; x.i = 5 + i; });
+    A.slice(5).concat(B.slice(5)).forEach((x, i) => { x.z = 1; x.i = i; });
+    S.ten = true; S.labels[1] = 'のこり'; S.rows.push('5+5=10'); snap();
+    S.hl = ['cA1', 'cB1']; glow(A.slice(5)); glow(B.slice(5)); snap();
+    S.rows.push(`${p}+${q}=${p + q}`); snap();
+    S.zones = [0, 1]; snap();
+    S.rows.push(`10+${p + q}=${a + b}`); S.res = a + b; snap();
+  },
+
+  genka({ S, snap, group, glow, a, b }) {   // 13−8 → 10と3、10−8=2、2+3=5
+    const pack = group('p'), bara = group('r');
+    const r = a - 10, left = 10 - b;
+    const takeList = pack.slice(left);   // うしろから b こ とる
+    S.ch.A = { vals: [null, null], roles: ['pair', 'rest'] };
+    S.hl = ['cA0']; S.zones = [0]; snap();
+    S.ch.A.vals[0] = 10; snap();
+    S.hl = ['cA1']; S.zones = [1]; snap();
+    S.ch.A.vals[1] = r; snap();
+    S.hl = ['B', 'cA0']; glow(takeList); snap();
+    takeList.forEach(x => x.gone = true); S.ten = false; S.rows.push(`10−${b}=${left}`); snap();
+    S.hl = ['cA1']; glow(pack.slice(0, left)); glow(bara); snap();
+    S.rows.push(`${left}+${r}=${a - b}`); S.res = a - b; snap();
+  },
+
+  gengen({ S, snap, group, glow, a, b }) {   // 13−8 → 3と5、13−3=10、10−5=5
+    const pack = group('p'), bara = group('r');
+    const r = a - 10, c = b - r;
+    const takeList = pack.slice(10 - c);
+    S.ch.B = { vals: [null, null], roles: ['rest', 'pair'] };
+    S.hl = ['cB0']; S.zones = [1]; snap();
+    S.ch.B.vals[0] = r; snap();
+    S.hl = ['cB1']; snap();
+    S.ch.B.vals[1] = c; snap();
+    S.hl = ['cB0']; glow(bara); snap();
+    bara.forEach(x => x.gone = true); S.rows.push(`${a}−${r}=10`); snap();
+    S.hl = ['cB1']; glow(takeList); snap();
+    takeList.forEach(x => x.gone = true); S.ten = false; S.rows.push(`10−${c}=${a - b}`); S.res = a - b; snap();
+  },
+};
+
+// たしざんの 2つの 解き方は 左右が ちがうだけなので、1つに まとめる
+// baseTok＝10を つくる 土台に なる かず（'A' か 'B'）
+function splitAdd({ S, snap, group, glow, a, b }, baseTok) {
+  const otherTok = baseTok === 'A' ? 'B' : 'A';
+  const n = baseTok === 'A' ? a : b, m = baseTok === 'A' ? b : a;
+  const base = group(baseTok === 'A' ? 'a' : 'b'), other = group(baseTok === 'A' ? 'b' : 'a');
+  const p = 10 - n, q = m - p;
+  const pi = otherTok === 'B' ? 0 : 1, ri = 1 - pi;   // 土台に 近いほうの えだに 10を つくる 数を 入れる
+  const box = i => `c${otherTok}${i}`;
+  const pairs = other.slice(0, p), rests = other.slice(p);
+
+  base.forEach((x, i) => { x.z = 0; x.i = i; x.cls = 'pair'; });
+  other.forEach((x, i) => { x.z = 1; x.i = i; });
+  S.isPair[baseTok] = true;
+  S.ch[otherTok] = { vals: [null, null], roles: pi === 0 ? ['pair', 'rest'] : ['rest', 'pair'] };
+  S.hl = [box(pi)]; S.slots = Array.from({ length: p }, (_, i) => n + i); snap();   // あと いくつで 10？
+  S.ch[otherTok].vals[pi] = p; pairs.forEach(x => x.cls = 'pair2'); snap();
+  S.hl = [box(ri)]; glow(rests); snap();                                            // m は p と いくつ？
+  S.ch[otherTok].vals[ri] = q; rests.forEach(x => x.cls = 'rest'); S.labels[1] = 'のこり'; snap();
+  S.hl = [baseTok, box(pi)]; glow(pairs); snap();                                   // n と p で？
+  pairs.forEach((x, i) => { x.z = 0; x.i = n + i; });
+  rests.forEach((x, i) => { x.i = i; });
+  S.ten = true; S.rows.push(`${n}+${p}=10`); snap();
+  S.hl = [box(ri)]; S.zones = [0]; glow(rests); snap();                             // 10 と q で？
+  S.rows.push(`10+${q}=${a + b}`); S.res = a + b; snap();
+}
+
+// はじめの 2場面（どの 解き方でも おなじ）＋ 解き方の 場面
+function buildFrames(kind, a, b, method) {
+  const S = {
+    res: null, hl: [], slots: [], zones: [], pick: false, ten: kind === 'sub',
+    isPair: { A: false, B: false }, ch: { A: null, B: null }, rows: [],
+    labels: kind === 'sub' ? ['10の まとまり', 'バラ'] : ['10の わく', ''],
+    blocks: [],
+  };
+  const addBlocks = (key, n, z, cls) => { for (let i = 0; i < n; i++) S.blocks.push({ id: key + i, z, i, cls, gone: false, glow: false }); };
+  if (kind === 'add') { addBlocks('a', a, 0, 'plain'); addBlocks('b', b, 1, 'plain'); }
+  else { addBlocks('p', 10, 0, 'pair'); addBlocks('r', a - 10, 1, 'rest'); }
+
+  const out = [];
+  const snap = () => {
+    out.push(JSON.parse(JSON.stringify(S)));
+    S.hl = []; S.slots = []; S.zones = []; S.pick = false;
+    S.blocks.forEach(x => { x.glow = false; });
+  };
+  const group = key => S.blocks.filter(x => x.id[0] === key);
+  const glow = list => list.forEach(x => { x.glow = true; });
+
+  snap();                                    // 式と ブロックだけ
+  S.hl = ['A', 'B']; S.pick = true; snap();  // どちらの かずを 分ける？
+  METHODS[method]({ S, snap, group, glow, a, b });
+  return out;
+}
+const CHOOSE_STEP = 1;
+
+/* =========================================================
+   画面を かく
+   ========================================================= */
+function rebuild() {
+  frames = buildFrames(st.kind, st.a, st.b, st.method || defaultMethod());
+}
+function render() {
+  const f = frames[st.step];
+  $('#kindAdd').setAttribute('aria-pressed', st.kind === 'add');
+  $('#kindSub').setAttribute('aria-pressed', st.kind === 'sub');
+  $('#opSign').textContent = st.kind === 'add' ? '+' : '−';
+  $('#eq').classList.toggle('sub', st.kind === 'sub');
+
+  [['A', st.a], ['B', st.b]].forEach(([k, v]) => {
+    const el = $('#num' + k);
+    el.textContent = v;
+    el.className = 'num' + (f.isPair[k] ? ' pair' : '') + (f.pick ? ' pick' : '') + (f.hl.includes(k) ? ' mark' : '');
+    el.setAttribute('aria-label', f.pick ? `${v}を 分ける` : String(v));
+    const ch = f.ch[k], box = $('#cherry' + k);
+    box.hidden = !ch;
+    if (ch) [0, 1].forEach(i => {
+      const c = box.querySelector('.i' + i);
+      c.textContent = ch.vals[i] === null ? '' : ch.vals[i];
+      c.className = `cbox i${i} ${ch.roles[i]}` + (f.hl.includes(`c${k}${i}`) ? ' mark' : '');
+    });
+  });
+  const res = $('#res');
+  res.textContent = f.res === null ? '？' : f.res;
+  res.classList.toggle('empty', f.res === null);
+  $('#gogoHolder').hidden = !(f.pick && canGogo(st.kind, st.a, st.b));
+
+  const rowsEl = $('#rows');   // ふえた ときだけ 足す（前の 行が また 動かないように）
+  while (rowsEl.children.length > f.rows.length) rowsEl.lastChild.remove();
+  f.rows.forEach((text, i) => {
+    if (rowsEl.children[i]) return;
+    const d = document.createElement('div');
+    d.className = 'row';
+    d.innerHTML = `<span class="no">${'①②③'[i]}</span>${text}`;
+    rowsEl.appendChild(d);
+  });
+
+  renderBlocks(f);
+  $('#prevBtn').disabled = st.step === 0;
+  $('#nextBtn').disabled = st.step === frames.length - 1;
+  $('#resetBtn').disabled = st.step === 0;
+}
+
+/* ---------- 10の わくと ブロック ---------- */
+const blockEls = new Map();
+function geo() {
+  const box = $('#blocks');
+  const W = box.clientWidth, H = box.clientHeight;
+  const u = Math.max(14, Math.min(W / 14, H / 4.95));   // 2つの わく＋あいだ＝やく 13.7u、ラベル＋わく＋こすう＝やく 4.9u
+  const g = u * 0.18, pad = u * 0.35;
+  const zw = 5 * u + 4 * g + 2 * pad, zh = 2 * u + g + 2 * pad, mid = u * 0.9;
+  const x0 = (W - (2 * zw + mid)) / 2, top = (H - (zh + u * 1.8)) / 2 + u * 0.8;
+  return { u, g, pad, zw, zh, mid, x0, top };
+}
+function slotXY(G, z, i) {
+  const zx = G.x0 + z * (G.zw + G.mid);
+  return { x: zx + G.pad + (i % 5) * (G.u + G.g), y: G.top + G.pad + Math.floor(i / 5) * (G.u + G.g) };
+}
+function renderBlocks(f) {
+  const G = geo();
+  document.documentElement.style.setProperty('--u', G.u + 'px');
+  let html = '';
+  [0, 1].forEach(z => {
+    const zx = G.x0 + z * (G.zw + G.mid);
+    const count = f.blocks.filter(b => b.z === z && !b.gone).length;
+    html += `<div class="zlabel" style="left:${zx}px;width:${G.zw}px;top:${G.top - G.u * 0.68}px">${f.labels[z]}</div>`;
+    html += `<div class="zone ${z ? 'loose' : ''} ${f.zones.includes(z) ? 'mark' : ''}" style="left:${zx}px;top:${G.top}px;width:${G.zw}px;height:${G.zh}px"></div>`;
+    if (z === 0) for (let i = 0; i < 10; i++) {
+      const s = slotXY(G, 0, i), m = G.u * 0.06;
+      html += `<div class="slot ${f.slots.includes(i) ? 'mark' : ''}" style="left:${s.x + m}px;top:${s.y + m}px;width:${G.u - 2 * m}px;height:${G.u - 2 * m}px"></div>`;
+    }
+    html += `<div class="zcount" style="left:${zx}px;width:${G.zw}px;top:${G.top + G.zh + G.u * 0.1}px">${count}こ</div>`;
+    if (z === 0 && f.ten) html += `<div class="ztag" style="left:${zx + G.zw - G.u * 1.2}px;top:${G.top - G.u * 0.68}px">10</div>`;
+  });
+  $('#deco').innerHTML = html;
+  f.blocks.forEach(b => {
+    let el = blockEls.get(b.id);
+    if (!el) { el = document.createElement('div'); $('#blocks').appendChild(el); blockEls.set(b.id, el); }
+    const s = slotXY(G, b.z, b.i);
+    el.className = `blk ${b.cls}` + (b.gone ? ' gone' : '') + (b.glow ? ' glow' : '');
+    Object.assign(el.style, { left: s.x + 'px', top: s.y + 'px', width: G.u + 'px', height: G.u + 'px' });
+  });
+}
+function clearBlocks() {
+  blockEls.forEach(el => el.remove());
+  blockEls.clear();
+  $('#rows').innerHTML = '';
+}
+
+/* ---------- 画面の 大きさに あわせる ---------- */
+function layout() {
+  const c = $('#eqCard');
+  const size = Math.max(30, Math.min(c.clientHeight / 2.75, c.clientWidth / 10.1));   // 式＋さくらんぼの 高さ、式＋①②の 幅
+  c.style.fontSize = size + 'px';
+  if (frames.length) render();
+}
+
+/* =========================================================
+   そうさ
+   ========================================================= */
+function go(step) {
+  st.step = Math.max(0, Math.min(frames.length - 1, step));
+  if (st.step <= CHOOSE_STEP && st.method) { st.method = null; rebuild(); }   // えらぶ 前に もどったら えらび直せる
+  render();
+}
+function chooseMethod(m) {
+  if (st.step !== CHOOSE_STEP) return;
+  st.method = m; rebuild();
+  st.step = CHOOSE_STEP + 1;
+  render();
+}
+function setProblem(kind, a, b) {
+  st.kind = kind; st.a = a; st.b = b; st.method = null; st.step = 0;
+  saved[kind] = { a, b };
+  clearBlocks(); rebuild(); render();
+}
+$('#nextBtn').onclick = () => go(st.step + 1);
+$('#prevBtn').onclick = () => go(st.step - 1);
+$('#resetBtn').onclick = () => go(0);
+$('#kindAdd').onclick = () => setProblem('add', saved.add.a, saved.add.b);
+$('#kindSub').onclick = () => setProblem('sub', saved.sub.a, saved.sub.b);
+$('#randomBtn').onclick = () => {
+  const list = POOL[st.kind].filter(p => !(p.a === st.a && p.b === st.b));
+  const p = list[Math.floor(Math.random() * list.length)];
+  setProblem(st.kind, p.a, p.b);
+};
+$('#numA').onclick = () => chooseMethod(st.kind === 'add' ? 'hika' : 'genka');
+$('#numB').onclick = () => chooseMethod(st.kind === 'add' ? 'kasu' : 'gengen');
+$('#gogoBtn').onclick = () => chooseMethod('gogo');
+$('#fullBtn').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+};
+document.addEventListener('keydown', e => {
+  if (!$('#pickerBack').hidden) { if (e.key === 'Escape') closePicker(); return; }
+  if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); go(st.step + 1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); go(st.step - 1); }
+});
+
+/* ---------- もんだいを かえる（数字を えらぶ 画面） ---------- */
+const pick = { a: null, b: null };
+function renderPicker() {
+  const k = st.kind;
+  const As = [...new Set(POOL[k].map(p => p.a))], Bs = [...new Set(POOL[k].map(p => p.b))];
+  $('#pickA').innerHTML = As.map(v => `<button data-v="${v}" aria-pressed="${pick.a === v}">${v}</button>`).join('');
+  $('#pickB').innerHTML = Bs.map(v => `<button data-v="${v}" aria-pressed="${pick.b === v}" ${isValid(k, pick.a, v) ? '' : 'disabled'}>${v}</button>`).join('');
+  const blank = '<span class="blank">□</span>';
+  $('#pickEq').innerHTML = `${pick.a ?? blank} ${k === 'add' ? '+' : '−'} ${pick.b ?? blank}`;
+  $('#pickOk').disabled = !isValid(k, pick.a, pick.b);
+}
+function closePicker() { $('#pickerBack').hidden = true; }
+$('#changeBtn').onclick = () => { pick.a = st.a; pick.b = st.b; renderPicker(); $('#pickerBack').hidden = false; };
+$('#pickClose').onclick = closePicker;
+$('#pickA').onclick = e => {
+  const v = +e.target.dataset.v; if (!v) return;
+  pick.a = v;
+  if (!isValid(st.kind, pick.a, pick.b)) pick.b = null;   // 組めない うしろの かずは 消す
+  renderPicker();
+};
+$('#pickB').onclick = e => {
+  const v = +e.target.dataset.v; if (!v || e.target.disabled) return;
+  pick.b = v; renderPicker();
+};
+$('#pickOk').onclick = () => { closePicker(); setProblem(st.kind, pick.a, pick.b); };
+
+/* ---------- はじめる ---------- */
+// URL で もんだいを ひらく：?q=8p3（たしざん）、?q=13m8（ひきざん）。おかしいときは はじめの もんだい
+(function start() {
+  const q = new URLSearchParams(location.search).get('q') || '';
+  const m = q.match(/^(\d+)([pm+\- −])(\d+)$/);
+  if (m) {
+    const kind = (m[2] === 'm' || m[2] === '-' || m[2] === '−') ? 'sub' : 'add';
+    const a = +m[1], b = +m[3];
+    if (isValid(kind, a, b)) { st.kind = kind; st.a = a; st.b = b; saved[kind] = { a, b }; }
+  }
+  rebuild();
+  layout();
+  window.addEventListener('resize', layout);
+  if (window.ResizeObserver) new ResizeObserver(layout).observe($('#eqCard'));
+})();
+</script>
+</body>
+</html>
