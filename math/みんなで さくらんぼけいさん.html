@@ -97,6 +97,12 @@
   .steam { font-size: calc(30px * var(--k)); animation: steam 1.3s ease-out forwards; }
   @keyframes steam { from { opacity: 0.9; transform: translateY(0); } to { opacity: 0; transform: translateY(calc(-40px * var(--k))); } }
 
+  /* ひきざんの かきこみ（えんぴつで かいたような やじるし・ななめ線・まる・すうじ） */
+  .mk .mark { fill: none; stroke: #616161; stroke-width: calc(2.6px * var(--k)); stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 0.7s ease; }
+  .mk.drawn .mark { stroke-dashoffset: 0; }
+  .mk .mark-num { fill: #616161; font-weight: 900; opacity: 0; transition: opacity 0.5s; }
+  .mk.drawn .mark-num { opacity: 1; }
+
   .rows { width: 2.5em; min-height: 1.6em; font-size: 1em; display: flex; flex-direction: column; justify-content: center; gap: 0.04em; }
   .row { font-size: 0.42em; font-weight: 900; line-height: 1.3; white-space: nowrap; animation: rowin 0.4s; }
   .row .no { font-size: 0.75em; color: #8d6e63; margin-right: 0.2em; }
@@ -173,7 +179,7 @@
     <span class="gogo-holder" id="gogoHolder" hidden><button class="gogo-btn" id="gogoBtn">5と 5</button></span>
   </div>
   <div class="rows" id="rows" aria-live="polite"></div>
-  <svg class="ov" id="ov" aria-hidden="true"></svg>
+  <svg class="ov" id="ov" aria-hidden="true"><g id="ovSaus"></g><g id="ovMarks"></g></svg>
 </div>
 
 <div class="card blocks-card"><div class="blocks" id="blocks"><div id="deco"></div></div></div>
@@ -272,8 +278,9 @@ const METHODS = {
     S.ch.A.vals[0] = 10; snap();
     S.hl = ['cA1']; S.zones = [1]; snap();
     S.ch.A.vals[1] = r; snap();
-    S.hl = ['B', 'cA0']; glow(takeList); snap();
-    takeList.forEach(x => x.gone = true); S.ten = false; S.rows.push(`10−${b}=${left}`); snap();
+    S.hl = ['B', 'cA0']; glow(takeList); S.marks.push('arrow'); snap();               // 8から 10へ やじるし
+    takeList.forEach(x => x.gone = true); S.ten = false; S.rows.push(`10−${b}=${left}`);
+    S.marks.push('strike', 'write'); snap();                                           // 10に ななめ線、左下に 2
     S.hl = ['cA1']; glow(pack.slice(0, left)); glow(bara); snap();
     S.rows.push(`${left}+${r}=${a - b}`); S.res = a - b; snap();
   },
@@ -287,8 +294,9 @@ const METHODS = {
     S.ch.B.vals[0] = r; snap();
     S.hl = ['cB1']; snap();
     S.ch.B.vals[1] = c; snap();
-    S.hl = ['cB0']; glow(bara); snap();
-    bara.forEach(x => x.gone = true); S.rows.push(`${a}−${r}=10`); snap();
+    S.hl = ['cB0']; glow(bara); S.marks.push('loop'); snap();                         // 一のくらいと バラを まるで かこむ
+    bara.forEach(x => x.gone = true); S.rows.push(`${a}−${r}=10`);
+    S.marks.push('strike', 'write'); snap();                                           // 一のくらいに ななめ線、下に 10
     S.hl = ['cB1']; glow(takeList); snap();
     takeList.forEach(x => x.gone = true); S.ten = false; S.rows.push(`10−${c}=${a - b}`); S.res = a - b; snap();
   },
@@ -327,6 +335,8 @@ function buildFrames(kind, a, b, method) {
   const S = {
     res: null, hl: [], slots: [], zones: [], pick: false, ten: kind === 'sub',
     saus: null,   // ソーセージで かこむ 2つ（例：['A', 'cB0']）。一度 やいたら そのまま のこる
+    marks: [],    // ひきざんの かきこみ（'arrow' 'loop' 'strike' 'write'）。かいた じゅんに ならぶ
+    method,
     isPair: { A: false, B: false }, ch: { A: null, B: null }, rows: [],
     labels: kind === 'sub' ? ['10の まとまり', 'バラ'] : ['10の わく', ''],
     blocks: [],
@@ -393,7 +403,14 @@ function render() {
   });
 
   renderBlocks(f);
-  renderSausage(f);
+  // 「つぎ」で 1つ すすんだ ときだけ アニメに する
+  const key = `${st.kind}${st.a}-${st.b}-${st.method}`;
+  const prevStep = lastShown.key === key ? lastShown.step : -9;
+  const prev = st.step === prevStep + 1 ? frames[prevStep] : null;
+  const same = st.step === prevStep;
+  lastShown = { key, step: st.step };
+  renderSausage(f, prev, same);
+  renderMarks(f, prev, same);
   $('#prevBtn').disabled = st.step === 0;
   $('#nextBtn').disabled = st.step === frames.length - 1;
   $('#resetBtn').disabled = st.step === 0;
@@ -476,13 +493,9 @@ function sausageSVG(ring, state) {
     + `<rect class="saus-body" pathLength="100" x="${-L / 2 - rad}" y="${-rad}" width="${L + 2 * rad}" height="${2 * rad}" rx="${rad}"/>`
     + `<g class="grill">${grill}</g></g></g>` + badge(bx, by);
 }
-function renderSausage(f) {
-  const key = `${st.kind}${st.a}-${st.b}-${st.method}`;
-  const prev = lastShown.key === key ? frames[lastShown.step] : null;
-  const arrived = lastShown.key === key && st.step === lastShown.step + 1 && prev && !prev.saus;
-  const same = lastShown.key === key && st.step === lastShown.step;
-  lastShown = { key, step: st.step };
-  const ov = $('#ov');
+function renderSausage(f, prev, same) {
+  const arrived = prev && !prev.saus;
+  const ov = $('#ovSaus');
   if (!f.saus) { sausAnim++; sausBusy = false; ov.innerHTML = ''; return; }
   if (arrived) { playSausage(f.saus); return; }
   if (same && sausBusy) return;   // アニメの とちゅうは そのまま
@@ -490,7 +503,7 @@ function renderSausage(f) {
   ov.innerHTML = sausageSVG(f.saus, 'drawn grilled');
 }
 async function playSausage(ring) {
-  const my = ++sausAnim, ov = $('#ov');
+  const my = ++sausAnim, ov = $('#ovSaus');
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const alive = () => my === sausAnim;
   const gogo = ring[0][0] === 'c' && ring[1][0] === 'c';
@@ -512,6 +525,68 @@ async function playSausage(ring) {
   sausBusy = false;
 }
 
+/* ---------- ひきざんの かきこみ（さくらんぼけいさん.html の markSVG と おなじ 形） ----------
+   10から とる：ひく かずから 10へ やじるし → 10に ななめ線 → 10 ひいた こたえを 10の 左下に かく
+   バラから とる：まえの かずの 一のくらいと バラを まるで かこむ → 一のくらいに ななめ線 → 下に 10 */
+let markAnim = 0, markBusy = false;
+function onesRange() {   // まえの かず（14 など）の 一のくらいの 1もじ
+  const t = $('#numA').firstChild, rg = document.createRange();
+  rg.setStart(t, t.length - 1); rg.setEnd(t, t.length);
+  return rg;
+}
+function markSVG(m, method, state) {
+  const k = parseFloat($('#eqCard').style.fontSize) / 48;
+  $('#ov').style.setProperty('--k', k);
+  const pack = method === 'genka';
+  const box0 = pack ? $('#cherryA .i0') : $('#cherryB .i0');   // 10（パック）か バラ の □
+  const tg = relRect(pack ? box0 : onesRange());              // ななめ線を ひく ところ
+  let d = '', num = '';
+  if (m === 'arrow') {          // ひく かず → 10
+    const s = relRect($('#numB')), e = relRect(box0);
+    const x1 = s.x + s.w * 0.15, y1 = s.cy + s.h * 0.1, x2 = e.cx + e.w * 0.3, y2 = e.y + e.h * 0.05;
+    const ang = Math.atan2(y2 - y1, x2 - x1), hl = 18 * k, hp = a => `${x2 - hl * Math.cos(ang + a)} ${y2 - hl * Math.sin(ang + a)}`;
+    d = `M ${x1} ${y1} L ${x2} ${y2} M ${hp(0.5)} L ${x2} ${y2} L ${hp(-0.5)}`;
+  } else if (m === 'loop') {    // 一のくらい と バラ を まるで かこむ
+    const r1 = tg, r2 = relRect(box0);
+    const dx = r2.cx - r1.cx, dy = r2.cy - r1.cy, L = Math.hypot(dx, dy), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+    const rx = L / 2 + Math.max(r1.w, r2.w) / 2 + 10 * k, ry = Math.max(r2.w, r2.h) / 2 + 10 * k;
+    const mx = (r1.cx + r2.cx) / 2, my = (r1.cy + r2.cy) / 2;
+    d = `M ${-rx} 0 A ${rx} ${ry} 0 1 1 ${rx} 0 A ${rx} ${ry} 0 1 1 ${-rx} 0`;
+    return `<g class="mk ${state}" transform="translate(${mx} ${my}) rotate(${ang})"><path class="mark" pathLength="100" d="${d}"/></g>`;
+  } else if (m === 'strike') {  // ななめ線
+    const iy = pack ? 0.08 : 0.22;
+    d = `M ${tg.x + tg.w * 0.05} ${tg.y + tg.h * iy} L ${tg.x + tg.w * 0.95} ${tg.y + tg.h * (1 - iy)}`;
+  } else if (m === 'write') {   // こたえを かきこむ
+    const ra = relRect($('#numA')), fs = ra.h * 0.42;   // しきの 大きさに あわせる
+    num = pack
+      ? `<text class="mark-num" style="font-size:${fs}px" x="${Math.max(tg.x - 4 * k, fs * 0.7)}" y="${tg.y + tg.h}" text-anchor="end">${10 - st.b}</text>`
+      : `<text class="mark-num" style="font-size:${fs}px" x="${ra.x}" y="${ra.y + ra.h + fs * 0.85}">10</text>`;
+  }
+  return `<g class="mk ${state}">${d ? `<path class="mark" pathLength="100" d="${d}"/>` : ''}${num}</g>`;
+}
+function renderMarks(f, prev, same) {
+  const ov = $('#ovMarks');
+  if (same && markBusy) return;   // アニメの とちゅうは そのまま
+  markAnim++; markBusy = false;
+  const old = prev ? prev.marks.length : f.marks.length;   // 前の 場面から ある ものは すぐ かく
+  ov.innerHTML = f.marks.slice(0, old).map(m => markSVG(m, f.method, 'drawn')).join('');
+  if (f.marks.length > old) playMarks(f.marks.slice(old), f.method);
+}
+async function playMarks(list, method) {   // 1つずつ じゅんに かく
+  const my = ++markAnim, ov = $('#ovMarks');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  markBusy = true;
+  for (const m of list) {
+    if (my !== markAnim) return;
+    ov.insertAdjacentHTML('beforeend', markSVG(m, method, ''));
+    const g = ov.lastElementChild;
+    await wait(40); if (my !== markAnim) return;
+    g.classList.add('drawn');
+    await wait(800);
+  }
+  if (my === markAnim) markBusy = false;
+}
+
 function clearBlocks() {
   blockEls.forEach(el => el.remove());
   blockEls.clear();
@@ -526,7 +601,8 @@ function layout() {
   $('#eq').style.paddingBottom = pb + 'em';
   const size = Math.max(30, Math.min(c.clientHeight / (pb + 1.6), c.clientWidth / 10.1));   // 式＋さくらんぼの 高さ、式＋①②の 幅
   c.style.fontSize = size + 'px';
-  sausAnim++; sausBusy = false;   // 大きさが かわったら ソーセージは やけた すがたで かき直す
+  sausAnim++; sausBusy = false;   // 大きさが かわったら ソーセージ・かきこみは できあがりの すがたで かき直す
+  markAnim++; markBusy = false;
   if (frames.length) render();
 }
 
