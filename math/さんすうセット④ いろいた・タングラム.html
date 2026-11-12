@@ -114,6 +114,9 @@
     touch-action: none; overflow: hidden;
   }
   .stage.drawing { outline-color: var(--draw); }   /* かく ときは ふちが オレンジ */
+  /* はいけい（かみ）。いちばん 下に しく */
+  .bgc { position: absolute; left: 0; top: 0; width: 1200px; height: 720px; z-index: 0; pointer-events: none; border-radius: 18px; }
+  .stage.dark .ptitle { color: rgba(255,255,255,0.8); }
   /* かさなりの じゅん：シルエット → ピース → ペンの線 */
   .layer { position: absolute; inset: 0; pointer-events: none; }
   .sil { position: absolute; left: 0; top: 0; width: 1200px; height: 720px; z-index: 1; pointer-events: none; overflow: visible; }
@@ -187,6 +190,13 @@
   .dialog p { font-size: 1.4rem; font-weight: 900; margin: 0 0 20px; }
   .dialog .btn { min-width: 140px; min-height: 60px; font-size: 1.2rem; margin: 0 8px; }
   .dialog .yes { background: #ffebee; border-color: #e57373; }
+  /* ===== はいけいを えらぶ 画面 ===== */
+  .bgpanel { max-width: min(760px, 94vw); max-height: 92vh; overflow-y: auto; text-align: left; padding: 20px 24px; }
+  .bgpanel h2 { margin: 0 0 6px; font-size: 1.1rem; color: var(--accent-dark); }
+  .bgpanel .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .bgpanel .btn { min-width: 0; margin: 0; font-size: 1rem; min-height: 56px; }
+  .bgpanel .sample { width: 54px; height: 40px; border-radius: 6px; border: 2px solid rgba(0,0,0,0.15); display: inline-block; }
+  .bgpanel .close { display: block; margin: 4px auto 0; min-width: 160px; }
 
   /* Chromebook くらいの はばでは 題名を かくして、ツールバーを 1だんに おさめる */
   @media (max-width: 1500px) {
@@ -226,6 +236,7 @@
     <button class="btn" id="undo" title="もどる（Ctrl+Z）" disabled><span class="ic">↩️</span>もどる</button>
     <button class="btn" id="redo" title="やりなおす（Ctrl+Y）" disabled><span class="ic">↪️</span></button>
   </div>
+  <button class="btn" id="bgBtn" title="はいけいを かえる"><span class="ic">🖼️</span>はいけい</button>
   <button class="btn" id="photo" title="ボードを しゃしんに する"><span class="ic">📷</span>しゃしん</button>
   <button class="btn" id="openBoard" title="くばられた もんだいの がぞうを ひらく"><span class="ic">📂</span>ひらく</button>
   <button class="btn" id="resetStart" title="くばられた ときの じょうたいに もどす" hidden><span class="ic">⟲</span>はじめに</button>
@@ -240,6 +251,7 @@
   <div class="toolbox" id="toolbox"></div>
   <div class="boardwrap" id="boardwrap">
     <div class="stage" id="stage">
+      <canvas class="bgc" id="bgc"></canvas>
       <div class="tray" id="tray" hidden></div>
       <div class="ptitle" id="ptitle"></div>
       <div class="trash" id="trash"><span class="ic">🗑️</span>ごみばこ</div>
@@ -253,6 +265,16 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="dialog-bg" id="bgBg" hidden>
+  <div class="dialog bgpanel">
+    <h2>かみ</h2>
+    <div class="row" id="bgKinds"></div>
+    <div id="bgSizeBox"><h2 id="bgSizeTitle">マスの おおきさ</h2><div class="row" id="bgSizes"></div></div>
+    <h2>かみの いろ</h2>
+    <div class="row" id="bgColors"></div>
+    <button class="btn close" id="bgClose">とじる</button>
+  </div>
+</div>
 <div class="dialog-bg" id="txtBg" hidden>
   <div class="dialog txtpanel">
     <h2>もんだいカード・まとめの ことば</h2>
@@ -453,10 +475,70 @@ function syncLevel() {
   if (book === 'tan') tanLv = curProb().lv; else kyoG = curProb().g;
 }
 
+/* =========================== はいけい（ボードの 下に しく かみ） ===========================
+   kind: plain むじ ／ grid 方眼紙 ／ note 算数ノート
+   ?bg=grid&size=G&color=cream のように URL でも えらべる */
+const BG_KINDS = [
+  { id: 'plain', name: 'むじ' },
+  { id: 'grid',  name: 'ほうがんし' },
+  { id: 'note',  name: 'さんすうノート' },
+];
+// 方眼紙の マス（いろいたの マス は 色板の 辺と、しきつめの マス は 2年の ピースの 1めもりと 同じ 大きさ）
+const GRID_SIZES = [ { id: 'L', name: 'いろいたの マス', size: L }, { id: 'G', name: 'しきつめの マス', size: G }, { id: 'S', name: 'ちいさい', size: 25 } ];
+// 算数ノートは よこに ならぶ マスの 数で えらぶ
+const NOTE_SIZES = [ { id: '12', name: '12マス', size: 100 }, { id: '15', name: '15マス', size: 80 }, { id: '18', name: '18マス', size: 66 } ];
+const BG_COLORS = [
+  { id: 'white', name: 'しろ',     paper: '#ffffff', line: '#c5cae9', bold: '#9fa8da' },
+  { id: 'cream', name: 'クリーム', paper: '#fff8e1', line: '#e6d3a3', bold: '#c9ab66' },
+  { id: 'green', name: 'こくばん', paper: '#2f5d46', line: 'rgba(255,255,255,0.28)', bold: 'rgba(255,255,255,0.5)' },
+];
+const bg = {
+  kind: BG_KINDS.some(k => k.id === params.get('bg')) ? params.get('bg') : 'plain',
+  grid: GRID_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : 'L',
+  note: NOTE_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : '15',
+  color: BG_COLORS.some(c => c.id === params.get('color')) ? params.get('color') : 'white',
+};
+// いまの マス目。ボードの まんなかに そろえる
+function gridCell() {
+  let size = 0;
+  if (bg.kind === 'grid') size = GRID_SIZES.find(g => g.id === bg.grid).size;
+  else if (bg.kind === 'note') size = NOTE_SIZES.find(g => g.id === bg.note).size;
+  else return null;
+  return { size, ox: (W % size) / 2, oy: (H % size) / 2 };
+}
+function drawBg(ctx) {
+  const col = BG_COLORS.find(c => c.id === bg.color);
+  ctx.fillStyle = col.paper;
+  ctx.fillRect(0, 0, W, H);
+  const g = gridCell();
+  if (!g) return;
+  const line = (x1, y1, x2, y2, color, width, dash) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  };
+  const xs = [], ys = [];
+  for (let x = g.ox; x <= W + 0.5; x += g.size) xs.push(x);
+  for (let y = g.oy; y <= H + 0.5; y += g.size) ys.push(y);
+  if (bg.kind === 'grid') {
+    // 方眼紙：ちいさい マスは 5マスごとに すこし こい 線
+    const bold = i => g.size < 40 && i % 5 === 0;
+    xs.forEach((x, i) => line(x, 0, x, H, bold(i) ? col.bold : col.line, bold(i) ? 2 : 1.5));
+    ys.forEach((y, i) => line(0, y, W, y, bold(i) ? col.bold : col.line, bold(i) ? 2 : 1.5));
+  } else {
+    // 算数ノート：マスの まんなかに 十字の 点線
+    for (let i = 0; i < xs.length - 1; i++) line(xs[i] + g.size / 2, ys[0], xs[i] + g.size / 2, ys[ys.length - 1], col.line, 1.5, [4, 5]);
+    for (let i = 0; i < ys.length - 1; i++) line(xs[0], ys[i] + g.size / 2, xs[xs.length - 1], ys[i] + g.size / 2, col.line, 1.5, [4, 5]);
+    xs.forEach(x => line(x, ys[0], x, ys[ys.length - 1], col.bold, 2.5));
+    ys.forEach(y => line(xs[0], y, xs[xs.length - 1], y, col.bold, 2.5));
+  }
+  ctx.setLineDash([]);
+}
+
 /* ---- 画面の 部品 ---- */
 const $ = id => document.getElementById(id);
 const stage = $('stage'), wrap = $('boardwrap'), piecesEl = $('pieces'), trashEl = $('trash'), silEl = $('sil');
 const ink = $('ink'), ictx = ink.getContext('2d'), toolbox = $('toolbox');
+const bgc = $('bgc'), bctx = bgc.getContext('2d');
 const els = new Map();   // id → 要素
 
 /* =========================== 拡大・縮小 =========================== */
@@ -472,7 +554,10 @@ function layout() {
   ink.width = Math.round(W * scale * dpr);
   ink.height = Math.round(H * scale * dpr);
   ictx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  bgc.width = ink.width;
+  bgc.height = ink.height;
   redrawInk();
+  redrawBg();
 }
 new ResizeObserver(layout).observe(wrap);
 window.addEventListener('scroll', () => { wrapRect = wrap.getBoundingClientRect(); });
@@ -570,8 +655,14 @@ function buildSil() {
   if (p.sol.length) {
     const all = p.sol.flatMap(([, pts]) => pts);
     const b = bboxOf(all);
-    const dx = Math.round((SIL_AREA.l + SIL_AREA.r) / 2 - (b.l + b.r) / 2);
-    const dy = Math.round((SIL_AREA.t + SIL_AREA.b) / 2 - (b.t + b.b) / 2);
+    let dx = Math.round((SIL_AREA.l + SIL_AREA.r) / 2 - (b.l + b.r) / 2);
+    let dy = Math.round((SIL_AREA.t + SIL_AREA.b) / 2 - (b.t + b.b) / 2);
+    if (book === 'kyo') {
+      // きょうかしょは、方眼紙・ノートの 線に シルエットの 線が そろうように ずらす
+      const u = kyoG === 1 ? L : G, gx = (W % u) / 2, gy = (H % u) / 2;
+      dx = gx + u * Math.round((dx - gx) / u);
+      dy = gy + u * Math.round((dy - gy) / u);
+    }
     sil.polys = p.sol.map(([, pts]) => pts.map(([x, y]) => [x + dx, y + dy]));
     sil.kinds = p.sol.map(([k]) => k);
     sil.area = sil.polys.reduce((a, q) => a + Math.abs(polyArea(q)), 0);
@@ -638,7 +729,8 @@ function findOutline() {
   }
 }
 function drawSil() {
-  let h = sil.polys.map(q => `<polygon class="shape" points="${ptsAttr(q)}"/>`).join('');
+  // 1つの path で ぬる（ピースごとに ぬると、さかいめに すきまの 線が 見えて 答えが わかってしまう）
+  let h = sil.polys.length ? `<path class="shape" d="${sil.polys.map(q => 'M' + ptsAttr(q).replace(/ /g, 'L') + 'Z').join('')}"/>` : '';
   if (hintSlot >= 0 && sil.polys[hintSlot]) h += `<polygon class="hintline" points="${ptsAttr(sil.polys[hintSlot])}"/>`;
   silEl.innerHTML = h;
 }
@@ -1317,14 +1409,14 @@ document.addEventListener('keydown', e => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
   else if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
-  else if (e.key === 'Escape') ['confirmBg', 'txtBg', 'shareBg'].forEach(id => { $(id).hidden = true; });
+  else if (e.key === 'Escape') ['confirmBg', 'txtBg', 'shareBg', 'bgBg'].forEach(id => { $(id).hidden = true; });
 });
 
 /* =========================== 盤面 ⇄ 文字列（くばる がぞうの 中に 入れる） =========================== */
 async function packState() {
   const r = v => Math.round(v * 10) / 10;
   const data = {
-    v: 1, b: book, p: probId, g: kyoG,
+    v: 1, b: book, p: probId, g: kyoG, bk: [bg.kind, bg.grid, bg.note, bg.color],
     i: items.map(it => it.type === 'text' ? ['text', r(it.x), r(it.y), it.text, it.fs] : [it.type, r(it.x), r(it.y), it.r, it.f, it.c || 0]),
     s: strokes.map(st => [st.color, st.pts.filter((p, k) => k % 2 === 0 || k === st.pts.length - 1).flatMap(p => [Math.round(p[0]), Math.round(p[1])])]),
   };
@@ -1347,6 +1439,12 @@ function applyState(data) {
   const pid = data.p === 'free' || probsOf(b).some(q => q.id === data.p) ? data.p : probsOf(b)[0].id;
   book = b; probId = pid; hintSlot = -1;
   kyoG = data.g === 2 ? 2 : 1;
+  const [bk, bgr, bno, bco] = Array.isArray(data.bk) ? data.bk : [];
+  if (BG_KINDS.some(k => k.id === bk)) bg.kind = bk;
+  if (GRID_SIZES.some(g => g.id === bgr)) bg.grid = bgr;
+  if (NOTE_SIZES.some(g => g.id === bno)) bg.note = bno;
+  if (BG_COLORS.some(c => c.id === bco)) bg.color = bco;
+  redrawBg();
   syncLevel();
   items = []; strokes = [];
   for (const a of (Array.isArray(data.i) ? data.i : []).slice(0, 200)) {
@@ -1371,6 +1469,40 @@ function applyState(data) {
   wasPitta = false;
   scheduleCheck();
 }
+/* =========================== はいけいを えらぶ 画面 =========================== */
+function redrawBg() {
+  const k = bgc.width / W;
+  if (!k) return;
+  bctx.setTransform(k, 0, 0, k, 0, 0);
+  drawBg(bctx);
+  stage.classList.toggle('dark', bg.color === 'green');
+}
+function bgButton(label, on, onclick, sample) {
+  const b = document.createElement('button');
+  b.className = 'btn' + (on ? ' on' : '');
+  b.innerHTML = (sample ? `<span class="sample" style="background:${sample}"></span>` : '') + label;
+  b.onclick = onclick;
+  return b;
+}
+function renderBgPanel() {
+  const kinds = $('bgKinds'); kinds.textContent = '';
+  for (const k of BG_KINDS) kinds.appendChild(bgButton(k.name, bg.kind === k.id, () => { bg.kind = k.id; changeBg(); }));
+  // かみの しゅるいごとの えらぶもの（[見出し, えらぶ表, bg の なまえ]）
+  const o = { grid: ['マスの おおきさ', GRID_SIZES, 'grid'], note: ['よこに ならぶ マスの かず', NOTE_SIZES, 'note'] }[bg.kind];
+  const r = $('bgSizes'); r.textContent = '';
+  $('bgSizeBox').hidden = !o;
+  if (o) {
+    $('bgSizeTitle').textContent = o[0];
+    for (const g of o[1]) r.appendChild(bgButton(g.name, bg[o[2]] === g.id, () => { bg[o[2]] = g.id; changeBg(); }));
+  }
+  const cols = $('bgColors'); cols.textContent = '';
+  for (const c of BG_COLORS) cols.appendChild(bgButton(c.name, bg.color === c.id, () => { bg.color = c.id; changeBg(); }, c.paper));
+}
+function changeBg() { redrawBg(); renderBgPanel(); }
+$('bgBtn').onclick = () => { renderBgPanel(); $('bgBg').hidden = false; };
+$('bgClose').onclick = () => { $('bgBg').hidden = true; };
+$('bgBg').addEventListener('click', e => { if (e.target === $('bgBg')) $('bgBg').hidden = true; });
+
 const TEACHER = params.get('teacher') === '1';
 if (TEACHER) document.body.classList.add('teacher');
 let startState = null;
@@ -1485,13 +1617,15 @@ function makePhoto() {
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  drawBg(ctx);
   // もんだいの なまえ
-  ctx.fillStyle = '#78909c'; ctx.font = `900 26px ${FONT}`; ctx.textAlign = 'left';
+  ctx.fillStyle = bg.color === 'green' ? 'rgba(255,255,255,0.8)' : '#78909c'; ctx.font = `900 26px ${FONT}`; ctx.textAlign = 'left';
   ctx.fillText($('ptitle').textContent, 18, 40);
   // シルエット
   ctx.fillStyle = '#90a4ae'; ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
-  for (const q of sil.polys) { pathPoly(ctx, q); ctx.fill(); ctx.stroke(); }
+  ctx.beginPath();
+  for (const q of sil.polys) { q.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); }
+  if (sil.polys.length) { ctx.fill(); ctx.stroke(); }
   // ピースと もんだいカード（かさなりの じゅん）
   for (const it of [...items].sort((a, b) => a.z - b.z)) {
     if (it.type === 'text') { drawTextCard(ctx, it); continue; }
