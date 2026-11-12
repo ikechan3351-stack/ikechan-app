@@ -65,6 +65,10 @@
   .grade button { flex: 1; min-height: 44px; border: 2px solid var(--soft); background: #fff; border-radius: 10px; font-weight: 900; font-size: 1rem; cursor: pointer; touch-action: manipulation; padding: 0; }
   .grade button.on { background: #ff8f00; border-color: #ff8f00; color: #fff; }
   .grade button:disabled { opacity: 0.4; cursor: default; }
+  /* いろいたの いろを えらぶ（おもて・うら の 2しょく） */
+  .irocols { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; font-weight: 900; font-size: 0.85rem; color: var(--accent-dark); }
+  .irocols button { flex: 1; min-height: 44px; border: 3px solid var(--soft); border-radius: 10px; cursor: pointer; touch-action: manipulation; padding: 0; }
+  .irocols button.on { border-color: #263238; box-shadow: 0 0 0 2px #fff inset; }
   /* いろいたを 出す ボタン */
   .tb-item {
     grid-column: 1 / -1; min-height: 70px; border: 2px solid var(--soft); border-radius: 14px; background: #f7f8fe;
@@ -212,6 +216,8 @@
     .main { flex-direction: column; }
     .toolbox { width: auto; display: flex; overflow-x: auto; overflow-y: hidden; flex: none; height: 150px; align-items: stretch; touch-action: pan-x; }
     .toolbox .label, .toolbox .tbhint { display: none; }
+    .irocols { flex: none; flex-direction: column; width: 70px; }
+    .irocols span { display: none; }
     .tabs, .grade { flex: none; flex-direction: column; width: 96px; margin: 0; }
     .grade span { display: none; }
     .prob { flex: none; width: 84px; }
@@ -368,11 +374,19 @@ for (const s of Object.values(SHAPES)) {
   s.area = Math.abs(polyArea(p));
 }
 // いろいたの いろ（おもて・うら）と、タングラムの 7しょくの いろ
-const IRO_COLORS = ['#ffa040', '#5aa9f0'];
+// いろいたの いろ（[おもて, うら, なまえ]）。道具箱で えらぶと、つぎに 出す いろいたが その いろに なる
+const IRO_PAIRS = [
+  ['#ffa040', '#5aa9f0', 'オレンジ・あお'],
+  ['#ef5350', '#ffd54f', 'あか・きいろ'],
+  ['#66bb6a', '#f48fb1', 'みどり・ピンク'],
+  ['#ab47bc', '#4dd0e1', 'むらさき・みずいろ'],
+];
+let iroC = 0;   // いま えらんでいる いろ
+const IRO_COLORS = IRO_PAIRS[0];
 const TAN_COLORS = ['#ef8080', '#64a8f0', '#7cc47f', '#ffd24d', '#b77fd0', '#4fc9d9', '#ff9466'];
 const PZ_ALL = ['pa', 'pi', 'pu', 'pe', 'po', 'pka', 'pki', 'pku'];   // パズルの 8まい
 const KYO_TYPES = ['iro', 'sq', 're', 'rt', 'ti', 'rb', ...PZ_ALL];   // きょうかしょ の ピース
-const pieceColor = it => it.type === 'iro' ? IRO_COLORS[it.f ? 1 : 0]
+const pieceColor = it => it.type === 'iro' ? IRO_PAIRS[(it.c || 0) % IRO_PAIRS.length][it.f ? 1 : 0]
   : SHAPES[it.type].colors ? SHAPES[it.type].colors[it.f ? 1 : 0]
   : TAN_COLORS[(it.c || 0) % TAN_COLORS.length];
 
@@ -1124,7 +1138,7 @@ function pieceIcon(k, size = 46) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><polygon points="${pts}" fill="${SHAPES[k].colors[0]}" stroke="#37474f" stroke-width="2"/></svg>`;
 }
 function iroIcon(size = 46) {
-  return `<svg width="${size}" height="${size}" viewBox="-2 -2 84 84"><polygon points="0,0 80,0 0,80" fill="${IRO_COLORS[0]}" stroke="#37474f" stroke-width="3"/><polygon points="80,4 80,80 4,80" fill="${IRO_COLORS[1]}" stroke="#37474f" stroke-width="3" opacity="0.9"/></svg>`;
+  return `<svg width="${size}" height="${size}" viewBox="-2 -2 84 84"><polygon points="0,0 80,0 0,80" fill="${IRO_PAIRS[iroC][0]}" stroke="#37474f" stroke-width="3"/><polygon points="80,4 80,80 4,80" fill="${IRO_PAIRS[iroC][1]}" stroke="#37474f" stroke-width="3" opacity="0.9"/></svg>`;
 }
 function buildToolbox() {
   toolbox.textContent = '';
@@ -1158,6 +1172,20 @@ function buildToolbox() {
       it.dataset.type = 'iro';
       it.innerHTML = iroIcon() + '<span>いろいた<br><small>タップで 1まい</small></span>';
       toolbox.appendChild(it);
+      // いろを えらぶ（ボタンは 左上が おもて、右下が うら）
+      const cr = document.createElement('div');
+      cr.className = 'irocols';
+      cr.innerHTML = '<span>いろ</span>';
+      IRO_PAIRS.forEach(([a, b, name], i) => {
+        const btn = document.createElement('button');
+        btn.className = i === iroC ? 'on' : '';
+        btn.title = name;
+        btn.setAttribute('aria-label', name);
+        btn.style.background = `linear-gradient(135deg, ${a} 50%, ${b} 50%)`;
+        btn.onclick = () => { iroC = i; buildToolbox(); };
+        cr.appendChild(btn);
+      });
+      toolbox.appendChild(cr);
     } else {
       // いまの もんだいで つかう ピースだけ 出す（じゆうは 3しゅるい ぜんぶ）
       const use = probId === 'free' ? ['sq', 're', 'rt', 'ti', 'rb'] : curProb().use;
@@ -1242,7 +1270,7 @@ toolbox.addEventListener('pointermove', e => {
   d.cx = e.clientX; d.cy = e.clientY;
   if (!d.ghost) {
     if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 8) return;
-    d.ghost = makePieceEl({ type: d.type, f: 0 });
+    d.ghost = makePieceEl({ type: d.type, f: 0, c: d.type === 'iro' ? iroC : 0 });
     d.ghost.classList.add('ghost', 'lift');
     document.body.appendChild(d.ghost);
   }
@@ -1259,12 +1287,12 @@ function endTb(e) {
   let it;
   if (!d.ghost) {
     const s = freeSpot(d.type);
-    it = addItem(d.type, s.x, s.y);
+    it = addItem(d.type, s.x, s.y, d.type === 'iro' ? { c: iroC } : undefined);
   } else {
     d.ghost.remove();
     const p = toBoard(d.cx, d.cy);
     if (!inBoard(p) || overTrash(p)) return;
-    it = addItem(d.type, p.x, p.y);
+    it = addItem(d.type, p.x, p.y, d.type === 'iro' ? { c: iroC } : undefined);
   }
   if (!it) return;
   settle(it);
