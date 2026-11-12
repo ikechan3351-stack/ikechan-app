@@ -423,6 +423,22 @@ function svgPlate(y) {
   return svg(PLATE_W, PLATE_H, s);
 }
 
+/* ---- 10の わく（5×2。①と おなじ 形。まん中の 5ごとに 太い 線） ---- */
+const FRAME_COLS = 5, FRAME_ROWS = 2;
+function svgFrame(cols, rows) {
+  const w = cols * CELL + PAD * 2, h = rows * CELL + PAD * 2;
+  let lines = '';
+  for (let c = 1; c < cols; c++) {
+    const x = PAD + c * CELL, thick = c % 5 === 0;
+    lines += `<line x1="${x}" y1="${PAD}" x2="${x}" y2="${h - PAD}" stroke="${thick ? '#3949ab' : '#9fa8da'}" stroke-width="${thick ? 4 : 2}"/>`;
+  }
+  for (let r = 1; r < rows; r++) {
+    const y = PAD + r * CELL, thick = r % 5 === 0;
+    lines += `<line x1="${PAD}" y1="${y}" x2="${w - PAD}" y2="${y}" stroke="${thick ? '#3949ab' : '#9fa8da'}" stroke-width="${thick ? 4 : 2}"/>`;
+  }
+  return svg(w, h, `<rect x="2" y="2" width="${w - 4}" height="${h - 4}" rx="8" fill="#fffdf3" stroke="#3949ab" stroke-width="4"/>${lines}`);
+}
+
 /* ---- てんびん（金額で かたむく ふしぎな てんびん） ----
    tilt：1＝ひだりが さがる、0＝まっすぐ、-1＝みぎが さがる。かたむきは この3とおり だけ（さの 大きさは 見せない） */
 const TB_W = 740, TB_H = 420;
@@ -457,7 +473,7 @@ function svgTenbin(tilt = 0, eq = false, live = false) {
 const FONT_SVG = 'Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, sans-serif';
 
 /* ---- 素材の 定義表：ここに1行足すと 道具がふえる ----
-   kind: 'count' おかね ／ 'plate' おさら ／ 'tenbin' てんびん ／ 'card' 数字カード ／ 'text' もんだいカード
+   kind: 'count' おかね ／ 'plate' おさら ／ 'frame' 10の わく（硬貨が マスに 1まいずつ すいつく）／ 'tenbin' てんびん ／ 'card' 数字カード ／ 'text' もんだいカード
    yen:  おかねの がく（おかね だけ） */
 const PIECES = {
   // もんだいカード（先生だけが つくれる。大きさは 文字に あわせて きまる）
@@ -470,6 +486,7 @@ for (const y of YENS) {
 }
 PIECES.p0 = { name: 'おさら', kind: 'plate', yen: 0, w: PLATE_W, h: PLATE_H, svg: '' };
 PIECES.tenbin = { name: 'てんびん', kind: 'tenbin', w: TB_W, h: TB_H, svg: '' };
+PIECES.waku10 = { name: '10の わく', kind: 'frame', cols: FRAME_COLS, rows: FRAME_ROWS, w: FRAME_COLS * CELL + PAD * 2, h: FRAME_ROWS * CELL + PAD * 2, svg: svgFrame(FRAME_COLS, FRAME_ROWS) };
 /* ---- 数字カード 0〜9 と きごう（＋ − ＝ ？ 円） ---- */
 function svgCard(ch, color) {
   return svg(56, 68, `<rect x="2" y="2" width="52" height="64" rx="8" fill="#fff" stroke="#5c6bc0" stroke-width="3"/>
@@ -485,7 +502,7 @@ Object.assign(PIECES, {
 });
 for (const y of [0, ...YENS]) PIECES['p' + y].svg = svgPlate(y);
 PIECES.tenbin.svg = svgTenbin(0, false, true);
-const isHolder = type => PIECES[type].kind === 'plate' || PIECES[type].kind === 'tenbin';   // おかねを のせられる 部品
+const isHolder = type => ['plate', 'tenbin', 'frame'].includes(PIECES[type].kind);   // おかねを のせられる 部品
 
 /* ---- がくねん：道具箱に 出す おかねの はんい ---- */
 const GRADES = {
@@ -506,7 +523,7 @@ const BOARDS = {
     name: 'おかね',
     groups: [
       { tab: '🪙 おかね', label: 'おかね',           tools: g => GRADES[g].map(y => 'm' + y) },
-      { tab: '🍽 おさら', label: 'おさら・てんびん', tools: g => [...GRADES[g].map(y => 'p' + y), 'p0', 'tenbin'] },
+      { tab: '🍽 おさら', label: 'おさら・てんびん', tools: g => ['waku10', ...GRADES[g].map(y => 'p' + y), 'p0', 'tenbin'] },
       { tab: '🔢 カード', label: 'すうじ カード',    tools: () => ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n0', 'plus', 'minus', 'eq', 'q', 'yen'] },
     ],
   },
@@ -844,8 +861,9 @@ function panAt(b, side) {
 function holderAt(x, y) {
   const hs = items.filter(h => isHolder(h.type)).sort((a, b) => b.z - a.z);
   for (const h of hs) {
-    if (PIECES[h.type].kind === 'plate') {
-      if (Math.abs(x - h.x) < PLATE_W / 2 && Math.abs(y - h.y) < PLATE_H / 2) return { h, side: '' };
+    const k = PIECES[h.type].kind;
+    if (k === 'plate' || k === 'frame') {
+      if (Math.abs(x - h.x) < PIECES[h.type].w / 2 && Math.abs(y - h.y) < PIECES[h.type].h / 2) return { h, side: '' };
     } else {
       for (const side of ['L', 'R']) {
         const p = panAt(h, side);
@@ -872,7 +890,10 @@ function flowRows(list, maxW, per) {
 function relayout(h, animate = true) {
   const moved = [];
   const put = (o, x, y) => { if (Math.abs(o.x - x) > 0.5 || Math.abs(o.y - y) > 0.5) moved.push(o); o.x = x; o.y = y; };
-  if (PIECES[h.type].kind === 'plate') {
+  if (PIECES[h.type].kind === 'frame') {
+    // 10の わく：それぞれ じぶんの マス（cell）の まんなかに おく
+    for (const o of membersOf(h)) { const c = frameCell(h, o.cell); put(o, c.x, c.y); }
+  } else if (PIECES[h.type].kind === 'plate') {
     const rows = flowRows(membersOf(h), PLATE_W - 24, 5);
     const top = h.y - PLATE_H / 2 + (PIECES[h.type].yen ? PLATE_HEAD + 8 : 16), room = PLATE_H / 2 + h.y - 12 - top;
     const total = rows.reduce((a, r) => a + r.h, 0) + (rows.length - 1) * 4;
@@ -906,6 +927,22 @@ function relayout(h, animate = true) {
     if (animate) { el.classList.add('glide'); setTimeout(() => el.classList.remove('glide'), 450); }
     place(o);
   }
+}
+// 10の わくの マスの まんなか（0〜9。上の だん 左から、下の だん 左から）
+function frameCell(h, i) {
+  const d = PIECES[h.type];
+  return { x: h.x - d.w / 2 + PAD + (i % d.cols + 0.5) * CELL, y: h.y - d.h / 2 + PAD + (Math.floor(i / d.cols) + 0.5) * CELL };
+}
+// おいた 場所に いちばん 近い あいている マス（いっぱいなら -1）
+function frameFreeCell(h, it) {
+  const d = PIECES[h.type], used = new Set(items.filter(o => o !== it && o.hold === h.id).map(o => o.cell));
+  let best = -1, bd = Infinity;
+  for (let i = 0; i < d.cols * d.rows; i++) {
+    if (used.has(i)) continue;
+    const c = frameCell(h, i), dd = Math.hypot(c.x - it.x, c.y - it.y);
+    if (dd < bd) { bd = dd; best = i; }
+  }
+  return best;
 }
 function relayoutId(id, animate) { const h = items.find(i => i.id === id); if (h) relayout(h, animate); }
 function relayoutAll(animate = false) { for (const h of items.filter(i => isHolder(i.type))) relayout(h, animate); }
@@ -942,7 +979,21 @@ function snapItem(it) {
   if (it.type === 'text') return;
   if (isHolder(it.type)) { relayout(it, false); place(it); return; }
   const prev = it.hold || 0, prevSide = it.side || '';
-  const at = PIECES[it.type].kind === 'count' ? holderAt(it.x, it.y) : null;
+  let at = PIECES[it.type].kind === 'count' ? holderAt(it.x, it.y) : null;
+  if (at && PIECES[at.h.type].kind === 'frame') {
+    // 10の わく：硬貨だけ。あいている マスに 1まいずつ
+    const cell = COIN[PIECES[it.type].yen].bill ? -2 : frameFreeCell(at.h, it);
+    if (cell === -2) toast('おさつは わくに 入らないよ');
+    else if (cell < 0) toast('10の わくは いっぱいだよ');
+    if (cell < 0) {
+      // 入らない ものは わくの すぐ 下（下に ばしょが なければ 上）に よける
+      const fd = PIECES[at.h.type], d = PIECES[it.type];
+      const below = at.h.y + fd.h / 2 + d.h / 2 + 8;
+      it.y = below + d.h / 2 <= H ? below : at.h.y - fd.h / 2 - d.h / 2 - 8;
+      clampItem(it);
+      at = null;
+    } else it.cell = cell;
+  }
   if (at) {
     if (prev !== at.h.id || prevSide !== at.side) it.ord = ++ordTop;
     it.hold = at.h.id; it.side = at.side;
@@ -1289,7 +1340,7 @@ function buildToolbox() {
   const h = document.createElement('div');
   h.className = 'tbhint';
   h.innerHTML = tabNow === 0 ? '👆 タップ … 1まい でる<br>✋ ながおし … くずす（りょうがえ）<br>🔗 まとめる … えらんで まとめる'
-              : tabNow === 1 ? '🍽 おさらに おかねを のせると、中で ならぶよ<br>⚖️ てんびんは おかねの がくで かたむくよ（1つだけ）'
+              : tabNow === 1 ? '🔟 10の わくには こうかが 1まいずつ 入るよ<br>🍽 おさらに おかねを のせると、中で ならぶよ<br>⚖️ てんびんは おかねの がくで かたむくよ（1つだけ）'
               : '';
   if (h.innerHTML) toolbox.appendChild(h);
 }
@@ -1763,7 +1814,7 @@ async function packState() {
     b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color, bg.place, bg.prow, bg.split],
     // おかねは のっている おさら・てんびんの ばんごう（1から）と さらの むき も 入れる
     i: items.map(it => it.type === 'text' ? [it.type, r(it.x), r(it.y), it.text, it.fs]
-                     : it.hold ? [it.type, r(it.x), r(it.y), items.findIndex(h => h.id === it.hold) + 1, it.side || ''] : [it.type, r(it.x), r(it.y)]),
+                     : it.hold ? [it.type, r(it.x), r(it.y), items.findIndex(h => h.id === it.hold) + 1, it.side || (it.cell ?? '')] : [it.type, r(it.x), r(it.y)]),
     s: strokes.map(st => [st.color, st.pts.filter((p, k) => k % 2 === 0 || k === st.pts.length - 1).flatMap(p => [r(p[0]), r(p[1])])]),
   };
   const bytes = new TextEncoder().encode(JSON.stringify(data));
@@ -1818,6 +1869,12 @@ function applyState(data) {
   for (const [it, k, side] of holds) {
     const h = byIndex[k - 1];
     if (!h || !isHolder(h.type)) continue;
+    if (PIECES[h.type].kind === 'frame') {
+      // 10の わく：マスの ばんごうが ただしく、まだ あいている ときだけ
+      const used = items.some(o => o.hold === h.id && o.cell === side);
+      if (!Number.isInteger(side) || side < 0 || side > 9 || used || COIN[PIECES[it.type].yen].bill) continue;
+      it.cell = side;
+    }
     it.hold = h.id;
     it.side = PIECES[h.type].kind === 'tenbin' ? (side === 'R' ? 'R' : 'L') : '';
   }
