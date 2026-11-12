@@ -323,10 +323,12 @@ const PALM = 45;                   // これより大きい さわり方は 手�
 const SNAP = 18;                   // この きょりより 近いと すいつく（ボードの px）
 const MAX_IRO = 60;                // いろいたの 安全上限
 const L = 80;                      // いろいたの 直角を はさむ 辺の ながさ
+const PU = 40;                     // きょうかしょの パズル（あ〜く）の 1めもり（もとの 正方形は 8めもり）
 const G = 50;                      // 2年の しきつめの 1めもり（正方形は 2めもり）
 const U = 70;                      // タングラムの 1めもり（7まいで 4めもり×4めもりの 正方形）
 const FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif';
 
+const PZ_COLORS = ['#f3d08f', '#ddb064'];   // パズルの いろ（おもて・うら）
 /* ---- ピースの かたち（頂点の ならび）。step は タップ1回で まわる かくど（×45°） ---- */
 const SHAPES = {
   iro: { name: 'いろいた',          pts: [[0, 0], [1, 0], [0, 1]],         k: L, step: 2 },
@@ -334,6 +336,18 @@ const SHAPES = {
   sq:  { name: '正方形',   ruby: 'せいほうけい',       pts: [[0, 0], [2, 0], [2, 2], [0, 2]], k: G, step: 2, colors: ['#7cc47f', '#ffd24d'] },
   re:  { name: '長方形',   ruby: 'ちょうほうけい',     pts: [[0, 0], [3, 0], [3, 2], [0, 2]], k: G, step: 2, colors: ['#b77fd0', '#ef8080'] },
   rt:  { name: '直角三角形', ruby: 'ちょっかく|さんかくけい', pts: [[0, 0], [0, 2], [3, 2]],         k: G, step: 2, colors: ['#ffa040', '#5aa9f0'] },
+  // 2年 いろがみの しきつめ（教科書の 青・みどりの さんかく、ピンク・きいろの 長方形）
+  ti:  { name: '直角三角形', ruby: 'ちょっかく|さんかくけい', pts: [[0, 0], [0, 2], [2, 2]],         k: G, step: 2, colors: ['#42a5f5', '#9ccc65'] },
+  rb:  { name: '長方形',   ruby: 'ちょうほうけい',     pts: [[0, 0], [4, 0], [4, 2], [0, 2]], k: G, step: 2, colors: ['#f48fb1', '#ffd54f'] },
+  // 2年 きょうかしょの パズル（正方形を 8まいに 切った もの。label は ピースに かく 字）
+  pa:  { name: 'あ', label: 'あ', pts: [[0, 0], [2, 0], [0, 4]],         k: PU, step: 1, colors: PZ_COLORS },
+  pi:  { name: 'い', label: 'い', pts: [[2, 0], [6, 0], [4, 4], [0, 4]], k: PU, step: 1, colors: PZ_COLORS },
+  pu:  { name: 'う', label: 'う', pts: [[4, 4], [5, 2], [6, 4]],         k: PU, step: 1, colors: PZ_COLORS },
+  pe:  { name: 'え', label: 'え', pts: [[6, 0], [6, 4], [5, 2]],         k: PU, step: 1, colors: PZ_COLORS },
+  po:  { name: 'お', label: 'お', pts: [[6, 0], [8, 0], [8, 4], [6, 4]], k: PU, step: 1, colors: PZ_COLORS },
+  pka: { name: 'か', label: 'か', pts: [[0, 4], [2, 8], [0, 8]],         k: PU, step: 1, colors: PZ_COLORS },
+  pki: { name: 'き', label: 'き', pts: [[0, 4], [4, 4], [4, 8], [2, 8]], k: PU, step: 1, colors: PZ_COLORS },
+  pku: { name: 'く', label: 'く', pts: [[4, 4], [8, 4], [8, 8], [4, 8]], k: PU, step: 1, colors: PZ_COLORS },
   B:   { name: 'おおきい さんかく', pts: [[0, 0], [4, 0], [2, 2]],         k: U, step: 1 },
   M:   { name: 'なかくらいの さんかく', pts: [[0, 0], [2, 0], [0, 2]],     k: U, step: 1 },
   S:   { name: 'ちいさい さんかく', pts: [[0, 0], [2, 0], [1, 1]],         k: U, step: 1 },
@@ -356,7 +370,8 @@ for (const s of Object.values(SHAPES)) {
 // いろいたの いろ（おもて・うら）と、タングラムの 7しょくの いろ
 const IRO_COLORS = ['#ffa040', '#5aa9f0'];
 const TAN_COLORS = ['#ef8080', '#64a8f0', '#7cc47f', '#ffd24d', '#b77fd0', '#4fc9d9', '#ff9466'];
-const KYO_TYPES = ['iro', 'sq', 're', 'rt'];   // きょうかしょ の ピース
+const PZ_ALL = ['pa', 'pi', 'pu', 'pe', 'po', 'pka', 'pki', 'pku'];   // パズルの 8まい
+const KYO_TYPES = ['iro', 'sq', 're', 'rt', 'ti', 'rb', ...PZ_ALL];   // きょうかしょ の ピース
 const pieceColor = it => it.type === 'iro' ? IRO_COLORS[it.f ? 1 : 0]
   : SHAPES[it.type].colors ? SHAPES[it.type].colors[it.f ? 1 : 0]
   : TAN_COLORS[(it.c || 0) % TAN_COLORS.length];
@@ -409,7 +424,17 @@ const TAN_PROBS = [
 ];
 /* ---- 📘きょうかしょ（2年 三角形と四角形：しきつめ）の もんだい。
    sol は こたえの ならべ方（1めもり＝G）。grp は 道具箱の 見出し（どの ピースを つかうか） ---- */
+const S2 = 2 * Math.SQRT2;   // さかなの からだ（正方形を 45°まわした ダイヤ）の 半分の はば
 const G2_PROBS = [
+  // きょうかしょの パズル：8まい ぜんぶ おきばに 出て、どれを つかうか 子どもが えらぶ（set）。1めもり＝PU
+  { id: 'pz-sq', grp: 'pz', set: PZ_ALL, unit: PU, name: 'もとの せいほうけい', sol: PZ_ALL.map(k => [k, SHAPES[k].pts]) },
+  { id: 'pz-roketto', grp: 'pz', set: PZ_ALL, unit: PU, name: 'ロケット', sol: [['pa',[[0,6],[4,6],[4,4]]],['pka',[[6,4],[6,6],[10,6]]],['po',[[4,2],[6,2],[6,6],[4,6]]],['pu',[[4,2],[5,0],[6,2]]]] },
+  { id: 'pz-sakana', grp: 'pz', set: PZ_ALL, unit: PU, name: 'さかな', sol: [['pku',[[0,S2],[S2,0],[2*S2,S2],[S2,2*S2]]],['pe',[[2*S2+1,S2-2],[2*S2+1,S2+2],[2*S2,S2]]]] },
+  { id: 'pz-ie', grp: 'pz', set: PZ_ALL, unit: PU, name: 'いえ', sol: [['pa',[[0,2],[4,2],[4,0]]],['pka',[[4,0],[4,2],[8,2]]],['pku',[[2,2],[6,2],[6,6],[2,6]]]] },
+  { id: 'pz-fune', grp: 'pz', set: PZ_ALL, unit: PU, name: 'ふね', sol: [['pku',[[4,0],[8,0],[8,4],[4,4]]],['pki',[[0,4],[4,4],[4,8],[2,8]]],['pa',[[4,4],[6,4],[4,8]]],['pi',[[6,4],[10,4],[8,8],[4,8]]],['pka',[[10,4],[10,8],[8,8]]]] },
+  // なかまわけ：シルエットは なし。ピースを 上に ならべ、はいけいを「ふたつに わける」に する
+  { id: 'pz-wake', grp: 'pz', set: PZ_ALL, unit: PU, name: 'なかまわけ', icon: '🔀', bg: 'split', sol: [],
+    pos: { pa: [[70, 140]], pku: [[215, 140]], pu: [[360, 140]], pi: [[545, 140]], pe: [[710, 140]], pki: [[835, 140]], pka: [[980, 140]], po: [[1085, 140]] } },
   { id: 'n2-sq4', grp: 'sq', name: 'おおきな せいほうけい', sol: [['sq',[[0,0],[2,0],[2,2],[0,2]]],['sq',[[2,0],[4,0],[4,2],[2,2]]],['sq',[[0,2],[2,2],[2,4],[0,4]]],['sq',[[2,2],[4,2],[4,4],[2,4]]]] },
   { id: 'n2-sq6', grp: 'sq', name: 'ちょうほうけい', sol: [0,2,4].flatMap(x => [0,2].map(y => ['sq',[[x,y],[x+2,y],[x+2,y+2],[x,y+2]]])) },
   { id: 'n2-re4', grp: 're', name: 'おおきな ちょうほうけい', sol: [0,3].flatMap(x => [0,2].map(y => ['re',[[x,y],[x+3,y],[x+3,y+2],[x,y+2]]])) },
@@ -419,10 +444,21 @@ const G2_PROBS = [
   { id: 'n2-rt4', grp: 'rt', name: 'おおきな さんかく', sol: [['rt',[[0,0],[0,2],[3,2]]],['rt',[[0,2],[0,4],[3,4]]],['rt',[[3,2],[3,4],[6,4]]],['rt',[[0,2],[3,2],[3,4]]]] },
   { id: 'n2-rtd', grp: 'rt', name: 'ダイヤ', sol: [['rt',[[3,0],[3,2],[0,2]]],['rt',[[3,0],[3,2],[6,2]]],['rt',[[0,2],[3,2],[3,4]]],['rt',[[6,2],[3,2],[3,4]]]] },
   { id: 'n2-rt8', grp: 'rt', name: 'おおきな ちょうほうけい', sol: [0,3].flatMap(x => [0,2].flatMap(y => [['rt',[[x,y],[x,y+2],[x+3,y+2]]],['rt',[[x,y],[x+3,y],[x+3,y+2]]]])) },
+  // いろがみの しきつめ（教科書の もよう）
+  { id: 'n2-ti8', grp: 'ti', name: 'おおきな しかく', sol: [0,2].flatMap(x => [0,2].flatMap(y => [['ti',[[x,y],[x,y+2],[x+2,y+2]]],['ti',[[x,y],[x+2,y],[x+2,y+2]]]])) },
+  { id: 'n2-ti9', grp: 'ti', name: 'おおきな さんかく', sol: [0,1,2].flatMap(j => [
+      ...Array.from({ length: j }, (_, i) => [['ti',[[2*i,2*j],[2*i,2*j+2],[2*i+2,2*j+2]]],['ti',[[2*i,2*j],[2*i+2,2*j],[2*i+2,2*j+2]]]]).flat(),
+      ['ti',[[2*j,2*j],[2*j,2*j+2],[2*j+2,2*j+2]]]]) },
+  { id: 'n2-rb4', grp: 'rb', name: 'れんが', sol: [0,4].flatMap(x => [0,2].map(y => ['rb',[[x,y],[x+4,y],[x+4,y+2],[x,y+2]]])) },
+  { id: 'n2-rbk', grp: 'rb', name: 'れんがの かべ', sol: [...[0,4].map(y => ['rb',[[0,y],[2,y],[2,y+4],[0,y+4]]]), ...[0,2,4,6].map(y => ['rb',[[2,y],[6,y],[6,y+2],[2,y+2]]])] },
+  { id: 'n2-rbs', grp: 'rb', name: 'かいだん', sol: [[0,0],[0,2],[4,2],[0,4],[4,4],[8,4]].map(([x,y]) => ['rb',[[x,y],[x+4,y],[x+4,y+2],[x,y+2]]]) },
   { id: 'n2-ie', grp: 'mix', name: 'いえ', sol: [['rt',[[0,2],[3,2],[3,0]]],['rt',[[3,0],[3,2],[6,2]]], ...[0,3].flatMap(x => [2,4].map(y => ['re',[[x,y],[x+3,y],[x+3,y+2],[x,y+2]]]))] },
 ];
-const G2_GROUPS = { sq: '正方形で しきつめよう', re: '長方形で しきつめよう', rt: '直角三角形で しきつめよう', mix: 'まぜて つくろう' };
-for (const p of G2_PROBS) { p.g = 2; p.sol = p.sol.map(([k, pts]) => [k, pts.map(([x, y]) => [x * G, y * G])]); p.use = [...new Set(p.sol.map(([k]) => k))]; }
+const G2_GROUPS = { pz: 'きょうかしょの パズル（あ〜く）', ti: 'いろがみの さんかくで もよう', rb: 'いろがみの 長方形で もよう', sq: '正方形で しきつめよう', re: '長方形で しきつめよう', rt: '直角三角形で しきつめよう', mix: 'まぜて つくろう' };
+for (const p of G2_PROBS) {
+  const u = p.unit || G;
+  p.g = 2; p.sol = p.sol.map(([k, pts]) => [k, pts.map(([x, y]) => [x * u, y * u])]); p.use = p.set ? [] : [...new Set(p.sol.map(([k]) => k))];
+}
 for (const p of TAN_PROBS) p.sol = p.sol.map(([k, pts]) => [k, pts.map(([x, y]) => [x * U, y * U])]);
 for (const p of IRO_PROBS) { p.sol = iroSolution(p.g); p.g = 1; }
 const KYO_PROBS = [...IRO_PROBS, ...G2_PROBS];
@@ -482,9 +518,15 @@ const BG_KINDS = [
   { id: 'plain', name: 'むじ' },
   { id: 'grid',  name: 'ほうがんし' },
   { id: 'note',  name: 'さんすうノート' },
+  { id: 'split', name: 'ふたつに わける' },
 ];
-// 方眼紙の マス（いろいたの マス は 色板の 辺と、しきつめの マス は 2年の ピースの 1めもりと 同じ 大きさ）
-const GRID_SIZES = [ { id: 'L', name: 'いろいたの マス', size: L }, { id: 'G', name: 'しきつめの マス', size: G }, { id: 'S', name: 'ちいさい', size: 25 } ];
+// 方眼紙の マス。「ピースに あわせる」は いまの もんだいの 1めもり（色板の 辺・しきつめの 1めもり・パズル・タングラム）に なり、
+// シルエットの へりと 方眼の 線が かさなる。ピースの かども 方眼の 点に すいつく
+const GRID_SIZES = [ { id: 'A', name: 'ピースに あわせる', size: 0 }, { id: 'S', name: 'こまかい', size: 25 } ];
+function unitNow() {
+  if (book === 'tan') return U;
+  return (probId !== 'free' && curProb().unit) || (kyoG === 1 ? L : G);
+}
 // 算数ノートは よこに ならぶ マスの 数で えらぶ
 const NOTE_SIZES = [ { id: '12', name: '12マス', size: 100 }, { id: '15', name: '15マス', size: 80 }, { id: '18', name: '18マス', size: 66 } ];
 const BG_COLORS = [
@@ -494,14 +536,14 @@ const BG_COLORS = [
 ];
 const bg = {
   kind: BG_KINDS.some(k => k.id === params.get('bg')) ? params.get('bg') : 'plain',
-  grid: GRID_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : 'L',
+  grid: GRID_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : 'A',
   note: NOTE_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : '15',
   color: BG_COLORS.some(c => c.id === params.get('color')) ? params.get('color') : 'white',
 };
 // いまの マス目。ボードの まんなかに そろえる
 function gridCell() {
   let size = 0;
-  if (bg.kind === 'grid') size = GRID_SIZES.find(g => g.id === bg.grid).size;
+  if (bg.kind === 'grid') size = GRID_SIZES.find(g => g.id === bg.grid).size || unitNow();
   else if (bg.kind === 'note') size = NOTE_SIZES.find(g => g.id === bg.note).size;
   else return null;
   return { size, ox: (W % size) / 2, oy: (H % size) / 2 };
@@ -510,6 +552,12 @@ function drawBg(ctx) {
   const col = BG_COLORS.find(c => c.id === bg.color);
   ctx.fillStyle = col.paper;
   ctx.fillRect(0, 0, W, H);
+  if (bg.kind === 'split') {
+    // ふたつに わける：上は ピースの おき場、下に 2つの はこ
+    ctx.strokeStyle = col.bold; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    for (const x of [14, W / 2 + 6]) { ctx.beginPath(); ctx.roundRect(x, 240, W / 2 - 20, H - 254, 16); ctx.stroke(); }
+    return;
+  }
   const g = gridCell();
   if (!g) return;
   const line = (x1, y1, x2, y2, color, width, dash) => {
@@ -563,7 +611,9 @@ new ResizeObserver(layout).observe(wrap);
 window.addEventListener('scroll', () => { wrapRect = wrap.getBoundingClientRect(); });
 function toBoard(cx, cy) { return { x: (cx - wrapRect.left - ox) / scale, y: (cy - wrapRect.top - oy) / scale }; }
 function inBoard(p) { return p.x >= 0 && p.y >= 0 && p.x <= W && p.y <= H; }
-const trashOn = () => book === 'kyo';   // タングラムは 7まい きまっているので ごみばこは なし
+// おきばに きまった ピースが 出る もんだい（タングラム・パズル）
+const usesTray = () => book === 'tan' || !!curProb().set;
+const trashOn = () => !usesTray();   // タングラムは 7まい きまっているので ごみばこは なし
 function overTrash(p) { return trashOn() && p.x > W - 16 - 110 - 10 && p.y > H - 16 - 110 - 10 && p.x <= W && p.y <= H; }
 function overToolbox(cx, cy) {
   const r = toolbox.getBoundingClientRect();
@@ -585,7 +635,9 @@ function makePieceEl(it) {
   const d = document.createElement('div');
   d.className = 'piece';
   const pts = ptsAttr(SHAPES[it.type].local);
-  d.innerHTML = `<svg width="1" height="1"><polygon class="hit" points="${pts}"/><polygon class="face" points="${pts}" fill="${pieceColor(it)}"/></svg>`;
+  const lb = SHAPES[it.type].label;
+  d.innerHTML = `<svg width="1" height="1"><polygon class="hit" points="${pts}"/><polygon class="face" points="${pts}" fill="${pieceColor(it)}"/>` +
+    (lb ? `<g class="lbl"><circle r="12" fill="#fff" stroke="#37474f" stroke-width="1.5"/><text text-anchor="middle" dy="5.5" font-size="16" font-weight="900" fill="#37474f">${lb}</text></g>` : '') + `</svg>`;
   return d;
 }
 function place(it) {
@@ -596,6 +648,8 @@ function place(it) {
   } else {
     el.style.transform = `translate3d(${it.x}px, ${it.y}px, 0) rotate(${it.r * 45}deg) scale(${it.f ? -1 : 1}, 1)`;
     el.querySelector('.face').setAttribute('fill', pieceColor(it));
+    const lbl = el.querySelector('.lbl');
+    if (lbl) lbl.setAttribute('transform', `scale(${it.f ? -1 : 1},1) rotate(${-it.r * 45})`);
   }
   el.style.zIndex = it.z;
 }
@@ -657,9 +711,9 @@ function buildSil() {
     const b = bboxOf(all);
     let dx = Math.round((SIL_AREA.l + SIL_AREA.r) / 2 - (b.l + b.r) / 2);
     let dy = Math.round((SIL_AREA.t + SIL_AREA.b) / 2 - (b.t + b.b) / 2);
-    if (book === 'kyo') {
-      // きょうかしょは、方眼紙・ノートの 線に シルエットの 線が そろうように ずらす
-      const u = kyoG === 1 ? L : G, gx = (W % u) / 2, gy = (H % u) / 2;
+    {
+      // 方眼紙の 線に シルエットの 線が そろうように ずらす
+      const u = unitNow(), gx = (W % u) / 2, gy = (H % u) / 2;
       dx = gx + u * Math.round((dx - gx) / u);
       dy = gy + u * Math.round((dy - gy) / u);
     }
@@ -670,8 +724,9 @@ function buildSil() {
   }
   drawSil();
   $('ptitle').textContent = probId === 'free' ? '' : (book === 'tan' ? '★'.repeat(p.lv) + ' ' : '') + p.name;
-  $('tray').hidden = book !== 'tan';
+  $('tray').hidden = !usesTray() || !!p.pos;
   trashEl.hidden = !trashOn();
+  redrawBg();
 }
 // 点が 多角形の 中に あるか
 function insidePoly(x, y, pts) {
@@ -737,13 +792,15 @@ function drawSil() {
 
 /* =========================== タングラムの おきば =========================== */
 // 7まいを 右の おきばに ならべる（まわさない もとの むき）
-const TRAY_POS = { B: [[1017, 100], [1017, 238]], M: [[930, 380]], Q: [[1100, 380]], P: [[1017, 506]], S: [[930, 630], [1100, 630]] };
+const TRAY_POS = { B: [[1017, 100], [1017, 238]], M: [[930, 380]], Q: [[1100, 380]], P: [[1017, 506]], S: [[930, 630], [1100, 630]],
+  pa: [[888, 120]], pi: [[1068, 120]], pka: [[888, 300]], pki: [[1038, 300]], pe: [[1168, 300]], pku: [[928, 480]], po: [[1058, 480]], pu: [[1148, 480]] };
 function trayPieces(kinds) {
   const used = {}, out = [];
   kinds.forEach(k => {
     const n = used[k] = (used[k] || 0);
     used[k]++;
-    const [x, y] = TRAY_POS[k][n % TRAY_POS[k].length];
+    const P = curProb().pos || TRAY_POS;
+    const [x, y] = P[k][n % P[k].length];
     // おきばの まん中に くるように（重心では なく 外がわの 四角で そろえる）
     const b = bboxOf(SHAPES[k].local);
     out.push({ type: k, x: x - (b.l + b.r) / 2, y: y - (b.t + b.b) / 2, c: TAN_ALL.indexOf(k) + n });
@@ -760,7 +817,7 @@ function tanKinds() {
 }
 function resetTray() {
   items = items.filter(i => !isPiece(i));
-  for (const t of trayPieces(tanKinds())) items.push({ id: nextId++, type: t.type, x: t.x, y: t.y, r: 0, f: 0, c: t.c, z: ++zTop });
+  for (const t of trayPieces(curProb().set || tanKinds())) items.push({ id: nextId++, type: t.type, x: t.x, y: t.y, r: 0, f: 0, c: t.c, z: ++zTop });
 }
 
 /* ---- もんだいを かえる（ピースと ペンの線は かたづく。もんだいカードは のこる） ---- */
@@ -769,9 +826,12 @@ function loadProb(b, id, keepUndo) {
   const had = items.some(isPiece) || strokes.length;
   book = b; probId = id; hintSlot = -1;
   syncLevel();
+  // なかまわけ は「ふたつに わける」の かみに。ほかの もんだいに もどったら まえの かみに もどす
+  if (curProb().bg) { if (bg.kind !== curProb().bg) { bg.prev = bg.kind; bg.kind = curProb().bg; } }
+  else if (bg.kind === 'split' && bg.prev) { bg.kind = bg.prev; bg.prev = null; }
   items = items.filter(i => !isPiece(i));
   strokes = [];
-  if (book === 'tan') resetTray();
+  if (usesTray()) resetTray();
   buildSil();
   rebuild();
   wasPitta = false;
@@ -802,6 +862,14 @@ function snapPiece(it) {
     // ② 頂点 と 辺（すべらせて あわせる）
     for (const v of mine) for (const [a, b] of tEdges) { const q = projSeg(v, a, b); tryD(q[0] - v[0], q[1] - v[1], Math.hypot(q[0] - v[0], q[1] - v[1]), SNAP * 0.8); }
     for (const t of tPts) for (const [a, b] of edgesOf(mine)) { const q = projSeg(t, a, b); tryD(t[0] - q[0], t[1] - q[1], Math.hypot(t[0] - q[0], t[1] - q[1]), SNAP * 0.8); }
+  }
+  if (!best && bg.kind === 'grid' && bg.grid === 'A') {
+    // ③ 頂点 と 方眼の 点（ピースに あわせた 方眼の ときだけ）
+    const g = gridCell();
+    for (const v of mine) {
+      const q = [g.ox + g.size * Math.round((v[0] - g.ox) / g.size), g.oy + g.size * Math.round((v[1] - g.oy) / g.size)];
+      tryD(q[0] - v[0], q[1] - v[1], Math.hypot(q[0] - v[0], q[1] - v[1]), SNAP);
+    }
   }
   if (best && best.d > 0.01) { it.x += best.dx; it.y += best.dy; return true; }
   return false;
@@ -845,7 +913,8 @@ function isPitta() {
   }
   // かさなり：ピースの 面積の 合計と、ぬれた ところの 広さが ちがえば かさなっている
   const over = areaSum * JR * JR - uni;
-  const tol = Math.max(8, silPx * 0.005);
+  // ゆるす 量。大きい シルエットでも ふえすぎないように 上限を つける（6px ずれたら ぴったりに しない）
+  const tol = Math.max(8, Math.min(silPx * 0.005, 50));
   lastJudge = { miss, out, over: Math.round(over), tol: Math.round(tol) };
   return miss <= tol && out <= tol && over <= tol && Math.abs(areaSum - sil.area) < sil.area * 0.01;
 }
@@ -1091,7 +1160,7 @@ function buildToolbox() {
       toolbox.appendChild(it);
     } else {
       // いまの もんだいで つかう ピースだけ 出す（じゆうは 3しゅるい ぜんぶ）
-      const use = probId === 'free' ? ['sq', 're', 'rt'] : curProb().use;
+      const use = probId === 'free' ? ['sq', 're', 'rt', 'ti', 'rb'] : curProb().use;
       for (const k of use) {
         const it = document.createElement('div');
         it.className = 'tb-item' + (use.length > 1 ? ' mini' : '');
@@ -1136,16 +1205,16 @@ function buildToolbox() {
     }
     const b = document.createElement('div');
     b.className = 'prob' + (p.id === probId ? ' on' : '') + (doneSet.has(book + p.id) ? ' done' : '');
-    b.innerHTML = silThumb(p.sol) + `<span>${p.name}</span>`;
+    b.innerHTML = (p.icon ? `<span style="font-size:30px;line-height:48px">${p.icon}</span>` : silThumb(p.sol)) + `<span>${p.name}</span>`;
     b.onclick = () => { if (p.id !== probId) loadProb(book, p.id); };
     toolbox.appendChild(b);
   }
-  if (book === 'tan') {
+  if (usesTray()) {
     const hb = document.createElement('button');
     hb.className = 'tbbtn hint';
     hb.innerHTML = '💡 ヒント';
     hb.onclick = showHint;
-    toolbox.appendChild(hb);
+    if (curProb().sol.length) toolbox.appendChild(hb);
     const rb = document.createElement('button');
     rb.className = 'tbbtn';
     rb.innerHTML = '🔄 ならべなおす';
@@ -1154,8 +1223,8 @@ function buildToolbox() {
   }
   const h = document.createElement('div');
   h.className = 'tbhint';
-  h.innerHTML = (book === 'kyo' ? (kyoG === 1 ? '👆 いろいたを' : '👆 上の ピースを') + ' タップ … 1まい でる<br>' : '') +
-    `👆 ピースを タップ … まわる（${book === 'kyo' ? '90' : '45'}°）<br>✋ ながおし … うらがえす<br>🧲 ちかづけると カチッと くっつく`;
+  h.innerHTML = (book === 'kyo' && !usesTray() ? (kyoG === 1 ? '👆 いろいたを' : '👆 上の ピースを') + ' タップ … 1まい でる<br>' : '') +
+    `👆 ピースを タップ … まわる（${book === 'tan' || curProb().set ? '45' : '90'}°）<br>✋ ながおし … うらがえす<br>🧲 ちかづけると カチッと くっつく`;
   toolbox.appendChild(h);
 }
 // いろいたの ボタン：タップ → 1まい出る。ひっぱる → すきな場所に 置ける
@@ -1399,7 +1468,7 @@ $('confirmYes').onclick = () => {
   $('confirmBg').hidden = true;
   pushUndo(snapshot());
   items = []; strokes = []; hintSlot = -1;
-  if (book === 'tan') resetTray();
+  if (usesTray()) resetTray();
   drawSil();
   rebuild();
   scheduleCheck();
@@ -1632,6 +1701,11 @@ function makePhoto() {
     pathPoly(ctx, worldPts(it));
     ctx.fillStyle = pieceColor(it); ctx.fill();
     ctx.strokeStyle = '#37474f'; ctx.lineWidth = 2.5; ctx.stroke();
+    const lb = SHAPES[it.type].label;
+    if (lb) {
+      ctx.beginPath(); ctx.arc(it.x, it.y, 12, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#37474f'; ctx.font = `900 16px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(lb, it.x, it.y + 5.5); ctx.textAlign = 'left';
+    }
   }
   for (const s of strokes) drawStroke(ctx, s);
   const now = new Date();
@@ -1663,7 +1737,7 @@ window.addEventListener('beforeunload', e => { if (undoStack.length) { e.prevent
 document.addEventListener('contextmenu', e => { if (e.target.closest('.stage, .toolbox')) e.preventDefault(); });
 
 /* =========================== はじめる =========================== */
-if (book === 'tan') resetTray();
+if (usesTray()) resetTray();
 buildSil();
 rebuild();
 buildToolbox();
