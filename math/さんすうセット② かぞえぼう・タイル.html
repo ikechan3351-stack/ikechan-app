@@ -8,7 +8,7 @@
   /* ===== 色のきまり（ほかの教材とそろえた やさしい色） ===== */
   :root {
     --ink: #263238; --accent: #3949ab; --accent-dark: #283593; --soft: #c5cae9;
-    --draw: #ff6f00; --board: #ffffff;
+    --draw: #ff6f00; --tie: #2e9d4a; --board: #ffffff;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -41,6 +41,7 @@
   .btn:disabled { opacity: 0.35; cursor: default; transform: none; box-shadow: none; }
   .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn.draw.on { background: var(--draw); border-color: var(--draw); }
+  .btn.tie.on { background: var(--tie); border-color: var(--tie); }
   /* ペンの いろ ボタン */
   .pen { min-width: 40px; width: 40px; padding: 0; }
   .pen .dot { width: 24px; height: 24px; border-radius: 50%; border: 3px solid rgba(0,0,0,0.15); }
@@ -96,6 +97,21 @@
     touch-action: none; overflow: hidden;
   }
   .stage.drawing { outline-color: var(--draw); }   /* かく ときは ふちが オレンジ */
+  .stage.tying { outline-color: var(--tie); }       /* まとめる ときは ふちが みどり */
+  .stage.tying .piece { cursor: crosshair; }
+  /* まとめる ときに かく かこみの 線 */
+  .lasso { position: absolute; left: 0; top: 0; width: 1200px; height: 720px; z-index: 5; pointer-events: none; overflow: visible; }
+  .lasso path { fill: rgba(46,157,74,0.10); stroke: var(--tie); stroke-width: 5; stroke-dasharray: 12 8; stroke-linejoin: round; stroke-linecap: round; }
+  .lasso.fade path { transition: opacity .35s; opacity: 0; }
+  /* えらんだ ものの 番号 */
+  .marks { z-index: 5; }
+  .pickmark { position: absolute; left: 0; top: 0; width: 32px; height: 32px; margin: -16px 0 0 -16px; border-radius: 50%;
+              background: var(--tie); color: #fff; border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px; }
+  .piece.picked { filter: drop-shadow(0 0 4px var(--tie)) drop-shadow(0 0 2px var(--tie)); }
+  /* まとめて できた たばが ぽんっと 出る */
+  .piece.born svg { animation: bornin .35s ease-out; }
+  @keyframes bornin { 0% { transform: scale(0.6); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
   /* かさなりの じゅん：ごみばこ → わく・おさら → かぞえる もの → ペンの線 */
   .layer { position: absolute; inset: 0; pointer-events: none; }
   .frames { z-index: 1; }
@@ -190,6 +206,7 @@
   <div class="group">
     <button class="btn on" id="modeMove" title="うごかす"><span class="ic">✋</span>うごかす</button>
     <button class="btn draw" id="modeDraw" title="かく"><span class="ic">✏️</span>かく</button>
+    <button class="btn tie" id="modeTie" title="10こ かこんで まとめる"><span class="ic">🔗</span>まとめる</button>
   </div>
   <div class="group" id="penColors"></div>
   <button class="btn" id="clearInk" title="せんを ぜんぶ けす"><span class="ic">🧽</span>せんを けす</button>
@@ -218,6 +235,8 @@
       <div class="layer frames" id="frames"></div>
       <div class="layer pieces" id="pieces"></div>
       <canvas class="ink" id="ink"></canvas>
+      <div class="layer marks" id="marks"></div>
+      <svg class="lasso" id="lasso" viewBox="0 0 1200 720"><path d=""/></svg>
       <div class="ring" id="ring" hidden><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="35"/></svg><span class="ic">✂️</span></div>
     </div>
   </div>
@@ -229,6 +248,7 @@
     <h2>かみ</h2>
     <div class="row" id="bgKinds"></div>
     <div id="bgSizeBox"><h2 id="bgSizeTitle">マスの おおきさ</h2><div class="row" id="bgSizes"></div></div>
+    <div id="bgSize2Box"><h2 id="bgSize2Title"></h2><div class="row" id="bgSizes2"></div></div>
     <div id="bgImgBox">
       <h2>がぞう</h2>
       <div class="row">
@@ -318,6 +338,23 @@ function svgBundle100() {          // 100本たば（10本たばを 10こ。あ�
   }
   return svg(270, STICK, s + `<rect x="1" y="${STICK / 2 - 11}" width="268" height="22" rx="7" fill="#1e63d6" stroke="#0d3a8a" stroke-width="2.5"/>`);
 }
+function svgBundle1000() {         // 1000本たば（100本たばを 10こ。むらさきの ひもで とめる）※ 本当より 小さく かいている
+  let s = '';
+  for (let r = 0; r < 2; r++) for (let i = 0; i < 5; i++) {
+    const x = 6 + i * 50, y = 6 + r * 96;
+    s += `<rect x="${x}" y="${y}" width="48" height="90" rx="6" fill="${STICK_FILL}" stroke="${STICK_LINE}" stroke-width="1.5"/>`;
+    for (let k = 1; k < 6; k++) s += `<line x1="${x + k * 8}" y1="${y + 4}" x2="${x + k * 8}" y2="${y + 86}" stroke="${STICK_LINE}" stroke-width="1" opacity="0.6"/>`;
+    s += `<rect x="${x - 1}" y="${y + 38}" width="50" height="12" rx="4" fill="#1e63d6" stroke="#0d3a8a" stroke-width="1.5"/>`;
+  }
+  s += `<rect x="1" y="91" width="260" height="20" rx="7" fill="#8e44ad" stroke="#5b2470" stroke-width="2.5"/>`;
+  s += tag1000(131, 101);
+  return svg(262, 200, s);
+}
+// 1000の しるし（小さく かいて いるので、数字でも わかるように する）
+function tag1000(cx, cy) {
+  return `<rect x="${cx - 36}" y="${cy - 17}" width="72" height="34" rx="10" fill="#fff" stroke="#5b2470" stroke-width="3"/>
+    <text x="${cx}" y="${cy + 9}" text-anchor="middle" font-family="Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, sans-serif" font-weight="900" font-size="25" fill="#5b2470">1000</text>`;
+}
 /* ---- タイル（1マス U。10は たて・よこ、100は 正方形） ---- */
 const U = 28;
 const TILE_FILL = '#5b9bf0', TILE_LINE = '#24539e';
@@ -329,6 +366,22 @@ function svgTiles(cols, rows) {
   for (let r = 1; r < rows; r++) s += `<line x1="2" y1="${r * U}" x2="${w - 2}" y2="${r * U}" stroke="${r % 5 ? '#d6e6ff' : TILE_LINE}" stroke-width="${r % 5 ? 1.5 : 3}"/>`;
   if (cols * rows === 1) s += shine(10, 8, 6, 3);
   return svg(w, h, s);
+}
+function svgTile1000() {           // 1000の タイル（100の 板を 10まい かさねた 立体）※ 本当より 小さく かいている
+  const P = 170, D = 8, c = P / 10;      // 板の 大きさ・1まいずつの ずれ・マスの 大きさ
+  let s = '';
+  for (let k = 9; k >= 0; k--) {         // おくの 板から じゅんに かく
+    const x = 2 + k * D, y = 2 + (9 - k) * D;
+    s += `<rect x="${x}" y="${y}" width="${P}" height="${P}" rx="3" fill="${k ? '#8dbbf5' : TILE_FILL}" stroke="${TILE_LINE}" stroke-width="2"/>`;
+  }
+  const x0 = 2, y0 = 2 + 9 * D;          // いちばん 前の 板に マス目
+  for (let i = 1; i < 10; i++) {
+    const w = i % 5 ? 1.2 : 2.5, col = i % 5 ? '#d6e6ff' : TILE_LINE;
+    s += `<line x1="${x0 + i * c}" y1="${y0 + 2}" x2="${x0 + i * c}" y2="${y0 + P - 2}" stroke="${col}" stroke-width="${w}"/>`;
+    s += `<line x1="${x0 + 2}" y1="${y0 + i * c}" x2="${x0 + P - 2}" y2="${y0 + i * c}" stroke="${col}" stroke-width="${w}"/>`;
+  }
+  s += tag1000(x0 + P / 2, y0 + P / 2);
+  return svg(P + 9 * D + 4, P + 9 * D + 4, s);
 }
 // たて向きの 絵を 90どまわして よこ向きに する
 function turned(svgText) {
@@ -349,10 +402,12 @@ const PIECES = {
   bou10h: { name: '10本たば', kind: 'count', base: 'bou10', w: STICK, h: 96, svg: turned(svgBundle10()), turn: 'bou10', split: { to: 'bou1h', dir: 'y', gap: 10 } },
   bou100: { name: '100本たば', kind: 'count', base: 'bou100', w: 270, h: STICK, svg: svgBundle100(), turn: 'bou100h', split: { to: 'bou10', dir: 'x', gap: 10 } },
   bou100h:{ name: '100本たば', kind: 'count', base: 'bou100', w: STICK, h: 270, svg: turned(svgBundle100()), turn: 'bou100', split: { to: 'bou10h', dir: 'y', gap: 10 } },
+  bou1000:{ name: '1000本たば', kind: 'count', base: 'bou1000', w: 262, h: 200, svg: svgBundle1000(), split: { to: 'bou100', dir: 'x', gap: 10 } },
   tile1:  { name: '1のタイル',   kind: 'count', base: 'tile1',   w: U, h: U, svg: svgTiles(1, 1), pad: true, tile: true },
   tile10: { name: '10のタイル',  kind: 'count', base: 'tile10',  w: U, h: U * 10, svg: svgTiles(1, 10), turn: 'tile10h', tile: true, split: { to: 'tile1', dir: 'y', gap: 4 } },
   tile10h:{ name: '10のタイル',  kind: 'count', base: 'tile10',  w: U * 10, h: U, svg: svgTiles(10, 1), turn: 'tile10', tile: true, split: { to: 'tile1', dir: 'x', gap: 4 } },
   tile100:{ name: '100のタイル', kind: 'count', base: 'tile100', w: U * 10, h: U * 10, svg: svgTiles(10, 10), tile: true, split: { to: 'tile10', dir: 'x', gap: 6 } },
+  tile1000:{ name: '1000のタイル', kind: 'count', base: 'tile1000', w: 246, h: 246, svg: svgTile1000(), tile: false, split: { to: 'tile100', dir: 'x', gap: 10 } },
   // もんだいカード（先生だけが つくれる。大きさは 文字に あわせて きまる）
   text:   { name: 'もんだいカード', kind: 'text', w: 100, h: 60, svg: '' },
 };
@@ -375,8 +430,8 @@ const BOARDS = {
   bou: {
     name: 'かぞえぼう・タイル',
     groups: [
-      { tab: '🥢 ぼう',   label: 'かぞえぼう', tools: ['bou1', 'bou10', 'bou100'] },
-      { tab: '🟦 タイル', label: 'タイル',     tools: ['tile1', 'tile10', 'tile100'] },
+      { tab: '🥢 ぼう',   label: 'かぞえぼう', tools: ['bou1', 'bou10', 'bou100', 'bou1000'] },
+      { tab: '🟦 タイル', label: 'タイル',     tools: ['tile1', 'tile10', 'tile100', 'tile1000'] },
       { tab: '🔢 カード', label: 'すうじ カード', tools: ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n0', 'plus', 'minus', 'eq', 'q'] },
     ],
   },
@@ -411,22 +466,33 @@ const BG_KINDS = [
   { id: 'plain', name: 'むじ' },
   { id: 'grid',  name: 'ほうがんし' },
   { id: 'note',  name: 'さんすうノート' },
+  { id: 'place', name: 'くらいどりひょう' },
+  { id: 'split', name: 'ふたつに わける' },
   { id: 'image', name: 'がぞう' },
 ];
 // 方眼紙の マス（T は タイル 1こと 同じ 大きさで、タイルが マスに すいつく。L は 数字カードが すいつく）
 const GRID_SIZES = [ { id: 'T', name: 'タイルの マス', size: U }, { id: 'L', name: 'おおきい', size: 70 }, { id: 'M', name: 'ふつう', size: 35 }, { id: 'S', name: 'ちいさい', size: 20 } ];
 // 算数ノートは よこに ならぶ マスの 数で えらぶ
 const NOTE_SIZES = [ { id: '12', name: '12マス', size: 100 }, { id: '15', name: '15マス', size: 80 }, { id: '18', name: '18マス', size: 66 } ];
+// くらいどりひょう：けたの かず と だんの かず（2だんは まん中に 線を 入れて 2つに わける）
+const PLACE_COLS = [ { id: '2', name: '十・一（2けた）' }, { id: '3', name: '百・十・一（3けた）' }, { id: '4', name: '千・百・十・一（4けた）' } ];
+const PLACE_ROWS = [ { id: '1', name: '1だん' }, { id: '2', name: '2だん' }, { id: '3', name: '3だん' }, { id: '4', name: '4だん' } ];
+// ふたつに わける：線の 向き
+const SPLIT_DIRS = [ { id: 'lr', name: 'ひだり と みぎ' }, { id: 'tb', name: 'うえ と した' } ];
+// strong＝ひょうの 線、head＝見出しの いろ、text＝見出しの 字
 const BG_COLORS = [
-  { id: 'white', name: 'しろ',     paper: '#ffffff', line: '#c5cae9', bold: '#9fa8da' },
-  { id: 'cream', name: 'クリーム', paper: '#fff8e1', line: '#e6d3a3', bold: '#c9ab66' },
-  { id: 'green', name: 'こくばん', paper: '#2f5d46', line: 'rgba(255,255,255,0.28)', bold: 'rgba(255,255,255,0.5)' },
+  { id: 'white', name: 'しろ',     paper: '#ffffff', line: '#c5cae9', bold: '#9fa8da', strong: '#5c6bc0', head: 'rgba(92,107,192,0.10)', text: '#283593' },
+  { id: 'cream', name: 'クリーム', paper: '#fff8e1', line: '#e6d3a3', bold: '#c9ab66', strong: '#a07d3a', head: 'rgba(160,125,58,0.13)', text: '#5d4017' },
+  { id: 'green', name: 'こくばん', paper: '#2f5d46', line: 'rgba(255,255,255,0.28)', bold: 'rgba(255,255,255,0.5)', strong: 'rgba(255,255,255,0.8)', head: 'rgba(255,255,255,0.12)', text: '#ffffff' },
 ];
 const bg = {
   kind: BG_KINDS.some(k => k.id === params.get('bg') && k.id !== 'image') ? params.get('bg') : 'plain',
   grid: GRID_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : 'T',
   note: NOTE_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : '15',
   color: BG_COLORS.some(c => c.id === params.get('color')) ? params.get('color') : 'white',
+  place: PLACE_COLS.some(c => c.id === params.get('cols')) ? params.get('cols') : '3',
+  prow: PLACE_ROWS.some(c => c.id === params.get('rows')) ? params.get('rows') : '1',
+  split: SPLIT_DIRS.some(c => c.id === params.get('dir')) ? params.get('dir') : 'lr',
   img: null,      // とりこんだ がぞう
   fade: true,     // がぞうを うすくする
 };
@@ -451,6 +517,8 @@ function drawBg(ctx) {
     if (bg.fade) { ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(0, 0, W, H); }
     return;
   }
+  if (bg.kind === 'place') { drawPlace(ctx, col); return; }
+  if (bg.kind === 'split') { drawSplit(ctx, col); return; }
   const g = gridCell();
   if (!g) return;
   const line = (x1, y1, x2, y2, color, width, dash) => {
@@ -476,6 +544,58 @@ function drawBg(ctx) {
     xs.forEach(x => line(x, ys[0], x, ys[ys.length - 1], col.bold, 2.5));
     ys.forEach(y => line(xs[0], y, xs[xs.length - 1], y, col.bold, 2.5));
   }
+  ctx.setLineDash([]);
+}
+
+/* ---- くらいどりひょう（右から 一・十・百） ---- */
+function drawPlace(ctx, col) {
+  const M = 14, HEAD = 70, n = +bg.place, x0 = M, y0 = M, w = W - M * 2, h = H - M * 2, cw = w / n;
+  const names = ['一', '十', '百', '千'];
+  ctx.lineJoin = 'round';
+  // 見出しの いろ
+  ctx.fillStyle = col.head;
+  ctx.beginPath(); ctx.roundRect(x0, y0, w, HEAD, [14, 14, 0, 0]); ctx.fill();
+  // 見出しの 字（「百の くらい」など）
+  ctx.fillStyle = col.text; ctx.textBaseline = 'middle';
+  for (let i = 0; i < n; i++) {
+    const cx = x0 + cw * (i + 0.5), name = names[n - 1 - i];
+    ctx.font = `900 44px ${FONT}`;
+    const a = ctx.measureText(name).width;
+    ctx.font = `900 24px ${FONT}`;
+    const b = ctx.measureText('の くらい').width;
+    const left = cx - (a + 6 + b) / 2;
+    ctx.font = `900 44px ${FONT}`; ctx.textAlign = 'left';
+    ctx.fillText(name, left, y0 + HEAD / 2 + 2);
+    ctx.font = `900 24px ${FONT}`;
+    ctx.fillText('の くらい', left + a + 6, y0 + HEAD / 2 + 6);
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.strokeStyle = col.strong;
+  // そとわく と 見出しの 下の 線
+  ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 14); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x0, y0 + HEAD); ctx.lineTo(x0 + w, y0 + HEAD); ctx.stroke();
+  // くらいの さかいめ
+  ctx.lineWidth = 3;
+  for (let i = 1; i < n; i++) { ctx.beginPath(); ctx.moveTo(x0 + cw * i, y0); ctx.lineTo(x0 + cw * i, y0 + h); ctx.stroke(); }
+  // 2〜4だん：よこ線で 同じ 高さに わける
+  const rows = +bg.prow, rh = (h - HEAD) / rows;
+  ctx.lineWidth = 4;
+  for (let r = 1; r < rows; r++) {
+    const y = y0 + HEAD + rh * r;
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + w, y); ctx.stroke();
+  }
+}
+/* ---- ふたつに わける（まん中に 1本 線） ---- */
+function drawSplit(ctx, col) {
+  const M = 14;
+  ctx.strokeStyle = col.strong; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.roundRect(M, M, W - M * 2, H - M * 2, 14); ctx.stroke();
+  ctx.lineWidth = 5; ctx.setLineDash([18, 12]);
+  ctx.beginPath();
+  if (bg.split === 'lr') { ctx.moveTo(W / 2, M); ctx.lineTo(W / 2, H - M); }
+  else { ctx.moveTo(M, H / 2); ctx.lineTo(W - M, H / 2); }
+  ctx.stroke();
   ctx.setLineDash([]);
 }
 
@@ -717,6 +837,7 @@ function restore(snap) {
   strokes = snap.strokes.map(s => ({ color: s.color, pts: s.pts.slice() }));
   zTop = items.reduce((m, i) => Math.max(m, i.z), 1);
   rebuild();
+  picked = []; drawMarks();
   updateButtons();
 }
 function undo() {
@@ -821,11 +942,14 @@ function splitItem(it) {
   // よこ（x）か たて（y）に 1れつ。ながすぎる ときは 2れつに おる
   const along = sp.dir === 'x' ? cd.w : cd.h, across = sp.dir === 'x' ? cd.h : cd.w;
   const lines = n * along + (n - 1) * sp.gap > (sp.dir === 'x' ? 1000 : 640) ? 2 : 1, per = n / lines;
-  const lineLen = per * along + (per - 1) * sp.gap;
+  // 1れつが ボードに 入らない ときは、すこし かさねて ならべる（1000を ばらした とき）
+  const room = sp.dir === 'x' ? W - 40 : H - 40;
+  const stepA = Math.min(along + sp.gap, per > 1 ? (room - along) / (per - 1) : along);
+  const lineLen = along + (per - 1) * stepA;
   const targets = [];
   for (let i = 0; i < n; i++) {
     const k = i % per, line = Math.floor(i / per);
-    const a = -lineLen / 2 + k * (along + sp.gap) + along / 2, b = (line - (lines - 1) / 2) * (across + 20);
+    const a = -lineLen / 2 + k * stepA + along / 2, b = (line - (lines - 1) / 2) * (across + 20);
     targets.push(sp.dir === 'x' ? { x: it.x + a, y: it.y + b } : { x: it.x + b, y: it.y + a });
   }
   // ボードから はみ出す ときは まとめて ずらす
@@ -951,7 +1075,7 @@ function buildToolbox() {
     if (g.tools.some(t => PIECES[t].kind === 'count')) {
       const h = document.createElement('div');
       h.className = 'tbhint';
-      h.innerHTML = '👆 タップ … むきが かわる<br>✋ ながおし … ばらす';
+      h.innerHTML = '👆 タップ … むきが かわる<br>✋ ながおし … ばらす<br>🔗 まとめる … 10こ えらぶ・かこむ';
       toolbox.appendChild(h);
     }
   }
@@ -1004,6 +1128,141 @@ function endTb(e) {
 }
 toolbox.addEventListener('pointerup', endTb);
 toolbox.addEventListener('pointercancel', endTb);
+
+/* =========================== まとめる（タップで えらぶ ／ かこむ） ===========================
+   えらんだ ものには 1・2・3… と 番号が つく。おなじ ものが 10こ そろうと、1つ上の たばに なる。
+   ・タップ：1こずつ えらぶ／もう1回 タップで はずす（数えながら えらべる）
+   ・かこむ：かこみの 中の ものを まとめて えらぶ（すこし ずれても 入るように あまく しらべる） */
+// 10こ あつめると なる もの（たて v ／ よこ h）
+const TIE = {
+  bou1:   { v: 'bou10',   h: 'bou10h' },
+  bou10:  { v: 'bou100',  h: 'bou100h' },
+  bou100: { v: 'bou1000', h: 'bou1000' },
+  tile1:  { v: 'tile10',  h: 'tile10h' },
+  tile10: { v: 'tile100', h: 'tile100' },
+  tile100:{ v: 'tile1000', h: 'tile1000' },
+};
+const lassoEl = $('lasso'), lassoPath = lassoEl.querySelector('path'), marksEl = $('marks');
+let lasso = null;     // { pid, pts, len, startEl }  かこみは 1つずつ
+let picked = [];      // えらんだ もの（えらんだ じゅん）
+function drawMarks() {
+  picked = picked.filter(it => items.includes(it));
+  marksEl.textContent = '';
+  picked.forEach((it, i) => {
+    const m = document.createElement('div');
+    m.className = 'pickmark';
+    m.textContent = i + 1;
+    m.style.transform = `translate(${it.x}px, ${it.y}px)`;
+    marksEl.appendChild(m);
+    els.get(it.id).classList.add('picked');
+  });
+  document.querySelectorAll('.piece.picked').forEach(el => {
+    if (!picked.some(it => it.id === +el.dataset.id)) el.classList.remove('picked');
+  });
+}
+function clearPicks() { picked = []; drawMarks(); }
+stage.addEventListener('pointerdown', e => {
+  if (mode !== 'tie' || isPalm(e) || lasso) return;
+  e.preventDefault();
+  try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  const p = toBoard(e.clientX, e.clientY);
+  lasso = { pid: e.pointerId, pts: [[p.x, p.y]], len: 0, startEl: e.target.closest('.piece') };
+  lassoEl.classList.remove('fade');
+  lassoPath.setAttribute('d', '');
+});
+stage.addEventListener('pointermove', e => {
+  if (!lasso || lasso.pid !== e.pointerId) return;
+  const p = toBoard(e.clientX, e.clientY), last = lasso.pts[lasso.pts.length - 1];
+  const step = Math.hypot(p.x - last[0], p.y - last[1]);
+  if (step < 4) return;
+  lasso.len += step;
+  lasso.pts.push([p.x, p.y]);
+  lassoPath.setAttribute('d', 'M' + lasso.pts.map(q => q[0].toFixed(0) + ' ' + q[1].toFixed(0)).join(' L') + ' Z');
+});
+function endLasso(e) {
+  if (!lasso || lasso.pid !== e.pointerId) return;
+  const L = lasso;
+  lasso = null;
+  lassoEl.classList.add('fade');
+  setTimeout(() => { if (!lasso) lassoPath.setAttribute('d', ''); }, 400);
+  if (e.type !== 'pointerup') return;
+  if (L.len < 25) {
+    // タップ：その ものを えらぶ／はずす。なにも ない ところは えらびなおし
+    const it = L.startEl && items.find(i => i.id === +L.startEl.dataset.id);
+    if (it && PIECES[it.type].kind === 'count') pickItems([it], true);
+    else if (picked.length) { clearPicks(); toast('えらびなおしだよ'); }
+    return;
+  }
+  const got = items.filter(it => PIECES[it.type].kind === 'count' && lassoHits(it, L.pts));
+  if (!got.length) { toast('かこんだ なかに なにも ないよ'); return; }
+  pickItems(got.sort((a, b) => a.x - b.x || a.y - b.y), false);
+}
+stage.addEventListener('pointerup', endLasso);
+stage.addEventListener('pointercancel', endLasso);
+// 点が かこみの 中に あるか（よく つかわれる「線を 何回 またぐか」の しらべ方）
+function insidePoly(x, y, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// かこみに 入ったか：まんなか、または 部品の 中の 9この 点の うち 4こ いじょうが 入っていれば 入った とみる
+// （長い 棒の はしが はみ出しても、とじきれて いなくても 入るように）
+function lassoHits(it, pts) {
+  if (insidePoly(it.x, it.y, pts)) return true;
+  const d = dims(it);
+  let n = 0;
+  for (const fx of [-0.35, 0, 0.35]) for (const fy of [-0.35, 0, 0.35]) if (insidePoly(it.x + fx * d.w, it.y + fy * d.h, pts)) n++;
+  return n >= 4;
+}
+function pickItems(list, toggle) {
+  if (toggle && picked.includes(list[0])) { picked = picked.filter(i => i !== list[0]); drawMarks(); return; }
+  const bases = new Set(list.map(it => baseOf(it.type)));
+  if (bases.size > 1) { toast('おなじ ものだけを えらんでね'); return; }
+  const base = [...bases][0];
+  if (!TIE[base]) { toast('1000より 大きい まとまりは ないよ'); return; }
+  if (picked.length && baseOf(picked[0].type) !== base) { picked = []; toast('ちがう ものなので、えらびなおしたよ'); }
+  for (const it of list) if (!picked.includes(it)) picked.push(it);
+  drawMarks();
+  if (picked.length === 10) tieItems(picked.slice());
+  else if (picked.length > 10) toast(`${picked.length}こ えらんだよ。10こに してね（タップで はずせるよ）`);
+  else toast(`${picked.length}こ。あと ${10 - picked.length}こで まとめられるよ`);
+}
+function tieItems(got) {
+  const base = baseOf(got[0].type), up = TIE[base];
+  if (countOf(up.v) >= MAX_PER_TYPE) { toast(`${PIECES[up.v].name}は ${MAX_PER_TYPE}こまでです`); return; }
+  // できる ものの 向き：棒は 多いほうの 向き、1の タイルは ならびが よこ長なら よこ
+  let horiz;
+  if (base === 'tile1') {
+    const xs = got.map(i => i.x), ys = got.map(i => i.y);
+    horiz = Math.max(...xs) - Math.min(...xs) > Math.max(...ys) - Math.min(...ys);
+  } else {
+    horiz = got.filter(i => i.type.endsWith('h')).length * 2 > got.length;
+  }
+  const to = horiz ? up.h : up.v;
+  const snap = snapshot();
+  const cx = got.reduce((a, i) => a + i.x, 0) / got.length, cy = got.reduce((a, i) => a + i.y, 0) / got.length;
+  picked = [];
+  drawMarks();
+  // まんなかに あつまってから、1つの たばに なる
+  for (const it of got) {
+    els.get(it.id).classList.add('pop');
+    it.x = cx; it.y = cy; it.z = ++zTop;
+    place(it);
+  }
+  setTimeout(() => {
+    if (got.some(it => !items.includes(it))) return;   // とちゅうで もどる を おしたとき
+    got.forEach(it => removeItem(it.id));
+    const b = addItem(to, cx, cy);
+    if (!b) return;
+    els.get(b.id).classList.add('born');
+    snapItem(b);
+    pushUndo(snap);
+    toast(`🔗 ${PIECES[to].name}に なったよ`);
+  }, 380);
+}
 
 /* =========================== ペン =========================== */
 const drawing = new Map();   // pointerId → { stroke, snap }
@@ -1080,14 +1339,18 @@ ink.addEventListener('pointercancel', endDraw);
 
 /* =========================== ツールバー =========================== */
 function setMode(m) {
+  if (m !== 'tie' && typeof clearPicks === 'function') clearPicks();
   mode = m;
   $('modeMove').classList.toggle('on', m === 'move');
   $('modeDraw').classList.toggle('on', m === 'draw');
+  $('modeTie').classList.toggle('on', m === 'tie');
   stage.classList.toggle('drawing', m === 'draw');
+  stage.classList.toggle('tying', m === 'tie');
   document.querySelectorAll('.pen').forEach(b => b.classList.toggle('on', m === 'draw' && b.dataset.color === penColor));
 }
 $('modeMove').onclick = () => setMode('move');
 $('modeDraw').onclick = () => setMode('draw');
+$('modeTie').onclick = () => { setMode('tie'); toast('🔗 おなじ ものを 10こ、タップで えらぶか ゆびで かこんでね'); };
 for (const c of PEN_COLORS) {
   const b = document.createElement('button');
   b.className = 'btn pen';
@@ -1146,15 +1409,21 @@ function renderBgPanel() {
       changeBg();
     }));
   }
-  const sizes = $('bgSizes'); sizes.textContent = '';
-  $('bgSizeBox').hidden = !(bg.kind === 'grid' || bg.kind === 'note');
-  if (bg.kind === 'grid' || bg.kind === 'note') {
-    const list = bg.kind === 'grid' ? GRID_SIZES : NOTE_SIZES;
-    $('bgSizeTitle').textContent = bg.kind === 'grid' ? 'マスの おおきさ（タイルの マス は タイルが、おおきい は 数字カードが すいつく）' : 'よこに ならぶ マスの かず';
-    for (const g of list) {
-      sizes.appendChild(bgButton(g.name, bg[bg.kind] === g.id, () => { bg[bg.kind] = g.id; changeBg(); }));
-    }
-  }
+  // かみの しゅるいごとの えらぶもの（[見出し, えらぶ表, bg の なまえ]。2つまで）
+  const OPTS = {
+    grid:  [['マスの おおきさ（タイルの マス は タイルが、おおきい は 数字カードが すいつく）', GRID_SIZES, 'grid']],
+    note:  [['よこに ならぶ マスの かず', NOTE_SIZES, 'note']],
+    place: [['けたの かず', PLACE_COLS, 'place'], ['だんの かず', PLACE_ROWS, 'prow']],
+    split: [['わける 線の むき', SPLIT_DIRS, 'split']],
+  }[bg.kind] || [];
+  [['bgSizeBox', 'bgSizeTitle', 'bgSizes'], ['bgSize2Box', 'bgSize2Title', 'bgSizes2']].forEach(([box, title, row], k) => {
+    const o = OPTS[k], r = $(row);
+    r.textContent = '';
+    $(box).hidden = !o;
+    if (!o) return;
+    $(title).textContent = o[0];
+    for (const g of o[1]) r.appendChild(bgButton(g.name, bg[o[2]] === g.id, () => { bg[o[2]] = g.id; changeBg(); }));
+  });
   $('bgImgBox').hidden = bg.kind !== 'image';
   $('bgFade').classList.toggle('on', bg.fade);
   $('bgFade').disabled = !bg.img;
@@ -1248,7 +1517,7 @@ async function packState() {
   const r = v => Math.round(v);
   const data = {
     v: 1,
-    b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color],
+    b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color, bg.place, bg.prow, bg.split],
     i: items.map(it => it.type === 'text' ? [it.type, r(it.x), r(it.y), it.text, it.fs] : [it.type, r(it.x), r(it.y)]),
     s: strokes.map(st => [st.color, st.pts.filter((p, k) => k % 2 === 0 || k === st.pts.length - 1).flatMap(p => [r(p[0]), r(p[1])])]),
   };
@@ -1267,7 +1536,11 @@ async function unpackState(str) {
 // 文字列から もどした 盤面を つくる（知らない 種類や おかしな 数は すてる）
 function applyState(data) {
   const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
-  const [kind, grid, note, color] = Array.isArray(data.b) ? data.b : [];
+  // （place は 部品を おく 関数の 名前なので、ここでは pcols と よぶ）
+  const [kind, grid, note, color, pcols, prow, sdir] = Array.isArray(data.b) ? data.b : [];
+  if (PLACE_COLS.some(c => c.id === pcols)) bg.place = pcols;
+  if (PLACE_ROWS.some(c => c.id === prow)) bg.prow = prow;
+  if (SPLIT_DIRS.some(c => c.id === sdir)) bg.split = sdir;
   if (BG_KINDS.some(k => k.id === kind) && kind !== 'image') bg.kind = kind;
   if (GRID_SIZES.some(g => g.id === grid)) bg.grid = grid;
   if (NOTE_SIZES.some(g => g.id === note)) bg.note = note;
