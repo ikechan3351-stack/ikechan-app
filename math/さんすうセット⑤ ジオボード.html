@@ -27,7 +27,7 @@
 
   /* ===== 上の ツールバー ===== */
   .topbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .back-link { font-size: 0.8rem; color: var(--accent-dark); text-decoration: none; padding: 4px; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; padding: 4px 8px; min-height: 44px; display: inline-flex; align-items: center; }
   h1 { margin: 0 4px 0 0; font-size: clamp(1rem, 1.8vw, 1.25rem); color: var(--accent-dark); white-space: nowrap; }
   .spacer { flex: 1; }
   .group { display: flex; gap: 4px; align-items: center; background: rgba(255,255,255,0.55); border-radius: 14px; padding: 3px; }
@@ -133,6 +133,12 @@
   @media (max-width: 900px) {
     .btn .lbl { display: none; }
     h1 { font-size: 0.95rem; }
+  }
+  /* スマホの たて向き：色の 帯は おり返す。道具は たてに スクロール。そばの ボタンは 2だんに */
+  @media (max-width: 600px) {
+    .palette { flex-wrap: wrap; }
+    .tools { overflow-y: auto; }
+    .selbar { flex-wrap: wrap; justify-content: center; max-width: 92vw; width: auto; }
   }
 </style>
 </head>
@@ -273,7 +279,7 @@
     <div class="mrow"><span class="ml">うごき</span>
       <button class="btn" data-motion="full">ふつう</button>
       <button class="btn" data-motion="less">うごきを 少なく</button></div>
-    <p class="mhint">学年を えらぶと、つかう 道具・はかる ボタン・ななめの 辺の かきかた・さいしょの 盤が きまります。<br>
+    <p class="mhint">学年を えらぶと、つかう 道具・はかる ボタン・ななめの 辺の かきかた・さいしょの ばんが きまります。<br>
       先生モードは、ピン・ゴム・文字が 大きく なり、数は タップするまで「？」で かくれます。道具は ぜんぶ 出ます。<br>
       いまの せっていは アドレス（URL）にも 入るので、そのまま 子どもに くばれます。</p>
     <button class="btn" id="setClose">とじる</button>
@@ -290,7 +296,7 @@
       <button class="btn" data-board="circle12"><span class="bic">⚪</span>まる 12</button>
       <button class="btn" data-board="circle24"><span class="bic">⚪</span>まる 24</button>
     </div>
-    <p class="mhint">正方形と 三角の 盤は、画面の よこはばに あわせて よこの ピンが ふえます。</p>
+    <p class="mhint">正方形と 三角の ばんは、画面の よこはばに あわせて よこの ピンが ふえます。</p>
     <button class="btn" id="boardClose">とじる</button>
   </div>
 </div>
@@ -392,6 +398,7 @@ const flipped = new Set();               // 生徒：かくした 数／先生�
 const isHidden = key => TEACHER ? !flipped.has(key) : flipped.has(key);
 let labelRects = [];                     // まいフレームの 数の いち（タップの あたり）
 const PALETTE = ['#e53935', '#fb8c00', '#f9a825', '#43a047', '#00acc1', '#1e88e5', '#8e24aa', '#6d4c41'];
+const COLOR_NAMES = { '#e53935': 'あか', '#fb8c00': 'オレンジ', '#f9a825': 'きいろ', '#43a047': 'みどり', '#00acc1': 'みずいろ', '#1e88e5': 'あお', '#8e24aa': 'むらさき', '#6d4c41': 'ちゃいろ' };
 
 // ---------- もどる・やりなおす（じょうたいの スナップショット） ----------
 const undoStack = [], redoStack = [];
@@ -411,7 +418,7 @@ function restore(s) {
   if (!state.shapes.some(s => s.id === selectedId)) selectedId = null;
   layout(); requestDraw(); updateButtons(); updateHint();
 }
-function undo() { if (!undoStack.length) return; cancelGesture(); redoStack.push(snap()); restore(undoStack.pop()); updateButtons(); scheduleSave(); }
+function undo() { if (!undoStack.length) return; cancelGesture(); if (!undoStack.length) return; redoStack.push(snap()); restore(undoStack.pop()); updateButtons(); scheduleSave(); }
 function redo() { if (!redoStack.length) return; cancelGesture(); undoStack.push(snap()); restore(redoStack.pop()); updateButtons(); scheduleSave(); }
 
 // ---------- キャンバスと ざひょう ----------
@@ -597,6 +604,7 @@ function drawPin(ctx, q, scale, glow) {
   ctx.fillStyle = g; ctx.fill();
 }
 function roundRect(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));   // とても 小さい 画面でも マイナスに ならないように
   ctx.beginPath(); ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
@@ -759,7 +767,7 @@ function drawInk() {
     if (p.length === 1) { fx.beginPath(); fx.arc(p[0].x, p[0].y, st.width * view.s / 2, 0, Math.PI * 2); fx.fill(); continue; }
     fx.beginPath(); fx.moveTo(p[0].x, p[0].y);
     for (let k = 1; k < p.length - 1; k++) fx.quadraticCurveTo(p[k].x, p[k].y, (p[k].x + p[k + 1].x) / 2, (p[k].y + p[k + 1].y) / 2);
-    fx.lineTo(p.at(-1).x, p.at(-1).y); fx.stroke();
+    fx.lineTo(p[p.length - 1].x, p[p.length - 1].y); fx.stroke();
   }
   // もじ（白い ふちどりで、ゴムの 上でも 読みやすく）
   textRects = [];
@@ -845,7 +853,7 @@ function drawGrip(x, y, color) {
 function perimeter(pts, closed) {
   let L = 0;
   for (let k = 1; k < pts.length; k++) L += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y);
-  if (closed && pts.length > 2) L += Math.hypot(pts[0].x - pts.at(-1).x, pts[0].y - pts.at(-1).y);
+  if (closed && pts.length > 2) L += Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y);
   return L;
 }
 
@@ -938,6 +946,26 @@ function hexA(hex, a) {
 
 // ---------- はかる：長さ・角度・面積（ゴムを うごかしている ときも まいフレーム 計算） ----------
 // ピン 1つ分 ＝ 1。面積は マス 1つ分 ＝ 1（座標の 公式で 計算）
+// 辺が まじわらず、同じ 点を 2回 通らず、つぶれて いない 多角形か
+function isSimplePoly(g) {
+  const n = g.length, E = 1e-7;
+  if (n < 3 || Math.abs(signedArea(g)) < E) return false;
+  const cr = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const on = (a, b, c) => Math.abs(cr(a, b, c)) < E && Math.min(a.x, b.x) - E <= c.x && c.x <= Math.max(a.x, b.x) + E && Math.min(a.y, b.y) - E <= c.y && c.y <= Math.max(a.y, b.y) + E;
+  for (let i = 0; i < n; i++) {
+    const a = g[i], b = g[(i + 1) % n], c = g[(i + 2) % n];
+    // となりの 辺が おり返して かさなる
+    if (Math.abs(cr(a, b, c)) < E && (b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y) < 0) return false;
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;          // となりあう 辺
+      const p = g[j], q = g[(j + 1) % n];
+      const d1 = cr(a, b, p), d2 = cr(a, b, q), d3 = cr(p, q, a), d4 = cr(p, q, b);
+      if (((d1 > E && d2 < -E) || (d1 < -E && d2 > E)) && ((d3 > E && d4 < -E) || (d3 < -E && d4 > E))) return false;
+      if (on(a, b, p) || on(a, b, q) || on(p, q, a) || on(p, q, b)) return false;
+    }
+  }
+  return true;
+}
 function inScope(s) { return meas.scope === 'all' || s.id === selectedId; }
 const isInt = v => Math.abs(v - Math.round(v)) < 1e-3;
 function fmtLen(L, axis) {
@@ -1032,6 +1060,7 @@ function drawMeasures() {
     const g = pts.map(q => ({ x: (q.x - geo.ox) / geo.sp, y: (q.y - geo.oy) / geo.sp }));   // ピン 1つ分 ＝ 1
     const poly = closed && n >= 3;
     const sa = poly ? signedArea(g) : 0;
+    const simple = !poly || isSimplePoly(g);   // 辺が まじわらない ふつうの 形か
     const col = s.stroke;
     const cx = pts.reduce((a, q) => a + q.x, 0) / n, cy = pts.reduce((a, q) => a + q.y, 0) / n;
 
@@ -1052,13 +1081,15 @@ function drawMeasures() {
     }
 
     // ----- 辺の 長さ（辺の 外がわ、まん中 あたり） -----
-    let peri = 0, periOK = true, periAxis = true;
+    let peri = 0, periOK = true, periAxis = true, periShown = 0, periApprox = false;
     const m = poly ? n : n - 1;
     for (let i = 0; i < m; i++) {
       const a = g[i], b = g[(i + 1) % n], L = Math.hypot(b.x - a.x, b.y - a.y);
       if (L < 1e-6) continue;
-      const axis = Math.abs(b.x - a.x) < 1e-6 || Math.abs(b.y - a.y) < 1e-6;
+      // 「たて・よこの 辺」と いえるのは 正方形の 盤だけ（三角・まるい 盤の たての 辺は 長さが 整数に ならない）
+      const axis = BOARD.type === 'square' && (Math.abs(b.x - a.x) < 1e-6 || Math.abs(b.y - a.y) < 1e-6);
       peri += L; if (!axis) periAxis = false;
+      if (isInt(L)) periShown += Math.round(L); else { periShown += +L.toFixed(1); periApprox = true; }   // 表示と 同じ 数で たす
       const txt = fmtLen(L, axis);
       if (txt === null) { periOK = false; continue; }
       if (!meas.length) continue;
@@ -1080,9 +1111,10 @@ function drawMeasures() {
         const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
         if (la < 1e-6 || lb < 1e-6) continue;
         const u = Math.acos(Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)))) * 180 / Math.PI;
+        if (u < 1e-6 || Math.abs(u - 180) < 1e-6) continue;   // 一直線（180°）・おり返し（0°）は 角では ないので 出さない
         const turn = (p.x - pr.x) * (nx_.y - p.y) - (p.y - pr.y) * (nx_.x - p.x);
         let deg = u, reflex = false;
-        if (poly && Math.abs(turn) > 1e-9 && Math.sign(turn) !== Math.sign(sa)) { deg = 360 - u; reflex = true; }  // へこんだ 角（180°より 大きい）
+        if (poly && simple && Math.abs(turn) > 1e-9 && Math.sign(turn) !== Math.sign(sa)) { deg = 360 - u; reflex = true; }  // へこんだ 角（180°より 大きい）
         sum += deg;
         if (!meas.angle) continue;
         const P = pts[i];
@@ -1116,13 +1148,16 @@ function drawMeasures() {
     if (poly && (meas.area || meas.peri || meas.sum)) {
       const lp = labelPoint(pts);
       const lines = [];
-      if (meas.area) {
+      if (!simple) {
+        // ゴムが まじわった 形・つぶれた 形は、面積や 角の 和を 出さない（まちがった 数に なるため）
+        lines.push([`${s.id}:cross`, 'ゴムが かさなって いるよ']);
+      } else if (meas.area) {
         // 三角の 盤は「小さい 正三角形 なんこ分」、ほかは マス（1×1）なんこ分
         const A = Math.abs(sa);
         lines.push([`${s.id}:area`, BOARD.type === 'tri' ? '△ ' + fmtArea(A / (SQ3 / 2)) + 'こ分' : '面積 ' + fmtArea(A)]);
       }
-      if (meas.peri && (periOK || periAxis)) lines.push([`${s.id}:peri`, 'まわり ' + fmtLen(peri, true)]);
-      if (meas.sum) lines.push([`${s.id}:sum`, '角の和 ' + fmtDeg(sum)]);
+      if (meas.peri && (periOK || periAxis)) lines.push([`${s.id}:peri`, 'まわり ' + (periApprox ? '約' + periShown.toFixed(1) : String(periShown))]);
+      if (meas.sum && simple) lines.push([`${s.id}:sum`, '角の和 ' + fmtDeg(sum)]);
       const lh = 30 * SCALE;
       lines.forEach(([k, t], idx) => drawLabel(k, t, lp.x, lp.y + (idx - (lines.length - 1) / 2) * lh, col, 0, 1, true));
     }
@@ -1273,9 +1308,22 @@ function placeOnBoard(points) {
   if (again.some((p, k) => !samePt(p, pts[k]))) pts = snapToPins(again);
   return pts;
 }
+// ぜんぶの 頂点が 盤の 中に あるか
+function insideBoard(points) {
+  if (BOARD.type === 'circle') return points.every(p => Math.hypot(p.i - BOARD.R, p.j - BOARD.R) <= BOARD.R + 1e-3);
+  const B = BOARD.bounds;
+  return points.every(p => p.i >= -1e-3 && p.j >= -1e-3 && p.i <= B.w + 1e-3 && p.j <= B.h + 1e-3);
+}
 const onPins = pts => pts.every(p => { const r = nearestPinW(p.i, p.j); return r && r.d < 1e-4; });
 // まわす・うらがえす 中心：円形の 盤は 盤の 中心（ピンが ピンに かさなる）、ほかは 図形の まん中
-const xfCenter = points => BOARD.type === 'circle' ? { i: BOARD.R, j: BOARD.R } : bboxCenter(points);
+const xfCenter = points => {
+  if (BOARD.type === 'circle') return { i: BOARD.R, j: BOARD.R };
+  const c = bboxCenter(points);
+  // 正方形の 盤：たて＋よこが 奇数の 形（2×1 など）は まん中が はんぱに なり、まわす たびに ずれる。
+  // 90°まわして ピンが ピンに のる 点（たて・よこが どちらも 整数か、どちらも ○.5）に よせる → 4回で 元の 場所に もどる
+  if (BOARD.type === 'square' && isInt(c.i * 2) && isInt(c.j * 2) && isInt(c.i) !== isInt(c.j)) c.j = Math.floor(c.j) + (isInt(c.i) ? 0 : 0.5);
+  return c;
+};
 // ボタンで まわす 角度：正方形 90°・三角格子 60°・円形は となりの ピンまで
 function stepAngleDeg() { return BOARD.type === 'tri' ? 60 : BOARD.type === 'circle' ? 360 / BOARD.N : 90; }
 // まわす角度を そろえる（15°ずつ／じゆう でも 90°の 近くなら 90°に）
@@ -1289,7 +1337,15 @@ function snapAngle(a) {
 function commitTransform(s, a, liveA, offX, offY) {
   const c0 = xfCenter(s.points);
   const raw = a ? rotatePts(s.points, c0, a) : s.points.map(p => ({ ...p }));
-  const pts = placeOnBoard(raw.map(p => ({ i: p.i + offX / geo.sp, j: p.j + offY / geo.sp })));
+  let pts = placeOnBoard(raw.map(p => ({ i: p.i + offX / geo.sp, j: p.j + offY / geo.sp })));
+  if (a && !insideBoard(pts)) {
+    // まわすと 盤から はみ出す → まわさずに もとへ もどす
+    toast('ばんに 入らないので まわせないよ');
+    anim.move = { id: s.id, x: offX, y: offY, vx: 0, vy: 0, tx: 0, ty: 0, mode: 'snap' };
+    anim.xf = { id: s.id, kind: 'rot', x: liveA, vx: 0, tx: 0, y: 0, vy: 0, ty: 0, cx: c0.i, cy: c0.j, mode: 'spring' };
+    requestDraw();
+    return;
+  }
   const D = { i: pts[0].i - raw[0].i, j: pts[0].j - raw[0].j };    // ぜんぶで どれだけ ずれたか
   if (JSON.stringify(pts) !== JSON.stringify(s.points)) { pushHist(); s.points = pts; }
   anim.move = { id: s.id, x: offX - D.i * geo.sp, y: offY - D.j * geo.sp, vx: 0, vy: 0, tx: 0, ty: 0, mode: 'snap' };
@@ -1398,6 +1454,8 @@ function splitPoly(P, A, B) {
   // 切り線の 中が 図形の 中を 通っているか（へりを なぞるだけ・外に 出る は だめ）
   for (const t of [0.25, 0.5, 0.75]) if (!inPolyG({ i: A.i + (B.i - A.i) * t, j: A.j + (B.j - A.j) * t }, P)) return null;
   for (let k = 0; k < P.length; k++) if (segCross(A, B, P[k], P[(k + 1) % P.length])) return null;
+  // 切り線の とちゅうに 図形の 頂点（へこんだ かど）が のる ときは 切らない（くびれた 形が できて しまう）
+  for (const V of P) if (!samePt(V, A) && !samePt(V, B) && onSeg(V, A, B) !== null) return null;
   // A・B を へりの 上に 頂点として 入れる
   const ring = [];
   let ia = -1, ib = -1;
@@ -1591,7 +1649,7 @@ wrap.addEventListener('pointerdown', e => {
     const s = pointer.target;
     if (!anim.move || anim.move.id !== s.id) startMove(s);
     const [a, b] = [...touches.keys()], p = touches.get(a), q = touches.get(b);
-    const c0 = bboxCenter(s.points);
+    const c0 = xfCenter(s.points);
     twist = { a, b, s, ang0: Math.atan2(q.y - p.y, q.x - p.x), mx0: (p.x + q.x) / 2, my0: (p.y + q.y) / 2,
               ox0: anim.move.x, oy0: anim.move.y };
     anim.move.mode = 'twist';
@@ -1659,7 +1717,7 @@ wrap.addEventListener('pointerdown', e => {
       // まわす つまみを つかんだ → 図形の まん中を 中心に まわす
       const h = handlePos(cur);
       if (Math.hypot(h.x - x, h.y - y) <= (e.pointerType === 'touch' ? 34 : 24) * SCALE) {
-        const c0 = bboxCenter(cur.points), c = pinXY(c0);
+        const c0 = xfCenter(cur.points), c = pinXY(c0);
         pointer.kind = 'rotate'; pointer.target = cur;
         pointer.a0 = Math.atan2(y - c.y, x - c.x); pointer.c = c;
         anim.xf = { id: cur.id, kind: 'rot', x: 0, vx: 0, tx: 0, y: 0, vy: 0, ty: 0, cx: c0.i, cy: c0.j, mode: 'drag' };
@@ -1775,8 +1833,8 @@ function releaseBend(x, y, canceled) {
   if (bd.insert) newPts.splice(bd.idx + 1, 0, target); else newPts[bd.idx] = target;
   // となりどうしが 同じ ピンに なったら 1つに まとめる
   const clean = [];
-  for (const p of newPts) if (!clean.length || !same(clean.at(-1), p)) clean.push(p);
-  if (s.closed && clean.length > 1 && same(clean[0], clean.at(-1))) clean.pop();
+  for (const p of newPts) if (!clean.length || !same(clean[clean.length - 1], p)) clean.push(p);
+  if (s.closed && clean.length > 1 && same(clean[0], clean[clean.length - 1])) clean.pop();
   if (clean.length === n && !bd.insert && same(target, s.points[bd.idx])) return back();   // おなじ ピン
   if (clean.length === n && bd.insert) return back();                                       // となりの ピン（かわらない）
   if (s.closed ? clean.length < 3 : clean.length < 2) return back();                        // かたちが なくなる
@@ -1820,7 +1878,7 @@ wrap.addEventListener('pointermove', e => {
     for (const ev of (list && list.length ? list : [e])) {
       const { x, y } = localXY(ev);
       if (pointer.kind === 'erase') { eraseAt(x, y); continue; }
-      const pts = pointer.stroke.points, last = fromGrid(pts.at(-1));
+      const pts = pointer.stroke.points, last = fromGrid(pts[pts.length - 1]);
       if (Math.hypot(x - last.x, y - last.y) >= 1.5) pts.push(toGrid(x, y));
     }
     pointer.moved = true; requestDraw(); return;
@@ -1852,6 +1910,7 @@ wrap.addEventListener('pointermove', e => {
 
 function endPointer(e, canceled) {
   if (e.pointerId !== pointer.id) return;
+  scheduleSave();   // ペン・けしゴム・もじの 移動も ほぞんする
   pointer.id = null;
   const { x, y } = localXY(e);
   if (pointer.kind === 'pen' || pointer.kind === 'erase') { requestDraw(); return; }
@@ -1985,6 +2044,8 @@ function cancelGesture() {
     state.strokes = state.strokes.filter(s => s !== pointer.stroke); pointer.stroke = null;
     if (undoStack.length) { undoStack.pop(); updateButtons(); }
   }
+  // まわす つまみで 回している 途中 → 回した 見た目を けす（のこすと 見た目と 中身が ずれる）
+  if (pointer.id !== null && pointer.kind === 'rotate' && anim.xf && anim.xf.mode === 'drag') { anim.xf = null; requestDraw(); }
   if (pointer.id !== null) { try { wrap.releasePointerCapture(pointer.id); } catch (_) {} pointer.id = null; }
   if (anim.rubber && anim.rubber.mode === 'drag') shrinkBack();
   if (anim.bend && anim.bend.mode === 'drag') releaseBend(anim.bend.x, anim.bend.y, true);
@@ -2009,7 +2070,7 @@ function updateButtons() {
 function updateHint(mode) {
   const b = buildShape();
   let h;
-  if (tool === 'select') h = selectedId ? 'ひっぱると うごくよ。上の ↻ を まわすか、2本指で ひねると まわるよ'
+  if (tool === 'select') h = selectedId ? 'ひっぱると うごくよ。上の ↻ を まわすか、ゆび 2ほんで ひねると まわるよ'
                                         : 'かたちを タップして えらぼう';
   else if (tool === 'cut') h = 'かたちの へりの ピンから、べつの へりの ピンまで 線を ひくと 2つに わかれるよ';
   else if (tool === 'paste') h = pasteFirst ? 'みどりに 光った かたちを タップすると はれるよ。ひっぱって くっつけても いいよ'
@@ -2052,7 +2113,7 @@ function buildPalette() {
   const box = $('palette'); box.innerHTML = '';
   const add = (cls, color, on, title, fn) => {
     const b = document.createElement('button');
-    b.className = 'btn col ' + cls + (on ? ' on' : ''); b.title = title;
+    b.className = 'btn col ' + cls + (on ? ' on' : ''); b.title = title; b.setAttribute('aria-label', title);
     b.innerHTML = `<span class="dot"${color ? ` style="background:${color}"` : ''}></span>`;
     b.onclick = () => { fn(); buildPalette(); updateHint(); };
     box.appendChild(b);
@@ -2060,9 +2121,9 @@ function buildPalette() {
   if (tool === 'rubber') add('rainbow', null, !rubberColor, '1本ずつ ちがう いろ', () => rubberColor = null);
   if (tool === 'write') add('', '#263238', writeColor === '#263238', 'くろ', () => writeColor = '#263238');
   for (const c of PALETTE) {
-    if (tool === 'rubber') add('', c, rubberColor === c, 'この いろの ゴム', () => rubberColor = c);
-    else if (tool === 'write') add('', c, writeColor === c, 'この いろで かく', () => writeColor = c);
-    else add('', c, paintColor === c, 'この いろで ぬる', () => paintColor = c);
+    if (tool === 'rubber') add('', c, rubberColor === c, `${COLOR_NAMES[c]}の ゴム`, () => rubberColor = c);
+    else if (tool === 'write') add('', c, writeColor === c, `${COLOR_NAMES[c]}で かく`, () => writeColor = c);
+    else add('', c, paintColor === c, `${COLOR_NAMES[c]}で ぬる`, () => paintColor = c);
   }
   if (tool === 'paint' && paintTarget === 'fill') add('none', null, !paintColor, 'ぬりを けす', () => paintColor = null);
 }
@@ -2152,15 +2213,17 @@ function applyGrade(changeBoard) {
   $('measBtns').hidden = !ms.length && !(TEACHER || pr.more);
   // 子どもモードでは、その学年で つかわない 表示は 切っておく
   if (!TEACHER && !pr.more) for (const k of ['length', 'angle', 'area', 'peri', 'sum', 'squares']) if (!ms.includes(k)) meas[k] = false;
+  if (!TEACHER && !pr.more) { meas.names = false; meas.scope = 'all'; }   // ⚙️が ない 学年では 消せなく なるので 切る
   meas.diag = GRADE && GRADE <= 3 ? 'hide' : 'approx';
   $('setName').textContent = (GRADE ? GRADE + '年' : 'ぜんぶ') + (TEACHER ? '・先生' : '');
   document.querySelectorAll('#setBg [data-grade]').forEach(b => b.classList.toggle('on', +b.dataset.grade === GRADE));
   document.querySelectorAll('#setBg [data-mode]').forEach(b => b.classList.toggle('on', (b.dataset.mode === 'teacher') === TEACHER));
   document.querySelectorAll('#setBg [data-motion]').forEach(b => b.classList.toggle('on', (b.dataset.motion === 'less') === REDUCED));
   if (changeBoard && pr.board !== state.board) {
-    const go = () => { cancelGesture(); if (state.shapes.length) pushHist(); state.board = pr.board; state.shapes = []; state.buildId = null;
+    const any = state.shapes.length || state.texts.length || state.strokes.length;
+    const go = () => { cancelGesture(); if (any) pushHist(); state.board = pr.board; state.shapes = []; state.texts = []; state.strokes = []; state.buildId = null;
       selectedId = null; pasteFirst = null; view = { s: 1, tx: 0, ty: 0 }; buildBoard(); layout(); updateButtons(); updateHint(); syncURL(); };
-    if (state.shapes.length) askConfirm(`${GRADE ? GRADE + '年' : ''}の 盤（${document.querySelector(`#boardBtns [data-board="${pr.board}"]`).textContent.replace(/^[⬜🔺⚪]/u, '')}）に かえますか？ ゴムは ぜんぶ はずれます`, 'かえる', go);
+    if (any) askConfirm(`${GRADE ? GRADE + '年' : ''}の ばん（${document.querySelector(`#boardBtns [data-board="${pr.board}"]`).textContent.replace(/^[⬜🔺⚪]/u, '')}）に かえますか？ ゴム・もじ・手がきは ぜんぶ きえます`, 'かえる', go);
     else go();
   }
   syncMeasUI(); layout(); updateHint(); syncURL();
@@ -2198,10 +2261,10 @@ document.querySelectorAll('#boardBtns .btn').forEach(btn => btn.onclick = () => 
   const key = btn.dataset.board; if (key === state.board) return;
   const change = () => {
     cancelGesture(); pushHist();
-    state.board = key; state.shapes = []; state.buildId = null; selectedId = null; pasteFirst = null;
+    state.board = key; state.shapes = []; state.texts = []; state.strokes = []; state.buildId = null;   // もじ・手がきも けす（ばんが かわると 場所が ずれる） selectedId = null; pasteFirst = null;
     view = { s: 1, tx: 0, ty: 0 }; buildBoard(); layout(); updateButtons(); updateHint(); syncURL();
   };
-  if (state.shapes.length) askConfirm('ばんを かえると、ゴムは ぜんぶ はずれます。かえますか？', 'かえる', change);
+  if (state.shapes.length || state.texts.length || state.strokes.length) askConfirm('ばんを かえると、ゴム・もじ・手がきは ぜんぶ きえます。かえますか？', 'かえる', change);
   else change();
 });
 $('clearAll').onclick = () => {
@@ -2359,6 +2422,7 @@ $('photoClose').onclick = () => { $('photoBg').hidden = true; };
 let startState = null;
 async function openBoardFile(file) {
   if (!file) return;
+  if (typeof DecompressionStream === 'undefined') { toast('この タブレットでは ひらけません（OSを あたらしく すると ひらけます）'); return; }
   let data = null;
   try { data = await readBoardFromPng(file); } catch (err) {
     if (Object.values(PNG_KEY_OTHERS).includes(err.message)) { toast(`これは「${err.message}」の がぞうです。そちらで ひらいてね`); return; }
@@ -2383,6 +2447,8 @@ let saveTimer = 0;
 function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 600); }
 function saveNow() {
   clearTimeout(saveTimer);
+  // 「つづきから／あたらしく」を えらぶ 前は ほぞんしない（からの 盤で 前の ほぞんを 消して しまうため）
+  if (!$('resumeBg').hidden) return;
   try {
     const d = boardData();
     if (!d.shapes.length && !d.texts.length && !d.strokes.length) localStorage.removeItem(SAVE_KEY);
