@@ -963,6 +963,14 @@ function drawShape(s, t) {
         fx.fillStyle = `rgba(255,255,255,${0.6 * (1 - (t - anim.paint.t0) / 400)})`; fx.fill();
       }
     }
+    if (pts.length === 1 && !closed) {
+      // まだ のばしていない ゴム：ピンに かけた 小さい 輪ゴム
+      const q = pts[0], rr = PIN_R * 1.9, lw = RUBBER_W * 0.6;
+      const ring = () => { fx.beginPath(); fx.arc(q.x, q.y, rr, 0, Math.PI * 2); };
+      ring(); fx.strokeStyle = 'rgba(0,0,0,0.22)'; fx.lineWidth = lw + 2.5; fx.stroke();
+      ring(); fx.strokeStyle = s.stroke; fx.lineWidth = lw; fx.stroke();
+      ring(); fx.strokeStyle = 'rgba(255,255,255,0.35)'; fx.lineWidth = Math.max(1, lw * 0.25); fx.stroke();
+    }
     if (pts.length >= 2) {
       fx.lineCap = 'round'; fx.lineJoin = 'round';
       const path = () => { fx.beginPath(); pts.forEach((q, k) => k ? fx.lineTo(q.x, q.y) : fx.moveTo(q.x, q.y)); if (closed) fx.closePath(); };
@@ -2032,7 +2040,16 @@ function endPointer(e, canceled) {
   if (canceled) { shrinkBack(); return; }
   // タップでは ゴムを のばさない（線は ゆびで のばした ときだけ ひける）
   if (!pointer.moved) {
-    if (pointer.kind === 'new') { anim.rubber = null; dropBuild(); requestDraw(); return; }   // ピンを タップした だけ → なにも しない
+    // ピンを タップした だけ → 小さい 輪ゴムを かけて おく（そこから のばせる）
+    if (pointer.kind === 'new') { anim.rubber = null; updateHint(); requestDraw(); return; }
+    if (b.points.length === 1) {
+      // 小さい 輪ゴムが ある ときに タップ：べつの あいた ピン → そこへ うつす／おなじ ピン → はずす
+      anim.rubber = null;
+      const dp = pointer.downPin, vh0 = dp ? findVertex(dp) : null, vh = vh0 && vh0.shape !== b ? vh0 : null;
+      if (dp && !vh && !same(dp, b.points[0])) { b.points[0] = dp; bouncePin(dp); }
+      else { dropBuild(); if (vh) { pick = { shapeId: vh.shape.id, pin: dp }; bouncePin(dp); } }
+      updateHint(); requestDraw(); return;
+    }
     // つくりかけの ときに タップ → つくるのを おわりにする。そこが ゴムの かどなら、かけかえる かどに えらぶ
     shrinkBack(); finishBuild();
     const vh = pointer.downPin ? findVertex(pointer.downPin) : null;
@@ -2172,7 +2189,7 @@ function updateHint(mode) {
   else if (pick && pickInfo()) h = 'うつしたい ピンを タップしよう。おなじ ピンを タップすると やめるよ';
   else if (!b) h = state.shapes.length ? 'かどを タップして、べつの ピンを タップすると かけかえられるよ。かどや まんなかを ひっぱっても いいよ'
                                   : 'ピンを おして、ゴムを のばして べつの ピンに かけよう';
-  else if (b.points.length === 1) h = 'つぎの ピンまで ゴムを のばそう';
+  else if (b.points.length === 1) h = 'わゴムを つぎの ピンまで のばそう。べつの ピンを タップすると うつるよ';
   else if (b.points.length === 2) h = 'もっと のばそう。タップすると「せん」で おわり';
   else h = 'はじめの ピン（てんせんの わ）に もどすと、かたちが できるよ';
   $('hint').textContent = h;
