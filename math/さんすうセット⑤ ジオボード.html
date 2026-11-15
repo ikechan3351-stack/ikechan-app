@@ -418,6 +418,7 @@ function restore(s) {
   anim.rubber = null; anim.closing = null; anim.bend = null; anim.move = null; anim.xf = null; anim.split = null; twist = null;
   if (!state.shapes.some(s => s.id === pasteFirst)) pasteFirst = null;
   if (!state.shapes.some(s => s.id === selectedId)) selectedId = null;
+  pick = null;
   layout(); requestDraw(); updateButtons(); updateHint();
 }
 function undo() { if (!undoStack.length) return; cancelGesture(); if (!undoStack.length) return; redoStack.push(snap()); restore(undoStack.pop()); updateButtons(); scheduleSave(); }
@@ -689,10 +690,32 @@ function frame(t) {
   if (anim.closing && t - anim.closing.t0 > 500) anim.closing = null;
   if (anim.closing) busy = true;
   if (buildShape() && buildShape().points.length === 1) busy = true;   // はじめの ピンを ゆらゆら 光らせる
+  if (pick) busy = true;                                               // えらんだ かどを ゆらゆら 光らせる
   if (busy || (anim.rubber && anim.rubber.mode === 'drag')) { lastT = t; requestDraw(); } else lastT = 0;
 }
 
 function buildShape() { return state.shapes.find(s => s.id === state.buildId) || null; }
+// かけかえ：ゴムの かどを タップして えらぶ → 行き先の ピンを タップすると そこへ かけかえる
+let pick = null;                        // { shapeId, pin }（えらんでいる かど）
+function pickInfo() {
+  if (!pick) return null;
+  const s = state.shapes.find(s => s.id === pick.shapeId);
+  const idx = s ? s.points.findIndex(p => same(p, pick.pin)) : -1;
+  if (idx < 0) { pick = null; return null; }   // もどる などで なくなった
+  return { s, idx };
+}
+// えらんだ かどを ピン target に かけかえる（はなした ときと 同じ きまりで、ばねで すいつく）
+function movePicked(target) {
+  const pk = pickInfo(); pick = null;
+  if (!pk) { updateHint(); return; }
+  const from = pinXY(pk.s.points[pk.idx]), q = pinXY(target);
+  startBend(pk.s, pk.idx, false, q.x, q.y);
+  releaseBend(q.x, q.y, false);
+  const bd = anim.bend;
+  if (bd && bd.mode === 'snap') { bd.x = from.x; bd.y = from.y; }   // もとの ピンから 行き先へ うごいて 見える
+  else if (bd && bd.mode === 'back') toast('そこには かけられないよ');
+  requestDraw();
+}
 
 function render(t) {
   fx.clearRect(0, 0, W, H);
@@ -738,6 +761,14 @@ function render(t) {
     const q = pinXY(b.points[0]), w = 0.5 + 0.5 * Math.sin(t / 220);
     fx.beginPath(); fx.arc(q.x, q.y, PIN_R * (2.2 + w * 0.6), 0, Math.PI * 2);
     fx.lineWidth = 3 * SCALE; fx.strokeStyle = b.stroke; fx.globalAlpha = 0.5 + 0.4 * w; fx.stroke(); fx.globalAlpha = 1;
+  }
+  // かけかえる ために えらんだ かど（ゆらゆら 光る わ）
+  const pk = tool === 'rubber' && pickInfo();
+  if (pk) {
+    const q = pinXY(pk.s.points[pk.idx]), w = 0.5 + 0.5 * Math.sin(t / 200);
+    fx.beginPath(); fx.arc(q.x, q.y, Math.max(PIN_R * 3, geo.sp * 0.22), 0, Math.PI * 2);
+    fx.fillStyle = `rgba(255,193,7,${0.2 + 0.15 * w})`; fx.fill();
+    fx.lineWidth = 4 * SCALE; fx.strokeStyle = '#ffb300'; fx.stroke();
   }
   // つくりかけの 図形の はじめの 頂点（もどると とじる）
   if (b && b.points.length >= 3) {
@@ -1754,13 +1785,21 @@ wrap.addEventListener('pointerdown', e => {
   if (anim.bend) { const d = anim.bend.done; anim.bend = null; d && d(); }   // まえの うごきは すぐ おわらせる
   const pin = hitPin(x, y, e.pointerType);
   const b = buildShape();
+  // かどを えらんでいる ときに ピンを おした → タップなら そこへ かけかえ（pointerup で きめる）
+  if (pickInfo() && pin && !b) {
+    e.preventDefault();
+    try { wrap.setPointerCapture(e.pointerId); } catch (_) {}
+    Object.assign(pointer, { id: e.pointerId, x, y, downX: x, downY: y, type: e.pointerType, downPin: pin, moved: false, vh: null, kind: 'place' });
+    requestDraw(); return;
+  }
+  if (pick) { pick = null; updateHint(); requestDraw(); }   // ほかの ところを おした → えらぶのを やめる
   // どこを つかんだか：ゴムの 辺 → つくりかけ → 頂点の ピン → ピン
   const vh = !b && pin ? findVertex(pin) : null;
   const pd = pin ? Math.hypot(pinXY(pin).x - x, pinXY(pin).y - y) : Infinity;
   const eh0 = vh ? null : hitEdge(x, y, e.pointerType);
   // ピンより ゴムの ほうが 近ければ、ゴムを つまむ（となりどうしの ピンの 間でも つまめる）
   const eh = eh0 && eh0.d + 4 < pd ? eh0 : null;
-  if (!b && !pin && !eh) return;        // なにもない ところ（いまは なにもしない）
+  if (!b && !pin && !eh) return;        // なにもない ところ（かどを えらんでいたら やめるだけ）
   e.preventDefault();
   try { wrap.setPointerCapture(e.pointerId); } catch (_) {}
   Object.assign(pointer, { id: e.pointerId, x, y, downX: x, downY: y, type: e.pointerType, downPin: pin, moved: false, vh });
@@ -1775,7 +1814,7 @@ wrap.addEventListener('pointerdown', e => {
     const from = pinXY(b.points[b.points.length - 1]);
     anim.rubber = { from, x, y, vx: 0, vy: 0, tx: x, ty: y, mode: 'drag', color: b.stroke, shapeId: b.id };
   } else if (vh) {
-    // 図形の 頂点：うごかせば かけ直し、タップなら そこから 新しい ゴム（pointermove・pointerup で きめる）
+    // 図形の 頂点：うごかせば かけ直し、タップなら かけかえる かどに えらぶ（pointermove・pointerup で きめる）
     pointer.kind = 'vertex';
   } else {
     pointer.kind = 'new';
@@ -1911,6 +1950,18 @@ wrap.addEventListener('pointermove', e => {
     a = Math.atan2(Math.sin(a), Math.cos(a));
     anim.xf.x = snapAngle(a); requestDraw(); return;
   }
+  if (pointer.kind === 'place' && Math.hypot(x - pointer.downX, y - pointer.downY) > TAP_MOVE) {
+    // かどを えらんだまま ピンから ゆびを うごかした → かけかえは やめて、ふつうの ゴムの そうさに する
+    const pk = pickInfo(), pin = pointer.downPin; pick = null;
+    const vh = pk && same(pk.s.points[pk.idx], pin) ? null : findVertex(pin);   // えらんだ かどから なら 新しい ゴム
+    pointer.moved = true;
+    if (vh) { pointer.kind = 'vertex'; pointer.vh = vh; startBend(vh.shape, vh.idx, false, x, y); }
+    else {
+      pointer.kind = 'new'; startBuild(pin);
+      anim.rubber = { from: pinXY(pin), x, y, vx: 0, vy: 0, tx: x, ty: y, mode: 'drag', color: buildShape().stroke, shapeId: state.buildId };
+    }
+    requestDraw(); return;
+  }
   if (!pointer.moved && Math.hypot(x - pointer.downX, y - pointer.downY) > TAP_MOVE) {
     pointer.moved = true;
     // 頂点を つかんで うごかした → ピンから はずして かけ直す
@@ -1963,17 +2014,33 @@ function endPointer(e, canceled) {
   }
   if (pointer.kind === 'select') { endMove(canceled); updateHint(); requestDraw(); return; }
   if (pointer.kind === 'paint') { if (!canceled && !pointer.moved) paintAt(x, y, pointer.type); return; }
+  if (pointer.kind === 'place') {
+    // かどを えらんで いる ときに ピンを タップ → そこへ かけかえ（おなじ ピンなら やめる）
+    const pk = pickInfo();
+    if (canceled || !pk || same(pk.s.points[pk.idx], pointer.downPin)) pick = null;
+    else movePicked(pointer.downPin);
+    updateHint(); requestDraw(); return;
+  }
   if (pointer.kind === 'vertex' && !pointer.moved) {
-    // 頂点の ピンを タップ → そこから 新しい ゴム（タップで つなぐ じゅんび）
-    if (!canceled) startBuild(pointer.downPin);
-    requestDraw(); return;
+    // ゴムの かどを タップ → かけかえる かどに えらぶ（つぎに タップした ピンへ うつる）
+    if (!canceled) { pick = { shapeId: pointer.vh.shape.id, pin: pointer.downPin }; bouncePin(pointer.downPin); }
+    updateHint(); requestDraw(); return;
   }
   if (pointer.kind === 'vertex' || pointer.kind === 'edge') { releaseBend(x, y, canceled); return; }
   const r = anim.rubber, b = buildShape();
   if (!r || !b) { requestDraw(); return; }
   if (canceled) { shrinkBack(); return; }
-  // タップなら おした ピン、ドラッグなら はなした ところに 近い ピン
-  const target = pointer.moved ? snapPin(x, y) : pointer.downPin;
+  // タップでは ゴムを のばさない（線は ゆびで のばした ときだけ ひける）
+  if (!pointer.moved) {
+    if (pointer.kind === 'new') { anim.rubber = null; dropBuild(); requestDraw(); return; }   // ピンを タップした だけ → なにも しない
+    // つくりかけの ときに タップ → つくるのを おわりにする。そこが ゴムの かどなら、かけかえる かどに えらぶ
+    shrinkBack(); finishBuild();
+    const vh = pointer.downPin ? findVertex(pointer.downPin) : null;
+    if (vh) { pick = { shapeId: vh.shape.id, pin: pointer.downPin }; bouncePin(pointer.downPin); }
+    updateHint(); requestDraw(); return;
+  }
+  // はなした ところに 近い ピン
+  const target = snapPin(x, y);
   const last = b.points[b.points.length - 1], first = b.points[0];
   r.x = x; r.y = y;
 
@@ -2102,10 +2169,11 @@ function updateHint(mode) {
     ? (paintColor ? 'いろを えらんで、かたちの 中を タップしよう' : 'ぬりを けしたい かたちの 中を タップしよう')
     : 'いろを えらんで、ゴムを タップしよう';
   else if (mode === 'drag') h = 'ピンの ちかくで はなすと かかるよ。ピンの ない ところで はなすと もどるよ';
-  else if (!b) h = state.shapes.length ? 'ゴムの まんなかや かどを つまんで ひっぱれるよ。ピンから 新しい ゴムも のばせるよ'
+  else if (pick && pickInfo()) h = 'うつしたい ピンを タップしよう。おなじ ピンを タップすると やめるよ';
+  else if (!b) h = state.shapes.length ? 'かどを タップして、べつの ピンを タップすると かけかえられるよ。かどや まんなかを ひっぱっても いいよ'
                                   : 'ピンを おして、ゴムを のばして べつの ピンに かけよう';
-  else if (b.points.length === 1) h = 'つぎの ピンまで のばすか、つぎの ピンを タップしよう';
-  else if (b.points.length === 2) h = 'もっと のばそう。さいごの ピンを タップすると「せん」で おわり';
+  else if (b.points.length === 1) h = 'つぎの ピンまで ゴムを のばそう';
+  else if (b.points.length === 2) h = 'もっと のばそう。タップすると「せん」で おわり';
   else h = 'はじめの ピン（てんせんの わ）に もどすと、かたちが できるよ';
   $('hint').textContent = h;
 }
@@ -2114,6 +2182,7 @@ function setTool(t) {
   if (t === tool) return;
   cancelGesture();
   if (tool === 'rubber') finishBuild();            // つくりかけの ゴムは そこで おわり
+  pick = null;
   tool = t;
   if (t !== 'select') selectedId = null;
   pasteFirst = null;
