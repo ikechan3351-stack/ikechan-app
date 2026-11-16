@@ -2179,6 +2179,41 @@ function liftFinger(e, canceled) {
 }
 wrap.addEventListener('pointerup', e => liftFinger(e, false));
 wrap.addEventListener('pointercancel', e => liftFinger(e, true));
+
+// ---------- ゆびを はなした しらせが こなかった ときの そなえ ----------
+// ブラウザや タブレットに よっては、はなした しらせ（pointerup）が とどかない ことがある（画面の 外で はなす・べつの アプリに きりかえる など）。
+// そのままだと「まだ ゆびが のって いる」ことに なり、つぎの ゆびが 2本目（拡大）に なって ゴムが かけられなく なるので、ここで おわらせる。
+const lastXY = new Map();   // ゆびごとの さいごの いち（画面の 座標）
+const liveIds = () => new Set([...touches.keys(), ...(pointer.id !== null ? [pointer.id] : [])]);
+function forceLift(pid, canceled) {
+  const p = lastXY.get(pid) || { clientX: 0, clientY: 0 };
+  lastXY.delete(pid);
+  if (!touches.has(pid) && pointer.id !== pid) return;
+  try { liftFinger({ pointerId: pid, clientX: p.clientX, clientY: p.clientY, preventDefault() {} }, canceled); } catch (_) {}
+  touches.delete(pid);
+  if (pointer.id === pid) pointer.id = null;
+  if (touches.size < 2) pinch = null;
+  if (!touches.size) twist = null;
+}
+function forceLiftAll() { for (const pid of liveIds()) forceLift(pid, true); requestDraw(); }
+window.addEventListener('pointermove', e => {
+  lastXY.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+  // マウスの ボタンを はなして いるのに、まだ おして いる ことに なって いる
+  if (e.pointerType === 'mouse' && e.buttons === 0 && liveIds().has(e.pointerId)) forceLift(e.pointerId, false);
+}, true);
+// はなした しらせが、ばんの 外で とどいた とき
+window.addEventListener('pointerup', e => { if (liveIds().has(e.pointerId)) { lastXY.set(e.pointerId, e); forceLift(e.pointerId, false); } });
+window.addEventListener('pointercancel', e => { if (liveIds().has(e.pointerId)) forceLift(e.pointerId, true); });
+// つかむ 権利が きえた（はなした しらせの あとにも くるので、少し まって まだ のこって いる ときだけ）
+wrap.addEventListener('lostpointercapture', e => { const pid = e.pointerId; setTimeout(() => { if (liveIds().has(pid)) forceLift(pid, true); }, 0); });
+// あたらしく さわり はじめた（ほかに ゆびが のって いない はずの とき）のに、前の ゆびが のこって いたら 先に おわらせる
+window.addEventListener('pointerdown', e => {
+  lastXY.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+  if (e.isPrimary) for (const pid of liveIds()) forceLift(pid, true);
+}, true);
+// べつの アプリ・タブに きりかえた
+window.addEventListener('blur', forceLiftAll);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') forceLiftAll(); });
 // マウスの ホイール・トラックパッドの ピンチで 拡大（ctrl＋ホイール）、ホイールだけなら 移動
 wrap.addEventListener('wheel', e => {
   e.preventDefault();
