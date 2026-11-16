@@ -440,12 +440,15 @@ const BG_KINDS = [
   { id: 'plain', name: 'むじ' },
   { id: 'grid',  name: 'ほうがんし' },
   { id: 'note',  name: 'さんすうノート' },
+  { id: 'split', name: 'ふたつに わける' },
   { id: 'image', name: 'がぞう' },
 ];
 // 方眼紙の マス（L は ブロックが ちょうど 1マスに 入る 大きさ。L の ときは マスに すいつく）
 const GRID_SIZES = [ { id: 'L', name: 'おおきい', size: 70 }, { id: 'M', name: 'ふつう', size: 35 }, { id: 'S', name: 'ちいさい', size: 20 } ];
 // 算数ノートは よこに ならぶ マスの 数で えらぶ
 const NOTE_SIZES = [ { id: '12', name: '12マス', size: 100 }, { id: '15', name: '15マス', size: 80 }, { id: '18', name: '18マス', size: 66 } ];
+// ふたつに わける 紙の 線の むき
+const SPLIT_DIRS = [ { id: 'lr', name: 'ひだり と みぎ' }, { id: 'tb', name: 'うえ と した' } ];
 const BG_COLORS = [
   { id: 'white', name: 'しろ',     paper: '#ffffff', line: '#c5cae9', bold: '#9fa8da' },
   { id: 'cream', name: 'クリーム', paper: '#fff8e1', line: '#e6d3a3', bold: '#c9ab66' },
@@ -456,6 +459,7 @@ const bg = {
   grid: GRID_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : 'L',
   note: NOTE_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : '15',
   color: BG_COLORS.some(c => c.id === params.get('color')) ? params.get('color') : 'white',
+  split: SPLIT_DIRS.some(c => c.id === params.get('dir')) ? params.get('dir') : 'lr',   // わける むき（?dir=tb で うえ と した）
   img: null,      // とりこんだ がぞう
   fade: true,     // がぞうを うすくする
 };
@@ -466,6 +470,20 @@ function gridCell() {
   else if (bg.kind === 'note') size = NOTE_SIZES.find(g => g.id === bg.note).size;
   else return null;
   return { size, ox: (W % size) / 2, oy: (H % size) / 2 };
+}
+/* ---- ふたつに わける（まん中に 1本 線。なかまわけ・「あわせて いくつ」「のこりは いくつ」に つかう） ---- */
+function drawSplit(ctx, col) {
+  const M = 14;
+  ctx.strokeStyle = col.bold; ctx.lineWidth = 4;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(M, M, W - M * 2, H - M * 2, 14); else ctx.rect(M, M, W - M * 2, H - M * 2);   // 古い 端末は 角の まるく ない わく
+  ctx.stroke();
+  ctx.lineWidth = 5; ctx.setLineDash([18, 12]);
+  ctx.beginPath();
+  if (bg.split === 'lr') { ctx.moveTo(W / 2, M); ctx.lineTo(W / 2, H - M); }
+  else { ctx.moveTo(M, H / 2); ctx.lineTo(W - M, H / 2); }
+  ctx.stroke();
+  ctx.setLineDash([]);
 }
 function drawBg(ctx) {
   const col = BG_COLORS.find(c => c.id === bg.color);
@@ -480,6 +498,7 @@ function drawBg(ctx) {
     if (bg.fade) { ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(0, 0, W, H); }
     return;
   }
+  if (bg.kind === 'split') { drawSplit(ctx, col); return; }
   const g = gridCell();
   if (!g) return;
   const line = (x1, y1, x2, y2, color, width, dash) => {
@@ -1097,8 +1116,11 @@ function renderBgPanel() {
     }));
   }
   const sizes = $('bgSizes'); sizes.textContent = '';
-  $('bgSizeBox').hidden = !(bg.kind === 'grid' || bg.kind === 'note');
-  if (bg.kind === 'grid' || bg.kind === 'note') {
+  $('bgSizeBox').hidden = !(bg.kind === 'grid' || bg.kind === 'note' || bg.kind === 'split');
+  if (bg.kind === 'split') {
+    $('bgSizeTitle').textContent = 'わける せんの むき';
+    for (const d of SPLIT_DIRS) sizes.appendChild(bgButton(d.name, bg.split === d.id, () => { bg.split = d.id; changeBg(); }));
+  } else if (bg.kind === 'grid' || bg.kind === 'note') {
     const list = bg.kind === 'grid' ? GRID_SIZES : NOTE_SIZES;
     $('bgSizeTitle').textContent = bg.kind === 'grid' ? 'マスの おおきさ（おおきい は ブロックが すいつく）' : 'よこに ならぶ マスの かず';
     for (const g of list) {
@@ -1199,7 +1221,7 @@ function stateData() {
   const r = v => Math.round(v);
   const data = {
     v: 1,
-    b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color],
+    b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color, bg.split],
     i: items.map(it => it.type === 'text' ? [it.type, r(it.x), r(it.y), it.text, it.fs] : [it.type, r(it.x), r(it.y)]),
     s: strokes.map(st => [st.color, st.pts.filter((p, k) => k % 2 === 0 || k === st.pts.length - 1).flatMap(p => [r(p[0]), r(p[1])])]),
   };
@@ -1223,11 +1245,12 @@ async function unpackState(str) {
 function applyState(data) {
   dropGestures();
   const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
-  const [kind, grid, note, color] = Array.isArray(data.b) ? data.b : [];
+  const [kind, grid, note, color, sdir] = Array.isArray(data.b) ? data.b : [];
   if (BG_KINDS.some(k => k.id === kind) && kind !== 'image') bg.kind = kind;
   if (GRID_SIZES.some(g => g.id === grid)) bg.grid = grid;
   if (NOTE_SIZES.some(g => g.id === note)) bg.note = note;
   if (BG_COLORS.some(c => c.id === color)) bg.color = color;
+  if (SPLIT_DIRS.some(c => c.id === sdir)) bg.split = sdir;
   items = []; strokes = [];
   for (const a of (Array.isArray(data.i) ? data.i : []).slice(0, 600)) {
     const [type, x, y] = a;
