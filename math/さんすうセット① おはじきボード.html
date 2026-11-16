@@ -192,6 +192,7 @@
   <button class="btn teacher-only" id="share" title="子どもに くばる がぞうを つくる"><span class="ic">💾</span>くばる</button>
   <input type="file" id="boardFile" accept="image/png,image/*" hidden>
   <button class="btn" id="clearAll" title="ぜんぶ かたづける"><span class="ic">🧹</span>かたづける</button>
+  <button class="btn" id="teacherBtn" title="先生モード（先生用の ボタンを だす）"><span class="ic">🧑‍🏫</span><span id="teacherLbl">せんせい</span></button>
 </div>
 
 <!-- ===== 道具箱 と ボード ===== -->
@@ -259,6 +260,14 @@
     <p id="resumeInfo" style="font-size:1rem;font-weight:bold;color:#5c6bc0;margin:-8px 0 18px"></p>
     <button class="btn yes" id="resumeYes">▶ つづきから</button>
     <button class="btn" id="resumeNo">あたらしく</button>
+  </div>
+</div>
+<div class="dialog-bg" role="dialog" aria-modal="true" id="teacherBg" hidden>
+  <div class="dialog">
+    <p>先生モードに しますか？</p>
+    <p style="font-size:1rem;font-weight:bold;color:#5c6bc0;margin:-8px 0 18px">先生用の ボタン（📝もんだい・💾くばる）が でます。<br>いまの ボードは そのまま つづきます。</p>
+    <button class="btn yes" id="teacherYes">先生モードに する</button>
+    <button class="btn" id="teacherNo">やめる</button>
   </div>
 </div>
 <div class="dialog-bg" role="dialog" aria-modal="true" id="confirmBg" hidden>
@@ -1091,7 +1100,7 @@ document.addEventListener('keydown', e => {
   const dlgOpen = [...document.querySelectorAll('.dialog-bg')].some(d => !d.hidden);
   if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); if (!dlgOpen) undo(); }
   else if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); if (!dlgOpen) redo(); }
-  else if (e.key === 'Escape') ['confirmBg', 'bgBg', 'txtBg', 'shareBg'].forEach(id => { $(id).hidden = true; });
+  else if (e.key === 'Escape') ['teacherBg', 'confirmBg', 'bgBg', 'txtBg', 'shareBg'].forEach(id => { $(id).hidden = true; });
 });
 
 /* =========================== はいけいを えらぶ 画面 =========================== */
@@ -1456,7 +1465,7 @@ function toast(msg) {
 }
 
 // ページを とじる前に、ならべたものが きえることを しらせる
-window.addEventListener('beforeunload', e => {
+window.addEventListener('beforeunload', e => { if (leaving) return;
   if (items.length || strokes.length) { e.preventDefault(); e.returnValue = ''; }
 });
 // 長おし・右クリックの メニューを 出さない
@@ -1495,7 +1504,33 @@ $('resumeYes').onclick = () => {
   if (d) { applyState(d); undoStack.length = 0; redoStack.length = 0; updateButtons(); toast('▶ つづきから はじめるよ'); }
 };
 $('resumeNo').onclick = () => { $('resumeBg').hidden = true; try { localStorage.removeItem(SAVE_KEY); } catch (_) {} };
-{
+/* =========================== 先生モードの きりかえ =========================== */
+// 先生モードは アドレスの ?teacher=1 で きまる。ボタンで きりかえる ときは、いまの ボードを この 端末に ほぞんしてから
+// アドレスを かえて 開きなおし、開いた あとで ほぞんした ボードを そのまま つづける（「つづきから」は きかない）。
+const SWITCH_KEY = SAVE_KEY + '-switch';
+let leaving = false;   // 開きなおす ときは「ページを はなれますか？」を 出さない
+function switchTeacher(on) {
+  try { dropGestures(); } catch (_) {}
+  saveDirty = true; saveNow();
+  try { sessionStorage.setItem(SWITCH_KEY, '1'); } catch (_) {}
+  const p = new URLSearchParams(location.search);
+  if (on) p.set('teacher', '1'); else p.delete('teacher');
+  leaving = true;
+  const q = p.toString();
+  location.href = location.pathname + (q ? '?' + q : '') + location.hash;
+}
+$('teacherLbl').textContent = TEACHER ? 'せんせい おわる' : 'せんせい';
+$('teacherBtn').classList.toggle('on', TEACHER);
+$('teacherBtn').onclick = () => { if (TEACHER) switchTeacher(false); else $('teacherBg').hidden = false; };   // おわる ときは きかない
+$('teacherNo').onclick = () => { $('teacherBg').hidden = true; };
+$('teacherYes').onclick = () => { $('teacherBg').hidden = true; switchTeacher(true); };
+let switched = false;
+try { switched = sessionStorage.getItem(SWITCH_KEY) === '1'; sessionStorage.removeItem(SWITCH_KEY); } catch (_) {}
+if (switched) {
+  // 先生モードの きりかえで 開きなおした：ほぞんした ボードを そのまま つづける
+  const d = loadSaved();
+  if (d) applyState(d);
+} else {
   const sv = loadSaved();
   if (sv) {
     const d = new Date(sv.at || Date.now());
