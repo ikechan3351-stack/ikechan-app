@@ -102,6 +102,11 @@
   .dialog .row { display: flex; gap: 12px; justify-content: center; }
   .dialog .btn { min-width: 120px; font-size: 1.15rem; }
   .boardpanel h2 { margin: 0 0 12px; font-size: 1.2rem; color: var(--accent-dark); }
+  .boardpanel { max-height: 94vh; overflow-y: auto; }
+  .boardpanel .mrow { text-align: left; }
+  .boardpanel .mrow .btn { min-height: 48px; }
+  .boardpanel .mrow .btn:disabled { opacity: 0.4; }
+  .lookdot { display: inline-block; width: 26px; height: 20px; border-radius: 5px; border: 2px solid rgba(0,0,0,0.2); }
   .bgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
   .bgrid .btn { flex-direction: column; min-height: 84px; min-width: 110px; font-size: 1.1rem; }
   .bgrid .bic { font-size: 1.8rem; }
@@ -296,6 +301,16 @@
       <button class="btn" data-board="circle24"><span class="bic">⚪</span>まる 24</button>
     </div>
     <p class="mhint">正方形と 三角の ばんは、画面の よこはばに あわせて よこの ピンが ふえます。</p>
+    <h2 style="margin-top:14px">はいけい</h2>
+    <div class="mrow"><span class="ml">ばんの いろ</span><span id="lookColorBtns" style="display:contents"></span></div>
+    <div class="mrow"><span class="ml">うすい こうし</span>
+      <button class="btn" data-lattice="0">なし</button>
+      <button class="btn" data-lattice="1">あり</button></div>
+    <div class="mrow"><span class="ml">グラフの めもり</span>
+      <button class="btn" data-graph="none">なし</button>
+      <button class="btn" data-graph="corner">0が ひだり下</button>
+      <button class="btn" data-graph="center">0が まん中</button></div>
+    <p class="mhint" id="lookHint"></p>
     <button class="btn" id="boardClose">とじる</button>
   </div>
 </div>
@@ -569,6 +584,73 @@ function hitPin(x, y, type) {
 }
 const same = (a, b) => a && b && Math.abs(a.i - b.i) < 1e-6 && Math.abs(a.j - b.j) < 1e-6;
 
+// ---------- はいけい：ばんの いろ・うすい こうし・グラフの めもり ----------
+// （もどる の 対象では ない。つづきから・くばる 画像・アドレスには 入る）
+const LOOK_COLORS = [
+  { id: 'wood',  name: 'もくめ',   paper: '#f7ecd4', edge: '#e6d3ad', line: 'rgba(141,110,99,0.30)',  axis: '#5d4037', text: '#4e342e' },
+  { id: 'white', name: 'しろ',     paper: '#ffffff', edge: '#c5cae9', line: '#c5cae9',                axis: '#283593', text: '#283593' },
+  { id: 'cream', name: 'クリーム', paper: '#fff8e1', edge: '#e6d3a3', line: '#dcc48a',                axis: '#6d4c41', text: '#5d4037' },
+  { id: 'green', name: 'こくばん', paper: '#2f5d46', edge: '#24483a', line: 'rgba(255,255,255,0.30)', axis: 'rgba(255,255,255,0.92)', text: '#ffffff' },
+];
+const look = {
+  color: LOOK_COLORS.some(c => c.id === Q.get('color')) ? Q.get('color') : 'wood',
+  lattice: Q.get('lattice') === '1',                                         // うすい こうし
+  graph: ['corner', 'center'].includes(Q.get('graph')) ? Q.get('graph') : 'none',   // グラフの めもり：none なし／corner 0が ひだり下／center 0が まん中
+};
+const lookColor = () => LOOK_COLORS.find(c => c.id === look.color) || LOOK_COLORS[0];
+// うすい こうし：となりの ピンどうしを うすい 線で むすぶ（正方形の 盤は 方眼、三角の 盤は 三角の 目）
+function drawLattice(LC) {
+  const P = BOARD.pins;
+  bg.strokeStyle = LC.line; bg.lineWidth = Math.max(1, 1.5 * SCALE);
+  bg.beginPath();
+  for (let a = 0; a < P.length; a++) {
+    const A = pinXY(P[a]);
+    for (let b = a + 1; b < P.length; b++) {
+      const di = P[b].i - P[a].i, dj = P[b].j - P[a].j;
+      if (Math.abs(di * di + dj * dj - 1) > 1e-3) continue;      // となり（きょり 1）だけ
+      const B = pinXY(P[b]);
+      bg.moveTo(A.x, A.y); bg.lineTo(B.x, B.y);
+    }
+  }
+  bg.stroke();
+}
+// グラフの 0（原点）に する ピン
+function graphOrigin() {
+  const B = BOARD.bounds;
+  return look.graph === 'center' ? { i: Math.round(B.w / 2), j: Math.round(B.h / 2) } : { i: 0, j: B.h };
+}
+// グラフの めもり：x軸・y軸（矢印つき）と 数。ピン 1つ分 ＝ 1、y は 上が プラス
+function drawGraphAxes(LC) {
+  const B = BOARD.bounds, O = graphOrigin(), o = pinXY(O);
+  const ext = geo.sp * 0.42, ah = Math.max(7, geo.sp * 0.16);
+  const x0 = pinXY({ i: 0, j: O.j }).x - (O.i > 0 ? ext * 0.6 : 0), x1 = pinXY({ i: B.w, j: O.j }).x + ext;
+  const y0 = pinXY({ i: O.i, j: B.h }).y + (O.j < B.h ? ext * 0.6 : 0), y1 = pinXY({ i: O.i, j: 0 }).y - ext;
+  bg.save();
+  bg.strokeStyle = LC.axis; bg.fillStyle = LC.axis; bg.lineWidth = Math.max(2, 2.5 * SCALE); bg.lineCap = 'round';
+  bg.beginPath(); bg.moveTo(x0, o.y); bg.lineTo(x1, o.y); bg.moveTo(o.x, y0); bg.lineTo(o.x, y1); bg.stroke();
+  // 矢印（x は 右、y は 上）
+  bg.beginPath(); bg.moveTo(x1 + ah * 0.5, o.y); bg.lineTo(x1 - ah, o.y - ah * 0.6); bg.lineTo(x1 - ah, o.y + ah * 0.6); bg.closePath(); bg.fill();
+  bg.beginPath(); bg.moveTo(o.x, y1 - ah * 0.5); bg.lineTo(o.x - ah * 0.6, y1 + ah); bg.lineTo(o.x + ah * 0.6, y1 + ah); bg.closePath(); bg.fill();
+  // 数（ピンが こまかい ときは 1つ おき）
+  const fs = Math.max(10, Math.min(geo.sp * 0.3, 20 * SCALE)), step = geo.sp < 34 ? 2 : 1, gap = PIN_R + 3;
+  bg.fillStyle = LC.text; bg.font = `900 ${fs}px "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif`;
+  bg.textAlign = 'center'; bg.textBaseline = 'top';
+  for (let i = 0; i <= B.w; i++) {
+    const v = i - O.i; if (v === 0 || v % step) continue;
+    bg.fillText(String(v), pinXY({ i, j: O.j }).x, o.y + gap);
+  }
+  bg.textAlign = 'right'; bg.textBaseline = 'middle';
+  for (let j = 0; j <= B.h; j++) {
+    const v = O.j - j; if (v === 0 || v % step) continue;
+    bg.fillText(String(v), o.x - gap - 1, pinXY({ i: O.i, j }).y);
+  }
+  bg.textBaseline = 'top'; bg.fillText('0', o.x - gap - 1, o.y + gap);
+  // 軸の 名前
+  bg.font = `italic 900 ${fs * 1.1}px "Times New Roman", serif`;
+  bg.textAlign = 'center'; bg.textBaseline = 'bottom'; bg.fillText('x', x1 - ah * 0.2, o.y - gap);
+  bg.textAlign = 'left'; bg.textBaseline = 'middle'; bg.fillText('y', o.x + gap + 2, y1 + ah * 0.4);
+  bg.restore();
+}
 // ---------- 下の そう：ばん と ピン ----------
 function drawBoard() {
   bg.clearRect(0, 0, W, H);
@@ -581,14 +663,17 @@ function drawBoard() {
   };
   bg.save();
   bg.shadowColor = 'rgba(0,0,0,0.18)'; bg.shadowBlur = 14; bg.shadowOffsetY = 4;
-  bg.fillStyle = '#f7ecd4'; shape(); bg.fill();
+  const LC = lookColor();
+  bg.fillStyle = LC.paper; shape(); bg.fill();
   bg.restore();
-  bg.strokeStyle = '#e6d3ad'; bg.lineWidth = 2; shape(); bg.stroke();
+  bg.strokeStyle = LC.edge; bg.lineWidth = 2; shape(); bg.stroke();
+  if (look.lattice && BOARD.type !== 'circle') drawLattice(LC);
+  if (look.graph !== 'none' && BOARD.type === 'square') drawGraphAxes(LC);
   if (BOARD.type === 'circle') {
     // 円周の 目安の 線（うすく）
     const c = pinXY({ i: BOARD.R, j: BOARD.R });
     bg.beginPath(); bg.arc(c.x, c.y, BOARD.R * geo.sp, 0, Math.PI * 2);
-    bg.strokeStyle = 'rgba(141,110,99,0.25)'; bg.lineWidth = 2; bg.setLineDash([6, 6]); bg.stroke(); bg.setLineDash([]);
+    bg.strokeStyle = LC.line; bg.lineWidth = 2; bg.setLineDash([6, 6]); bg.stroke(); bg.setLineDash([]);
   }
   // ピン
   for (const p of BOARD.pins) drawPin(bg, pinXY(p), 1, false);
@@ -2342,6 +2427,9 @@ function syncURL() {
     q.set('board', state.board);
     const on = ['length', 'angle', 'area'].filter(k => meas[k]);
     if (on.length) q.set('show', on.join(','));
+    if (look.color !== 'wood') q.set('color', look.color);
+    if (look.lattice) q.set('lattice', '1');
+    if (look.graph !== 'none') q.set('graph', look.graph);
     if (REDUCED && !OS_REDUCED) q.set('motion', 'less');
     history.replaceState(null, '', location.pathname + '?' + q.toString());
   } catch (_) { /* 見るだけの 環境などで 書きかえられなくても 動く */ }
@@ -2355,7 +2443,33 @@ document.querySelectorAll('#setBg [data-motion]').forEach(b => b.onclick = () =>
 $('setBtn').onclick = () => { $('setTitle').textContent = '🎓 せってい'; $('setClose').textContent = 'とじる'; $('setBg').hidden = false; };
 $('setClose').onclick = () => { $('setBg').hidden = true; };
 $('setBg').addEventListener('click', e => { if (e.target === $('setBg')) $('setBg').hidden = true; });
-$('boardBtn').onclick = () => { $('boardBg').hidden = false; };
+$('boardBtn').onclick = () => { syncLookUI(); $('boardBg').hidden = false; };
+// ----- はいけい（ばんの いろ・うすい こうし・グラフの めもり）を えらぶ -----
+function syncLookUI() {
+  const box = $('lookColorBtns');
+  if (!box.childElementCount) {
+    for (const c of LOOK_COLORS) {
+      const b = document.createElement('button');
+      b.className = 'btn'; b.dataset.lookColor = c.id;
+      b.innerHTML = `<span class="lookdot" style="background:${c.paper}"></span>${c.name}`;
+      b.onclick = () => setLook({ color: c.id });
+      box.appendChild(b);
+    }
+  }
+  box.querySelectorAll('[data-look-color]').forEach(b => b.classList.toggle('on', b.dataset.lookColor === look.color));
+  const sq = BOARD.type === 'square', circ = BOARD.type === 'circle';
+  document.querySelectorAll('#boardBg [data-lattice]').forEach(b => { b.classList.toggle('on', (b.dataset.lattice === '1') === look.lattice); b.disabled = circ; });
+  document.querySelectorAll('#boardBg [data-graph]').forEach(b => { b.classList.toggle('on', b.dataset.graph === look.graph); b.disabled = !sq; });
+  $('lookHint').textContent = sq ? 'グラフの めもりは、ピン 1つ分が 1 です。「0が まん中」は マイナスの 数も つかえます。'
+    : circ ? 'まるい ばんでは、こうしと グラフの めもりは つかえません（いろは かえられます）。'
+    : '三角の ばんでは、グラフの めもりは つかえません（こうしは 三角の 目に なります）。';
+}
+function setLook(ch) {
+  Object.assign(look, ch);
+  syncLookUI(); drawBoard(); requestDraw(); syncURL(); scheduleSave();
+}
+document.querySelectorAll('#boardBg [data-lattice]').forEach(b => b.onclick = () => setLook({ lattice: b.dataset.lattice === '1' }));
+document.querySelectorAll('#boardBg [data-graph]').forEach(b => b.onclick = () => setLook({ graph: b.dataset.graph }));
 $('boardClose').onclick = () => { $('boardBg').hidden = true; };
 $('boardBg').addEventListener('click', e => { if (e.target === $('boardBg')) $('boardBg').hidden = true; });
 $('zoomReset').onclick = resetView;
@@ -2405,7 +2519,7 @@ const PNG_KEY_OTHERS = { 'sansuset-board': 'さんすうセット① おはじ�
                          'sansuset3-board': 'さんすうセット③ おかね', 'sansuset4-board': 'さんすうセット④ いろいた・タングラム' };
 // 盤面を 文字に する（ちぢめられる ブラウザでは ちぢめる）
 function boardData() {
-  return { v: 1, board: state.board, colorIdx: state.colorIdx,
+  return { v: 1, board: state.board, colorIdx: state.colorIdx, look: { ...look },
            shapes: state.shapes.filter(s => s.id !== state.buildId || s.points.length > 1), texts: state.texts, strokes: state.strokes };
 }
 async function packState() {
@@ -2430,6 +2544,12 @@ function applyBoardData(d) {
   const texts = Array.isArray(d.texts) ? d.texts.filter(t => t && isFinite(t.x) && isFinite(t.y) && typeof t.text === 'string') : [];
   const strokes = Array.isArray(d.strokes) ? d.strokes.filter(t => t && Array.isArray(t.points) && t.points.every(p => isFinite(p.x) && isFinite(p.y))) : [];
   const board = BOARDS_URL.includes(d.board) ? d.board : state.board;
+  if (d.look && typeof d.look === 'object') {
+    // はいけいも もどす（知らない 値は つかわない）
+    if (LOOK_COLORS.some(c => c.id === d.look.color)) look.color = d.look.color;
+    look.lattice = d.look.lattice === true;
+    look.graph = ['corner', 'center'].includes(d.look.graph) ? d.look.graph : 'none';
+  }
   restore(JSON.stringify({ ...state, board, shapes, texts, strokes, buildId: null, colorIdx: d.colorIdx | 0 }));
   updateButtons(); syncURL();
   return true;
