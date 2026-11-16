@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>きって うごかして かさねて 方眼ボード</title>
+<style>
+  /* ===== 色のきまり（さんすうセット・ジオボードと そろえた やさしい色） ===== */
+  :root {
+    --ink: #263238; --accent: #3949ab; --accent-dark: #283593; --soft: #c5cae9;
+    --ok: #2e7d32; --warn: #ad1457;
+    --btn: 52px;                       /* ボタンの 大きさ（先生モードで 大きくなる） */
+  }
+  body.teacher { --btn: 64px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3f4fb 0%, #dfe3f5 100%);
+    height: 100dvh; overflow: hidden;
+    display: flex; flex-direction: column; padding: 6px 8px 8px; gap: 6px;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  button { font-family: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  rt { font-size: 0.5em; }
+
+  /* ===== 上の ツールバー ===== */
+  .topbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; padding: 4px 8px; min-height: 44px; display: inline-flex; align-items: center; }
+  h1 { margin: 0 4px 0 0; font-size: clamp(1rem, 1.8vw, 1.25rem); color: var(--accent-dark); white-space: nowrap; }
+  .spacer { flex: 1; }
+  .group { display: flex; gap: 4px; align-items: center; background: rgba(255,255,255,0.55); border-radius: 14px; padding: 3px; }
+  .btn {
+    min-height: var(--btn); min-width: var(--btn); padding: 2px 8px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.12); line-height: 1.15;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap;
+  }
+  body.teacher .btn { font-size: 1.2rem; }
+  .btn .ic { font-size: 1.35rem; }
+  .btn:active { transform: translateY(2px); box-shadow: none; }
+  .btn:disabled { opacity: 0.35; cursor: default; transform: none; box-shadow: none; }
+  .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ===== 左の 道具 と ボード ===== */
+  .main { flex: 1; min-height: 0; display: flex; gap: 8px; }
+  .tools {
+    flex: none; display: flex; flex-direction: column; gap: 6px;
+    background: #fff; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 6px;
+  }
+  .tool {
+    width: calc(var(--btn) + 22px); min-height: calc(var(--btn) + 14px);
+    border: 2px solid var(--soft); background: #fff; border-radius: 14px; cursor: pointer; touch-action: manipulation;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-weight: 900; font-size: 0.85rem;
+  }
+  body.teacher .tool { font-size: 1rem; }
+  .tool .ic { font-size: 1.6rem; }
+  .tool.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tool.soon { opacity: 0.4; }
+
+  .boardwrap {
+    flex: 1; min-width: 0; position: relative; border-radius: 18px; overflow: hidden;
+    background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+    touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  .boardwrap canvas { position: absolute; left: 0; top: 0; }
+
+  /* えらんだ 色板の そばの ボタン */
+  .selbar { position: absolute; z-index: 5; display: flex; gap: 6px; background: rgba(255,255,255,0.94);
+            border-radius: 14px; padding: 4px; box-shadow: 0 3px 10px rgba(0,0,0,0.18); transform: translateX(-50%); width: max-content; }
+
+  /* いろの パレット */
+  .palette .col { min-width: var(--btn); width: var(--btn); padding: 0; }
+  .palette .col .dot { width: 30px; height: 30px; border-radius: 8px; border: 3px solid rgba(0,0,0,0.15); }
+  body.teacher .palette .col .dot { width: 40px; height: 40px; }
+  .palette .col.on { border-color: var(--ink); border-width: 4px; }
+
+  /* ===== 下の おび ===== */
+  .bottombar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 40px; }
+  .hintline { font-size: 1rem; font-weight: bold; color: #5c6bc0; padding: 0 6px; flex: 1; min-width: 12em; }
+  body.teacher .hintline { font-size: 1.2rem; }
+
+  /* ===== ページの 中の かくにん（confirm() は つかわない） ===== */
+  .dialog-bg { position: fixed; inset: 0; background: rgba(38,50,56,0.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .dialog { background: #fff; border-radius: 20px; padding: 24px 28px; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,0.25); max-width: 92vw; max-height: 94vh; overflow-y: auto; }
+  .dialog p { font-size: 1.3rem; font-weight: 900; margin: 0 0 18px; }
+  .dialog h2 { margin: 0 0 12px; font-size: 1.2rem; color: var(--accent-dark); }
+  .dialog .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .dialog .btn { min-width: 120px; font-size: 1.15rem; }
+  .mrow { display: flex; align-items: center; gap: 8px; margin: 10px 0; flex-wrap: wrap; text-align: left; }
+  .mrow .ml { width: 7em; font-weight: 900; color: var(--accent-dark); }
+  .btn.danger { background: #e53935; border-color: #e53935; color: #fff; }
+
+  .toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); background: rgba(38,50,56,0.9); color: #fff;
+           padding: 10px 20px; border-radius: 999px; font-weight: bold; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 60; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 1100px) {
+    h1 .sub, #undo .lbl, #redo .lbl, #clearAll .lbl { display: none; }
+  }
+  @media (max-width: 900px) {
+    .btn .lbl { display: none; }
+    h1 { font-size: 0.95rem; }
+  }
+  @media (max-width: 600px) {
+    .palette { flex-wrap: wrap; }
+    .tools { overflow-y: auto; }
+    .tool { width: calc(var(--btn) + 6px); }
+    .selbar { flex-wrap: wrap; justify-content: center; max-width: 92vw; width: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 上の ツールバー ===== -->
+<div class="topbar">
+  <a class="back-link" href="../index.html">← トップ</a>
+  <h1><span class="sub">きって うごかして かさねて </span><ruby>方眼<rt>ほうがん</rt></ruby>ボード</h1>
+  <button class="btn" id="setBtn" title="学年・マスの 大きさ・先生モード"><span class="ic">🎓</span><span id="setName">小学生</span></button>
+  <div class="group" id="measBtns">
+    <button class="btn" data-meas="length" title="辺の 長さを 見せる"><span class="ic">📏</span><span class="lbl">長さ</span></button>
+    <button class="btn" data-meas="angle" title="角の 大きさを 見せる"><span class="ic">📐</span><span class="lbl">角度</span></button>
+    <button class="btn" data-meas="area" title="面積（マスの数）を 見せる"><span class="ic">🟦</span><span class="lbl">面積</span></button>
+  </div>
+  <div class="spacer"></div>
+</div>
+
+<!-- ===== 道具 と ボード ===== -->
+<div class="main">
+  <div class="tools" id="tools">
+    <button class="tool on" data-tool="make"><span class="ic">✏️</span>つくる</button>
+    <button class="tool" data-tool="move"><span class="ic">👆</span>うごかす</button>
+    <button class="tool soon" data-tool="cut" title="パート2で 作ります"><span class="ic">✂️</span>きる</button>
+    <button class="tool soon" data-tool="paste" title="パート2で 作ります"><span class="ic">🧩</span>はる</button>
+    <button class="tool soon" data-tool="overlap" title="パート3で 作ります"><span class="ic">🔍</span>かさねる</button>
+  </div>
+  <div class="boardwrap" id="boardwrap">
+    <canvas id="cv"></canvas>
+    <!-- えらんだ 色板の そばに 出る ボタン -->
+    <div class="selbar" id="selbar" hidden>
+      <button class="btn" id="selRotL" title="左に 90° まわす"><span class="ic">↺</span>90°</button>
+      <button class="btn" id="selRotR" title="右に 90° まわす"><span class="ic">↻</span>90°</button>
+      <button class="btn" id="selFlipH" title="左右に うらがえす"><span class="ic">↔️</span></button>
+      <button class="btn" id="selFlipV" title="上下に うらがえす"><span class="ic">↕️</span></button>
+      <button class="btn" id="selCopy" title="おなじ 色板を もう1まい つくる"><span class="ic">⧉</span>コピー</button>
+      <button class="btn" id="selDelete" title="この 色板を けす"><span class="ic">🗑️</span>けす</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 下の おび ===== -->
+<div class="bottombar">
+  <div class="group palette" id="palette"></div>
+  <button class="btn" id="cancelMake" hidden><span class="ic">✖️</span><span class="lbl">やめる</span></button>
+  <div class="hintline" id="hint"></div>
+  <button class="btn" id="undo" title="ひとつ もどす"><span class="ic">↶</span><span class="lbl">もどる</span></button>
+  <button class="btn" id="redo" title="やりなおす"><span class="ic">↷</span><span class="lbl">やりなおす</span></button>
+  <button class="btn" id="clearAll" title="ぜんぶ けす"><span class="ic">🗑️</span><span class="lbl">ぜんぶけす</span></button>
+</div>
+
+<!-- せってい -->
+<div class="dialog-bg" id="setDlg" hidden>
+  <div class="dialog">
+    <h2>せってい</h2>
+    <div class="mrow"><span class="ml">学年</span>
+      <button class="btn" data-level="sho">小学生（4〜6年）</button>
+      <button class="btn" data-level="chu">中学生（1・2年）</button></div>
+    <div class="mrow"><span class="ml">マスの 大きさ</span>
+      <button class="btn" data-cell="L">大</button>
+      <button class="btn" data-cell="M">中</button>
+      <button class="btn" data-cell="S">小</button></div>
+    <div class="mrow"><span class="ml">つかう 人</span>
+      <button class="btn" data-mode="student">🧒 子ども（1人で）</button>
+      <button class="btn" data-mode="teacher">🧑‍🏫 先生（電子黒板）</button></div>
+    <div class="row"><button class="btn" id="setClose">とじる</button></div>
+  </div>
+</div>
+
+<!-- かくにん -->
+<div class="dialog-bg" id="askDlg" hidden>
+  <div class="dialog">
+    <p id="askMsg"></p>
+    <div class="row"><button class="btn" id="askNo">やめる</button><button class="btn danger" id="askYes">けす</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   きって うごかして かさねて 方眼ボード
+   - 色板（いろいた）は「マスの 交わる点（格子点）」を 頂点に もつ 多角形。
+   - 座標は マスの 数で もつ（1マス＝1）。頂点は いつも 整数なので、
+     面積は 0.5 マスきざみ、長さは √(整数) で ずれなく 計算できる。
+   ===================================================================== */
+
+/* ---------- 色（色覚の ちがいにも 見分けやすい やさしい色） ---------- */
+const COLORS = [
+  { name: 'あか',   fill: '#ef9a9a', line: '#c62828' },
+  { name: 'オレンジ', fill: '#ffcc80', line: '#e65100' },
+  { name: 'きいろ', fill: '#fff59d', line: '#9e8a00' },
+  { name: 'みどり', fill: '#a5d6a7', line: '#2e7d32' },
+  { name: 'あお',   fill: '#90caf9', line: '#1565c0' },
+  { name: 'むらさき', fill: '#ce93d8', line: '#6a1b9a' },
+];
+
+/* ---------- 状態（じょうたい） ---------- */
+const S = {
+  pieces: [],          // 色板 { id, pts:[[x,y],...], c:色の番号 }
+  nextId: 1,
+  tool: 'make',
+  color: 4,
+  sel: null,           // えらんでいる 色板の id
+  making: [],          // つくりかけの 頂点
+  meas: { length: false, angle: false, area: false },
+  level: 'sho',        // sho＝小学生 / chu＝中学生
+  cellKey: 'M',
+  teacher: false,
+};
+const undoStack = [], redoStack = [];
+
+/* ---------- URL で 最初の 状態を きめる（?teacher=1 / ?level=chu / ?cell=L） ---------- */
+const Q = new URLSearchParams(location.search);
+if (Q.get('teacher') === '1' || Q.get('mode') === 'teacher') S.teacher = true;
+if (Q.get('level') === 'chu') S.level = 'chu';
+if (['L', 'M', 'S'].includes(Q.get('cell'))) S.cellKey = Q.get('cell');
+
+/* ---------- 画面の 部品 ---------- */
+const $ = id => document.getElementById(id);
+const wrap = $('boardwrap'), cv = $('cv'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1, CELL = 44, OX = 0, OY = 0, COLS = 0, ROWS = 0;
+
+/* マスの 大きさ（先生モードでは 少し 大きく） */
+function cellSize() {
+  const base = { L: 60, M: 44, S: 30 }[S.cellKey];
+  return S.teacher ? Math.round(base * 1.25) : base;
+}
+
+function resize() {
+  const r = wrap.getBoundingClientRect();
+  DPR = window.devicePixelRatio || 1;
+  W = r.width; H = r.height;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  CELL = cellSize();
+  COLS = Math.max(4, Math.floor((W - 16) / CELL));
+  ROWS = Math.max(4, Math.floor((H - 16) / CELL));
+  OX = Math.round((W - COLS * CELL) / 2);
+  OY = Math.round((H - ROWS * CELL) / 2);
+  draw();
+}
+
+/* マス座標 ⇔ 画面の 点 */
+const toPx = (x, y) => [OX + x * CELL, OY + y * CELL];
+const toGrid = (px, py) => [(px - OX) / CELL, (py - OY) / CELL];
+
+/* ---------- 計算の 道具 ---------- */
+// 面積の 2倍（向きつき）。頂点が 整数なので、かならず 整数になる
+function area2(pts) {
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
+    s += x1 * y2 - x2 * y1;
+  }
+  return s;
+}
+function centroid(pts) {
+  // 図形の 重心（面積の 中心）。ラベルを おく 場所に つかう
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
+    const f = x1 * y2 - x2 * y1;
+    a += f; cx += (x1 + x2) * f; cy += (y1 + y2) * f;
+  }
+  if (a === 0) return [pts[0][0], pts[0][1]];
+  return [cx / (3 * a), cy / (3 * a)];
+}
+// 点が 多角形の 中に あるか
+function inside(pts, x, y) {
+  let c = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+// 2本の 線分が 交わるか（はしが ふれるのも 交わると みる）
+function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+function onSeg(p, a, b) {
+  return Math.min(a[0], b[0]) <= p[0] && p[0] <= Math.max(a[0], b[0]) &&
+         Math.min(a[1], b[1]) <= p[1] && p[1] <= Math.max(a[1], b[1]);
+}
+function segHit(a, b, c, d) {
+  const d1 = cross(c, d, a), d2 = cross(c, d, b), d3 = cross(a, b, c), d4 = cross(a, b, d);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+  if (d1 === 0 && onSeg(a, c, d)) return true;
+  if (d2 === 0 && onSeg(b, c, d)) return true;
+  if (d3 === 0 && onSeg(c, a, b)) return true;
+  if (d4 === 0 && onSeg(d, a, b)) return true;
+  return false;
+}
+// まっすぐ ならんだ 頂点（180°）を とりのぞく
+function tidy(pts) {
+  let p = pts.slice();
+  let changed = true;
+  while (changed && p.length > 3) {
+    changed = false;
+    for (let i = 0; i < p.length; i++) {
+      const a = p[(i - 1 + p.length) % p.length], b = p[i], c = p[(i + 1) % p.length];
+      if (cross(a, b, c) === 0) { p.splice(i, 1); changed = true; break; }
+    }
+  }
+  return p;
+}
+// 自分と 交わらない 形か（へんな 形を ふせぐ）
+function isSimple(pts) {
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    for (let j = i + 1; j < n; j++) {
+      if (j === i || (j + 1) % n === i || j === (i + 1) % n) continue;
+      if (segHit(a, b, pts[j], pts[(j + 1) % n])) return false;
+    }
+  }
+  return true;
+}
+
+/* ---------- 数の 見せ方 ---------- */
+// 面積（2倍の 値 a2 を うけとる）。小学生は「8½」、中学生は「8.5」
+function fmtArea(a2) {
+  a2 = Math.abs(a2);
+  const whole = Math.floor(a2 / 2), half = a2 % 2 === 1;
+  if (S.level === 'chu') return (half ? (a2 / 2).toFixed(1) : String(whole)) + ' cm²';
+  if (!half) return whole + 'マス';
+  return (whole ? whole : '') + '½マス';
+}
+// √n を a√b に なおす
+function simplifyRoot(n) {
+  let a = 1, b = n;
+  for (let k = 2; k * k <= b; k++) while (b % (k * k) === 0) { b /= k * k; a *= k; }
+  return [a, b];
+}
+// 長さ。たて・よこ なら 整数。ななめは 中学生は √、小学生は「やく」
+function fmtLen(dx, dy) {
+  const n = dx * dx + dy * dy;
+  const r = Math.round(Math.sqrt(n));
+  if (r * r === n) return String(r);
+  if (S.level === 'chu') {
+    const [a, b] = simplifyRoot(n);
+    return (a === 1 ? '' : a) + '√' + b;
+  }
+  return 'やく' + Math.sqrt(n).toFixed(1);
+}
+
+/* ---------- もどる・やりなおす ---------- */
+function snapshot() { return JSON.stringify({ p: S.pieces, n: S.nextId }); }
+function pushUndo() {
+  undoStack.push(snapshot());
+  if (undoStack.length > 100) undoStack.shift();
+  redoStack.length = 0;
+  updateButtons();
+}
+function restore(s) {
+  const o = JSON.parse(s);
+  S.pieces = o.p; S.nextId = o.n;
+  if (!S.pieces.find(p => p.id === S.sel)) S.sel = null;
+}
+function undo() {
+  if (S.making.length) { S.making.pop(); draw(); updateHint(); return; }
+  if (!undoStack.length) return;
+  redoStack.push(snapshot()); restore(undoStack.pop()); after();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot()); restore(redoStack.pop()); after();
+}
+function after() { draw(); placeSelbar(); updateButtons(); updateHint(); }
+function updateButtons() {
+  $('undo').disabled = !undoStack.length && !S.making.length;
+  $('redo').disabled = !redoStack.length;
+  $('clearAll').disabled = !S.pieces.length && !S.making.length;
+  $('cancelMake').hidden = !S.making.length;
+}
+
+/* ---------- かく ---------- */
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  drawGrid();
+  for (const p of S.pieces) drawPiece(p);
+  // 測る 値は 色板の 上に まとめて かく（下に かくれないように）
+  for (const p of S.pieces) drawMeasures(p);
+  drawMaking();
+}
+
+function drawGrid() {
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= COLS; i++) {
+    ctx.strokeStyle = i % 5 === 0 ? '#9fa8da' : '#dde1f3';
+    ctx.beginPath(); ctx.moveTo(OX + i * CELL + 0.5, OY); ctx.lineTo(OX + i * CELL + 0.5, OY + ROWS * CELL); ctx.stroke();
+  }
+  for (let j = 0; j <= ROWS; j++) {
+    ctx.strokeStyle = j % 5 === 0 ? '#9fa8da' : '#dde1f3';
+    ctx.beginPath(); ctx.moveTo(OX, OY + j * CELL + 0.5); ctx.lineTo(OX + COLS * CELL, OY + j * CELL + 0.5); ctx.stroke();
+  }
+  // つくる 道具の ときは 格子点を 見せる
+  if (S.tool === 'make') {
+    ctx.fillStyle = '#7986cb';
+    const r = Math.max(2, CELL * 0.06);
+    for (let i = 0; i <= COLS; i++) for (let j = 0; j <= ROWS; j++) {
+      ctx.beginPath(); ctx.arc(OX + i * CELL, OY + j * CELL, r, 0, 7); ctx.fill();
+    }
+  }
+}
+
+function pathOf(pts) {
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => { const [px, py] = toPx(x, y); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+  ctx.closePath();
+}
+
+function drawPiece(p) {
+  const col = COLORS[p.c], picked = p.id === S.sel, lifted = drags.has(p.id);
+  ctx.save();
+  if (lifted) { ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5; }
+  pathOf(p.pts);
+  ctx.globalAlpha = 0.82; ctx.fillStyle = col.fill; ctx.fill();
+  ctx.restore();
+  pathOf(p.pts);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = picked ? 4 : 2.5; ctx.strokeStyle = col.line;
+  ctx.setLineDash(picked ? [10, 6] : []); ctx.stroke(); ctx.setLineDash([]);
+  if (picked) {
+    ctx.fillStyle = col.line;
+    for (const [x, y] of p.pts) { const [px, py] = toPx(x, y); ctx.beginPath(); ctx.arc(px, py, 5, 0, 7); ctx.fill(); }
+  }
+}
+
+function label(text, px, py, size, color) {
+  ctx.font = `900 ${size}px "Hiragino Sans","Yu Gothic","Meiryo",sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineJoin = 'round';
+  ctx.strokeText(text, px, py);
+  ctx.fillStyle = color; ctx.fillText(text, px, py);
+}
+
+function drawMeasures(p) {
+  const pts = p.pts, n = pts.length, col = COLORS[p.c];
+  const sgn = Math.sign(area2(pts)) || 1;       // 頂点の まわる 向き
+  const fs = Math.max(13, Math.min(22, CELL * 0.38)) * (S.teacher ? 1.15 : 1);
+  if (S.meas.area) {
+    const [cx, cy] = centroid(pts), [px, py] = toPx(cx, cy);
+    label(fmtArea(area2(pts)), px, py, fs * 1.15, '#283593');
+  }
+  if (S.meas.length) {
+    for (let i = 0; i < n; i++) {
+      const a = pts[i], b = pts[(i + 1) % n];
+      const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
+      // 辺の 外がわに 少し ずらして かく
+      const nx = dy / L * sgn, ny = -dx / L * sgn;
+      const [px, py] = toPx((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+      label(fmtLen(Math.abs(dx), Math.abs(dy)), px + nx * fs * 0.95, py + ny * fs * 0.95, fs, col.line);
+    }
+  }
+  if (S.meas.angle) {
+    for (let i = 0; i < n; i++) {
+      const a = pts[(i - 1 + n) % n], b = pts[i], c = pts[(i + 1) % n];
+      const v1 = [a[0] - b[0], a[1] - b[1]], v2 = [c[0] - b[0], c[1] - b[1]];
+      let ang = Math.atan2(v1[0] * v2[1] - v1[1] * v2[0], v1[0] * v2[0] + v1[1] * v2[1]) * 180 / Math.PI;
+      // 図形の 内がわの 角に そろえる
+      ang = ang * sgn; if (ang < 0) ang += 360;
+      ang = 360 - ang;
+      if (ang > 359.5) ang -= 360;
+      // 内がわに むかって ラベルを おく
+      const u1 = Math.hypot(...v1), u2 = Math.hypot(...v2);
+      let bx = v1[0] / u1 + v2[0] / u2, by = v1[1] / u1 + v2[1] / u2, bl = Math.hypot(bx, by);
+      if (bl < 1e-6) { bx = -v1[1] / u1; by = v1[0] / u1; bl = 1; }
+      bx /= bl; by /= bl;
+      if (ang > 180) { bx = -bx; by = -by; }
+      const [px, py] = toPx(b[0], b[1]);
+      const deg = Math.round(ang * 10) / 10;
+      const txt = (Number.isInteger(deg) ? deg : deg.toFixed(1)) + '°';
+      label(txt, px + bx * fs * 1.5, py + by * fs * 1.5, fs * 0.85, '#6a1b9a');
+      // 直角の しるし
+      if (Math.abs(ang - 90) < 0.01) {
+        const s = Math.min(CELL * 0.22, 12);
+        const e1 = [v1[0] / u1 * s, v1[1] / u1 * s], e2 = [v2[0] / u2 * s, v2[1] / u2 * s];
+        ctx.beginPath(); ctx.moveTo(px + e1[0], py + e1[1]); ctx.lineTo(px + e1[0] + e2[0], py + e1[1] + e2[1]);
+        ctx.lineTo(px + e2[0], py + e2[1]); ctx.strokeStyle = '#6a1b9a'; ctx.lineWidth = 2; ctx.stroke();
+      }
+    }
+  }
+}
+
+function drawMaking() {
+  const m = S.making;
+  if (rectDrag) {
+    const [a, b] = rectDrag;
+    const pts = [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]];
+    pathOf(pts); ctx.globalAlpha = 0.5; ctx.fillStyle = COLORS[S.color].fill; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.setLineDash([8, 6]); ctx.lineWidth = 3; ctx.strokeStyle = COLORS[S.color].line; ctx.stroke(); ctx.setLineDash([]);
+    const fs = Math.max(14, CELL * 0.4);
+    const [px, py] = toPx((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+    label(Math.abs(b[0] - a[0]) + '×' + Math.abs(b[1] - a[1]), px, py, fs, '#283593');
+    return;
+  }
+  if (!m.length) return;
+  const col = COLORS[S.color];
+  ctx.beginPath();
+  m.forEach(([x, y], i) => { const [px, py] = toPx(x, y); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+  if (hover) { const [px, py] = toPx(hover[0], hover[1]); ctx.lineTo(px, py); }
+  ctx.lineWidth = 3; ctx.strokeStyle = col.line; ctx.setLineDash([8, 6]); ctx.stroke(); ctx.setLineDash([]);
+  m.forEach(([x, y], i) => {
+    const [px, py] = toPx(x, y);
+    ctx.beginPath(); ctx.arc(px, py, i === 0 ? 10 : 6, 0, 7);
+    ctx.fillStyle = i === 0 ? '#fff' : col.line; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = col.line; ctx.stroke();
+  });
+}
+
+/* ---------- つくる ---------- */
+let hover = null, rectDrag = null;
+// 画面の 点に いちばん 近い 格子点（はなれすぎて いたら null）
+function nearLattice(px, py) {
+  const [gx, gy] = toGrid(px, py);
+  const x = Math.round(gx), y = Math.round(gy);
+  if (x < 0 || y < 0 || x > COLS || y > ROWS) return null;
+  if (Math.hypot(gx - x, gy - y) > 0.45) return null;
+  return [x, y];
+}
+function addVertex(pt) {
+  const m = S.making;
+  if (m.length >= 3 && pt[0] === m[0][0] && pt[1] === m[0][1]) { finishMaking(); return; }
+  if (m.length && pt[0] === m[m.length - 1][0] && pt[1] === m[m.length - 1][1]) return;
+  if (m.some(q => q[0] === pt[0] && q[1] === pt[1])) { toast('おなじ 点は 2回 えらべません'); return; }
+  // 新しい 辺が 前の 辺と 交わらないか
+  if (m.length >= 2) {
+    const a = m[m.length - 1];
+    for (let i = 0; i < m.length - 2; i++) if (segHit(a, pt, m[i], m[i + 1])) { toast('辺が 交わって しまいます'); return; }
+  }
+  m.push(pt);
+  after();
+}
+function finishMaking() {
+  const pts = tidy(S.making);
+  if (pts.length < 3 || area2(pts) === 0) { toast('かたちに なりません'); return; }
+  if (!isSimple(pts)) { toast('辺が 交わって しまいます'); return; }
+  addPiece(pts);
+  S.making = [];
+  after();
+}
+function addPiece(pts) {
+  pushUndo();
+  const p = { id: S.nextId++, pts, c: S.color };
+  S.pieces.push(p);
+  return p;
+}
+
+/* ---------- うごかす ---------- */
+const drags = new Map();   // ゆび（pointerId）ごとに 動かしている 色板
+function pieceAt(px, py) {
+  const [gx, gy] = toGrid(px, py);
+  for (let i = S.pieces.length - 1; i >= 0; i--) if (inside(S.pieces[i].pts, gx, gy)) return S.pieces[i];
+  return null;
+}
+function bringFront(p) { S.pieces = S.pieces.filter(q => q !== p); S.pieces.push(p); }
+const selPiece = () => S.pieces.find(p => p.id === S.sel) || null;
+
+// 回す・裏がえす ときの 中心は、重心に いちばん 近い 格子点（頂点が 格子点に のこる）
+function pivot(p) { const [cx, cy] = centroid(p.pts); return [Math.round(cx), Math.round(cy)]; }
+function transformSel(fn) {
+  const p = selPiece(); if (!p) return;
+  pushUndo();
+  const [ox, oy] = pivot(p);
+  p.pts = p.pts.map(([x, y]) => { const [u, v] = fn(x - ox, y - oy); return [u + ox, v + oy]; });
+  keepOnBoard(p);
+  after();
+}
+// 板の 外に 出すぎたら もどす
+function keepOnBoard(p) {
+  const xs = p.pts.map(q => q[0]), ys = p.pts.map(q => q[1]);
+  let dx = 0, dy = 0;
+  if (Math.max(...xs) < 1) dx = 1 - Math.max(...xs);
+  if (Math.min(...xs) > COLS - 1) dx = COLS - 1 - Math.min(...xs);
+  if (Math.max(...ys) < 1) dy = 1 - Math.max(...ys);
+  if (Math.min(...ys) > ROWS - 1) dy = ROWS - 1 - Math.min(...ys);
+  if (dx || dy) p.pts = p.pts.map(([x, y]) => [x + dx, y + dy]);
+}
+
+$('selRotR').onclick = () => transformSel((x, y) => [-y, x]);
+$('selRotL').onclick = () => transformSel((x, y) => [y, -x]);
+$('selFlipH').onclick = () => transformSel((x, y) => [-x, y]);
+$('selFlipV').onclick = () => transformSel((x, y) => [x, -y]);
+$('selCopy').onclick = () => {
+  const p = selPiece(); if (!p) return;
+  pushUndo();
+  const q = { id: S.nextId++, pts: p.pts.map(([x, y]) => [x + 1, y + 1]), c: p.c };
+  keepOnBoard(q);
+  S.pieces.push(q); S.sel = q.id;
+  after();
+};
+$('selDelete').onclick = () => {
+  const p = selPiece(); if (!p) return;
+  pushUndo();
+  S.pieces = S.pieces.filter(q => q !== p); S.sel = null;
+  after();
+};
+
+function placeSelbar() {
+  const bar = $('selbar'), p = S.tool === 'move' ? selPiece() : null;
+  if (!p || drags.size) { bar.hidden = true; return; }
+  bar.hidden = false;
+  const xs = p.pts.map(q => toPx(q[0], q[1])[0]), ys = p.pts.map(q => toPx(q[0], q[1])[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const bw = bar.offsetWidth, bh = bar.offsetHeight;
+  let top = Math.min(...ys) - bh - 12;
+  if (top < 4) top = Math.max(...ys) + 12;
+  if (top + bh > H - 4) top = Math.max(4, H - bh - 4);
+  bar.style.left = Math.max(bw / 2 + 4, Math.min(W - bw / 2 - 4, cx)) + 'px';
+  bar.style.top = top + 'px';
+}
+
+/* ---------- ゆび・マウスの うごき ---------- */
+const downs = new Map();   // つくる 道具：ゆびを おいた 格子点
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  cv.setPointerCapture(e.pointerId);
+  if (S.tool === 'make') {
+    const pt = nearLattice(px, py);
+    downs.set(e.pointerId, { pt, moved: false });
+    return;
+  }
+  if (S.tool === 'move') {
+    const p = pieceAt(px, py);
+    if (!p) { S.sel = null; after(); return; }
+    if ([...drags.values()].some(d => d.piece === p)) return;   // べつの ゆびが もう 動かしている
+    bringFront(p); S.sel = p.id;
+    const [gx, gy] = toGrid(px, py);
+    drags.set(e.pointerId, { piece: p, start: [gx, gy], orig: p.pts.map(q => q.slice()), before: snapshot(), moved: false });
+    $('selbar').hidden = true;
+    draw();
+  }
+});
+cv.addEventListener('pointermove', e => {
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  if (S.tool === 'make') {
+    const d = downs.get(e.pointerId);
+    const pt = nearLattice(px, py);
+    if (d && d.pt && !S.making.length && pt && pt[0] !== d.pt[0] && pt[1] !== d.pt[1]) {
+      // つくりかけが ない ときに ゆびを すべらせると 長方形
+      d.moved = true; rectDrag = [d.pt, pt];
+    } else if (d && d.moved && pt) {
+      rectDrag = [d.pt, pt];
+    }
+    hover = S.making.length && e.pointerType === 'mouse' ? pt : null;
+    draw();
+    return;
+  }
+  const d = drags.get(e.pointerId);
+  if (!d) return;
+  const [gx, gy] = toGrid(px, py);
+  // マス目に そって 1マスずつ 動く（平行移動）
+  const dx = Math.round(gx - d.start[0]), dy = Math.round(gy - d.start[1]);
+  if (dx || dy) d.moved = true;
+  d.piece.pts = d.orig.map(([x, y]) => [x + dx, y + dy]);
+  draw();
+});
+function endPointer(e) {
+  if (S.tool === 'make') {
+    const d = downs.get(e.pointerId); downs.delete(e.pointerId);
+    if (!d) return;
+    if (d.moved && rectDrag) {
+      const [a, b] = rectDrag; rectDrag = null;
+      if (a[0] !== b[0] && a[1] !== b[1]) {
+        const pts = [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]];
+        addPiece(area2(pts) < 0 ? pts.reverse() : pts);
+      }
+      after(); return;
+    }
+    rectDrag = null;
+    if (d.pt && e.type === 'pointerup') addVertex(d.pt);
+    draw();
+    return;
+  }
+  const d = drags.get(e.pointerId);
+  if (!d) return;
+  drags.delete(e.pointerId);
+  if (d.moved) {
+    keepOnBoard(d.piece);
+    undoStack.push(d.before); redoStack.length = 0;
+  }
+  after();
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && hover) { hover = null; draw(); } });
+
+/* ---------- 道具・色・はかる ---------- */
+function setTool(t) {
+  if (['cut', 'paste', 'overlap'].includes(t)) { toast('この 道具は じゅんびちゅうです'); return; }
+  S.tool = t; S.making = []; rectDrag = null; hover = null;
+  if (t !== 'move') S.sel = null;
+  document.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  after();
+}
+document.querySelectorAll('.tool').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+
+function buildPalette() {
+  const pal = $('palette'); pal.innerHTML = '';
+  COLORS.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.className = 'btn col' + (i === S.color ? ' on' : '');
+    b.title = c.name;
+    b.innerHTML = `<span class="dot" style="background:${c.fill};border-color:${c.line}"></span>`;
+    b.onclick = () => {
+      S.color = i;
+      // うごかす 道具で えらんでいる 色板が あれば、その 色を かえる
+      const p = S.tool === 'move' ? selPiece() : null;
+      if (p && p.c !== i) { pushUndo(); p.c = i; }
+      buildPalette(); after();
+    };
+    pal.appendChild(b);
+  });
+}
+
+document.querySelectorAll('[data-meas]').forEach(b => b.onclick = () => {
+  const k = b.dataset.meas; S.meas[k] = !S.meas[k];
+  b.classList.toggle('on', S.meas[k]); draw();
+});
+
+/* ---------- 下の ボタン ---------- */
+$('undo').onclick = undo;
+$('redo').onclick = redo;
+$('cancelMake').onclick = () => { S.making = []; after(); };
+$('clearAll').onclick = () => ask('ぜんぶ けしますか？', () => {
+  pushUndo(); S.pieces = []; S.making = []; S.sel = null; after();
+});
+
+function ask(msg, yes) {
+  $('askMsg').textContent = msg; $('askDlg').hidden = false;
+  $('askNo').onclick = () => { $('askDlg').hidden = true; };
+  $('askYes').onclick = () => { $('askDlg').hidden = true; yes(); };
+}
+
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function updateHint() {
+  let h = '';
+  if (S.tool === 'make') {
+    h = S.making.length
+      ? (S.making.length >= 3 ? 'つぎの 点を タップ。さいしょの 点（白い まる）に もどると できあがり' : 'つぎの 点を タップ')
+      : '点を じゅんに タップして 色板を つくる。点から ゆびを すべらせると 長方形';
+  } else if (S.tool === 'move') {
+    h = selPiece() ? 'ひっぱって 動かす。上の ボタンで まわす・うらがえす。色を タップで 色が かわる' : '色板を タップして えらぶ・ひっぱって 動かす';
+  }
+  $('hint').textContent = h;
+}
+
+/* ---------- せってい ---------- */
+function applySettings() {
+  document.body.classList.toggle('teacher', S.teacher);
+  $('setName').textContent = (S.level === 'chu' ? '中学生' : '小学生') + (S.teacher ? '・先生' : '');
+  document.querySelectorAll('[data-level]').forEach(b => b.classList.toggle('on', b.dataset.level === S.level));
+  document.querySelectorAll('[data-cell]').forEach(b => b.classList.toggle('on', b.dataset.cell === S.cellKey));
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', (b.dataset.mode === 'teacher') === S.teacher));
+  buildPalette();
+  requestAnimationFrame(() => { resize(); placeSelbar(); });
+}
+$('setBtn').onclick = () => { $('setDlg').hidden = false; };
+$('setClose').onclick = () => { $('setDlg').hidden = true; };
+document.querySelectorAll('[data-level]').forEach(b => b.onclick = () => { S.level = b.dataset.level; applySettings(); });
+document.querySelectorAll('[data-cell]').forEach(b => b.onclick = () => { S.cellKey = b.dataset.cell; applySettings(); });
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.teacher = b.dataset.mode === 'teacher'; applySettings(); });
+
+/* キーボード（パソコン用）：Ctrl+Z で もどる、Esc で やめる */
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if (e.key === 'Escape') { S.making = []; S.sel = null; after(); }
+  else if (e.key === 'Delete' && selPiece()) $('selDelete').onclick();
+});
+
+window.addEventListener('resize', () => { resize(); placeSelbar(); });
+applySettings();
+updateHint(); updateButtons();
+</script>
+</body>
+</html>
