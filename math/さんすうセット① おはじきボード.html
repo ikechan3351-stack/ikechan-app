@@ -928,6 +928,7 @@ toolbox.addEventListener('pointerdown', e => {
   if (!b || isPalm(e)) return;
   e.preventDefault();
   try { toolbox.setPointerCapture(e.pointerId); } catch (_) {}
+  { const old = tbDrags.get(e.pointerId); if (old && old.ghost) old.ghost.remove(); }
   tbDrags.set(e.pointerId, { type: b.dataset.type, sx: e.clientX, sy: e.clientY, ghost: null, cx: e.clientX, cy: e.clientY });
 });
 toolbox.addEventListener('pointermove', e => {
@@ -1502,6 +1503,37 @@ $('resumeNo').onclick = () => { $('resumeBg').hidden = true; try { localStorage.
     $('resumeBg').hidden = false;
   }
 }
+
+/* =========================== ゆびを はなした しらせが こなかった ときの そなえ =========================== */
+// ブラウザや タブレットに よっては、ゆび・マウスを はなした しらせ（pointerup）が とどかない ことがある
+// （画面の 外で はなした・べつの アプリに きりかえた・つかむ 権利が うしなわれた など）。
+// そのままだと 道具箱から 出した 半とうめいの 絵や、つかんだ ものが 画面に のこって うごかなく なるので、ここで かならず おわらせる。
+(() => {
+  const endAll = (pid, type) => {
+    const ev = { pointerId: pid, type };
+    if (tbDrags.has(pid)) endTb(ev);
+    if (drags.has(pid)) endDrag(ev);
+    if (drawing.has(pid)) endDraw(ev);
+    
+  };
+  const has = pid => tbDrags.has(pid) || drags.has(pid) || drawing.has(pid);
+  // はなした しらせが、ふだんの 場所（道具箱・ボード）に とどかなかった とき
+  window.addEventListener('pointerup', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointerup'); });
+  window.addEventListener('pointercancel', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointercancel'); });
+  // つかむ 権利が きえた（はなした しらせの あとにも くるので、少し まって まだ のこって いる ときだけ）
+  for (const el of [toolbox, stage, ink]) el.addEventListener('lostpointercapture', e => {
+    const pid = e.pointerId;
+    setTimeout(() => { if (has(pid)) endAll(pid, 'pointerup'); }, 0);
+  });
+  // マウスの ボタンを はなして いるのに、まだ つかんで いる ことに なって いる
+  window.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && e.buttons === 0 && has(e.pointerId)) endAll(e.pointerId, 'pointerup'); });
+  // おなじ ゆび（マウス）で また おした：前の つかみが のこって いたら 先に おわらせる
+  window.addEventListener('pointerdown', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointercancel'); }, true);
+  // べつの アプリ・タブに きりかえた
+  const all = () => { for (const pid of new Set([...tbDrags.keys(), ...drags.keys(), ...drawing.keys()])) endAll(pid, 'pointercancel'); };
+  window.addEventListener('blur', all);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') all(); });
+})();
 </script>
 </body>
 </html>
