@@ -44,6 +44,7 @@
   .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn.draw.on { background: var(--draw); border-color: var(--draw); }
   .btn.minnum.on { background: #fff3f2; border-color: var(--long); color: #c62828; border-width: 3px; }
+  .btn.toggle.on { background: #eef0fb; border-color: var(--accent); color: var(--accent-dark); border-width: 3px; }
   /* ペンの いろ ボタン */
   .pen { min-width: 44px; width: 44px; padding: 0; }
   .pen .dot { width: 24px; height: 24px; border-radius: 50%; border: 3px solid rgba(0,0,0,0.15); }
@@ -134,6 +135,12 @@
   .tcard.open { background: #fff; color: var(--ink); }
   .tcard.odd { color: #8e44ad; font-size: 28px; }
   .tcard small { font-size: 20px; color: #8e44ad; }
+  /* ごぜん・ごご の 札（とけいの 右上。タップで きりかえ） */
+  .ampm { position: absolute; transform: translateX(-50%); pointer-events: auto; min-width: 110px; height: 52px;
+          border-radius: 26px; font-size: 28px; font-weight: 900; display: flex; align-items: center; justify-content: center;
+          cursor: pointer; touch-action: manipulation; padding: 0 14px; box-shadow: 0 3px 0 rgba(0,0,0,0.12); white-space: nowrap; }
+  .ampm.am { background: #fff8e1; border: 3px solid #f9a825; color: #b26a00; }
+  .ampm.pm { background: #ede7f6; border: 3px solid #5e35b1; color: #4527a0; }
   /* はりが べつべつに うごく ときの しらせ */
   .apart { position: absolute; left: 18px; top: 14px; font-size: 20px; font-weight: 900; color: #6a1b9a;
            background: #f3e5f5; border: 2px dashed #ab47bc; border-radius: 12px; padding: 4px 12px; }
@@ -219,6 +226,8 @@
     <button class="btn" id="count2"><span class="ic">🕐🕐</span>2つ</button>
   </div>
   <button class="btn minnum" id="minNumBtn" title="ふんの すうじを だす・けす"><span class="ic">🔢</span>ふんの すうじ</button>
+  <button class="btn toggle" id="shadowBtn" title="おわりの とけいに、はじめの とけいの はりを うすく だす"><span class="ic">◐</span>かげのはり</button>
+  <button class="btn toggle" id="ampmBtn" title="ごぜん・ごご の 札を だす・けす"><span class="ic">🌞</span>ごぜん・ごご</button>
   <div class="group">
     <button class="btn" id="undo" title="もどる（Ctrl+Z）" disabled><span class="ic">↩️</span>もどる</button>
     <button class="btn" id="redo" title="やりなおす（Ctrl+Y）" aria-label="やりなおす" disabled><span class="ic">↪️</span></button>
@@ -372,6 +381,7 @@ const WORDS = [
   ['ちょうど', '#2e7d32', '#2e7d32'], ['まだ', '#263238', '#5c6bc0'], ['すぎ', '#263238', '#5c6bc0'],
   ['はじめ', '#3949ab', '#3949ab'], ['おわり', '#3949ab', '#3949ab'], ['から', '#263238', '#5c6bc0'], ['まで', '#263238', '#5c6bc0'],
   ['ふんかん', '#263238', '#5c6bc0'], ['ぷんかん', '#263238', '#5c6bc0'], ['じかん', '#263238', '#5c6bc0'],
+  ['ごぜん', '#b26a00', '#f9a825'], ['ごご', '#4527a0', '#5e35b1'], ['しょうご', '#4527a0', '#5e35b1'],   // 2ねん（ごぜん・ごご の 札と おなじ いろ）
 ];
 WORDS.forEach(([t, c, b], i) => { PIECES['w' + i] = { name: t, kind: 'word', w: wordW(t), h: 64, svg: svgWord(t, c, b) }; });
 // 1ねん で つかう ことば（2ねん は ぜんぶ）
@@ -405,13 +415,20 @@ const TEACHER = params.get('teacher') === '1';
 if (TEACHER) document.body.classList.add('teacher');
 
 /* =========================== とけいの 状態 ===========================
-   t  … 0じ0ふん からの ふん（0〜719）。ながい はりは いつも t から きまる。
+   t  … ごぜん0じ0ふん からの ふん（0〜1439）。0〜719 が ごぜん、720〜1439 が ごご。
+         ながい はりは いつも t から きまる。はりを まわして 12を こえると ごぜん・ごご も かわる。
    hd … みじかい はりの 角度（0〜360。12が 0）。「べつべつ」の ときだけ つかう。
          「いっしょ」の ときは t から きまる（1ぷんで 0.5ど すすむ）。 */
 let clocks = [ { t: 180, hd: 90 }, { t: 180, hd: 90 } ];   // はじめは 3じ
 let count = params.get('clocks') === '2' ? 2 : 1;          // とけいの かず
 let grade = params.get('grade') === '2' ? 2 : 1;           // がくねん（1ねん は とけい 1つ だけ）
 let minNum = false;                                        // ふんの すうじを 出しているか（子どもが きりかえ）
+let shadow = false;                                        // かげのはり（2ねん・とけい 2つ の とき）
+let ampm = false;                                          // ごぜん・ごご の 札（2ねん）
+const showShadow = () => shadow && grade === 2 && count === 2;
+const showAmpm = () => ampm && grade === 2;
+const DAY = 1440, HALF = 720;
+const isPm = c => c.t >= HALF;
 const opt = {                                              // 先生の せってい（?link=0 ?card=0 ?minnum=0 でも きめられる）
   link: params.get('link') !== '0',      // はりを いっしょに うごかす
   card: params.get('card') !== '0',      // こたえカードを 出す
@@ -422,7 +439,9 @@ const opened = [false, false];         // こたえカードを めくって い
 
 const mod = (a, n) => ((a % n) + n) % n;
 const minuteDeg = c => (c.t % 60) * 6;
-const hourDeg = c => opt.link ? mod(c.t, 720) * 0.5 : c.hd;
+const hourDeg = c => opt.link ? mod(c.t, HALF) * 0.5 : c.hd;
+// 「べつべつ」の ときは、ながい はりが 12を こえても ごぜん・ごご は かえない（みじかい はりが うごかないので）
+const keepHalf = (c, t) => opt.link ? mod(t, DAY) : (isPm(c) ? HALF : 0) + mod(t, HALF);
 // 「べつべつ」→「いっしょ」に もどす ときや、よめるか しらべる ときに つかう：
 // みじかい はりが さしている「じ」（ながい はりの ふんに あう 位置との ずれが 4ど いないなら よめる）
 function readHour(c) {
@@ -433,11 +452,15 @@ function readHour(c) {
 }
 // ふん の よみかた（1・3・4・6・8・0 は ぷん、2・5・7・9 は ふん）
 const funReading = m => [1, 3, 4, 6, 8, 0].includes(m % 10) ? 'ぷん' : 'ふん';
+// ごぜん・ごご を 出す ときは 教科書と おなじく 0〜11じ（ごご0じ＝しょうご）。出さない ときは 1〜12じ
 function readClock(c) {
   const m = c.t % 60, r = readHour(c);
   if (!r.ok) return null;                       // ながい はり と みじかい はりが あわない（よめない とけい）
-  const h = r.h === 0 ? 12 : r.h;
-  return m === 0 ? `${h}じ` : `${h}じ ${m}${funReading(m)}`;
+  const ap = showAmpm();
+  const h = ap ? r.h : (r.h === 0 ? 12 : r.h);
+  const body = m === 0 ? `${h}じ` : `${h}じ ${m}${funReading(m)}`;
+  if (!ap) return body;
+  return (isPm(c) ? 'ごご ' : 'ごぜん ') + body + (isPm(c) && h === 0 && m === 0 ? '（しょうご）' : '');
 }
 
 /* =========================== はいけい（ボードの 下に しく かみ） =========================== */
@@ -563,12 +586,18 @@ function faceSvg(withMin) {
   }
   return s;
 }
-function handsSvg(c) {
-  return `<g transform="rotate(${hourDeg(c)})"><line x1="0" y1="22" x2="0" y2="-128" stroke="#1e63d6" stroke-width="22" stroke-linecap="round"/></g>
-    <g transform="rotate(${minuteDeg(c)})"><line x1="0" y1="28" x2="0" y2="-206" stroke="#e53935" stroke-width="11" stroke-linecap="round"/></g>
+const HOUR_HAND = '<line x1="0" y1="22" x2="0" y2="-128" stroke="#1e63d6" stroke-width="22" stroke-linecap="round"/>';
+const MIN_HAND = '<line x1="0" y1="28" x2="0" y2="-206" stroke="#e53935" stroke-width="11" stroke-linecap="round"/>';
+// ghost：かげのはり に する とけい（はじめの とけい）。うすく、本物の はりの 下に かく
+function handsSvg(c, ghost) {
+  const gh = ghost ? `<g class="gh" opacity="0.28" transform="rotate(${hourDeg(ghost)})">${HOUR_HAND}</g>
+    <g class="gm" opacity="0.28" transform="rotate(${minuteDeg(ghost)})">${MIN_HAND}</g>` : '';
+  return `${gh}<g class="h" transform="rotate(${hourDeg(c)})">${HOUR_HAND}</g>
+    <g class="m" transform="rotate(${minuteDeg(c)})">${MIN_HAND}</g>
     <circle cx="0" cy="0" r="15" fill="#263238"/><circle cx="0" cy="0" r="6" fill="#fff"/>`;
 }
-const clockSvg = (c, withMin) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-VB} ${-VB} ${VB * 2} ${VB * 2}">${faceSvg(withMin)}${handsSvg(c)}</svg>`;
+const ghostFor = i => i === 1 && showShadow() ? clocks[0] : null;
+const clockSvg = (c, withMin, ghost) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-VB} ${-VB} ${VB * 2} ${VB * 2}">${faceSvg(withMin)}${handsSvg(c, ghost)}</svg>`;
 
 // とけいの 部品（絵・名ふだ・ボタン・こたえカード）を 作りなおす
 const clockEls = [];
@@ -586,8 +615,20 @@ function renderClocks() {
     const box = document.createElement('div');
     box.className = 'clock';
     Object.assign(box.style, { left: g.cx - g.R + 'px', top: g.cy - g.R + 'px', width: g.R * 2 + 'px', height: g.R * 2 + 'px' });
-    box.innerHTML = clockSvg(c, minNum);
+    box.innerHTML = clockSvg(c, minNum, ghostFor(i));
     clocksEl.appendChild(box);
+    let apEl = null;
+    if (showAmpm()) {
+      apEl = document.createElement('div');
+      Object.assign(apEl.style, { left: g.cx + g.R - 50 + 'px', top: g.cy - g.R - 14 + 'px' });   // 右上の すみ
+      apEl.onclick = () => {   // タップで ごぜん ⇄ ごご（はりは うごかない）
+        if (mode !== 'move') return;
+        pushUndo(snapshot());
+        clocks[i].t = mod(clocks[i].t + HALF, DAY);
+        clockChanged(i);
+      };
+      clocksEl.appendChild(apEl);
+    }
     if (count === 2) {
       const lab = document.createElement('div');
       lab.className = 'clabel';
@@ -614,18 +655,32 @@ function renderClocks() {
       card.onclick = () => { if (mode === 'move') { opened[i] = !opened[i]; updateCard(i); } };
       clocksEl.appendChild(card);
     }
-    clockEls[i] = { box, card };
+    clockEls[i] = { box, card, apEl };
     updateCard(i);
+    updateAmpm(i);
   }
   updateTopButtons();
+}
+function updateAmpm(i) {
+  const e = clockEls[i];
+  if (!e || !e.apEl) return;
+  e.apEl.className = 'ampm ' + (isPm(clocks[i]) ? 'pm' : 'am');
+  e.apEl.textContent = isPm(clocks[i]) ? '🌙 ごご' : '☀️ ごぜん';
 }
 // はりだけ かきなおす（ひっぱって いる 間は これだけ）
 function updateHands(i) {
   const e = clockEls[i];
   if (!e) return;
-  const gs = e.box.querySelectorAll('svg > g');
-  gs[0].setAttribute('transform', `rotate(${hourDeg(clocks[i])})`);
-  gs[1].setAttribute('transform', `rotate(${minuteDeg(clocks[i])})`);
+  const set = (sel, deg) => { const g = e.box.querySelector(sel); if (g) g.setAttribute('transform', `rotate(${deg})`); };
+  set('g.h', hourDeg(clocks[i]));
+  set('g.m', minuteDeg(clocks[i]));
+  updateAmpm(i);
+  // はじめの とけいを うごかしたら、おわりの とけいの かげのはりも うごかす
+  if (i === 0 && showShadow() && clockEls[1]) {
+    const e1 = clockEls[1].box;
+    e1.querySelector('g.gh').setAttribute('transform', `rotate(${hourDeg(clocks[0])})`);
+    e1.querySelector('g.gm').setAttribute('transform', `rotate(${minuteDeg(clocks[0])})`);
+  }
 }
 function cardText(i) {
   if (!opened[i]) return { html: '？　<small>タップで めくる</small>', cls: '' };
@@ -649,7 +704,7 @@ function clockChanged(i) {
 function stepClock(i, d) {
   if (mode !== 'move') return;
   pushUndo(snapshot());
-  clocks[i].t = mod(clocks[i].t + d, 720);   // 「べつべつ」の ときは ながい はりだけ うごく
+  clocks[i].t = keepHalf(clocks[i], clocks[i].t + d);   // 「べつべつ」の ときは ながい はりだけ うごく
   clockChanged(i);
 }
 function updateTopButtons() {
@@ -658,6 +713,10 @@ function updateTopButtons() {
   $('count2').classList.toggle('on', count === 2);
   $('minNumBtn').hidden = !opt.minBtn;
   $('minNumBtn').classList.toggle('on', minNum);
+  $('shadowBtn').hidden = !(grade === 2 && count === 2);
+  $('shadowBtn').classList.toggle('on', shadow);
+  $('ampmBtn').hidden = grade !== 2;
+  $('ampmBtn').classList.toggle('on', ampm);
 }
 
 /* =========================== はりを ひっぱる =========================== */
@@ -697,10 +756,10 @@ function moveHand(e) {
   const c = clocks[d.i];
   if (d.hand === 'm') {
     d.acc += da / 6;                                  // ながい はり：6どで 1ぷん
-    c.t = mod(Math.round(d.acc), 720);
+    c.t = keepHalf(c, Math.round(d.acc));
   } else if (opt.link) {
     d.acc += da * 2;                                  // みじかい はり（いっしょ）：0.5どで 1ぷん → ながい はりは 12ばいで まわる
-    c.t = mod(Math.round(d.acc), 720);
+    c.t = mod(Math.round(d.acc), DAY);
   } else {
     d.acc += da;                                      // みじかい はり（べつべつ）：0.5どずつ
     c.hd = mod(Math.round(d.acc * 2) / 2, 360);
@@ -832,6 +891,7 @@ function clockAvoid() {
     circles.push({ x: g.cx, y: g.cy, r: g.R * (minNum ? 285 : FACE + 6) / VB + 8 });
     rects.push({ l: g.cx - 220, t: g.cy + g.R, r: g.cx + 220, b: g.cy + g.R + 150 });
     if (count === 2) rects.push({ l: g.cx - g.R, t: g.cy - g.R - 16, r: g.cx - g.R + 110, b: g.cy - g.R + 40 });
+    if (showAmpm()) rects.push({ l: g.cx + g.R - 140, t: g.cy - g.R - 18, r: g.cx + g.R + 40, b: g.cy - g.R + 42 });
   }
   if (!opt.link) rects.push({ l: 0, t: 0, r: 330, b: 56 });
   return { circles, rects };
@@ -858,7 +918,7 @@ function freeSpot(type) {
 const undoStack = [], redoStack = [];
 function snapshot() {
   return { items: items.map(i => ({ ...i })), strokes: strokes.map(s => ({ color: s.color, pts: s.pts.slice() })),
-           clocks: clocks.map(c => ({ ...c })), count, minNum };
+           clocks: clocks.map(c => ({ ...c })), count, minNum, shadow, ampm };
 }
 function pushUndo(snap) {
   scheduleSave();
@@ -874,6 +934,7 @@ function restore(snap) {
   clocks = snap.clocks.map(c => ({ ...c }));
   count = grade === 1 ? 1 : snap.count;
   minNum = snap.minNum && opt.minBtn;
+  shadow = !!snap.shadow; ampm = !!snap.ampm;
   opened[0] = opened[1] = false;
   zTop = items.reduce((m, i) => Math.max(m, i.z), 1);
   rebuild();
@@ -1197,6 +1258,17 @@ $('minNumBtn').onclick = () => {
   minNum = !minNum;
   renderClocks();
 };
+$('shadowBtn').onclick = () => {
+  pushUndo(snapshot());
+  shadow = !shadow;
+  renderClocks();
+};
+$('ampmBtn').onclick = () => {
+  pushUndo(snapshot());
+  ampm = !ampm;
+  opened[0] = opened[1] = false;   // カードの よみかたが かわるので「？」に もどす
+  renderClocks();
+};
 
 // カードと せんを かたづける（とけいは のこす。もどる で もどせる）
 $('clearAll').onclick = () => { if (items.length || strokes.length) $('confirmBg').hidden = false; };
@@ -1228,8 +1300,8 @@ function renderSet() {
 function setLink(on) {
   if (opt.link === on) return;
   for (const c of clocks) {
-    if (on) c.t = readHour(c).h * 60 + c.t % 60;   // いっしょ に もどす：みじかい はりに いちばん ちかい「じ」に あわせる
-    else c.hd = mod(c.t, 720) * 0.5;               // べつべつ に する：いまの 位置から
+    if (on) c.t = (isPm(c) ? HALF : 0) + readHour(c).h * 60 + c.t % 60;   // いっしょ に もどす：みじかい はりに いちばん ちかい「じ」に あわせる
+    else c.hd = mod(c.t, HALF) * 0.5;               // べつべつ に する：いまの 位置から
   }
   opt.link = on;
   undoStack.length = 0; redoStack.length = 0; updateButtons();   // しくみが かわるので もどる は リセット
@@ -1361,7 +1433,7 @@ function stateData() {
   return {
     v: 1,
     b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color],
-    g: grade, n: count, f: minNum ? 1 : 0,
+    g: grade, n: count, f: minNum ? 1 : 0, h: shadow ? 1 : 0, a: ampm ? 1 : 0,
     o: [opt.link ? 1 : 0, opt.card ? 1 : 0, opt.minBtn ? 1 : 0],
     k: clocks.map(c => [c.t, c.hd]),
     i: items.map(it => it.type === 'text' ? [it.type, r(it.x), r(it.y), it.text, it.fs] : [it.type, r(it.x), r(it.y)]),
@@ -1394,12 +1466,13 @@ function applyState(data) {
   if (Array.isArray(data.o)) { opt.link = data.o[0] !== 0; opt.card = data.o[1] !== 0; opt.minBtn = data.o[2] !== 0; }
   if (Array.isArray(data.k)) {
     data.k.slice(0, 2).forEach((a, i) => {
-      if (Array.isArray(a) && num(a[0]) !== null) clocks[i].t = mod(Math.round(a[0]), 720);
+      if (Array.isArray(a) && num(a[0]) !== null) clocks[i].t = mod(Math.round(a[0]), DAY);
       if (Array.isArray(a) && num(a[1]) !== null) clocks[i].hd = mod(Math.round(a[1] * 2) / 2, 360);
     });
   }
   count = grade === 2 && data.n === 2 ? 2 : 1;
   minNum = data.f === 1 && opt.minBtn;
+  shadow = data.h === 1; ampm = data.a === 1;
   opened[0] = opened[1] = false;
   items = []; strokes = [];
   for (const a of (Array.isArray(data.i) ? data.i : []).slice(0, 400)) {
@@ -1566,8 +1639,16 @@ async function drawClocks(ctx) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (let i = 0; i < count; i++) {
     const g = geom(i);
-    const img = await svgImage(clockSvg(clocks[i], minNum));
+    const img = await svgImage(clockSvg(clocks[i], minNum, ghostFor(i)));
     if (img) ctx.drawImage(img, g.cx - g.R, g.cy - g.R, g.R * 2, g.R * 2);
+    if (showAmpm()) {
+      const pm = isPm(clocks[i]), txt = pm ? '🌙 ごご' : '☀️ ごぜん';
+      ctx.font = `900 28px ${FONT}`;
+      const w = Math.max(110, ctx.measureText(txt).width + 28), ax = g.cx + g.R - 50, ay = g.cy - g.R - 14;
+      roundBox(ctx, ax - w / 2, ay, w, 52, 26, pm ? '#ede7f6' : '#fff8e1', pm ? '#5e35b1' : '#f9a825', 3);
+      ctx.fillStyle = pm ? '#4527a0' : '#b26a00';
+      ctx.fillText(txt, ax, ay + 27);
+    }
     if (count === 2) {
       ctx.font = `900 30px ${FONT}`;
       const lab = i === 0 ? 'はじめ' : 'おわり', w = ctx.measureText(lab).width + 36;
