@@ -127,6 +127,7 @@
     <button class="btn" data-meas="area" title="面積（マスの数）を 見せる"><span class="ic">🟦</span><span class="lbl">面積</span></button>
   </div>
   <button class="btn on" id="ghostBtn" title="切ったり 動かしたり する 前の 形を うすく 見せる"><span class="ic">⬚</span><span class="lbl">もとの形</span></button>
+  <button class="btn" id="recBtn" title="動かした ときの 移動（ずらす・まわす・うらがえす）と、対応する 点を 見せる"><span class="ic">🧭</span><span class="lbl">移動</span></button>
   <div class="spacer"></div>
 </div>
 
@@ -137,7 +138,7 @@
     <button class="tool" data-tool="move"><span class="ic">👆</span>うごかす</button>
     <button class="tool" data-tool="cut"><span class="ic">✂️</span>きる</button>
     <button class="tool" data-tool="paste"><span class="ic">🧩</span>はる</button>
-    <button class="tool soon" data-tool="overlap" title="パート3で 作ります"><span class="ic">🔍</span>かさねる</button>
+    <button class="tool" data-tool="overlap"><span class="ic">🔍</span>かさねる</button>
   </div>
   <div class="boardwrap" id="boardwrap">
     <canvas id="cv"></canvas>
@@ -218,6 +219,9 @@ const S = {
   nextG: 1,
   ghost: true,         // もとの形の 影を 見せるか
   pasteA: null,        // はる 道具で えらんだ 1まいめの id
+  ovA: null, ovB: null, // かさねる 道具で えらんだ 2まい
+  record: false,       // 移動の 記録を 見せるか
+  lastMove: null,      // さいごの 移動 { id, before, after, kind, ... }
   tool: 'make',
   color: 4,
   sel: null,           // えらんでいる 色板の id
@@ -233,6 +237,7 @@ const undoStack = [], redoStack = [];
 const Q = new URLSearchParams(location.search);
 if (Q.get('teacher') === '1' || Q.get('mode') === 'teacher') S.teacher = true;
 if (Q.get('level') === 'chu') S.level = 'chu';
+if (Q.get('record') === '1') S.record = true;
 if (['L', 'M', 'S'].includes(Q.get('cell'))) S.cellKey = Q.get('cell');
 
 /* ---------- 画面の 部品 ---------- */
@@ -401,10 +406,12 @@ function draw() {
   if (S.ghost) drawGhosts();
   for (const p of S.pieces) drawPiece(p);
   if (S.tool === 'paste') drawPasteMarks();
+  if (S.record && S.tool === 'move' && !drags.size) drawRecord();
   // 測る 値は 色板の 上に まとめて かく（下に かくれないように）
   for (const p of S.pieces) drawMeasures(p);
   drawMaking();
   drawCutLine();
+  if (S.tool === 'overlap') drawOverlap();
 }
 
 // もとの形の 影（うすい 灰色の 点線）。色板が 1まいも のこって いない 形は かかない
@@ -790,13 +797,21 @@ const selPiece = () => S.pieces.find(p => p.id === S.sel) || null;
 
 // 回す・裏がえす ときの 中心は、重心に いちばん 近い 格子点（頂点が 格子点に のこる）
 function pivot(p) { const [cx, cy] = centroid(p.pts); return [Math.round(cx), Math.round(cy)]; }
-function transformSel(fn) {
+function transformSel(fn, info) {
   const p = selPiece(); if (!p) return;
   pushUndo();
+  const before = p.pts.map(q => q.slice());
   const [ox, oy] = pivot(p);
   p.pts = p.pts.map(([x, y]) => { const [u, v] = fn(x - ox, y - oy); return [u + ox, v + oy]; });
   keepOnBoard(p);
+  // 板の 外に 出て もどした ときは 平行移動も まざるので、記録は のこさない
+  const pure = p.pts.every((q, i) => { const [u, v] = fn(before[i][0] - ox, before[i][1] - oy); return q[0] === u + ox && q[1] === v + oy; });
+  setLastMove(p, before, pure ? Object.assign({ o: [ox, oy] }, info) : null);
   after();
+}
+// さいごの 移動を おぼえる（頂点の 番号どうしが 対応する 点）
+function setLastMove(p, before, info) {
+  S.lastMove = info ? Object.assign({ id: p.id, before, after: p.pts.map(q => q.slice()) }, info) : null;
 }
 // 板の 外に 出すぎたら もどす
 function keepOnBoard(p) {
@@ -809,10 +824,11 @@ function keepOnBoard(p) {
   if (dx || dy) p.pts = p.pts.map(([x, y]) => [x + dx, y + dy]);
 }
 
-$('selRotR').onclick = () => transformSel((x, y) => [-y, x]);
-$('selRotL').onclick = () => transformSel((x, y) => [y, -x]);
-$('selFlipH').onclick = () => transformSel((x, y) => [-x, y]);
-$('selFlipV').onclick = () => transformSel((x, y) => [x, -y]);
+// 画面は 下が y の ＋ なので、(x,y)→(-y,x) は 時計回り
+$('selRotR').onclick = () => transformSel((x, y) => [-y, x], { kind: 'rot', cw: true });
+$('selRotL').onclick = () => transformSel((x, y) => [y, -x], { kind: 'rot', cw: false });
+$('selFlipH').onclick = () => transformSel((x, y) => [-x, y], { kind: 'flip', axis: 'v' });
+$('selFlipV').onclick = () => transformSel((x, y) => [x, -y], { kind: 'flip', axis: 'h' });
 $('selCopy').onclick = () => {
   const p = selPiece(); if (!p) return;
   pushUndo();
@@ -843,6 +859,174 @@ function placeSelbar() {
   bar.style.top = top + 'px';
 }
 
+/* =====================================================================
+   かさねる：2まいが 合同か しらべて、1まいを もう1まいに 重ねて 見せる
+   - 頂点ごとに（つぎの 辺の 長さ²、前の 辺との 内積、外積）を ならべて くらべる。
+     ぜんぶ 整数なので、まちがいなく くらべられる。
+   - うらがえした 形とも くらべる（うらがえさないと 重ならない 合同も ある）。
+   ===================================================================== */
+function orientPos(pts) {
+  // 頂点の 番号を つけたまま、向きを そろえる
+  const idx = pts.map((_, i) => i);
+  return area2(pts) > 0 ? idx : idx.reverse();
+}
+function signature(pts, idx) {
+  const n = idx.length, sg = [];
+  for (let k = 0; k < n; k++) {
+    const a = pts[idx[(k - 1 + n) % n]], b = pts[idx[k]], c = pts[idx[(k + 1) % n]];
+    const e1 = [b[0] - a[0], b[1] - a[1]], e2 = [c[0] - b[0], c[1] - b[1]];
+    sg.push((e2[0] * e2[0] + e2[1] * e2[1]) + ',' + (e1[0] * e2[0] + e1[1] * e2[1]) + ',' + (e1[0] * e2[1] - e1[1] * e2[0]));
+  }
+  return sg;
+}
+// 合同なら { flip, pairs:[[Aの頂点, Bの頂点], ...] }、ちがえば null
+function congruence(A, B) {
+  if (A.length !== B.length) return null;
+  const ia = orientPos(A), sa = signature(A, ia), n = A.length;
+  for (const flip of [false, true]) {
+    const Bm = flip ? B.map(([x, y]) => [-x, y]) : B;
+    const ib = orientPos(Bm), sb = signature(Bm, ib);
+    for (let k = 0; k < n; k++) {
+      if (sa.every((v, i) => v === sb[(i + k) % n])) return { flip, pairs: ia.map((a, i) => [a, ib[(i + k) % n]]) };
+    }
+  }
+  return null;
+}
+let ovAnim = null;   // { t0, res, a, b }
+function startOverlap() {
+  const a = S.pieces.find(p => p.id === S.ovA), b = S.pieces.find(p => p.id === S.ovB);
+  if (!a || !b) return;
+  const res = congruence(a.pts, b.pts);
+  ovAnim = { t0: performance.now(), res, a, b };
+  requestAnimationFrame(ovLoop);
+}
+function ovLoop() { draw(); if (ovAnim && performance.now() - ovAnim.t0 < 2000) requestAnimationFrame(ovLoop); }
+// B を A に 重ねる とちゅうの 形（t：0〜1）
+function ovShape(res, a, b, t) {
+  const B = b.pts, A = a.pts;
+  const [cx, cy] = centroid(B);
+  const tf = res.flip ? Math.min(1, t / 0.35) : 1;                 // うらがえす（さいしょの 35%）
+  const tr = res.flip ? Math.max(0, (t - 0.35) / 0.65) : t;        // まわして ずらす
+  const ease = u => u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+  const sx = res.flip ? 1 - 2 * ease(tf) : 1;
+  // うらがえした あとの 形で、A に 重ねる ための 回転角と 移動
+  const Bf = B.map(([x, y]) => [res.flip ? 2 * cx - x : x, y]);
+  const [p0, q0] = res.pairs[0], [p1, q1] = res.pairs[1];
+  const angA = Math.atan2(A[p1][1] - A[p0][1], A[p1][0] - A[p0][0]);
+  const angB = Math.atan2(Bf[q1][1] - Bf[q0][1], Bf[q1][0] - Bf[q0][0]);
+  let th = angA - angB; while (th > Math.PI) th -= 2 * Math.PI; while (th <= -Math.PI) th += 2 * Math.PI;
+  const [ax, ay] = centroid(A), e = ease(tr), c = Math.cos(th * e), s = Math.sin(th * e);
+  const mx = cx + (ax - cx) * e, my = cy + (ay - cy) * e;
+  return B.map(([x, y]) => {
+    const u = (x - cx) * sx, v = y - cy;
+    return [mx + u * c - v * s, my + u * s + v * c];
+  });
+}
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function vertexLetters(pts, names, color) {
+  const [cx, cy] = centroid(pts), fs = Math.max(15, Math.min(24, CELL * 0.42));
+  pts.forEach((q, i) => {
+    if (names[i] == null) return;
+    const dx = q[0] - cx, dy = q[1] - cy, L = Math.hypot(dx, dy) || 1;
+    const [px, py] = toPx(q[0], q[1]);
+    label(names[i], px + dx / L * fs * 0.9, py + dy / L * fs * 0.9, fs, color);
+  });
+}
+function banner(text, color) {
+  const fs = S.teacher ? 26 : 21;
+  ctx.font = `900 ${fs}px "Hiragino Sans","Yu Gothic","Meiryo",sans-serif`;
+  const w = ctx.measureText(text).width + 36, x = W / 2 - w / 2, y = 10;
+  ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.strokeStyle = color; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.roundRect(x, y, w, fs + 20, 14); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, W / 2, y + (fs + 20) / 2);
+}
+function drawOverlap() {
+  const a = S.pieces.find(p => p.id === S.ovA), b = S.pieces.find(p => p.id === S.ovB);
+  if (a) { pathOf(a.pts); ctx.lineWidth = 6; ctx.strokeStyle = '#ef6c00'; ctx.stroke(); }
+  if (!a || !b || !ovAnim) return;
+  const res = ovAnim.res, chu = S.level === 'chu';
+  pathOf(b.pts); ctx.lineWidth = 6; ctx.strokeStyle = '#1565c0'; ctx.setLineDash([10, 6]); ctx.stroke(); ctx.setLineDash([]);
+  if (!res) {
+    banner('✖ どう うごかしても 重ならない → 合同では ない', '#ad1457');
+    return;
+  }
+  const t = Math.min(1, (performance.now() - ovAnim.t0) / 1600);
+  const sh = ovShape(res, a, b, t);
+  ctx.beginPath(); sh.forEach(([x, y], i) => { const [px, py] = toPx(x, y); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.closePath();
+  ctx.globalAlpha = 0.55; ctx.fillStyle = COLORS[b.c].fill; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.lineWidth = 4; ctx.strokeStyle = COLORS[b.c].line; ctx.stroke();
+  if (t < 1) return;
+  // 対応する 頂点に 同じ 文字（A と A'）を つける
+  const na = [], nb = [];
+  res.pairs.forEach(([i, j], k) => { na[i] = LETTERS[k]; nb[j] = LETTERS[k] + "'"; });
+  vertexLetters(a.pts, na, '#e65100');
+  vertexLetters(b.pts, nb, '#1565c0');
+  pathOf(a.pts); ctx.lineWidth = 6; ctx.strokeStyle = '#2e7d32'; ctx.stroke();
+  banner('✔ ぴったり 重なった → 合同' + (res.flip ? (chu ? '（裏返すと 重なる）' : '（うらがえすと 重なる）') : (chu ? '（裏返さずに 重なる）' : '（うらがえさずに 重なる）')), '#2e7d32');
+}
+
+// 移動の 記録：動かす 前の 形・対応する 点を むすぶ 線・矢印や 中心や 軸
+function drawRecord() {
+  const m = S.lastMove;
+  if (!m) return;
+  const p = S.pieces.find(q => q.id === m.id);
+  if (!p || p.pts.length !== m.after.length || p.pts.some((q, i) => q[0] !== m.after[i][0] || q[1] !== m.after[i][1])) return;
+  const chu = S.level === 'chu', col = '#455a64';
+  // 動かす 前の 形
+  pathOf(m.before); ctx.lineWidth = 2.5; ctx.strokeStyle = col; ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
+  // 対応する 点を むすぶ 線（平行移動・対称移動）
+  if (m.kind !== 'rot') {
+    ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 2; ctx.setLineDash([2, 5]);
+    m.before.forEach((q, i) => { const [ax, ay] = toPx(...q), [bx, by] = toPx(...m.after[i]); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); });
+    ctx.setLineDash([]);
+  }
+  const names = m.before.map((_, i) => LETTERS[i]);
+  vertexLetters(m.before, names, col);
+  vertexLetters(m.after, names.map(s => s + "'"), COLORS[p.c].line);
+  let text = '';
+  if (m.kind === 'move') {
+    const [ax, ay] = toPx(...centroid(m.before)), [bx, by] = toPx(...centroid(m.after));
+    arrow(ax, ay, bx, by, '#e65100');
+    const parts = [];
+    if (m.dx) parts.push((m.dx > 0 ? '右へ ' : '左へ ') + Math.abs(m.dx));
+    if (m.dy) parts.push((m.dy > 0 ? '下へ ' : '上へ ') + Math.abs(m.dy));
+    text = (chu ? '平行移動　' : 'ずらす　') + parts.join('、');
+  } else if (m.kind === 'rot') {
+    const [ox, oy] = toPx(...m.o);
+    // 中心と、対応する 1組の 点を むすんで 角を 見せる
+    const [ax, ay] = toPx(...m.before[0]), [bx, by] = toPx(...m.after[0]);
+    ctx.strokeStyle = '#6a1b9a'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ax, ay); ctx.moveTo(ox, oy); ctx.lineTo(bx, by); ctx.stroke();
+    const r = Math.min(Math.hypot(ax - ox, ay - oy), CELL) * 0.6;
+    if (r > 4) { ctx.beginPath(); ctx.arc(ox, oy, r, Math.atan2(ay - oy, ax - ox), Math.atan2(by - oy, bx - ox), !m.cw); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(ox, oy, 7, 0, 7); ctx.fillStyle = '#6a1b9a'; ctx.fill();
+    label('O', ox - 14, oy + 16, Math.max(15, CELL * 0.4), '#6a1b9a');
+    text = (chu ? '回転移動　点Oを 中心に ' : 'まわす　点Oを 中心に ') + (m.cw ? '時計回りに 90°' : '時計と 反対回りに 90°');
+  } else if (m.kind === 'flip') {
+    const [ox, oy] = toPx(...m.o);
+    ctx.strokeStyle = '#6a1b9a'; ctx.lineWidth = 3; ctx.setLineDash([14, 6, 3, 6]); ctx.beginPath();
+    if (m.axis === 'v') { ctx.moveTo(ox, OY); ctx.lineTo(ox, OY + ROWS * CELL); } else { ctx.moveTo(OX, oy); ctx.lineTo(OX + COLS * CELL, oy); }
+    ctx.stroke(); ctx.setLineDash([]);
+    const lx = m.axis === 'v' ? ox + 8 : OX + 30, ly = m.axis === 'v' ? OY + ROWS * CELL - 16 : oy - 14;
+    label('ℓ', lx + 8, ly, Math.max(18, CELL * 0.5), '#6a1b9a');
+    text = (chu ? '対称移動　直線ℓを 軸に して ' : 'うらがえす　直線ℓで ') + (m.axis === 'v' ? '左右に' : '上下に');
+  }
+  banner(text, '#283593');
+}
+function arrow(ax, ay, bx, by, color) {
+  const L = Math.hypot(bx - ax, by - ay); if (L < 4) return;
+  const ux = (bx - ax) / L, uy = (by - ay) / L, h = 14;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx - ux * h, by - uy * h); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - ux * h - uy * h * 0.6, by - uy * h + ux * h * 0.6);
+  ctx.lineTo(bx - ux * h + uy * h * 0.6, by - uy * h - ux * h * 0.6); ctx.closePath(); ctx.fill();
+}
+// 動かした 色板が、ほかの 色板と ぴったり 同じ 場所に 重なったか
+function samePlace(p, q) {
+  const k = v => v.map(String).sort().join(';');
+  return p.pts.length === q.pts.length && k(p.pts) === k(q.pts);
+}
+
 /* ---------- ゆび・マウスの うごき ---------- */
 const downs = new Map();   // つくる 道具：ゆびを おいた 格子点
 cv.addEventListener('pointerdown', e => {
@@ -860,9 +1044,9 @@ cv.addEventListener('pointerdown', e => {
     draw();
     return;
   }
-  if (S.tool === 'move' || S.tool === 'paste') {
+  if (S.tool === 'move' || S.tool === 'paste' || S.tool === 'overlap') {
     const p = pieceAt(px, py);
-    if (!p) { S.sel = null; S.pasteA = null; after(); return; }
+    if (!p) { S.sel = null; S.pasteA = null; S.ovA = S.ovB = null; ovAnim = null; after(); return; }
     if ([...drags.values()].some(d => d.piece === p)) return;   // べつの ゆびが もう 動かしている
     bringFront(p);
     if (S.tool === 'move') S.sel = p.id;
@@ -935,6 +1119,15 @@ function endPointer(e) {
   if (d.moved) {
     keepOnBoard(d.piece);
     undoStack.push(d.before); redoStack.length = 0;
+    const dx = d.piece.pts[0][0] - d.orig[0][0], dy = d.piece.pts[0][1] - d.orig[0][1];
+    setLastMove(d.piece, d.orig, (dx || dy) ? { kind: 'move', dx, dy } : null);
+    if (S.tool === 'overlap') { S.ovA = S.ovB = null; ovAnim = null; }
+    const twin = S.pieces.find(q => q !== d.piece && samePlace(q, d.piece));
+    if (twin) toast('ぴったり 重なった！');
+  } else if (S.tool === 'overlap' && e.type === 'pointerup') {
+    // タップ：1まいめ（オレンジ）→ 2まいめ で 重ねて しらべる
+    if (!S.ovA || S.ovB || S.ovA === d.piece.id) { S.ovA = S.ovA === d.piece.id && !S.ovB ? null : d.piece.id; S.ovB = null; ovAnim = null; }
+    else { S.ovB = d.piece.id; startOverlap(); }
   } else if (S.tool === 'paste' && e.type === 'pointerup') {
     // タップ：1まいめを えらぶ → みどりの 相手を タップで はる
     const a = S.pieces.find(p => p.id === S.pasteA);
@@ -950,7 +1143,7 @@ cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && hove
 
 /* ---------- 道具・色・はかる ---------- */
 function setTool(t) {
-  if (t === 'overlap') { toast('この 道具は じゅんびちゅうです'); return; }
+  S.ovA = S.ovB = null; ovAnim = null;
   S.tool = t; S.making = []; rectDrag = null; hover = null; cutDrag = null; S.pasteA = null;
   if (t !== 'move') S.sel = null;
   document.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
@@ -983,6 +1176,8 @@ document.querySelectorAll('[data-meas]').forEach(b => b.onclick = () => {
 
 /* ---------- 下の ボタン ---------- */
 $('ghostBtn').onclick = () => { S.ghost = !S.ghost; $('ghostBtn').classList.toggle('on', S.ghost); draw(); };
+$('recBtn').onclick = () => { S.record = !S.record; $('recBtn').classList.toggle('on', S.record); if (S.record && S.tool !== 'move') setTool('move'); draw(); };
+$('recBtn').classList.toggle('on', S.record);
 $('undo').onclick = undo;
 $('redo').onclick = redo;
 $('cancelMake').onclick = () => { S.making = []; after(); };
@@ -1012,6 +1207,10 @@ function updateHint() {
     h = selPiece() ? 'ひっぱって 動かす。上の ボタンで まわす・うらがえす。色を タップで 色が かわる' : '色板を タップして えらぶ・ひっぱって 動かす';
   } else if (S.tool === 'cut') {
     h = '色板の 外から 外まで（または へりから へりまで）、格子点を むすぶ 線を ひくと 切れる';
+  } else if (S.tool === 'overlap') {
+    h = !S.ovA ? '1まいめの 色板を タップ（オレンジに なる）'
+      : !S.ovB ? '2まいめの 色板を タップすると、1まいめに 重ねて 合同か しらべる'
+      : 'べつの 色板を タップすると しらべ直す。何もない 所を タップで やめる';
   } else if (S.tool === 'paste') {
     h = S.pasteA ? 'みどりの ＋ の 色板を タップすると 1まいに なる。ひっぱって 動かす ことも できる'
                  : 'はりたい 色板を タップ（オレンジに なる）。ひっぱって 動かす ことも できる';
