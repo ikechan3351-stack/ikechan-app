@@ -94,6 +94,14 @@
   .mrow { display: flex; align-items: center; gap: 8px; margin: 10px 0; flex-wrap: wrap; text-align: left; }
   .mrow .ml { width: 7em; font-weight: 900; color: var(--accent-dark); }
   .btn.danger { background: #e53935; border-color: #e53935; color: #fff; }
+  /* ===== はいけいを えらぶ 画面（ほかの さんすうボードと そろえた） ===== */
+  .bgpanel { max-width: min(760px, 94vw); text-align: left; padding: 20px 24px; }
+  .bgpanel h2 { margin: 0 0 6px; font-size: 1.1rem; }
+  .bgpanel .row { justify-content: flex-start; gap: 8px; margin-bottom: 16px; }
+  .bgpanel .btn { min-width: 0; margin: 0; font-size: 1rem; min-height: 56px; }
+  .bgpanel .sample { width: 54px; height: 40px; border-radius: 6px; border: 2px solid rgba(0,0,0,0.15); display: inline-block; }
+  .bgpanel .close { display: block; margin: 4px auto 0; min-width: 160px; }
+  .bgpanel .note { font-size: 0.85rem; color: #5c6bc0; margin: -8px 0 14px; }
 
   .toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); background: rgba(38,50,56,0.9); color: #fff;
            padding: 10px 20px; border-radius: 999px; font-weight: bold; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 60; }
@@ -139,6 +147,8 @@
     body.teacher .topbar .btn .lbl, body.teacher .task .nav .lbl, body.teacher #taskHint .lbl, body.teacher #taskAnswer .lbl, body.teacher h1 .sub { display: none; }
     body.teacher .task .chip { font-size: 0.85rem; }
   }
+  /* 🖼️はいけい ボタンの ぶん、題名の 前半は 1400px より せまいと かくす（ツールバーを 1だんに おさめる） */
+  @media (max-width: 1400px) { h1 .sub { display: none; } }
   @media (max-width: 1100px) {
     h1 .sub, #undo .lbl, #redo .lbl, #clearAll .lbl { display: none; }
   }
@@ -174,6 +184,7 @@
   <button class="btn on" id="ghostBtn" title="切ったり 動かしたり する 前の 形を うすく 見せる"><span class="ic">⬚</span><span class="lbl">もとの形</span></button>
   <button class="btn" id="recBtn" title="動かした ときの 移動（ずらす・まわす・うらがえす）と、対応する 点を 見せる"><span class="ic">🧭</span><span class="lbl">移動</span></button>
   <div class="spacer"></div>
+  <button class="btn" id="bgBtn" title="はいけいを かえる"><span class="ic">🖼️</span><span class="lbl">はいけい</span></button>
   <button class="btn" id="photo" title="ボードを しゃしん（がぞう）に する"><span class="ic">📷</span><span class="lbl">しゃしん</span></button>
 </div>
 
@@ -287,11 +298,27 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<!-- はいけい -->
+<div class="dialog-bg" id="bgDlg" hidden>
+  <div class="dialog bgpanel">
+    <h2>🖼️ かみ</h2>
+    <div class="row" id="bgKinds"></div>
+    <div id="bgImgBox">
+      <h2>がぞう</h2>
+      <div class="row">
+        <button class="btn" id="bgPick">📂 がぞうを えらぶ</button>
+        <button class="btn" id="bgFade">うすくする</button>
+      </div>
+      <p class="note">がぞうは この パソコンの 中だけで つかいます（どこにも おくりません）。方眼の 線は がぞうの 上に かさなります。</p>
+      <input type="file" id="bgFile" accept="image/*" hidden>
+    </div>
+    <h2>かみの いろ</h2>
+    <div class="row" id="bgColors"></div>
+    <button class="btn close" id="bgClose">とじる</button>
+  </div>
+</div>
 
-<link rel="stylesheet" href="worksheet.css">
-<script src="math-render.js"></script>
-<script src="worksheet.js"></script>
+<div class="toast" id="toast"></div>
 
 <script>
 'use strict';
@@ -350,6 +377,22 @@ if (JH) S.level = 'chu';
 const HUB = HIGH ? '算数セット 高学年.html' : JH ? '数学操作ボード 中学.html' : '';   // もどる 先
 const HUB_Q = HIGH ? '&high=1' : JH ? '&jh=1' : '';   // アドレスを 書きかえる ときに のこす
 const HUB_LEVEL = HIGH ? 'sho' : JH ? 'chu' : '';     // お題の 目次に 出す 学年（空なら ぜんぶ）
+
+/* ---------- はいけい（ボードの 下に しく かみ）。方眼の 線は 色板を 作る 目もり なので いつも かく ----------
+   kind: grid 方眼紙 ／ image がぞう（とりこんだ がぞうの 上に 方眼）
+   ?color=cream のように URL でも 色を えらべる */
+const BG_KINDS = [ { id: 'grid', name: 'ほうがんし' }, { id: 'image', name: 'がぞう' } ];
+const BG_COLORS = [
+  { id: 'white', name: 'しろ',     paper: '#ffffff', line: '#dde1f3', bold: '#9fa8da', dot: '#7986cb' },
+  { id: 'cream', name: 'クリーム', paper: '#fff8e1', line: '#eadcb6', bold: '#c9ab66', dot: '#a8864a' },
+  { id: 'green', name: 'こくばん', paper: '#2f5d46', line: 'rgba(255,255,255,0.22)', bold: 'rgba(255,255,255,0.5)', dot: 'rgba(255,255,255,0.75)' },
+];
+const bg = {
+  kind: 'grid',
+  color: BG_COLORS.some(c => c.id === Q.get('color')) ? Q.get('color') : 'white',
+  img: null,     // とりこんだ がぞう
+  fade: true,    // がぞうを うすくする
+};
 
 /* ---------- 画面の 部品 ---------- */
 const $ = id => document.getElementById(id);
@@ -564,18 +607,27 @@ function drawCutLine() {
 }
 
 function drawGrid() {
+  const col = BG_COLORS.find(c => c.id === bg.color);
+  // かみ（ボード ぜんたい）
+  ctx.fillStyle = col.paper; ctx.fillRect(0, 0, W, H);
+  if (bg.kind === 'image' && bg.img) {
+    // はみ出さないように ちぢめて まんなかに おく
+    const k = Math.min(W / bg.img.width, H / bg.img.height), w = bg.img.width * k, h = bg.img.height * k;
+    ctx.drawImage(bg.img, (W - w) / 2, (H - h) / 2, w, h);
+    if (bg.fade) { ctx.fillStyle = bg.color === 'green' ? 'rgba(47,93,70,0.5)' : 'rgba(255,255,255,0.5)'; ctx.fillRect(0, 0, W, H); }
+  }
   ctx.lineWidth = 1;
   for (let i = 0; i <= COLS; i++) {
-    ctx.strokeStyle = i % 5 === 0 ? '#9fa8da' : '#dde1f3';
+    ctx.strokeStyle = i % 5 === 0 ? col.bold : col.line;
     ctx.beginPath(); ctx.moveTo(OX + i * CELL + 0.5, OY); ctx.lineTo(OX + i * CELL + 0.5, OY + ROWS * CELL); ctx.stroke();
   }
   for (let j = 0; j <= ROWS; j++) {
-    ctx.strokeStyle = j % 5 === 0 ? '#9fa8da' : '#dde1f3';
+    ctx.strokeStyle = j % 5 === 0 ? col.bold : col.line;
     ctx.beginPath(); ctx.moveTo(OX, OY + j * CELL + 0.5); ctx.lineTo(OX + COLS * CELL, OY + j * CELL + 0.5); ctx.stroke();
   }
   // つくる・きる 道具の ときは 格子点を 見せる
   if (S.tool === 'make' || S.tool === 'cut') {
-    ctx.fillStyle = '#7986cb';
+    ctx.fillStyle = col.dot;
     const r = Math.max(2, CELL * 0.06);
     for (let i = 0; i <= COLS; i++) for (let j = 0; j <= ROWS; j++) {
       ctx.beginPath(); ctx.arc(OX + i * CELL, OY + j * CELL, r, 0, 7); ctx.fill();
@@ -1735,48 +1787,62 @@ $('photoSave').onclick = () => {
 };
 $('photoClose').onclick = () => { $('photoDlg').hidden = true; };
 
-/* ---------- ワークシート（よそう → やってみる → わかったこと → まとめ） ---------- */
-function initWorksheet() {
-  if (typeof Worksheet === 'undefined') return;
-  Worksheet.init({
-    kids: S.level !== 'chu',
-    open: false,          // ボードを 広く つかうため、はじめは とじて おく
-    key: 'きって うごかして かさねて 方眼ボード',
-    title: 'きって うごかして かさねて 方眼ボード',
-    question: '形を 切ったり 動かしたり 重ねたり すると、何が かわって、何が かわらない？',
-    predictions: ['面積は かわらない', '形が かわると 面積も かわる', 'ぴったり 重なれば、形も 大きさも 同じ', 'わからない'],
-    fields: [
-      { key: 'odai', label: 'お題', math: false },
-      { key: 'mai', label: '色板の まい数', math: false },
-      { key: 'area', label: '面積の 合計', math: false },
-      { key: 'kekka', label: 'たしかめた 結果・移動', math: false }
-    ],
-    operationNote: '切ったり 動かしたり した ときに「きろくする」を おそう。お題・まい数・面積が のこるよ。',
-    capture: () => {
-      const a2 = S.pieces.filter(p => !p.lock).reduce((s, p) => s + Math.abs(area2(p.pts)), 0);
-      const m = S.lastMove;
-      const mv = m ? ({ move: '平行移動', rot: '回転移動', flip: '対称移動' })[m.kind] : '';
-      return { odai: S.scene ? S.scene.grade + ' ' + S.scene.title : 'じゆう', mai: S.pieces.length + 'まい', area: fmtArea(a2), kekka: [S.lastFb, mv].filter(Boolean).join(' / ') };
-    },
-    summaryHint: '「切って 動かしても、面積は 〜」「ぴったり 重なる 形を 〜 と いう」の 形で 書いてみよう',
-    teacher: {
-      hint: '切る前の形（灰色の点線）と、切って並べかえた形を比べさせる。合同は「重ねて確かめる」→「辺・角で確かめる」の順に。',
-      answer: '切って動かしても面積は変わらない（等積変形）。ぴったり重なる図形を合同といい、裏返して重なるものも合同。平行・回転・対称移動では形も大きさも変わらない。'
-    }
-  });
+/* ---------- はいけいを えらぶ 画面 ---------- */
+function bgButton(text, on, onclick, sample) {
+  const b = document.createElement('button');
+  b.className = 'btn' + (on ? ' on' : '');
+  b.innerHTML = (sample ? `<span class="sample" style="background:${sample}"></span>` : '') + text;
+  b.onclick = onclick;
+  return b;
 }
+function renderBgPanel() {
+  const kinds = $('bgKinds'); kinds.textContent = '';
+  for (const k of BG_KINDS) kinds.appendChild(bgButton(k.name, bg.kind === k.id, () => {
+    bg.kind = k.id;
+    if (k.id === 'image' && !bg.img) $('bgFile').click();   // はじめて えらんだ ときは がぞうを えらぶ
+    changeBg();
+  }));
+  $('bgImgBox').hidden = bg.kind !== 'image';
+  $('bgFade').classList.toggle('on', bg.fade);
+  $('bgFade').disabled = !bg.img;
+  const cols = $('bgColors'); cols.textContent = '';
+  for (const c of BG_COLORS) cols.appendChild(bgButton(c.name, bg.color === c.id, () => { bg.color = c.id; changeBg(); }, c.paper));
+}
+function changeBg() { draw(); renderBgPanel(); }
+$('bgBtn').onclick = () => { renderBgPanel(); $('bgDlg').hidden = false; };
+$('bgClose').onclick = () => { $('bgDlg').hidden = true; };
+$('bgDlg').addEventListener('click', e => { if (e.target === $('bgDlg')) $('bgDlg').hidden = true; });
+$('bgPick').onclick = () => $('bgFile').click();
+$('bgFade').onclick = () => { bg.fade = !bg.fade; changeBg(); };
+// がぞうを とりこむ（大きすぎる がぞうは ちぢめて、うごきを かるくする）
+$('bgFile').addEventListener('change', () => {
+  const file = $('bgFile').files[0];
+  $('bgFile').value = '';
+  if (!file) return;
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 1800 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    bg.img = c; bg.kind = 'image';
+    changeBg();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('この がぞうは よみこめませんでした'); };
+  img.src = url;
+});
 
 /* キーボード（パソコン用）：Ctrl+Z で もどる、Esc で やめる */
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
-  else if (e.key === 'Escape') { ['menuDlg', 'setDlg', 'photoDlg', 'askDlg'].forEach(id => { $(id).hidden = true; }); S.making = []; S.sel = null; after(); }
+  else if (e.key === 'Escape') { ['menuDlg', 'setDlg', 'photoDlg', 'askDlg', 'bgDlg'].forEach(id => { $(id).hidden = true; }); S.making = []; S.sel = null; after(); }
   else if (e.key === 'Delete' && selPiece()) $('selDelete').onclick();
 });
 
 window.addEventListener('resize', () => { resize(); placeSelbar(); });
 applySettings();
 updateHint(); updateButtons();
-initWorksheet();
 // URL の ?scene=○○ で お題を 開く。なければ 目次を 出す（?scene=free で じゆう）
 requestAnimationFrame(() => requestAnimationFrame(() => {
   const sc = Q.get('scene');
