@@ -532,6 +532,7 @@ function pushUndo() {
 function restore(s) {
   const o = JSON.parse(s);
   S.pieces = o.p; S.nextId = o.n; S.ghosts = o.gh; S.nextG = o.ng;
+  rotAnim = null; rotDrag = null;
   if (!S.pieces.find(p => p.id === S.sel)) S.sel = null;
   if (!S.pieces.find(p => p.id === S.pasteA)) S.pasteA = null;
 }
@@ -562,12 +563,13 @@ function draw() {
   for (const p of S.pieces) drawPiece(p);
   if (S.tool === 'paste') drawPasteMarks();
   drawSceneExtras();
-  if (S.record && S.tool === 'move' && !drags.size) drawRecord();
+  if (S.record && S.tool === 'move' && !drags.size && !rotAnim) drawRecord();
   // 測る 値は 色板の 上に まとめて かく（下に かくれないように）
   for (const p of S.pieces) drawMeasures(p);
   drawMaking();
   drawCutLine();
   if (S.tool === 'overlap') drawOverlap();
+  if (handleOn()) drawHandle(selPiece());
 }
 
 // もとの形の 影（うすい 灰色の 点線）。色板が 1まいも のこって いない 形は かかない
@@ -642,6 +644,14 @@ function pathOf(pts) {
 }
 
 function drawPiece(p) {
+  const ra = rotAnim && rotAnim.id === p.id && rotAnim.a ? rotAnim : null;
+  if (!ra) { drawPiece0(p); return; }
+  const [px, py] = toPx(ra.cx, ra.cy);
+  ctx.save(); ctx.translate(px, py); ctx.rotate(ra.a); ctx.translate(-px, -py);
+  drawPiece0(p);
+  ctx.restore();
+}
+function drawPiece0(p) {
   const col = COLORS[p.c], picked = p.id === S.sel, lifted = drags.has(p.id);
   ctx.save();
   if (lifted) { ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5; }
@@ -667,6 +677,7 @@ function label(text, px, py, size, color) {
 }
 
 function drawMeasures(p) {
+  if (rotAnim && rotAnim.id === p.id) return;   // まわっている 間は かかない（おわったら 出る）
   const pts = p.pts, n = pts.length, col = COLORS[p.c];
   const sgn = Math.sign(area2(pts)) || 1;       // 頂点の まわる 向き
   const fs = Math.max(13, Math.min(22, CELL * 0.38)) * (S.teacher ? 1.15 : 1);
@@ -980,6 +991,9 @@ function transformSel(fn, info) {
   const pure = p.pts.every((q, i) => { const [u, v] = fn(before[i][0] - ox, before[i][1] - oy); return q[0] === u + ox && q[1] === v + oy; });
   setLastMove(p, before, pure ? Object.assign({ o: [ox, oy] }, info) : null);
   after();
+  // 板の 中に もどした ずれ（まわる 見た目の 中心も いっしょに ずらす）
+  const [u0, v0] = fn(before[0][0] - ox, before[0][1] - oy);
+  return { ox, oy, sx: p.pts[0][0] - (u0 + ox), sy: p.pts[0][1] - (v0 + oy) };
 }
 // さいごの 移動を おぼえる（頂点の 番号どうしが 対応する 点）
 function setLastMove(p, before, info) {
@@ -996,9 +1010,117 @@ function keepOnBoard(p) {
   if (dx || dy) p.pts = p.pts.map(([x, y]) => [x + dx, y + dy]);
 }
 
-// 画面は 下が y の ＋ なので、(x,y)→(-y,x) は 時計回り
-$('selRotR').onclick = () => transformSel((x, y) => [-y, x], { kind: 'rot', cw: true });
-$('selRotL').onclick = () => transformSel((x, y) => [y, -x], { kind: 'rot', cw: false });
+/* ---------- まわす（ジオボードと 同じ：↻ つまみ・ゆび2本で ひねる・ばねで くるっと） ----------
+   まわしている 間は 見た目だけ すきな 角度に まわり、ゆびを はなすと いちばん 近い 90°に ぴたっと おさまる。
+   （色板の 頂点は いつも 格子点に のる：切る・はる・かさねる が そのまま つかえる） */
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SPRING = { w: 34, z: 0.55 };   // w：かたさ、z：ゆれの おさまりかた（約0.2秒で おちつく）
+const QT = Math.PI / 2;
+let rotAnim = null;   // まわる 見た目 { id, cx, cy（中心の 格子ざひょう）, a（見た目の 角度 rad・時計回りが ＋）, v, mode:'drag'|'spring' }
+let rotDrag = null;   // まわしている ゆび { ids:[…], pos:Map, last（前の 角度）, a（まわした 角度）, piece }
+let rafId = 0, lastT = 0;
+function springTick(t) {
+  rafId = 0;
+  const r = rotAnim;
+  if (!r || r.mode !== 'spring') return;
+  const dt = lastT ? Math.min(0.05, (t - lastT) / 1000) : 1 / 60; lastT = t;
+  let h = dt; const k = SPRING.w * SPRING.w, c = 2 * SPRING.z * SPRING.w;
+  while (h > 0) { const s = Math.min(h, 1 / 240); h -= s; r.v += (-k * r.a - c * r.v) * s; r.a += r.v * s; }
+  if (REDUCED || (Math.abs(r.a) < 0.003 && Math.abs(r.v) < 0.05)) { rotAnim = null; after(); return; }
+  draw();
+  rafId = requestAnimationFrame(springTick);
+}
+function startSpring() { lastT = 0; if (!rafId) rafId = requestAnimationFrame(springTick); }
+// 90° を k回（＋＝時計回り）まわして きめる。見た目は いまの 角度 liveA から ばねで 0 へ
+function turnSel(k, liveA) {
+  const p = selPiece(); if (!p) return;
+  const km = ((k % 4) + 4) % 4;
+  let cx, cy;
+  if (km) {
+    // 画面は 下が y の ＋ なので、(x,y)→(-y,x) は 時計回り
+    const fn = km === 1 ? (x, y) => [-y, x] : km === 3 ? (x, y) => [y, -x] : (x, y) => [-x, -y];
+    const info = km === 2 ? { kind: 'rot', cw: true, deg: 180 } : { kind: 'rot', cw: km === 1 };
+    const r = transformSel(fn, info);
+    cx = r.ox + r.sx; cy = r.oy + r.sy;
+  } else [cx, cy] = pivot(p);
+  rotAnim = { id: p.id, cx, cy, a: liveA - k * QT, v: 0, mode: 'spring' };
+  if (REDUCED) rotAnim = null;
+  after(); startSpring();
+}
+// ↻ つまみ：えらんだ 色板の 上（上に 場所が なければ 下）
+function handleOn() {
+  const p = S.tool === 'move' ? selPiece() : null;
+  return !!p && !p.lock && (!drags.size || (rotDrag && rotDrag.handle));
+}
+function handlePos(p) {
+  const xs = p.pts.map(q => toPx(q[0], q[1])[0]), ys = p.pts.map(q => toPx(q[0], q[1])[1]);
+  const x = (Math.min(...xs) + Math.max(...xs)) / 2, top = Math.min(...ys), bot = Math.max(...ys);
+  const up = top - 46 >= 24;
+  return { x, y: up ? top - 46 : bot + 46, edge: up ? top : bot, up };
+}
+function drawHandle(p) {
+  const h = handlePos(p), r = 20;
+  ctx.beginPath(); ctx.moveTo(h.x, h.y + (h.up ? r : -r)); ctx.lineTo(h.x, h.edge);
+  ctx.strokeStyle = 'rgba(57,73,171,0.6)'; ctx.lineWidth = 3; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#3949ab'; ctx.stroke();
+  ctx.fillStyle = '#3949ab'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('↻', h.x, h.y + 1);
+  if (rotDrag) drawAngleTag(h.x + r + 8, h.y);
+}
+// まわしている 角度（「みぎに 90°」）
+function shownDeg(a) {
+  let deg = Math.round(a * 180 / Math.PI);
+  const q = Math.round(deg / 90) * 90;
+  if (Math.abs(deg - q) <= 6) deg = q;           // 90° の 近くは 90° に すいつく
+  return deg;
+}
+function drawAngleTag(x, y) {
+  if (!rotAnim) return;
+  let deg = shownDeg(rotAnim.a) % 360; if (deg > 180) deg -= 360; if (deg <= -180) deg += 360;
+  const txt = deg === 0 ? '0°' : deg === 180 ? '180°' : (deg > 0 ? 'みぎに ' : 'ひだりに ') + Math.abs(deg) + '°';
+  ctx.font = '900 20px "Hiragino Sans","Yu Gothic","Meiryo",sans-serif';
+  const w = ctx.measureText(txt).width + 20;
+  if (x + w > W - 4) x = Math.max(4, W - 4 - w);
+  ctx.fillStyle = 'rgba(38,50,56,0.85)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y - 16, w, 32, 10) : ctx.rect(x, y - 16, w, 32); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, x + 10, y + 1);
+}
+// まわしはじめ（handle：つまみ／twist：ゆび2本）
+function startRot(p, ids, pos, handle) {
+  rotAnim = null;
+  const [cx, cy] = pivot(p);
+  rotAnim = { id: p.id, cx, cy, a: 0, v: 0, mode: 'drag' };
+  rotDrag = { ids, pos, handle, piece: p, last: rotAngleNow(pos, ids, cx, cy, handle), a: 0 };
+  $('selbar').hidden = true;
+  draw();
+}
+function rotAngleNow(pos, ids, cx, cy, handle) {
+  if (handle) { const [ox, oy] = toPx(cx, cy), q = pos.get(ids[0]); return Math.atan2(q[1] - oy, q[0] - ox); }
+  const a = pos.get(ids[0]), b = pos.get(ids[1]);
+  return Math.atan2(b[1] - a[1], b[0] - a[0]);
+}
+function moveRot(id, px, py) {
+  if (!rotDrag || !rotDrag.ids.includes(id)) return false;
+  rotDrag.pos.set(id, [px, py]);
+  const now = rotAngleNow(rotDrag.pos, rotDrag.ids, rotAnim.cx, rotAnim.cy, rotDrag.handle);
+  let d = now - rotDrag.last; d = Math.atan2(Math.sin(d), Math.cos(d));   // −180°〜180° に なおして たしていく
+  rotDrag.last = now; rotDrag.a += d;
+  const deg = shownDeg(rotDrag.a);
+  rotAnim.a = Math.abs(deg - rotDrag.a * 180 / Math.PI) < 6.5 && deg % 90 === 0 ? deg * Math.PI / 180 : rotDrag.a;
+  draw();
+  return true;
+}
+function endRot(id) {
+  if (!rotDrag || !rotDrag.ids.includes(id)) return false;
+  const a = rotAnim ? rotAnim.a : 0;
+  rotDrag = null;
+  turnSel(Math.round(a / QT), a);
+  return true;
+}
+
+
+$('selRotR').onclick = () => turnSel(1, 0);
+$('selRotL').onclick = () => turnSel(-1, 0);
 $('selFlipH').onclick = () => transformSel((x, y) => [-x, y], { kind: 'flip', axis: 'v' });
 $('selFlipV').onclick = () => transformSel((x, y) => [x, -y], { kind: 'flip', axis: 'h' });
 $('selCopy').onclick = () => {
@@ -1019,14 +1141,15 @@ $('selDelete').onclick = () => {
 
 function placeSelbar() {
   const bar = $('selbar'), p = S.tool === 'move' ? selPiece() : null;
-  if (!p || drags.size) { bar.hidden = true; return; }
+  if (!p || drags.size || rotDrag) { bar.hidden = true; return; }
   bar.hidden = false;
   for (const id of ['selRotL', 'selRotR', 'selFlipH', 'selFlipV', 'selDelete']) $(id).hidden = !!p.lock;
   const xs = p.pts.map(q => toPx(q[0], q[1])[0]), ys = p.pts.map(q => toPx(q[0], q[1])[1]);
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
   const bw = bar.offsetWidth, bh = bar.offsetHeight;
-  let top = Math.min(...ys) - bh - 12;
-  if (top < 4) top = Math.max(...ys) + 12;
+  const hp = p.lock ? null : handlePos(p);
+  let top = Math.min(...ys) - bh - 12 - (hp && hp.up ? 56 : 0);
+  if (top < 4) top = Math.max(...ys) + 12 + (hp && !hp.up ? 64 : 0);
   if (top + bh > H - 4) top = Math.max(4, H - bh - 4);
   bar.style.left = Math.max(bw / 2 + 4, Math.min(W - bw / 2 - 4, cx)) + 'px';
   bar.style.top = top + 'px';
@@ -1174,7 +1297,7 @@ function drawRecord() {
     if (r > 4) { ctx.beginPath(); ctx.arc(ox, oy, r, Math.atan2(ay - oy, ax - ox), Math.atan2(by - oy, bx - ox), !m.cw); ctx.stroke(); }
     ctx.beginPath(); ctx.arc(ox, oy, 7, 0, 7); ctx.fillStyle = '#6a1b9a'; ctx.fill();
     label('O', ox - 14, oy + 16, Math.max(15, CELL * 0.4), '#6a1b9a');
-    text = (chu ? '回転移動　点Oを 中心に ' : 'まわす　点Oを 中心に ') + (m.cw ? '時計回りに 90°' : '時計と 反対回りに 90°');
+    text = (chu ? '回転移動　点Oを 中心に ' : 'まわす　点Oを 中心に ') + (m.deg === 180 ? '180°' : m.cw ? '時計回りに 90°' : '時計と 反対回りに 90°');
   } else if (m.kind === 'flip') {
     const [ox, oy] = toPx(...m.o);
     ctx.strokeStyle = '#6a1b9a'; ctx.lineWidth = 3; ctx.setLineDash([14, 6, 3, 6]); ctx.beginPath();
@@ -1217,6 +1340,25 @@ cv.addEventListener('pointerdown', e => {
     draw();
     return;
   }
+  if (S.tool === 'move') {
+    if (rotDrag) return;   // まわしている 間の ほかの ゆびは つかわない
+    // ↻ つまみを つかんだ → まわす
+    const sp = selPiece();
+    if (sp && handleOn() && !drags.size) {
+      const h = handlePos(sp);
+      if (Math.hypot(px - h.x, py - h.y) < 30) { startRot(sp, [e.pointerId], new Map([[e.pointerId, [px, py]]]), true); return; }
+    }
+    // 色板を つかんだ まま 2本目の ゆび（色板の 外か 同じ 色板）→ ひねって まわす
+    if (drags.size === 1) {
+      const [id1, d1] = [...drags][0], p2 = pieceAt(px, py);
+      if (!d1.piece.lock && (!p2 || p2 === d1.piece)) {
+        drags.delete(id1);
+        if (d1.moved) { keepOnBoard(d1.piece); undoStack.push(d1.before); redoStack.length = 0; updateButtons(); }
+        startRot(d1.piece, [id1, e.pointerId], new Map([[id1, d1.px], [e.pointerId, [px, py]]]), false);
+        return;
+      }
+    }
+  }
   if (S.tool === 'move' || S.tool === 'paste' || S.tool === 'overlap') {
     const p = pieceAt(px, py);
     if (!p) { S.sel = null; S.pasteA = null; S.ovA = S.ovB = null; ovAnim = null; after(); return; }
@@ -1224,7 +1366,7 @@ cv.addEventListener('pointerdown', e => {
     bringFront(p);
     if (S.tool === 'move') S.sel = p.id;
     const [gx, gy] = toGrid(px, py);
-    drags.set(e.pointerId, { piece: p, start: [gx, gy], orig: p.pts.map(q => q.slice()), before: snapshot(), moved: false });
+    drags.set(e.pointerId, { piece: p, start: [gx, gy], px: [px, py], orig: p.pts.map(q => q.slice()), before: snapshot(), moved: false });
     $('selbar').hidden = true;
     draw();
   }
@@ -1252,8 +1394,10 @@ cv.addEventListener('pointermove', e => {
     draw();
     return;
   }
+  if (moveRot(e.pointerId, px, py)) return;
   const d = drags.get(e.pointerId);
   if (!d) return;
+  d.px = [px, py];
   if (d.piece.lock) { if (!d.warned) { d.warned = true; toast('この 形は 動かせません（⧉コピーは できます）'); } return; }
   const [gx, gy] = toGrid(px, py);
   // マス目に そって 1マスずつ 動く（平行移動）
@@ -1287,6 +1431,7 @@ function endPointer(e) {
     draw();
     return;
   }
+  if (endRot(e.pointerId)) return;
   const d = drags.get(e.pointerId);
   if (!d) return;
   drags.delete(e.pointerId);
@@ -1379,7 +1524,7 @@ function updateHint() {
       ? (S.making.length >= 3 ? 'つぎの 点を タップ。さいしょの 点（白い まる）に もどると できあがり' : 'つぎの 点を タップ')
       : '点を じゅんに タップして 色板を つくる。点から ゆびを すべらせると 長方形';
   } else if (S.tool === 'move') {
-    h = selPiece() ? 'ひっぱって 動かす。上の ボタンで まわす・うらがえす。色を タップで 色が かわる' : '色板を タップして えらぶ・ひっぱって 動かす';
+    h = selPiece() ? 'ひっぱって 動かす。↻ を まわすか、ゆび 2ほんで ひねると まわる。ボタンで うらがえす。色を タップで 色が かわる' : '色板を タップして えらぶ・ひっぱって 動かす';
   } else if (S.tool === 'cut') {
     h = '色板の 外から 外まで（または へりから へりまで）、格子点を むすぶ 線を ひくと 切れる';
   } else if (S.tool === 'overlap') {
