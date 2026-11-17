@@ -241,7 +241,7 @@
 
 <!-- ===== 上の ツールバー ===== -->
 <div class="topbar">
-  <a class="back-link" href="../index.html">← トップ</a>
+  <a class="back-link" id="backLink" href="../index.html">← トップ</a>
   <h1>さんすうセット③ おかね</h1>
   <div class="group">
     <button class="btn on" id="modeMove" title="うごかす"><span class="ic">✋</span>うごかす</button>
@@ -569,9 +569,14 @@ let straight = false;  // true なら ペンが まっすぐな 線（ちょく�
 let penColor = PEN_COLORS[0].color;
 
 const params = new URLSearchParams(location.search);
+// ?low=1：「さんすうセット ていがくねん」から ひらいた（低学年で つかわない ものを かくす）
+const LOW = params.get('low') === '1';
 const board = BOARDS.okane;
 // ?grade=1〜3 で はじめの がくねんを きめる（くばる がぞうにも 入る）
 let grade = GRADES[params.get('grade')] ? +params.get('grade') : 2;
+// ていがくねん（?low=1）では 1ねん・2ねん だけ
+const GRADE_LIST = LOW ? [1, 2] : [1, 2, 3];
+if (!GRADE_LIST.includes(grade)) grade = 2;
 
 /* =========================== はいけい（ボードの 下に しく かみ） ===========================
    kind: plain むじ ／ grid 方眼紙 ／ note 算数ノート ／ image がぞう
@@ -1349,7 +1354,7 @@ function buildToolbox() {
   const gr = document.createElement('div');
   gr.className = 'grade';
   gr.innerHTML = '<span>がくねん</span>';
-  for (const g of [1, 2, 3]) {
+  for (const g of GRADE_LIST) {
     const b = document.createElement('button');
     b.textContent = g + 'ねん';
     b.className = g === grade ? 'on' : '';
@@ -1924,7 +1929,7 @@ function applyState(data) {
   if (GRID_SIZES.some(g => g.id === grid)) bg.grid = grid;
   if (NOTE_SIZES.some(g => g.id === note)) bg.note = note;
   if (BG_COLORS.some(c => c.id === color)) bg.color = color;
-  if (GRADES[data.g]) grade = data.g;
+  if (GRADES[data.g]) grade = GRADE_LIST.includes(data.g) ? data.g : 2;
   items = []; strokes = [];
   const byIndex = [], holds = [];
   for (const a of (Array.isArray(data.i) ? data.i : []).slice(0, 600)) {
@@ -2164,7 +2169,21 @@ layout();
 /* =========================== つづきから（この 端末に 自動で ほぞん） =========================== */
 // うごかす・かく たびに、少し あとで この 端末（ブラウザ）に ほぞんする。つぎに ひらいた とき「つづきから」を えらべる。
 // （写真の はいけいは ほぞんしない。ほぞんできない 端末でも そのまま 動く）
-const SAVE_KEY = 'ikechan-math-さんすうセット③ おかね';
+const SAVE_KEY = 'ikechan-math-さんすうセット③ おかね' + (LOW ? '-ていがくねん' : '');   // ていがくねんから ひらいた ときは べつに ほぞん
+/* ---- 「さんすうセット ていがくねん」から ひらいた とき（?low=1） ----
+   ・左上の「← トップ」を「🏠 ボードえらび」に かえる
+   ・この タブで 2かいめ からは「つづきから？」を きかずに つづける（ボードを いったり きたり しやすく） */
+const LOW_SEEN = SAVE_KEY + '-seen';
+let lowSeen = false;
+function lowBackLink() {
+  const a = document.getElementById('backLink');
+  a.href = 'さんすうセット ていがくねん.html' + (TEACHER ? '?teacher=1' : '');
+  a.textContent = '🏠 ボードえらび';
+}
+if (LOW) {
+  lowBackLink();
+  try { lowSeen = sessionStorage.getItem(LOW_SEEN) === '1'; sessionStorage.setItem(LOW_SEEN, '1'); } catch (_) {}
+}
 let saveTimer = 0, saveDirty = false;
 function scheduleSave() { saveDirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 600); }
 function saveNow() {
@@ -2220,7 +2239,7 @@ if (switched) {
   if (sv) {
     const d = new Date(sv.at || Date.now());
     $('resumeInfo').textContent = `${d.getMonth() + 1}がつ ${d.getDate()}にち ${d.getHours()}じ${String(d.getMinutes()).padStart(2, '0')}ふん の ボード`;
-    $('resumeBg').hidden = false;
+    if (lowSeen) $('resumeYes').click(); else $('resumeBg').hidden = false;
   }
 }
 
