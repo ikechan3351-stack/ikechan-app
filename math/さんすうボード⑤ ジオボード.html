@@ -155,7 +155,7 @@
   <h1><span class="sub">さんすうボード⑤ </span>ジオボード</h1>
   <button class="btn" id="setBtn" title="つかう 人・モードの せってい"><span class="ic">🎓</span><span id="setName">高学年用</span></button>
   <button class="btn" id="boardBtn" title="ばんを かえる"><span class="ic">⚪</span><span id="boardName">7×7</span></button>
-  <button class="btn" id="lookBtn" title="はいけいを かえる（ばんの いろ・こうし・グラフの めもり）"><span class="ic">🖼️</span><span class="lbl">はいけい</span></button>
+  <button class="btn" id="lookBtn" title="はいけいを かえる（ばんの いろ・こうし・グラフの めもり・まん中の 線）"><span class="ic">🖼️</span><span class="lbl">はいけい</span></button>
   <div class="group" id="measBtns">
     <button class="btn" data-meas="length" title="辺の 長さを 見せる"><span class="ic">📏</span><span class="lbl">長さ</span></button>
     <button class="btn" data-meas="angle" title="角の 大きさを 見せる"><span class="ic">📐</span><span class="lbl">角度</span></button>
@@ -303,6 +303,11 @@
       <button class="btn" data-graph="none">なし</button>
       <button class="btn" data-graph="corner">0が ひだり下</button>
       <button class="btn" data-graph="center">0が まん中</button></div>
+    <div class="mrow"><span class="ml">まん中の 線</span>
+      <button class="btn" data-mid="none">なし</button>
+      <button class="btn" data-mid="v">たて</button>
+      <button class="btn" data-mid="h">よこ</button>
+      <button class="btn" data-mid="both">りょうほう</button></div>
     <p class="mhint" id="lookHint"></p>
     <button class="btn" id="lookClose" style="min-width:140px">とじる</button>
   </div>
@@ -604,15 +609,16 @@ const same = (a, b) => a && b && Math.abs(a.i - b.i) < 1e-6 && Math.abs(a.j - b.
 // ---------- はいけい：ばんの いろ・うすい こうし・グラフの めもり ----------
 // （もどる の 対象では ない。つづきから・くばる 画像・アドレスには 入る）
 const LOOK_COLORS = [
-  { id: 'wood',  name: 'もくめ',   paper: '#f7ecd4', edge: '#e6d3ad', line: 'rgba(141,110,99,0.30)',  axis: '#5d4037', text: '#4e342e' },
-  { id: 'white', name: 'しろ',     paper: '#ffffff', edge: '#c5cae9', line: '#c5cae9',                axis: '#283593', text: '#283593' },
-  { id: 'cream', name: 'クリーム', paper: '#fff8e1', edge: '#e6d3a3', line: '#dcc48a',                axis: '#6d4c41', text: '#5d4037' },
-  { id: 'green', name: 'こくばん', paper: '#2f5d46', edge: '#24483a', line: 'rgba(255,255,255,0.30)', axis: 'rgba(255,255,255,0.92)', text: '#ffffff' },
+  { id: 'wood',  name: 'もくめ',   paper: '#f7ecd4', edge: '#e6d3ad', line: 'rgba(141,110,99,0.30)',  axis: '#5d4037', text: '#4e342e', mid: '#e53935' },
+  { id: 'white', name: 'しろ',     paper: '#ffffff', edge: '#c5cae9', line: '#c5cae9',                axis: '#283593', text: '#283593', mid: '#e53935' },
+  { id: 'cream', name: 'クリーム', paper: '#fff8e1', edge: '#e6d3a3', line: '#dcc48a',                axis: '#6d4c41', text: '#5d4037', mid: '#e53935' },
+  { id: 'green', name: 'こくばん', paper: '#2f5d46', edge: '#24483a', line: 'rgba(255,255,255,0.30)', axis: 'rgba(255,255,255,0.92)', text: '#ffffff', mid: '#ffeb3b' },
 ];
 const look = {
   color: LOOK_COLORS.some(c => c.id === Q.get('color')) ? Q.get('color') : 'wood',
   lattice: Q.get('lattice') === '1',                                         // うすい こうし
   graph: ['corner', 'center'].includes(Q.get('graph')) ? Q.get('graph') : 'none',   // グラフの めもり：none なし／corner 0が ひだり下／center 0が まん中
+  mid: ['v', 'h', 'both'].includes(Q.get('mid')) ? Q.get('mid') : 'none',   // まん中の 線（線対称の 学習用）：none なし／v たて／h よこ／both りょうほう
 };
 const lookColor = () => LOOK_COLORS.find(c => c.id === look.color) || LOOK_COLORS[0];
 // うすい こうし：となりの ピンどうしを うすい 線で むすぶ（正方形の 盤は 方眼、三角の 盤は 三角の 目）
@@ -630,6 +636,21 @@ function drawLattice(LC) {
     }
   }
   bg.stroke();
+}
+// まん中の 線：ばんの ちょうど まん中に たて・よこの 点線（線対称の 対称の じく に つかう）
+function drawMidLines(LC) {
+  const B = BOARD.bounds, ext = geo.sp * 0.32;
+  const cx = geo.ox + geo.sp * B.w / 2, cy = geo.oy + geo.sp * B.h / 2;
+  let hx = geo.sp * B.w / 2 + ext, hy = geo.sp * B.h / 2 + ext;
+  if (BOARD.type === 'circle') hx = hy = geo.sp * B.w / 2 + ext;
+  bg.save();
+  bg.strokeStyle = LC.mid; bg.lineWidth = Math.max(2.5, 3 * SCALE); bg.lineCap = 'round';
+  bg.setLineDash([Math.max(10, geo.sp * 0.28), Math.max(7, geo.sp * 0.18)]);
+  bg.beginPath();
+  if (look.mid === 'v' || look.mid === 'both') { bg.moveTo(cx, cy - hy); bg.lineTo(cx, cy + hy); }
+  if (look.mid === 'h' || look.mid === 'both') { bg.moveTo(cx - hx, cy); bg.lineTo(cx + hx, cy); }
+  bg.stroke();
+  bg.restore();
 }
 // グラフの 0（原点）に する ピン
 function graphOrigin() {
@@ -692,6 +713,7 @@ function drawBoard() {
     bg.beginPath(); bg.arc(c.x, c.y, BOARD.R * geo.sp, 0, Math.PI * 2);
     bg.strokeStyle = LC.line; bg.lineWidth = 2; bg.setLineDash([6, 6]); bg.stroke(); bg.setLineDash([]);
   }
+  if (look.mid !== 'none') drawMidLines(LC);
   // ピン
   for (const p of BOARD.pins) drawPin(bg, pinXY(p), 1, false);
 }
@@ -2497,6 +2519,7 @@ function syncURL() {
     if (look.color !== 'wood') q.set('color', look.color);
     if (look.lattice) q.set('lattice', '1');
     if (look.graph !== 'none') q.set('graph', look.graph);
+    if (look.mid !== 'none') q.set('mid', look.mid);
     if (REDUCED && !OS_REDUCED) q.set('motion', 'less');
     if (LOW) q.set('low', '1');    // ていがくねん・高学年の しるしを のこす
     if (HIGH) q.set('high', '1');
@@ -2544,6 +2567,7 @@ function syncLookUI() {
   const sq = BOARD.type === 'square', circ = BOARD.type === 'circle';
   document.querySelectorAll('#lookBg [data-lattice]').forEach(b => { b.classList.toggle('on', (b.dataset.lattice === '1') === look.lattice); b.disabled = circ; });
   document.querySelectorAll('#lookBg [data-graph]').forEach(b => { b.classList.toggle('on', b.dataset.graph === look.graph); b.disabled = !sq; });
+  document.querySelectorAll('#lookBg [data-mid]').forEach(b => b.classList.toggle('on', b.dataset.mid === look.mid));
   $('lookHint').textContent = sq ? 'グラフの めもりは、ピン 1つ分が 1 です。「0が まん中」は マイナスの 数も つかえます。'
     : circ ? 'まるい ばんでは、こうしと グラフの めもりは つかえません（いろは かえられます）。'
     : '三角の ばんでは、グラフの めもりは つかえません（こうしは 三角の 目に なります）。';
@@ -2554,6 +2578,7 @@ function setLook(ch) {
 }
 document.querySelectorAll('#lookBg [data-lattice]').forEach(b => b.onclick = () => setLook({ lattice: b.dataset.lattice === '1' }));
 document.querySelectorAll('#lookBg [data-graph]').forEach(b => b.onclick = () => setLook({ graph: b.dataset.graph }));
+document.querySelectorAll('#lookBg [data-mid]').forEach(b => b.onclick = () => setLook({ mid: b.dataset.mid }));
 $('boardClose').onclick = () => { $('boardBg').hidden = true; };
 $('boardBg').addEventListener('click', e => { if (e.target === $('boardBg')) $('boardBg').hidden = true; });
 $('zoomReset').onclick = resetView;
@@ -2633,6 +2658,7 @@ function applyBoardData(d) {
     if (LOOK_COLORS.some(c => c.id === d.look.color)) look.color = d.look.color;
     look.lattice = d.look.lattice === true;
     look.graph = ['corner', 'center'].includes(d.look.graph) ? d.look.graph : 'none';
+    look.mid = ['v', 'h', 'both'].includes(d.look.mid) ? d.look.mid : 'none';
   }
   restore(JSON.stringify({ ...state, board, shapes, texts, strokes, buildId: null, colorIdx: d.colorIdx | 0 }));
   updateButtons(); syncURL();
