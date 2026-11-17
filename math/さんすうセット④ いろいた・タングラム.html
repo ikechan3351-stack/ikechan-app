@@ -661,6 +661,8 @@ const doneSet = new Set();   // ぴったりに なった もんだい（⭐を 
 const params = new URLSearchParams(location.search);
 // ?low=1：「さんすうセット ていがくねん」から ひらいた（低学年で つかわない ものを かくす）
 const LOW = params.get('low') === '1';
+// ?high=1：「算数セット 高学年」から ひらいた（高学年で つかわない ものを かくす）
+const HIGH = params.get('high') === '1' && !LOW;
 if (params.get('mode') === 'tangram') { book = 'tan'; probId = TAN_PROBS[0].id; }
 else if (params.get('g') === '2') { kyoG = 2; probId = G2_PROBS[0].id; }
 else if (params.get('g') === '3' && !LOW) { kyoG = 3; probId = G3_PROBS[0].id; }
@@ -673,6 +675,8 @@ else if (params.get('g') === '5' && !LOW) { kyoG = 5; probId = G5_PROBS[0].id; }
 function probsOf(b) { return b === 'tan' ? TAN_PROBS : KYO_PROBS; }
 function curProb() { return probId === 'free' ? FREE : (probsOf(book).find(p => p.id === probId) || FREE); }
 syncLevel();
+// 高学年（?high=1）は 4ねんから はじめる
+if (HIGH && book === 'kyo' && kyoG < 4) { kyoG = 4; probId = G4_PROBS[0].id; }
 // もんだいに あわせて ★・学年 を そろえる
 function syncLevel() {
   if (probId === 'free') return;
@@ -1372,8 +1376,9 @@ function buildToolbox() {
   let list;
   if (book === 'kyo') {
     // 学年ボタンが 5つ あるので「がくねん」の 字は 出さない（ボタンが せまく なって「5ねん」が きれる）
-    // ていがくねん（?low=1）では 1ねん・2ねん だけ（3〜5ねんの ボードを ひらいた ときは その 学年も 出す）
-    for (const g of LOW ? [1, 2, ...(kyoG > 2 ? [kyoG] : [])] : [1, 2, 3, 4, 5]) {
+    // ていがくねん（?low=1）では 1ねん・2ねん、高学年（?high=1）では 4ねん・5ねん だけ（ほかの 学年の ボードを ひらいた ときは その 学年も 出す）
+    const gList = LOW ? [1, 2, ...(kyoG > 2 ? [kyoG] : [])] : HIGH ? [...(kyoG < 4 ? [kyoG] : []), 4, 5] : [1, 2, 3, 4, 5];
+    for (const g of gList) {
       const b = document.createElement('button');
       b.textContent = g + 'ねん';
       b.className = g === kyoG ? 'on' : '';
@@ -2023,20 +2028,21 @@ layout();
 /* =========================== つづきから（この 端末に 自動で ほぞん） =========================== */
 // うごかす・かく たびに、少し あとで この 端末（ブラウザ）に ほぞんする。つぎに ひらいた とき「つづきから」を えらべる。
 // （写真の はいけいは ほぞんしない。ほぞんできない 端末でも そのまま 動く）
-const SAVE_KEY = 'ikechan-math-さんすうセット④ いろいた・タングラム' + (LOW ? '-ていがくねん' : '');   // ていがくねんから ひらいた ときは べつに ほぞん
-/* ---- 「さんすうセット ていがくねん」から ひらいた とき（?low=1） ----
-   ・左上の「← トップ」を「🏠 ボードえらび」に かえる
+const SAVE_KEY = 'ikechan-math-さんすうセット④ いろいた・タングラム' + (LOW ? '-ていがくねん' : HIGH ? '-高学年' : '');   // ていがくねん・高学年から ひらいた ときは べつに ほぞん
+/* ---- 「さんすうセット ていがくねん」「算数セット 高学年」から ひらいた とき（?low=1・?high=1） ----
+   ・左上の「← トップ」を「🏠 ボードえらび」に かえる（もどる 先は HUB）
    ・この タブで 2かいめ からは「つづきから？」を きかずに つづける（ボードを いったり きたり しやすく） */
-const LOW_SEEN = SAVE_KEY + '-seen';
-let lowSeen = false;
-function lowBackLink() {
+const HUB = LOW ? 'さんすうセット ていがくねん.html' : HIGH ? '算数セット 高学年.html' : '';
+const HUB_SEEN = SAVE_KEY + '-seen';
+let hubSeen = false;
+function hubBackLink() {
   const a = document.getElementById('backLink');
-  a.href = 'さんすうセット ていがくねん.html' + (TEACHER ? '?teacher=1' : '');
+  a.href = HUB + (TEACHER ? '?teacher=1' : '');
   a.textContent = '🏠 ボードえらび';
 }
-if (LOW) {
-  lowBackLink();
-  try { lowSeen = sessionStorage.getItem(LOW_SEEN) === '1'; sessionStorage.setItem(LOW_SEEN, '1'); } catch (_) {}
+if (HUB) {
+  hubBackLink();
+  try { hubSeen = sessionStorage.getItem(HUB_SEEN) === '1'; sessionStorage.setItem(HUB_SEEN, '1'); } catch (_) {}
 }
 let saveTimer = 0, saveDirty = false;
 function scheduleSave() { saveDirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 600); }
@@ -2093,7 +2099,7 @@ if (switched) {
   if (sv) {
     const d = new Date(sv.at || Date.now());
     $('resumeInfo').textContent = `${d.getMonth() + 1}がつ ${d.getDate()}にち ${d.getHours()}じ${String(d.getMinutes()).padStart(2, '0')}ふん の ボード`;
-    if (lowSeen) $('resumeYes').click(); else $('resumeBg').hidden = false;
+    if (hubSeen) $('resumeYes').click(); else $('resumeBg').hidden = false;
   }
 }
 

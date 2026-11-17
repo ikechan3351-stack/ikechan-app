@@ -359,6 +359,8 @@
 const Q = new URLSearchParams(location.search);
 // ?low=1：「さんすうセット ていがくねん」から ひらいた（低学年用に きめて、だれむけの 切りかえを かくす）
 const LOW = Q.get('low') === '1';
+// ?high=1：「算数セット 高学年」から ひらいた（高学年で つかわない ものを かくす）
+const HIGH = Q.get('high') === '1' && !LOW;
 let TEACHER = Q.get('mode') === 'teacher' || Q.get('teacher') === '1';
 // つかう 人：low 低学年用／high 高学年用（ぜんぶ つかえる）／jh 中学生用（ぜんぶ ＋ ななめの 辺を √ で かく）
 // むかしの ?grade=1〜4 の アドレスも うごくように：1・2年→低学年用、それ以外→高学年用
@@ -366,6 +368,7 @@ const LEVELS = ['low', 'high', 'jh'];
 const G_RAW = parseInt(Q.get('grade') || '0', 10) || 0;
 let LEVEL = LEVELS.includes(Q.get('level')) ? Q.get('level') : (G_RAW && G_RAW <= 2 ? 'low' : 'high');
 if (LOW) LEVEL = 'low';   // ていがくねんでは いつも 低学年用
+if (HIGH) LEVEL = 'high'; // 高学年では いつも 高学年用（中学生用には しない）
 
 // うごきを すくなく（OS の せってい、?motion=less、または 🎓 の せってい）
 const OS_REDUCED = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -2492,7 +2495,9 @@ function syncURL() {
     if (look.lattice) q.set('lattice', '1');
     if (look.graph !== 'none') q.set('graph', look.graph);
     if (REDUCED && !OS_REDUCED) q.set('motion', 'less');
-    if (LOW) { q.set('low', '1'); lowBackLink(); }   // ていがくねんの しるしを のこす・もどる 先に 先生モードを つたえる
+    if (LOW) q.set('low', '1');    // ていがくねん・高学年の しるしを のこす
+    if (HIGH) q.set('high', '1');
+    if (HUB) hubBackLink();        // もどる 先に 先生モードを つたえる
     history.replaceState(null, '', location.pathname + '?' + q.toString());
   } catch (_) { /* 見るだけの 環境などで 書きかえられなくても 動く */ }
 }
@@ -2742,20 +2747,21 @@ document.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTrans
 $('resetStart').onclick = () => { if (!startState) return; pushHist(); restore(startState); updateButtons(); };
 
 // ---------- つづきから（この 端末に 自動で ほぞん） ----------
-const SAVE_KEY = 'ikechan-math-さんすうセット⑤ ジオボード' + (LOW ? '-ていがくねん' : '');   // ていがくねんから ひらいた ときは べつに ほぞん
-/* ---- 「さんすうセット ていがくねん」から ひらいた とき（?low=1） ----
-   ・左上の「← トップ」を「🏠 ボードえらび」に かえる
+const SAVE_KEY = 'ikechan-math-さんすうセット⑤ ジオボード' + (LOW ? '-ていがくねん' : HIGH ? '-高学年' : '');   // ていがくねん・高学年から ひらいた ときは べつに ほぞん
+/* ---- 「さんすうセット ていがくねん」「算数セット 高学年」から ひらいた とき（?low=1・?high=1） ----
+   ・左上の「← トップ」を「🏠 ボードえらび」に かえる（もどる 先は HUB）
    ・この タブで 2かいめ からは「つづきから？」を きかずに つづける（ボードを いったり きたり しやすく） */
-const LOW_SEEN = SAVE_KEY + '-seen';
-let lowSeen = false;
-function lowBackLink() {
+const HUB = LOW ? 'さんすうセット ていがくねん.html' : HIGH ? '算数セット 高学年.html' : '';
+const HUB_SEEN = SAVE_KEY + '-seen';
+let hubSeen = false;
+function hubBackLink() {
   const a = document.getElementById('backLink');
-  a.href = 'さんすうセット ていがくねん.html' + (TEACHER ? '?teacher=1' : '');
+  a.href = HUB + (TEACHER ? '?teacher=1' : '');
   a.textContent = '🏠 ボードえらび';
 }
-if (LOW) {
-  lowBackLink();
-  try { lowSeen = sessionStorage.getItem(LOW_SEEN) === '1'; sessionStorage.setItem(LOW_SEEN, '1'); } catch (_) {}
+if (HUB) {
+  hubBackLink();
+  try { hubSeen = sessionStorage.getItem(HUB_SEEN) === '1'; sessionStorage.setItem(HUB_SEEN, '1'); } catch (_) {}
 }
 let saveTimer = 0;
 function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 600); }
@@ -2789,10 +2795,10 @@ applyGrade(false);
   if (sv) {
     const d = new Date(sv.at || Date.now());
     $('resumeInfo').textContent = `${d.getMonth() + 1}がつ ${d.getDate()}にち ${d.getHours()}じ${String(d.getMinutes()).padStart(2, '0')}ふん の ボード（かたち ${sv.shapes.length}こ）`;
-    if (lowSeen) $('resumeYes').click(); else $('resumeBg').hidden = false;
+    if (hubSeen) $('resumeYes').click(); else $('resumeBg').hidden = false;
   }
 }
-if (LOW) $('levelRow').hidden = true;   // ていがくねんでは だれむけを えらばない
+if (HUB) $('levelRow').hidden = true;   // ていがくねん・高学年では だれむけを えらばない
 else if (!Q.has('level') && !Q.has('grade') && !Q.has('mode') && !Q.has('teacher')) {
   $('setTitle').textContent = '🎓 はじめる まえに えらんでね'; $('setClose').textContent = '▶ はじめる'; $('setBg').hidden = false;
 }
