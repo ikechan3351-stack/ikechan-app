@@ -126,6 +126,7 @@
     <button class="btn" data-meas="angle" title="角の 大きさを 見せる"><span class="ic">📐</span><span class="lbl">角度</span></button>
     <button class="btn" data-meas="area" title="面積（マスの数）を 見せる"><span class="ic">🟦</span><span class="lbl">面積</span></button>
   </div>
+  <button class="btn on" id="ghostBtn" title="切ったり 動かしたり する 前の 形を うすく 見せる"><span class="ic">⬚</span><span class="lbl">もとの形</span></button>
   <div class="spacer"></div>
 </div>
 
@@ -134,8 +135,8 @@
   <div class="tools" id="tools">
     <button class="tool on" data-tool="make"><span class="ic">✏️</span>つくる</button>
     <button class="tool" data-tool="move"><span class="ic">👆</span>うごかす</button>
-    <button class="tool soon" data-tool="cut" title="パート2で 作ります"><span class="ic">✂️</span>きる</button>
-    <button class="tool soon" data-tool="paste" title="パート2で 作ります"><span class="ic">🧩</span>はる</button>
+    <button class="tool" data-tool="cut"><span class="ic">✂️</span>きる</button>
+    <button class="tool" data-tool="paste"><span class="ic">🧩</span>はる</button>
     <button class="tool soon" data-tool="overlap" title="パート3で 作ります"><span class="ic">🔍</span>かさねる</button>
   </div>
   <div class="boardwrap" id="boardwrap">
@@ -211,8 +212,12 @@ const COLORS = [
 
 /* ---------- 状態（じょうたい） ---------- */
 const S = {
-  pieces: [],          // 色板 { id, pts:[[x,y],...], c:色の番号 }
+  pieces: [],          // 色板 { id, pts:[[x,y],...], c:色の番号, g:もとの形の番号 }
   nextId: 1,
+  ghosts: {},          // もとの形 { g: pts }（切ったり 動かしたり する 前の 形）
+  nextG: 1,
+  ghost: true,         // もとの形の 影を 見せるか
+  pasteA: null,        // はる 道具で えらんだ 1まいめの id
   tool: 'make',
   color: 4,
   sel: null,           // えらんでいる 色板の id
@@ -358,7 +363,7 @@ function fmtLen(dx, dy) {
 }
 
 /* ---------- もどる・やりなおす ---------- */
-function snapshot() { return JSON.stringify({ p: S.pieces, n: S.nextId }); }
+function snapshot() { return JSON.stringify({ p: S.pieces, n: S.nextId, gh: S.ghosts, ng: S.nextG }); }
 function pushUndo() {
   undoStack.push(snapshot());
   if (undoStack.length > 100) undoStack.shift();
@@ -367,8 +372,9 @@ function pushUndo() {
 }
 function restore(s) {
   const o = JSON.parse(s);
-  S.pieces = o.p; S.nextId = o.n;
+  S.pieces = o.p; S.nextId = o.n; S.ghosts = o.gh; S.nextG = o.ng;
   if (!S.pieces.find(p => p.id === S.sel)) S.sel = null;
+  if (!S.pieces.find(p => p.id === S.pasteA)) S.pasteA = null;
 }
 function undo() {
   if (S.making.length) { S.making.pop(); draw(); updateHint(); return; }
@@ -392,10 +398,49 @@ function draw() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
   drawGrid();
+  if (S.ghost) drawGhosts();
   for (const p of S.pieces) drawPiece(p);
+  if (S.tool === 'paste') drawPasteMarks();
   // 測る 値は 色板の 上に まとめて かく（下に かくれないように）
   for (const p of S.pieces) drawMeasures(p);
   drawMaking();
+  drawCutLine();
+}
+
+// もとの形の 影（うすい 灰色の 点線）。色板が 1まいも のこって いない 形は かかない
+function drawGhosts() {
+  const live = new Set(S.pieces.map(p => p.g));
+  for (const g of Object.keys(S.ghosts)) {
+    if (!live.has(Number(g))) continue;
+    pathOf(S.ghosts[g]);
+    ctx.fillStyle = 'rgba(120,144,156,0.13)'; ctx.fill();
+    ctx.setLineDash([6, 5]); ctx.lineWidth = 2.5; ctx.strokeStyle = '#90a4ae'; ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+
+// はる 道具：えらんだ 1まい（オレンジ）と、くっつけられる 相手（みどり）
+function pasteCandidates(a) { return S.pieces.filter(q => q !== a && mergePolys(a.pts, q.pts)); }
+function drawPasteMarks() {
+  const a = S.pieces.find(p => p.id === S.pasteA);
+  if (!a) return;
+  for (const q of pasteCandidates(a)) {
+    pathOf(q.pts); ctx.lineWidth = 5; ctx.strokeStyle = '#2e7d32'; ctx.setLineDash([10, 6]); ctx.stroke(); ctx.setLineDash([]);
+    const [cx, cy] = centroid(q.pts), [px, py] = toPx(cx, cy);
+    label('＋', px, py, Math.max(20, CELL * 0.6), '#2e7d32');
+  }
+  pathOf(a.pts); ctx.lineWidth = 6; ctx.strokeStyle = '#ef6c00'; ctx.stroke();
+}
+
+// きる 道具：ひいている 線と、切った しゅんかんの 光る 線
+function drawCutLine() {
+  const L = cutDrag && cutDrag.end ? [cutDrag.start, cutDrag.end] : cutFlash ? [cutFlash.A, cutFlash.B] : null;
+  if (!L) return;
+  const [ax, ay] = toPx(...L[0]), [bx, by] = toPx(...L[1]);
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+  ctx.lineWidth = cutFlash && !cutDrag ? 5 : 3; ctx.strokeStyle = cutFlash && !cutDrag ? '#ffb300' : '#ad1457';
+  ctx.setLineDash(cutFlash && !cutDrag ? [] : [10, 6]); ctx.stroke(); ctx.setLineDash([]);
+  for (const [x, y] of [[ax, ay], [bx, by]]) { ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fillStyle = '#ad1457'; ctx.fill(); }
+  if (cutDrag) label('✂️', bx + 18, by - 18, 26, '#ad1457');
 }
 
 function drawGrid() {
@@ -408,8 +453,8 @@ function drawGrid() {
     ctx.strokeStyle = j % 5 === 0 ? '#9fa8da' : '#dde1f3';
     ctx.beginPath(); ctx.moveTo(OX, OY + j * CELL + 0.5); ctx.lineTo(OX + COLS * CELL, OY + j * CELL + 0.5); ctx.stroke();
   }
-  // つくる 道具の ときは 格子点を 見せる
-  if (S.tool === 'make') {
+  // つくる・きる 道具の ときは 格子点を 見せる
+  if (S.tool === 'make' || S.tool === 'cut') {
     ctx.fillStyle = '#7986cb';
     const r = Math.max(2, CELL * 0.06);
     for (let i = 0; i <= COLS; i++) for (let j = 0; j <= ROWS; j++) {
@@ -556,9 +601,181 @@ function finishMaking() {
 }
 function addPiece(pts) {
   pushUndo();
-  const p = { id: S.nextId++, pts, c: S.color };
+  const g = newGhost(pts);
+  const p = { id: S.nextId++, pts, c: S.color, g };
   S.pieces.push(p);
   return p;
+}
+// 新しい「もとの形」を おぼえる
+function newGhost(pts) {
+  const g = S.nextG++;
+  S.ghosts[g] = pts.map(q => q.slice());
+  return g;
+}
+
+/* =====================================================================
+   きる：線（格子点 から 格子点）で 色板を 切りわける
+   - 線と へりの 交わる点を 分数で きっちり 計算する。
+   - 交わる点が 格子点で なければ 切らない（頂点が いつも 格子点に なるように）。
+   ===================================================================== */
+// 2倍した 座標で、点が へりの 上に あるか
+function onBoundary2(pts, X, Y) {
+  for (let i = 0; i < pts.length; i++) {
+    const a = [pts[i][0] * 2, pts[i][1] * 2], b = [pts[(i + 1) % pts.length][0] * 2, pts[(i + 1) % pts.length][1] * 2];
+    if (cross(a, b, [X, Y]) === 0 && onSeg([X, Y], a, b)) return true;
+  }
+  return false;
+}
+// 線分 A→B と 多角形の へりの 交わる点（t の 小さい じゅん）。lattice＝格子点か
+function crossings(pts, A, B) {
+  const d = [B[0] - A[0], B[1] - A[1]], out = [];
+  const add = (t, x, y, lat) => { if (!out.some(o => Math.abs(o.t - t) < 1e-9)) out.push({ t, p: [x, y], lat }); };
+  for (let i = 0; i < pts.length; i++) {
+    const P = pts[i], Qp = pts[(i + 1) % pts.length], e = [Qp[0] - P[0], Qp[1] - P[1]];
+    const den = d[0] * e[1] - d[1] * e[0];
+    const ap = [P[0] - A[0], P[1] - A[1]];
+    if (den === 0) {
+      // 平行：同じ 直線の 上で 重なって いれば、重なりの はしを 交わる点に する
+      if (ap[0] * d[1] - ap[1] * d[0] !== 0) continue;
+      const dd = d[0] * d[0] + d[1] * d[1];
+      for (const V of [P, Qp]) { const tn = (V[0] - A[0]) * d[0] + (V[1] - A[1]) * d[1]; if (tn >= 0 && tn <= dd) add(tn / dd, V[0], V[1], true); }
+      for (const [V, t] of [[A, 0], [B, 1]]) if (onSeg(V, P, Qp)) add(t, V[0], V[1], true);
+      continue;
+    }
+    let tn = ap[0] * e[1] - ap[1] * e[0], un = ap[0] * d[1] - ap[1] * d[0], dn = den;
+    if (dn < 0) { tn = -tn; un = -un; dn = -dn; }
+    if (tn < 0 || tn > dn || un < 0 || un > dn) continue;
+    const xn = d[0] * tn, yn = d[1] * tn;
+    const lat = xn % dn === 0 && yn % dn === 0;
+    add(tn / dn, A[0] + xn / dn, A[1] + yn / dn, lat);
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+// 弦（へりの 上の 2点 a・b を むすぶ 線）で 多角形を 2つに 分ける
+function insertPoint(pts, q) {
+  let i = pts.findIndex(v => v[0] === q[0] && v[1] === q[1]);
+  if (i >= 0) return i;
+  for (i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    if (cross(a, b, q) === 0 && onSeg(q, a, b)) { pts.splice(i + 1, 0, q.slice()); return i + 1; }
+  }
+  return -1;
+}
+function splitByChord(pts0, a, b) {
+  const pts = pts0.map(v => v.slice());
+  if (insertPoint(pts, a) < 0 || insertPoint(pts, b) < 0) return null;
+  const ia = pts.findIndex(v => v[0] === a[0] && v[1] === a[1]);
+  const ib = pts.findIndex(v => v[0] === b[0] && v[1] === b[1]);
+  const walk = (s, t) => { const r = []; for (let k = s; ; k = (k + 1) % pts.length) { r.push(pts[k]); if (k === t) break; } return r; };
+  const p1 = tidy(walk(ia, ib)), p2 = tidy(walk(ib, ia));
+  if (p1.length < 3 || p2.length < 3 || !area2(p1) || !area2(p2)) return null;
+  return [p1, p2];
+}
+// 1まいの 色板を 線 A→B で 切る。結果：{ parts } / { bad:true }（格子点を 通らない）/ null（切れない）
+function cutPiece(pts, A, B) {
+  const xs = crossings(pts, A, B), chords = [];
+  for (let i = 0; i + 1 < xs.length; i++) {
+    const p = xs[i].p, q = xs[i + 1].p;
+    const MX = p[0] + q[0], MY = p[1] + q[1];          // まん中の 点（2倍）
+    if (Number.isInteger(MX) && Number.isInteger(MY) && onBoundary2(pts, MX, MY)) continue;
+    if (!inside(pts, MX / 2, MY / 2)) continue;
+    if (!xs[i].lat || !xs[i + 1].lat) return { bad: true };
+    chords.push([p, q]);
+  }
+  if (!chords.length) return null;
+  let parts = [pts];
+  for (const [p, q] of chords) {
+    const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+    const k = parts.findIndex(r => inside(r, mx, my));
+    if (k < 0) continue;
+    const sp = splitByChord(parts[k], p, q);
+    if (sp) parts.splice(k, 1, ...sp);
+  }
+  return parts.length > 1 ? { parts } : null;
+}
+function doCut(A, B) {
+  if (A[0] === B[0] && A[1] === B[1]) return;
+  const results = [];
+  let bad = false;
+  for (const p of S.pieces) {
+    const r = cutPiece(p.pts, A, B);
+    if (r && r.bad) bad = true;
+    else if (r) results.push([p, r.parts]);
+  }
+  if (!results.length) {
+    toast(bad ? 'マスの 点（格子点）を 通る ところで 切ってね' : '色板の へりから へりまで 線を 引いてね');
+    return;
+  }
+  pushUndo();
+  // 重なった 色板は、紙と 同じように いっしょに 切れる
+  for (const [p, parts] of results) {
+    const i = S.pieces.indexOf(p);
+    const np = parts.map(pts => ({ id: S.nextId++, pts: area2(pts) < 0 ? pts.reverse() : pts, c: p.c, g: p.g }));
+    S.pieces.splice(i, 1, ...np);
+  }
+  cutFlash = { A, B, until: performance.now() + 600 };
+  requestAnimationFrame(flashLoop);
+  if (bad) toast('格子点を 通らない ところは 切れません');
+  after();
+}
+let cutFlash = null;
+function flashLoop() { draw(); if (cutFlash && performance.now() < cutFlash.until) requestAnimationFrame(flashLoop); else { cutFlash = null; draw(); } }
+
+/* =====================================================================
+   はる：へりが ぴったり くっついた 2まいを 1まいに する
+   - 2つの へりを、あいての 頂点で 細かく 分けて、
+     向きが 反対で 同じ 辺（くっついている 所）を とりのぞくと、まわりの へりが のこる。
+   ===================================================================== */
+function splitEdgesBy(P, Q) {
+  const r = [];
+  for (let i = 0; i < P.length; i++) {
+    const a = P[i], b = P[(i + 1) % P.length];
+    r.push(a);
+    const mids = Q.filter(v => cross(a, b, v) === 0 && onSeg(v, a, b) && !(v[0] === a[0] && v[1] === a[1]) && !(v[0] === b[0] && v[1] === b[1]));
+    mids.sort((u, v) => Math.hypot(u[0] - a[0], u[1] - a[1]) - Math.hypot(v[0] - a[0], v[1] - a[1]));
+    r.push(...mids);
+  }
+  return r;
+}
+function mergePolys(P0, Q0) {
+  const P = area2(P0) > 0 ? P0 : P0.slice().reverse(), Q = area2(Q0) > 0 ? Q0 : Q0.slice().reverse();
+  const Ps = splitEdgesBy(P, Q), Qs = splitEdgesBy(Q, P);
+  const key = (a, b) => a + '>' + b;
+  const edges = [];
+  for (const L of [Ps, Qs]) for (let i = 0; i < L.length; i++) edges.push([L[i], L[(i + 1) % L.length], L === Ps ? 0 : 1]);
+  const setOf = [new Set(), new Set()];
+  for (const [a, b, w] of edges) setOf[w].add(key(a, b));
+  let shared = 0;
+  const keep = edges.filter(([a, b, w]) => { const s = setOf[1 - w].has(key(b, a)); if (s) shared++; return !s; });
+  if (!shared) return null;                                  // くっついて いない
+  const next = new Map();
+  for (const [a, b] of keep) { const k = String(a); if (next.has(k)) return null; next.set(k, b); }
+  if (!keep.length) return null;
+  const res = [keep[0][0]];
+  let cur = keep[0][1];
+  while (String(cur) !== String(res[0])) {
+    res.push(cur);
+    cur = next.get(String(cur));
+    if (!cur || res.length > keep.length) return null;
+  }
+  if (res.length !== keep.length) return null;               // 穴が できる・2つに はなれる
+  const m = tidy(res);
+  if (m.length < 3 || !isSimple(m) || area2(m) !== area2(P) + area2(Q)) return null;   // 重なって いる
+  return m;
+}
+function doPaste(a, b) {
+  const m = mergePolys(a.pts, b.pts);
+  if (!m) return false;
+  pushUndo();
+  // 同じ もとの形から 切った 2まいなら、もとの形を ひきつぐ
+  const g = a.g === b.g ? a.g : newGhost(m);
+  const np = { id: S.nextId++, pts: m, c: a.c, g };
+  const i = S.pieces.indexOf(a);
+  S.pieces = S.pieces.filter(q => q !== a && q !== b);
+  S.pieces.splice(Math.min(i, S.pieces.length), 0, np);
+  S.pasteA = null;
+  after();
+  return true;
 }
 
 /* ---------- うごかす ---------- */
@@ -601,6 +818,7 @@ $('selCopy').onclick = () => {
   pushUndo();
   const q = { id: S.nextId++, pts: p.pts.map(([x, y]) => [x + 1, y + 1]), c: p.c };
   keepOnBoard(q);
+  q.g = newGhost(q.pts);
   S.pieces.push(q); S.sel = q.id;
   after();
 };
@@ -635,11 +853,19 @@ cv.addEventListener('pointerdown', e => {
     downs.set(e.pointerId, { pt, moved: false });
     return;
   }
-  if (S.tool === 'move') {
+  if (S.tool === 'cut') {
+    // 色板の 上でも 外でも、格子点から 線を ひきはじめる
+    const pt = nearLattice(px, py) || (() => { const [gx, gy] = toGrid(px, py); return [Math.max(0, Math.min(COLS, Math.round(gx))), Math.max(0, Math.min(ROWS, Math.round(gy)))]; })();
+    cutDrag = { id: e.pointerId, start: pt, end: null };
+    draw();
+    return;
+  }
+  if (S.tool === 'move' || S.tool === 'paste') {
     const p = pieceAt(px, py);
-    if (!p) { S.sel = null; after(); return; }
+    if (!p) { S.sel = null; S.pasteA = null; after(); return; }
     if ([...drags.values()].some(d => d.piece === p)) return;   // べつの ゆびが もう 動かしている
-    bringFront(p); S.sel = p.id;
+    bringFront(p);
+    if (S.tool === 'move') S.sel = p.id;
     const [gx, gy] = toGrid(px, py);
     drags.set(e.pointerId, { piece: p, start: [gx, gy], orig: p.pts.map(q => q.slice()), before: snapshot(), moved: false });
     $('selbar').hidden = true;
@@ -658,6 +884,14 @@ cv.addEventListener('pointermove', e => {
       rectDrag = [d.pt, pt];
     }
     hover = S.making.length && e.pointerType === 'mouse' ? pt : null;
+    draw();
+    return;
+  }
+  if (S.tool === 'cut') {
+    if (!cutDrag || cutDrag.id !== e.pointerId) return;
+    const [gx, gy] = toGrid(px, py);
+    const pt = [Math.max(0, Math.min(COLS, Math.round(gx))), Math.max(0, Math.min(ROWS, Math.round(gy)))];
+    cutDrag.end = pt[0] === cutDrag.start[0] && pt[1] === cutDrag.start[1] ? null : pt;
     draw();
     return;
   }
@@ -687,23 +921,37 @@ function endPointer(e) {
     draw();
     return;
   }
+  if (S.tool === 'cut') {
+    if (!cutDrag || cutDrag.id !== e.pointerId) return;
+    const c = cutDrag; cutDrag = null;
+    if (c.end && e.type === 'pointerup') doCut(c.start, c.end);
+    else if (e.type === 'pointerup') toast('格子点から 格子点まで 線を ひいて 切ります');
+    draw();
+    return;
+  }
   const d = drags.get(e.pointerId);
   if (!d) return;
   drags.delete(e.pointerId);
   if (d.moved) {
     keepOnBoard(d.piece);
     undoStack.push(d.before); redoStack.length = 0;
+  } else if (S.tool === 'paste' && e.type === 'pointerup') {
+    // タップ：1まいめを えらぶ → みどりの 相手を タップで はる
+    const a = S.pieces.find(p => p.id === S.pasteA);
+    if (!a || a === d.piece) S.pasteA = a === d.piece ? null : d.piece.id;
+    else if (!doPaste(a, d.piece)) { S.pasteA = d.piece.id; toast('へりが ぴったり くっついて いないと はれません'); }
   }
   after();
 }
+let cutDrag = null;
 cv.addEventListener('pointerup', endPointer);
 cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && hover) { hover = null; draw(); } });
 
 /* ---------- 道具・色・はかる ---------- */
 function setTool(t) {
-  if (['cut', 'paste', 'overlap'].includes(t)) { toast('この 道具は じゅんびちゅうです'); return; }
-  S.tool = t; S.making = []; rectDrag = null; hover = null;
+  if (t === 'overlap') { toast('この 道具は じゅんびちゅうです'); return; }
+  S.tool = t; S.making = []; rectDrag = null; hover = null; cutDrag = null; S.pasteA = null;
   if (t !== 'move') S.sel = null;
   document.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
   after();
@@ -734,6 +982,7 @@ document.querySelectorAll('[data-meas]').forEach(b => b.onclick = () => {
 });
 
 /* ---------- 下の ボタン ---------- */
+$('ghostBtn').onclick = () => { S.ghost = !S.ghost; $('ghostBtn').classList.toggle('on', S.ghost); draw(); };
 $('undo').onclick = undo;
 $('redo').onclick = redo;
 $('cancelMake').onclick = () => { S.making = []; after(); };
@@ -761,6 +1010,11 @@ function updateHint() {
       : '点を じゅんに タップして 色板を つくる。点から ゆびを すべらせると 長方形';
   } else if (S.tool === 'move') {
     h = selPiece() ? 'ひっぱって 動かす。上の ボタンで まわす・うらがえす。色を タップで 色が かわる' : '色板を タップして えらぶ・ひっぱって 動かす';
+  } else if (S.tool === 'cut') {
+    h = '色板の 外から 外まで（または へりから へりまで）、格子点を むすぶ 線を ひくと 切れる';
+  } else if (S.tool === 'paste') {
+    h = S.pasteA ? 'みどりの ＋ の 色板を タップすると 1まいに なる。ひっぱって 動かす ことも できる'
+                 : 'はりたい 色板を タップ（オレンジに なる）。ひっぱって 動かす ことも できる';
   }
   $('hint').textContent = h;
 }
