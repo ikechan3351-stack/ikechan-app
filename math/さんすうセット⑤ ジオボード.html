@@ -211,6 +211,7 @@
   </div>
   <div class="group" id="writeMode" hidden>
     <button class="btn on" data-wmode="pen" title="手で かく"><span class="ic">✏️</span>ペン</button>
+    <button class="btn" data-wmode="line" title="まっすぐな 線を ひく"><span class="ic">📏</span>ちょくせん</button>
     <button class="btn" data-wmode="text" title="もじを 入れる"><span class="ic">🔤</span>もじ</button>
     <button class="btn" data-wmode="erase" title="けしゴム"><span class="ic">🧽</span>けしゴム</button>
   </div>
@@ -404,7 +405,7 @@ let paintColor = '#1e88e5';             // ぬる いろ（null＝ぬりを け�
 let paintTarget = 'fill';               // 'fill' なかを ぬる／'stroke' ゴムの いろを かえる
 let paintAlpha = 0.5;                   // 0.5 うすい／1 こい
 let rotStep = 15;                       // まわす ハンドル：15°ずつ（0＝じゆう）
-let writeMode = 'pen';                  // かく：'pen' ペン／'text' もじ／'erase' けしゴム
+let writeMode = 'pen';                  // かく：'pen' ペン／'line' ちょくせん／'text' もじ／'erase' けしゴム
 let writeColor = '#263238';             // ペン・もじの いろ
 let writeSize = 1;                      // 0 小／1 中／2 大
 const PEN_W = [3, 6, 11];               // ペンの ふとさ（px。ばんの 拡大に あわせて かわる）
@@ -883,6 +884,14 @@ function render(t) {
 const toGrid = (x, y) => ({ x: (x - geo.ox) / geo.sp, y: (y - geo.oy) / geo.sp });
 const fromGrid = p => ({ x: geo.ox + p.x * geo.sp, y: geo.oy + p.y * geo.sp });
 let textRects = [];                      // まいフレームの もじの いち（タップの あたり）
+// ちょくせんの むきが よこ・たて・ななめ45°に ちかい（6°いない）ときは ぴったり そろえる
+function snapLine(ax, ay, x, y) {
+  const dx = x - ax, dy = y - ay, len = Math.hypot(dx, dy);
+  if (len < 1) return { x, y };
+  const a = Math.atan2(dy, dx), step = Math.PI / 4, sa = Math.round(a / step) * step;
+  if (Math.abs(a - sa) > 6 * Math.PI / 180) return { x, y };
+  return { x: ax + Math.cos(sa) * len, y: ay + Math.sin(sa) * len };
+}
 function drawInk() {
   // 手がきの せん：点と 点の まん中を 通る なめらかな 曲線で つなぐ
   fx.lineCap = 'round'; fx.lineJoin = 'round';
@@ -1841,9 +1850,9 @@ wrap.addEventListener('pointerdown', e => {
   if (tool === 'write') {
     if (editing) closeTextInput(true);
     Object.assign(pointer, { id: e.pointerId, x, y, downX: x, downY: y, type: e.pointerType, moved: false, erased: false });
-    if (writeMode === 'pen') {
-      // 手で かく：1本の せんを はじめる
-      pointer.kind = 'pen';
+    if (writeMode === 'pen' || writeMode === 'line') {
+      // 手で かく：1本の せんを はじめる（ちょくせんは 2つの 点だけで できた せん）
+      pointer.kind = 'pen'; pointer.straight = writeMode === 'line';
       pushHist();
       const st = { id: nextId++, points: [toGrid(x, y)], color: writeColor, width: PEN_W[writeSize] * SCALE };
       state.strokes.push(st); pointer.stroke = st;
@@ -2036,6 +2045,11 @@ wrap.addEventListener('pointermove', e => {
     for (const ev of (list && list.length ? list : [e])) {
       const { x, y } = localXY(ev);
       if (pointer.kind === 'erase') { eraseAt(x, y); continue; }
+      if (pointer.straight) {
+        // ちょくせん：はじめの 点と いまの 点を まっすぐ むすぶ（よこ・たて・ななめ45°の ちかくなら ぴったり そろえる）
+        const pts = pointer.stroke.points, a = fromGrid(pts[0]), q = snapLine(a.x, a.y, x, y);
+        pts.length = 1; pts.push(toGrid(q.x, q.y)); continue;
+      }
       const pts = pointer.stroke.points, last = fromGrid(pts[pts.length - 1]);
       if (Math.hypot(x - last.x, y - last.y) >= 1.5) pts.push(toGrid(x, y));
     }
@@ -2306,6 +2320,7 @@ function updateHint(mode) {
   else if (tool === 'paste') h = pasteFirst ? 'みどりに 光った かたちを タップすると はれるよ。ひっぱって くっつけても いいよ'
                                             : 'はりたい かたちを タップしよう。ひっぱると うごくよ';
   else if (tool === 'write') h = writeMode === 'pen' ? '指や ペンで じゆうに かこう'
+    : writeMode === 'line' ? 'はじめの ところから ひっぱると、まっすぐな 線が ひけるよ'
     : writeMode === 'erase' ? 'けしたい せんや もじを こすろう'
     : editing ? 'もじを 入れて、Enter（かんりょう）で きまるよ'
     : 'もじを 入れたい ところを タップしよう。もじを ひっぱると うごくよ。タップで なおせるよ';

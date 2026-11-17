@@ -246,6 +246,7 @@
   <div class="group">
     <button class="btn on" id="modeMove" title="うごかす"><span class="ic">✋</span>うごかす</button>
     <button class="btn draw" id="modeDraw" title="かく"><span class="ic">✏️</span>かく</button>
+    <button class="btn draw" id="modeLine" title="まっすぐな 線を ひく"><span class="ic">📏</span>ちょくせん</button>
     <button class="btn tie" id="modeTie" title="おかねを えらんで まとめる（りょうがえ）"><span class="ic">🔗</span>まとめる</button>
   </div>
   <div class="group" id="penColors"></div>
@@ -564,6 +565,7 @@ let ordTop = 0;
 let strokes = [];   // { color, pts: [[x,y], ...] }
 let nextId = 1, zTop = 1;
 let mode = 'move';  // 'move' か 'draw'
+let straight = false;  // true なら ペンが まっすぐな 線（ちょくせん）に なる
 let penColor = PEN_COLORS[0].color;
 
 const params = new URLSearchParams(location.search);
@@ -1632,6 +1634,14 @@ function drawStroke(ctx, s) {
   ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
   ctx.stroke();
 }
+// ちょくせんの むきが よこ・たて・ななめ45°に ちかい（6°いない）ときは ぴったり そろえる
+function snapLine(ax, ay, x, y) {
+  const dx = x - ax, dy = y - ay, len = Math.hypot(dx, dy);
+  if (len < 1) return { x, y };
+  const a = Math.atan2(dy, dx), step = Math.PI / 4, sa = Math.round(a / step) * step;
+  if (Math.abs(a - sa) > 6 * Math.PI / 180) return { x, y };
+  return { x: ax + Math.cos(sa) * len, y: ay + Math.sin(sa) * len };
+}
 function redrawInk() {
   ictx.save();
   ictx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1645,13 +1655,20 @@ ink.addEventListener('pointerdown', e => {
   try { ink.setPointerCapture(e.pointerId); } catch (_) {}
   const p = toBoard(e.clientX, e.clientY);
   const stroke = { color: penColor, pts: [[p.x, p.y]] };
-  drawing.set(e.pointerId, { stroke, snap: snapshot() });
+  drawing.set(e.pointerId, { stroke, snap: snapshot(), straight });
   strokes.push(stroke);
   drawStroke(ictx, stroke);
 });
 ink.addEventListener('pointermove', e => {
   const d = drawing.get(e.pointerId);
   if (!d) return;
+  if (d.straight) {
+    // ちょくせん：はじめの 点と いまの 点の 2つだけで できた 線にして かきなおす
+    const p = toBoard(e.clientX, e.clientY), a = d.stroke.pts[0], q = snapLine(a[0], a[1], p.x, p.y);
+    d.stroke.pts = [a, [q.x, q.y]];
+    redrawInk();
+    return;
+  }
   // こまかい 動きも ひろって、線を なめらかにする
   const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
   for (const ev of (evs.length ? evs : [e])) {
@@ -1684,14 +1701,16 @@ function setMode(m) {
   closeBreakMenu();
   if (changed) buildToolbox();
   $('modeMove').classList.toggle('on', m === 'move');
-  $('modeDraw').classList.toggle('on', m === 'draw');
+  $('modeDraw').classList.toggle('on', m === 'draw' && !straight);
+  $('modeLine').classList.toggle('on', m === 'draw' && straight);
   $('modeTie').classList.toggle('on', m === 'tie');
   stage.classList.toggle('drawing', m === 'draw');
   stage.classList.toggle('tying', m === 'tie');
   document.querySelectorAll('.pen').forEach(b => b.classList.toggle('on', m === 'draw' && b.dataset.color === penColor));
 }
 $('modeMove').onclick = () => setMode('move');
-$('modeDraw').onclick = () => setMode('draw');
+$('modeDraw').onclick = () => { straight = false; setMode('draw'); };
+$('modeLine').onclick = () => { straight = true; setMode('draw'); };   // ペンの いろは そのまま
 $('modeTie').onclick = () => { setMode('tie'); toast('🔗 ひだりで「なにに まとめるか」を えらんでね'); };
 for (const c of PEN_COLORS) {
   const b = document.createElement('button');
