@@ -118,6 +118,8 @@
 
   /* ===== とけい ===== */
   .clock { position: absolute; cursor: grab; }
+  .nline { position: absolute; pointer-events: none; }
+  .nline svg { display: block; width: 100%; height: 100%; }
   .clock svg { display: block; width: 100%; height: 100%; }
   .clock.turning { cursor: grabbing; }
   .clabel { position: absolute; transform: translateX(-50%); font-size: 30px; font-weight: 900; color: var(--accent-dark);
@@ -228,6 +230,7 @@
   </div>
   <button class="btn minnum" id="minNumBtn" title="ふんの すうじを だす・けす"><span class="ic">🔢</span>ふんの すうじ</button>
   <button class="btn toggle" id="shadowBtn" title="おわりの とけいに、はじめの とけいの はりを うすく だす"><span class="ic">◐</span>かげのはり</button>
+  <button class="btn toggle" id="lineBtn" title="じかんの すうちょくせんを だす・けす（とけいの ピースが 線の 上にも ならぶ）"><span class="ic">📏</span>すうちょくせん</button>
   <button class="btn toggle" id="ampmBtn" title="ごぜん・ごご の 札を だす・けす"><span class="ic">🌞</span>ごぜん・ごご</button>
   <div class="group">
     <button class="btn" id="undo" title="もどる（Ctrl+Z）" disabled><span class="ic">↩️</span>もどる</button>
@@ -475,11 +478,15 @@ const opt = {                                              // 先生の せっ�
 };
 /* ---- じかんの ピース（2ねん）----
    とけいの ふちに、はじめ から おわり まで の あいだを うめる おうぎ形の ピースを ならべる。
-   chains[i] … i ばんめの とけいの ならび { s: 1こ目の はしの 位置（0〜59ふん の 目もり）, segs: [ピースの ながさ(ふん), ...] }
+   chains[i] … i ばんめの とけいの ならび { s: 1こ目の はしの 位置（0〜59ふん の 目もり）, t0: 1こ目を おいた ときの 時こく（0〜1439。すうちょくせんの「○じ」に つかう）,
+                segs: [ピースの ながさ(ふん), ...] }
    ピースは つながって ならぶ（すきま・かさなりは できない）。60ぷんを こえると 外がわの 2だんめに つづく（2じかん まで）。
    とけい1つ の とき は 0ばん、2つ の とき は おわりの とけい（1ばん）だけに おける。 */
 const SEG_MAX = 120;                                       // 2じかん（2だん）まで
-let chains = [ { s: 0, segs: [] }, { s: 0, segs: [] } ];
+let chains = [ { s: 0, t0: 0, segs: [] }, { s: 0, t0: 0, segs: [] } ];
+let nline = false;                                         // じかんの すうちょくせんを 出しているか（2ねん）
+const showLine = () => nline && usePieces();
+const copyChain = ch => ({ s: ch.s, t0: ch.t0, segs: ch.segs.slice() });
 const usePieces = () => grade === 2 && opt.piece;
 const pieceClock = () => count === 2 ? 1 : 0;              // ピースを おける とけい
 const chainSum = ch => ch.segs.reduce((a, b) => a + b, 0);
@@ -617,6 +624,8 @@ const setVB = () => { VB = usePieces() ? 336 : 290; };
 // じかんの ピースの 帯の 内がわ・外がわ（1だんめ・2だんめ）
 const RINGS = [[247, 288], [293, 334]];
 function geom(i) {
+  // すうちょくせんを 出す ときは、とけいを 小さく 上に よせて、下に 線の 場所を あける
+  if (showLine()) return { cx: count === 1 ? 600 : i === 0 ? 300 : 900, cy: 226, R: 212 };
   if (count === 1) return { cx: 600, cy: 290, R: 262 };
   return { cx: i === 0 ? 300 : 900, cy: 300, R: 232 };
 }
@@ -713,6 +722,64 @@ const clockSvg = (c, withMin, ghost, i) => {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-VB} ${-VB} ${VB * 2} ${VB * 2}">${faceSvg()}${ch}${withMin ? minNumSvg() : ''}${handsSvg(c, ghost)}</svg>`;
 };
 
+/* ---- じかんの すうちょくせん（2ねん）----
+   ボードの いちばん下に 2じかん（ピースが のびれば 3じかん）ぶんの 横の 線。とけいに ならべた ピースが、おなじ 色の 帯で 線の 上にも ならぶ。
+   数字は ちょうどの 時こく（8じ・9じ…）だけ。おわりの 印は 出さない（こたえに なるので）。 */
+const LINE = { l: 24, t: 594, w: 1036, h: 120 };          // 右下の ごみばこに かからない はば
+const LINE_PAD = 46;                                       // 線の 左右の あき
+const LINE_Y = 72;                                         // 線の 高さ（はこの 中）
+function lineSvg() {
+  const ch = chains[pieceClock()];
+  const has = ch.segs.length > 0;
+  const t0 = has ? ch.t0 : clocks[0].t;                    // ピースが ない ときは はじめの とけいの「じ」から
+  const H0 = Math.floor(t0 / 60);
+  // 線の ながさ：ふだんは 2じかん。ピースが 2じかんめの 先まで のびたら 3じかん（1ぷんの はばを 大きく とる ため）
+  const LINE_MIN = Math.max(2, Math.ceil(((t0 % 60) + (has ? chainSum(ch) : 0)) / 60)) * 60;
+  const k = (LINE.w - LINE_PAD * 2) / LINE_MIN;            // 1ぷんの はば
+  const X = m => LINE_PAD + (m - H0 * 60) * k;             // 時こく（ふん）→ 横の 位置
+  const F = FONT.replace(/"/g, '');
+  let s = `<rect x="2" y="2" width="${LINE.w - 4}" height="${LINE.h - 4}" rx="14" fill="#fff" stroke="#c5cae9" stroke-width="3"/>`;
+  // ピースの 帯（線の すぐ 上）
+  if (has) {
+    let cum = 0;
+    ch.segs.forEach((len, n) => {
+      const hour = len === 60, col = hour ? HOUR_COL : SEG_COL;
+      const x1 = X(t0 + cum), x2 = X(t0 + cum + len);
+      s += `<rect x="${x1.toFixed(1)}" y="${LINE_Y - 36}" width="${(x2 - x1).toFixed(1)}" height="30" fill="${n % 2 ? col.fill2 : col.fill}" stroke="#fff" stroke-width="3"/>`;
+      const txt = hour ? '1じかん' : String(len), fs = hour ? 20 : 21;
+      const bw = (hour ? fs * 3.6 : txt.length * fs * 0.62) + 12;
+      if (x2 - x1 >= bw + 2) {   // はばが せまい（1ぷん など）ときは 数字を かかない
+        const cx = (x1 + x2) / 2;
+        s += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${LINE_Y - 34}" width="${bw.toFixed(1)}" height="26" rx="13" fill="#fff" stroke="${hour ? '#1e63d6' : '#e53935'}" stroke-width="2"/>
+          <text x="${cx.toFixed(1)}" y="${LINE_Y - 14}" text-anchor="middle" font-family="${F}" font-weight="900" font-size="${fs}" fill="${col.text}">${txt}</text>`;
+      }
+      cum += len;
+    });
+    // はじめの 印（ピースの はし）
+    const xs = X(t0);
+    s += `<text x="${xs.toFixed(1)}" y="22" text-anchor="middle" font-family="${F}" font-weight="900" font-size="18" fill="#3949ab">はじめ</text>
+      <path d="M ${(xs - 7).toFixed(1)} 26 L ${(xs + 7).toFixed(1)} 26 L ${xs.toFixed(1)} 34 Z" fill="#3949ab"/>`;
+  }
+  // 線と 目もり（1ぷん：ほそい、5ふん：中、ちょうど：ふとい ＋ 数字）
+  s += `<line x1="${LINE_PAD - 14}" y1="${LINE_Y}" x2="${LINE.w - LINE_PAD + 14}" y2="${LINE_Y}" stroke="#263238" stroke-width="3" stroke-linecap="round"/>`;
+  for (let m = 0; m <= LINE_MIN; m++) {
+    const x = X(H0 * 60 + m).toFixed(1);
+    if (m % 60 === 0) {
+      const h = (H0 + m / 60) % 24;
+      const lab = showAmpm() ? `${h < 12 ? 'ごぜん' : 'ごご'}${h % 12}じ` : `${h % 12 || 12}じ`;
+      s += `<line x1="${x}" y1="${LINE_Y - 12}" x2="${x}" y2="${LINE_Y + 16}" stroke="#263238" stroke-width="5" stroke-linecap="round"/>
+        <text x="${x}" y="${LINE_Y + 40}" text-anchor="middle" font-family="${F}" font-weight="900" font-size="24" fill="#1e63d6">${lab}</text>`;
+    } else if (m % 5 === 0) {
+      s += `<line x1="${x}" y1="${LINE_Y}" x2="${x}" y2="${LINE_Y + 11}" stroke="#c62828" stroke-width="2.5"/>`;
+    } else {
+      s += `<line x1="${x}" y1="${LINE_Y}" x2="${x}" y2="${LINE_Y + 6}" stroke="#ef7f7c" stroke-width="1.2"/>`;
+    }
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${LINE.w} ${LINE.h}" width="${LINE.w}" height="${LINE.h}">${s}</svg>`;
+}
+let lineEl = null;
+function updateLine() { if (lineEl) lineEl.innerHTML = lineSvg(); }
+
 // とけいの 部品（絵・名ふだ・ボタン・こたえカード）を 作りなおす
 const clockEls = [];
 function renderClocks() {
@@ -774,6 +841,14 @@ function renderClocks() {
     updateCard(i);
     updateAmpm(i);
   }
+  lineEl = null;
+  if (showLine()) {
+    lineEl = document.createElement('div');
+    lineEl.className = 'nline';
+    Object.assign(lineEl.style, { left: LINE.l + 'px', top: LINE.t + 'px', width: LINE.w + 'px', height: LINE.h + 'px' });
+    clocksEl.appendChild(lineEl);
+    updateLine();
+  }
   updateTopButtons();
 }
 function updateAmpm(i) {
@@ -813,6 +888,7 @@ function updateCard(i) {
 // はりが うごいたら、こたえカードは「？」に もどす（めくって あてる だけに しない ため）
 function clockChanged(i) {
   updateHands(i);
+  if (i === 0 && showLine() && !chains[pieceClock()].segs.length) updateLine();   // 線の「○じ」は はじめの とけいから
   if (opened[i]) { opened[i] = false; updateCard(i); }
   scheduleSave();
 }
@@ -831,6 +907,8 @@ function updateTopButtons() {
   $('shadowBtn').hidden = !(grade === 2 && count === 2);
   $('shadowBtn').classList.toggle('on', shadow);
   $('ampmBtn').hidden = grade !== 2;
+  $('lineBtn').hidden = !usePieces();
+  $('lineBtn').classList.toggle('on', nline);
   $('ampmBtn').classList.toggle('on', ampm);
 }
 
@@ -843,7 +921,8 @@ function addSeg(len) {
   if (chainSum(ch) + len > SEG_MAX) { toast('ピースは 2じかん（2だん）までだよ'); return false; }
   const snap = snapshot();
   if (!ch.segs.length) {
-    ch.s = clocks[count === 2 ? 0 : i].t % 60;
+    ch.t0 = clocks[count === 2 ? 0 : i].t;
+    ch.s = ch.t0 % 60;
     if (count === 2) shadow = true;    // はじめの 時こくが 見えるように かげのはりも 出す
   }
   ch.segs.push(len);
@@ -1089,6 +1168,7 @@ function clockAvoid() {
     if (showAmpm()) rects.push({ l: g.cx + g.R - 140, t: g.cy - g.R - 18, r: g.cx + g.R + 40, b: g.cy - g.R + 42 });
   }
   if (!opt.link) rects.push({ l: 0, t: 0, r: 330, b: 56 });
+  if (showLine()) rects.push({ l: LINE.l, t: LINE.t, r: LINE.l + LINE.w, b: LINE.t + LINE.h });
   return { circles, rects };
 }
 function freeSpot(type) {
@@ -1114,7 +1194,7 @@ const undoStack = [], redoStack = [];
 function snapshot() {
   return { items: items.map(i => ({ ...i })), strokes: strokes.map(s => ({ color: s.color, pts: s.pts.slice() })),
            clocks: clocks.map(c => ({ ...c })), count, minNum, shadow, ampm,
-           chains: chains.map(ch => ({ s: ch.s, segs: ch.segs.slice() })) };
+           chains: chains.map(copyChain), nline };
 }
 function pushUndo(snap) {
   scheduleSave();
@@ -1131,7 +1211,8 @@ function restore(snap) {
   count = grade === 1 ? 1 : snap.count;
   minNum = snap.minNum && opt.minBtn;
   shadow = !!snap.shadow; ampm = !!snap.ampm;
-  if (snap.chains) chains = snap.chains.map(ch => ({ s: ch.s, segs: ch.segs.slice() }));
+  if (snap.chains) chains = snap.chains.map(copyChain);
+  nline = !!snap.nline;
   opened[0] = opened[1] = false;
   zTop = items.reduce((m, i) => Math.max(m, i.z), 1);
   rebuild();
@@ -1488,6 +1569,12 @@ $('minNumBtn').onclick = () => {
   minNum = !minNum;
   renderClocks();
 };
+$('lineBtn').onclick = () => {
+  dropGestures();
+  pushUndo(snapshot());
+  nline = !nline;
+  renderClocks();
+};
 $('shadowBtn').onclick = () => {
   pushUndo(snapshot());
   shadow = !shadow;
@@ -1671,7 +1758,7 @@ function stateData() {
     b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color],
     g: grade, n: count, f: minNum ? 1 : 0, h: shadow ? 1 : 0, a: ampm ? 1 : 0,
     o: [opt.link ? 1 : 0, opt.card ? 1 : 0, opt.minBtn ? 1 : 0, opt.piece ? 1 : 0],
-    p: chains.map(ch => [ch.s, ch.segs.slice()]),
+    p: chains.map(ch => [ch.s, ch.segs.slice(), ch.t0]), l: nline ? 1 : 0,
     k: clocks.map(c => [c.t, c.hd]),
     i: items.map(it => it.type === 'text' ? [it.type, r(it.x), r(it.y), it.text, it.fs] : [it.type, r(it.x), r(it.y)]),
     s: strokes.map(st => [st.color, st.pts.filter((p, k) => k % 2 === 0 || k === st.pts.length - 1).flatMap(p => [r(p[0]), r(p[1])])]),
@@ -1709,11 +1796,13 @@ function applyState(data) {
   }
   count = grade === 2 && data.n === 2 ? 2 : 1;
   minNum = data.f === 1 && opt.minBtn;
-  shadow = data.h === 1; ampm = data.a === 1;
+  shadow = data.h === 1; ampm = data.a === 1; nline = data.l === 1;
   // じかんの ピース（知らない ながさ・2じかんを こえる ぶんは すてる）
   chains = [0, 1].map(i => {
     const a = Array.isArray(data.p) && Array.isArray(data.p[i]) ? data.p[i] : [];
-    const ch = { s: num(a[0]) !== null ? mod(Math.round(a[0]), 60) : 0, segs: [] };
+    const ch = { s: num(a[0]) !== null ? mod(Math.round(a[0]), 60) : 0, t0: 0, segs: [] };
+    // t0（はじめの 時こく）が ない・あわない ときは、はじめの とけいの「じ」と s から つくる
+    ch.t0 = num(a[2]) !== null && mod(Math.round(a[2]), 60) === ch.s ? mod(Math.round(a[2]), DAY) : Math.floor(clocks[0].t / 60) * 60 + ch.s;
     for (const len of (Array.isArray(a[1]) ? a[1] : [])) if (SEG_LENS.includes(len) && chainSum(ch) + len <= SEG_MAX) ch.segs.push(len);
     return ch;
   });
@@ -1909,6 +1998,10 @@ async function drawClocks(ctx) {
       ctx.fillText(txt, g.cx, top + 35);
     }
   }
+  if (showLine()) {
+    const img = await svgImage(lineSvg());
+    if (img) ctx.drawImage(img, LINE.l, LINE.t, LINE.w, LINE.h);
+  }
   if (!opt.link) {
     ctx.font = `900 20px ${FONT}`; ctx.textAlign = 'left';
     ctx.fillStyle = '#6a1b9a'; ctx.fillText('⚠ はりが べつべつに うごくよ', 30, 34);
@@ -1929,7 +2022,7 @@ async function makePhoto() {
   for (const s of strokes) drawStroke(ctx, s);
   const now = new Date();
   ctx.fillStyle = '#9aa0bf'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'right';
-  ctx.fillText(`${now.getMonth() + 1}がつ ${now.getDate()}にち`, W - 20, H - 16);
+  ctx.fillText(`${now.getMonth() + 1}がつ ${now.getDate()}にち`, W - 20, showLine() ? 30 : H - 16);   // すうちょくせんが ある ときは 右上に
   return c;
 }
 $('photo').onclick = async () => {
