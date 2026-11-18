@@ -152,6 +152,19 @@
   @keyframes ringfill { to { stroke-dashoffset: 0; } }
   .toolbox .tbhint { grid-column: 1 / -1; font-size: 0.8rem; font-weight: bold; color: #5c6bc0; line-height: 1.5; padding: 6px 4px 0; }
 
+  /* でる かず（1こ・5こ・10こ）の きりかえ */
+  .toolbox .cntsel { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; font-weight: 900; font-size: 0.85rem; color: var(--accent-dark); padding: 0 2px; }
+  .cntsel span { white-space: nowrap; }
+  .cntsel button { flex: 1; min-height: 44px; border: 2px solid var(--soft); background: #fff; border-radius: 10px;
+                   font-weight: 900; font-size: 1rem; cursor: pointer; touch-action: manipulation; padding: 0; font-family: inherit; }
+  .cntsel button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tb-item { position: relative; }
+  .tb-item .cnt { position: absolute; right: 3px; top: 3px; background: var(--accent); color: #fff; border-radius: 10px;
+                  font-size: 0.8rem; font-weight: 900; padding: 0 6px; line-height: 1.5; pointer-events: none; }
+  @media (max-width: 900px) {
+    .toolbox .cntsel { flex: none; flex-direction: column; align-items: stretch; width: 64px; padding: 0; }
+    .cntsel span { display: none; }
+  }
   /* 道具箱から ひっぱっている ときの かげ */
   .ghost { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; transform-origin: 0 0; opacity: 0.85; }
 
@@ -1229,6 +1242,19 @@ function buildToolbox() {
     lab.className = 'label';
     lab.textContent = g.label;
     toolbox.appendChild(lab);
+    if (g.tools.some(canGroup)) {
+      const sel = document.createElement('div');
+      sel.className = 'cntsel';
+      sel.innerHTML = '<span>でる かず</span>';
+      for (const n of COUNTS) {
+        const b = document.createElement('button');
+        b.textContent = n + 'こ';
+        b.className = tbCount === n ? 'on' : '';
+        b.onclick = () => { tbCount = n; buildToolbox(); };
+        sel.appendChild(b);
+      }
+      toolbox.appendChild(sel);
+    }
     for (const type of g.tools) {
       const def = PIECES[type];
       const card = def.kind === 'card';
@@ -1245,6 +1271,12 @@ function buildToolbox() {
       el.style.transform = `scale(${fit})`;
       th.appendChild(el);
       b.appendChild(th);
+      if (tbCount > 1 && canGroup(type)) {
+        const c = document.createElement('span');
+        c.className = 'cnt';
+        c.textContent = '×' + tbCount;
+        b.appendChild(c);
+      }
       if (!card) {
         const t = document.createElement('div');
         t.textContent = def.name;
@@ -1266,7 +1298,70 @@ function buildToolbox() {
     }
   }
 }
-// 道具箱：タップ → 1こ出る。ひっぱる → すきな場所に 置ける
+
+/* =========================== まとめて 出す（1こ・5こ・10こ） ===========================
+   道具箱の「でる かず」で えらんだ 数だけ、ばらの まま ならべて 出す（1こずつ うごかせる） */
+const COUNTS = [1, 5, 10];
+let tbCount = 1;
+// まとめて 出せる もの：1本の ぼう・1の タイル（10本たば・10の タイルは もう まとまって いるので 1つずつ）
+const canGroup = type => type === 'bou1' || type === 'bou1h' || type === 'tile1';
+const howMany = type => countOf(type);
+function groupOffsets(type, n) {
+  const d = PIECES[type];
+  return Array.from({ length: n }, (_, i) => {
+    if (type === 'tile1') return { x: (i % 5) * U, y: Math.floor(i / 5) * U };              // タイル：5こ×2だん、ぴったり ならべる
+    const k = i * (Math.min(d.w, d.h) + 10) + (i >= 5 ? 14 : 0);                            // ぼう：5本ごとに すこし あける
+    return type === 'bou1' ? { x: k, y: 0 } : { x: 0, y: k };
+  });
+}
+const FILL_FRAMES = false;
+const GROUP_TOP = () => bg.kind === 'place' ? 14 + 70 + 6 : 12;   // くらいどりひょうの 見出しに かさならない
+// わくの 上の あいている マス（上の だんから じゅんに）
+function freeFrameCells(p) {
+  const f = items.filter(o => PIECES[o.type].kind === 'frame' && PIECES[o.type].cols && isOn(o, p.x, p.y)).sort((a, b) => b.z - a.z)[0];
+  if (!f) return null;
+  const d = PIECES[f.type], l = f.x - d.w / 2 + PAD, t = f.y - d.h / 2 + PAD, out = [];
+  for (let r = 0; r < d.rows; r++) for (let c = 0; c < d.cols; c++) {
+    const x = l + c * CELL + CELL / 2, y = t + r * CELL + CELL / 2;
+    if (!items.some(o => !isHolder(o.type) && Math.abs(o.x - x) < CELL / 2 && Math.abs(o.y - y) < CELL / 2)) out.push({ x, y });
+  }
+  return out;
+}
+// ならべた ときの そとがわ（1こ目の まんなかを 0 と した 位置）
+function groupBox(type, offs) {
+  const d = PIECES[type];
+  return { l: Math.min(...offs.map(o => o.x)) - d.w / 2, t: Math.min(...offs.map(o => o.y)) - d.h / 2,
+           r: Math.max(...offs.map(o => o.x)) + d.w / 2, b: Math.max(...offs.map(o => o.y)) + d.h / 2 };
+}
+// タップで 出す ときの 置き場所：ならべた かたまりが ほかの ものと かさならない 場所
+function freeGroupSpot(type, offs) {
+  const bx = groupBox(type, offs), top = typeof GROUP_TOP === 'function' ? GROUP_TOP() : GROUP_TOP;
+  const hit = (a, b) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
+  for (let y = top - bx.t; y + bx.b <= H - 8; y += 10) {
+    for (let x = 12 - bx.l; x + bx.r <= W - 8; x += 10) {
+      const rc = { l: x + bx.l, t: y + bx.t, r: x + bx.r, b: y + bx.b };
+      if (overlapsTrash(rc)) continue;
+      if (!items.some(h => hit(rc, rectOf(h, 5)))) return { x, y };
+    }
+  }
+  return null;
+}
+function addGroup(type, n, at) {   // at：引っぱって おいた 場所（ない ときは あいている 場所）
+  if (howMany(type) + n > MAX_PER_TYPE) { toast(`${PIECES[type].name}は ${MAX_PER_TYPE}こまでです`); return false; }
+  if (at && FILL_FRAMES) {
+    const cells = freeFrameCells(at);
+    if (cells && cells.length >= n) { cells.slice(0, n).forEach(c => { const it = addItem(type, c.x, c.y); if (it) place(it); }); return true; }
+  }
+  const offs = groupOffsets(type, n), bx = groupBox(type, offs);
+  let o = at ? { x: at.x - (bx.l + bx.r) / 2, y: at.y - (bx.t + bx.b) / 2 } : freeGroupSpot(type, offs);
+  if (!o) o = { x: W / 2 - (bx.l + bx.r) / 2, y: H / 2 - (bx.t + bx.b) / 2 };   // あいて いなければ まんなか
+  // ボードから はみ出さないように ずらす
+  o.x = Math.max(-bx.l, Math.min(W - bx.r, o.x));
+  o.y = Math.max(-bx.t, Math.min(H - bx.b, o.y));
+  for (const f of offs) { const it = addItem(type, o.x + f.x, o.y + f.y); if (it) snapItem(it); }
+  return true;
+}
+// 道具箱：タップ → 1こ出る（でる かずが 5・10 なら その 数）。ひっぱる → すきな場所に 置ける
 const tbDrags = new Map();
 toolbox.addEventListener('pointerdown', e => {
   const b = e.target.closest('.tb-item');
@@ -1299,6 +1394,7 @@ function endTb(e) {
     // タップ：あいている 場所に 1こ
     if (e.type === 'pointercancel') return;
     const snap = snapshot();
+    if (tbCount > 1 && canGroup(d.type)) { if (addGroup(d.type, tbCount)) pushUndo(snap); return; }
     const s = freeSpot(d.type);
     const it = addItem(d.type, s.x, s.y);
     if (it) { snapItem(it); pushUndo(snap); }
@@ -1308,6 +1404,7 @@ function endTb(e) {
   const p = toBoard(d.cx, d.cy);
   if (e.type === 'pointercancel' || !inBoard(p) || overTrash(p)) return;
   const snap = snapshot();
+  if (tbCount > 1 && canGroup(d.type)) { if (addGroup(d.type, tbCount, p)) pushUndo(snap); return; }
   const it = addItem(d.type, p.x, p.y);
   if (!it) return;
   snapItem(it);
