@@ -142,6 +142,7 @@
   .teacher-only { display: none !important; }
   body.teacher .teacher-only { display: inline-flex !important; }
   .btn.wall.on { background: #6d4c41; border-color: #6d4c41; color: #fff; }
+  .btn.ring.on { background: #0277bd; border-color: #0277bd; color: #fff; }
   /* もんだいカード（先生が 書く。子どもは 動かせない） */
   .qcard { position: absolute; left: 14px; top: 4px; max-width: 1000px; z-index: 1; pointer-events: none;
            background: #fffef5; border: 3px solid #3949ab; border-radius: 12px; padding: 4px 14px;
@@ -233,6 +234,7 @@
   <button class="btn" id="openBoard" title="くばられた もんだいの がぞうを ひらく"><span class="ic">📂</span>ひらく</button>
   <button class="btn" id="resetStart" title="くばられた ときの じょうたいに もどす" hidden><span class="ic">⟲</span>はじめに</button>
   <button class="btn wall teacher-only tape-only" id="wallBtn" title="分数の かべ（先生だけ）"><span class="ic">🧱</span>かべ</button>
+  <button class="btn ring teacher-only circle-only" id="ringBtn" title="円の 目もりの 輪（先生だけ）"><span class="ic">🎯</span>目もり</button>
   <button class="btn teacher-only" id="addText" title="もんだいカードを かく"><span class="ic">📝</span>もんだい</button>
   <button class="btn teacher-only" id="share" title="子どもに くばる がぞうを つくる"><span class="ic">💾</span>くばる</button>
   <button class="btn teacher-only" id="setBtn" title="せってい（タイルの 字・つかう 分母）"><span class="ic">☰</span>せってい</button>
@@ -301,6 +303,9 @@
     <div class="row" id="setDens"></div>
     <p class="note">おすと 出す・出さない が かわります。ボードに ある タイルは そのまま のこります。<br>
       アドレスの おわりに <b>?den=2,4,8&amp;label=hide</b> のように つけても えらべます（ブックマークして くばれます）。</p>
+    <h2>円の 目もりの 輪（先生だけ・🎯目もり）</h2>
+    <div class="row" id="setRing"></div>
+    <p class="note">えらぶと 輪が 出ます。数字は「タイルの 字」に あわせます（かくす の ときは 線だけ）。くばる がぞうには 入りません。</p>
     <button class="btn close" id="setClose">とじる</button>
   </div>
 </div>
@@ -386,7 +391,8 @@ let view = 'tape';               // いま 見えている ボード：tape テ�
 let citems = [];                 // 円の ピース { id, d, c: 円の番号（-1 は おきば）, s: 円の中の 始まりの 目もり, x, y: おきばでの 中心（とがった 所）, z, o }
 let ccount = 3;                  // 円の 数（2 か 3）
 let otherStrokes = [];           // いま 見えて いない ほうの ボードの ペンの線
-let wallOn = false;              // 分数の かべ（先生だけ。ほぞん・くばる には 入れない）
+let wallOn = false;
+let ringOn = false, ringDen = 4;   // 円の 目もりの 輪（先生だけ。ほぞん・くばる には 入れない）。100 は 百分率（10%ずつ）              // 分数の かべ（先生だけ。ほぞん・くばる には 入れない）
 const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
 if (TEACHER) document.body.classList.add('teacher');
 const LABELS = [
@@ -895,9 +901,11 @@ stage.addEventListener('pointercancel', endDrag);
 const cpiecesEl = $('cpieces');
 const cels = new Map();
 const TAU = Math.PI * 2;
-const cR = () => ccount === 2 ? 160 : 130;                         // 円の 半径
-const cCenter = i => ({ x: W / ccount * (i + 0.5), y: 96 + cR() }); // 円の 中心
-const okibaTop = () => 96 + cR() * 2 + 24;                         // おきばの 上の はし
+// 目もりの 輪が ある ときは、数字の 場所を あける ため 円を 少し 小さく・下に する
+const ringPad = () => ringOn ? 20 : 0;
+const cR = () => ccount === 2 ? 160 : (ringOn ? 112 : 130);       // 円の 半径
+const cCenter = i => ({ x: W / ccount * (i + 0.5), y: 96 + ringPad() + cR() }); // 円の 中心
+const okibaTop = () => 96 + ringPad() * 3 + cR() * 2 + 24;         // おきばの 上の はし
 const sweep = d => TAU / d;
 // 角度は 12時を 0 に して 時計まわり
 const pt = (cx, cy, r, a) => [cx + r * Math.sin(a), cy - r * Math.cos(a)];
@@ -1050,10 +1058,12 @@ function drawCircleBg(ctx) {
     const c = cCenter(i);
     ctx.fillStyle = '#fafafa'; ctx.strokeStyle = '#78909c'; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, TAU); ctx.fill(); ctx.stroke();
-    // 12時の しるし
+    // 12時の しるし（目もりの 輪が ある ときは「0」が しるしに なる）
+    if (ringOn) continue;
     ctx.fillStyle = '#455a64';
     ctx.beginPath(); ctx.moveTo(c.x - 9, c.y - r - 16); ctx.lineTo(c.x + 9, c.y - r - 16); ctx.lineTo(c.x, c.y - r - 3); ctx.closePath(); ctx.fill();
   }
+  if (ringOn) for (let i = 0; i < ccount; i++) drawRing(ctx, cCenter(i), r);
   const top = okibaTop() - 10;
   ctx.save();
   ctx.strokeStyle = '#cfd8dc'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
@@ -1062,6 +1072,53 @@ function drawCircleBg(ctx) {
   ctx.fillStyle = '#90a4ae'; ctx.font = `900 20px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillText('おきば', 20, top + 8);
   ctx.textBaseline = 'alphabetic';
+}
+/* ---- 目もりの 輪：円の まわりに 1/ringDen ずつの 目もりと 数字 ---- */
+function ringLabel(k, n) {
+  if (n === 100) return `${k}%`;
+  if (k === 0) return '0';
+  if (labelMode === 'hide') return '';
+  if (labelMode === 'dec') {
+    const v = k / n;
+    return Number.isInteger(v * 1000) ? String(+v.toFixed(3)) : (Math.floor(v * 100) / 100).toFixed(2) + '…';
+  }
+  if (labelMode === 'pct') {
+    const v = k * 100 / n;
+    return Number.isInteger(v * 10) ? `${+v.toFixed(1)}%` : (Math.floor(v * 10) / 10).toFixed(1) + '…%';
+  }
+  return `${k}/${n}`;
+}
+function drawRing(ctx, c, r) {
+  const n = ringDen, band = 18;
+  ctx.save();
+  // うすい 帯
+  ctx.strokeStyle = 'rgba(2,119,189,0.12)'; ctx.lineWidth = band;
+  ctx.beginPath(); ctx.arc(c.x, c.y, r + band / 2 + 2, 0, TAU); ctx.stroke();
+  // 目もり：百分率は 10%ごとに 長い 線、5%ごとに 短い 線
+  const marks = n === 100 ? 20 : n;
+  ctx.strokeStyle = '#01579b'; ctx.lineCap = 'round';
+  for (let k = 0; k < marks; k++) {
+    const a = k / marks * TAU, major = n !== 100 || k % 2 === 0;
+    const [x1, y1] = pt(c.x, c.y, r + 1, a), [x2, y2] = pt(c.x, c.y, r + (major ? band + 4 : band / 2 + 2), a);
+    ctx.lineWidth = major ? 3 : 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    // 円の 中にも うすい 線（どこまで うまったか 見やすく）
+    if (major) {
+      ctx.save(); ctx.strokeStyle = 'rgba(1,87,155,0.25)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 5]);
+      ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(x1, y1); ctx.stroke(); ctx.restore();
+    }
+  }
+  // 数字
+  ctx.fillStyle = '#01579b'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const labels = n === 100 ? 10 : n, fs = labels > 8 ? 15 : 18;
+  ctx.font = `900 ${fs}px ${FONT}`;
+  for (let k = 0; k < labels; k++) {
+    const t = ringLabel(n === 100 ? k * 10 : k, n);
+    if (!t) continue;
+    const a = k / labels * TAU, [x, y] = pt(c.x, c.y, r + band + 6 + fs * 0.9 + (Math.abs(Math.sin(a)) * ctx.measureText(t).width / 2), a);
+    ctx.fillText(t, x, y);
+  }
+  ctx.restore();
 }
 /* ---- しゃしん 用 ---- */
 function drawCPiece(ctx, it) {
@@ -1740,9 +1797,10 @@ function settingsChanged() {
   buildToolbox();
   rebuild();
   crebuild();
+  redrawBg();
   renderSettings();
 }
-$('setBtn').onclick = () => { renderSettings(); $('setBg').hidden = false; };
+$('setBtn').onclick = () => { renderSettings(); renderRingSettings(); $('setBg').hidden = false; };
 $('setClose').onclick = () => { $('setBg').hidden = true; };
 
 /* =========================== 先生：分数の かべ =========================== */
@@ -1752,6 +1810,36 @@ $('wallBtn').onclick = () => {
   redrawBg();
   if (wallOn) toast('🧱 分数の かべ（先生だけ）。たての線で みんなの 発見と くらべよう');
 };
+
+/* =========================== 先生：円の 目もりの 輪 =========================== */
+function updateRingBtn() { $('ringBtn').classList.toggle('on', ringOn); }
+function setRing(on, den) {
+  ringOn = on;
+  if (den) ringDen = den;
+  updateRingBtn();
+  for (const i of citems) if (i.c < 0) clampFree(i);
+  crebuild();
+  redrawBg();
+}
+$('ringBtn').onclick = () => {
+  setRing(!ringOn);
+  if (ringOn) toast(`🎯 目もりの 輪（${ringDen === 100 ? '百分率' : ringDen + 'とうぶん'}）。こまかさは ☰せってい で かえられるよ`);
+};
+function renderRingSettings() {
+  const row = $('setRing');
+  row.textContent = '';
+  const opts = [[0, 'なし'], ...[2, 3, 4, 5, 6, 8, 10, 12].map(n => [n, n + 'とうぶん']), [100, '百分率 10%ずつ']];
+  for (const [n, name] of opts) {
+    const b = document.createElement('button');
+    b.className = 'btn' + ((n === 0 ? !ringOn : ringOn && ringDen === n) ? ' on' : '');
+    b.textContent = name;
+    b.onclick = () => {
+      if (n === 0) setRing(false); else setRing(true, n);
+      renderRingSettings();
+    };
+    row.appendChild(b);
+  }
+}
 
 /* =========================== 先生：もんだいカード =========================== */
 function renderQ() {
@@ -1862,10 +1950,10 @@ async function readBoardFromPng(file) {
 }
 async function makeBoardPng() {
   const code = await packState();   // 先に 盤面を とっておく
-  const wasWall = wallOn;
-  wallOn = false;                   // かべは くばる がぞうに 入れない
+  const wasWall = wallOn, wasRing = ringOn;
+  wallOn = ringOn = false;          // かべ・目もりの 輪は くばる がぞうに 入れない
   const c = makePhoto();
-  wallOn = wasWall;
+  wallOn = wasWall; ringOn = wasRing;
   const blob = await new Promise(res => c.toBlob(res, 'image/png'));
   return addBoardToPng(blob, code);
 }
