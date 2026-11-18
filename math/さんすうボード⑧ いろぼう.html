@@ -71,6 +71,15 @@
   .stage canvas { position: absolute; left: 0; top: 0; }
   .layer { position: absolute; inset: 0; }
   .ink { pointer-events: none; }
+  /* ごみばこ（さんすうボード⑦ と おなじ） */
+  .trash {
+    position: absolute; right: 16px; bottom: 16px; width: 110px; height: 110px; z-index: 0;
+    border: 4px dashed #cfd3e6; border-radius: 22px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #8a90b0; font-weight: bold; font-size: 18px;
+    pointer-events: none; transition: background .12s, border-color .12s; background: rgba(255,255,255,0.7);
+  }
+  .trash .ic { font-size: 46px; line-height: 1; }
+  .trash.hot { background: #ffebee; border-color: #e57373; color: #c62828; }
   body.drawing .ink { pointer-events: auto; cursor: crosshair; }
   body.drawing .rod.onboard { pointer-events: none; }
 
@@ -160,6 +169,7 @@
   <div class="boardwrap" id="boardwrap">
     <div class="stage" id="stage">
       <canvas id="bgc"></canvas>
+      <div class="trash" id="trash"><span class="ic">🗑️</span>ごみばこ</div>
       <div class="layer" id="pieces"></div>
       <canvas class="ink" id="ink"></canvas>
     </div>
@@ -321,7 +331,7 @@ function buildToolbox() {
     tb.appendChild(item);
   }
   tb.insertAdjacentHTML('beforeend',
-    '<div class="tbhint">✋ ひっぱって ボードに おく<br>👆 タップで たて・よこ<br>⏱ ながおしで コピー<br>🗑 ここへ もどすと けせる<br>↔ ピンクの ぼうは ○を ひっぱって のばせる</div>');
+    '<div class="tbhint">✋ ひっぱって ボードに おく<br>👆 タップで たて・よこ<br>⏱ ながおしで コピー<br>🗑 ごみばこ か ここへ もどすと けせる<br>↔ ピンクの ぼうは ○を ひっぱって のばせる</div>');
 }
 
 /* =========================== もどる・やりなおす =========================== */
@@ -345,6 +355,8 @@ function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add
 
 function stagePt(e) { const b = stage.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; }
 function overToolbox(e) { const b = $('toolbox').getBoundingClientRect(); return e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom; }
+function overTrash(e) { const b = $('trash').getBoundingClientRect(); return e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom; }
+const toTrash = e => overToolbox(e) || overTrash(e);
 function overStage(e) { const b = stage.getBoundingClientRect(); return e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom; }
 function clampRod(r) {
   const cols = Math.floor(stage.clientWidth / U), rows = Math.floor(stage.clientHeight / U);
@@ -408,6 +420,7 @@ window.addEventListener('pointermove', e => {
   if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 8) return;
   if (!drag.moved) { drag.moved = true; clearTimeout(drag.lp); drag.el.classList.add('dragging'); if (drag.kind === 'move') pieces.appendChild(drag.el); }
   $('toolbox').classList.toggle('drop-ok', drag.kind === 'move' && overToolbox(e));
+  $('trash').classList.toggle('hot', overTrash(e));
   if (drag.kind === 'new') {
     drag.el.style.left = (e.clientX - U / 2) + 'px'; drag.el.style.top = (e.clientY - U / 2) + 'px';
   } else {
@@ -419,7 +432,7 @@ function endDrag(e) {
   if (!drag || e.pointerId !== drag.pid) return;
   const d = drag; drag = null;
   clearTimeout(d.lp);
-  $('toolbox').classList.remove('drop-ok');
+  $('toolbox').classList.remove('drop-ok'); $('trash').classList.remove('hot');
   if (d.kind === 'resize') {
     if (d.before !== snapshot()) { undoStack.push(d.before); redoStack.length = 0; changed(); }
     return;
@@ -429,7 +442,7 @@ function endDrag(e) {
     if (!d.moved) {                       // タップ → あいている ところに おく
       pushUndo(); Object.assign(d.r, freeSpot(d.r.len)); rods.push(d.r); render(); changed(); return;
     }
-    if (!overStage(e)) return;
+    if (!overStage(e) || overTrash(e)) return;
     const p = stagePt(e);
     pushUndo();
     d.r.x = Math.round((p.x - U / 2) / U); d.r.y = Math.round((p.y - U / 2) / U);
@@ -443,7 +456,7 @@ function endDrag(e) {
     r.v = !r.v; clampRod(r); render(); changed(); return;
   }
   undoStack.push(d.before); redoStack.length = 0;
-  if (overToolbox(e)) { rods = rods.filter(o => o !== r); render(); changed(); toast('🗑 けしたよ'); return; }
+  if (toTrash(e)) { rods = rods.filter(o => o !== r); render(); changed(); toast('🗑 けしたよ'); return; }
   const p = stagePt(e);
   r.x = Math.round((p.x - d.ox) / U); r.y = Math.round((p.y - d.oy) / U);
   clampRod(r);
@@ -451,7 +464,7 @@ function endDrag(e) {
   render(); changed();
 }
 window.addEventListener('pointerup', endDrag);
-window.addEventListener('pointercancel', e => { if (drag && drag.el && drag.kind === 'new') drag.el.remove(); if (drag) { clearTimeout(drag.lp); drag = null; $('toolbox').classList.remove('drop-ok'); render(); } });
+window.addEventListener('pointercancel', e => { if (drag && drag.el && drag.kind === 'new') drag.el.remove(); if (drag) { clearTimeout(drag.lp); drag = null; $('toolbox').classList.remove('drop-ok'); $('trash').classList.remove('hot'); render(); } });
 
 /* =========================== かく（ペン） =========================== */
 const PENS = ['#e53935', '#1e88e5', '#263238', '#43a047'];
