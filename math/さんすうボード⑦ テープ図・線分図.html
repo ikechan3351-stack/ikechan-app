@@ -390,6 +390,7 @@ const TOOLS = {
   braceS: { name: 'かっこ ┌┐',        make: () => ({ type: 'brace', len: 360, dir: 'u', shape: 's', l: '？' }) },
   word:   { name: 'ことば',            make: () => ({ type: 'word', text: LOW ? 'なまえ' : 'なまえ', c: 'k' }) },
   kurabe: { name: 'くらべる わく',     make: () => ({ type: 'kurabe' }) },
+  awase:  { name: 'あわせる わく',     make: () => ({ type: 'awase' }) },
 };
 /* ---- すうじ カード（①おはじきボードと 同じ） ---- */
 const svgTag = (w, h, body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${body}</svg>`;
@@ -409,28 +410,61 @@ Object.assign(CARDS, {
   box:   { name: '□', svg: svgCard('□', '#37474f') },
 });
 
-/* =========================== くらべる わく ===========================
-   左右 2つの へや（ものを のせると いっしょに 動く）と、下の 2つの しかく（数を かく）、
-   まん中の まる（＝ ＞ ＜ を えらぶ）が ついた わく。
-   ボードの 上の もの：{ type: 'kurabe', ka: 左の 数, kb: 右の 数, ks: きごう('' '=' '>' '<') }
-   ※ この まとまりは さんすうボード①②③⑦ で ほぼ 同じ（⑦は 絵の 関数が svgTag）。なおす ときは 3つ とも なおす */
-const KB = { w: 760, h: 440, pad: 6, foot: 96 };            // 大きさ と 下の 列の 高さ
+/* =========================== くらべる わく・あわせる わく ===========================
+   くらべる わく（kurabe）：左右 2つの へやと、下の 2つの しかく（数）、まん中の まる（＝ ＞ ＜）。
+   あわせる わく（awase）：上に「ぜんぶ」の へや、下に 2つの「ぶぶん」の へや。それぞれの へやの 下に 数の しかく。
+   どちらも、のせた ものは わくと いっしょに 動く。
+   ボードの 上の もの：{ type, ka, kb, kc: 数（文字）, ks: きごう('' '=' '>' '<') }
+     kurabe … ka 左・kb 右・ks まる ／ awase … ka 上（ぜんぶ）・kb 左下・kc 右下
+   ※ この まとまりは さんすうボード①②③⑦ で ほぼ 同じ（⑦は 絵の 関数が svgTag）。なおす ときは 4つ とも なおす */
+const KB = { w: 760, h: 440, pad: 6, foot: 96 };            // 大きさ と（くらべる わくの）下の 列の 高さ
+const AW_TOP = 196;                                          // あわせる わくの 上の へやの 下の 線
 const KB_MAX = 5;                                            // 数の けた（99999 まで）
 const KB_SIGNS = { '=': '＝', '>': '＞', '<': '＜' };
+const isKB = type => type === 'kurabe' || type === 'awase';
+// 数の しかくの まんなか（わくの 左上から）
+function kbBoxes(type) {
+  const { w, h, pad, foot } = KB, mid = w / 2;
+  if (type === 'awase') return { ka: [mid, AW_TOP - 42], kb: [pad + (mid - pad) / 2, h - pad - 42], kc: [mid + (mid - pad) / 2, h - pad - 42] };
+  const fy = h - pad - foot / 2;
+  return { ka: [pad + (mid - pad) / 2, fy], kb: [mid + (mid - pad) / 2, fy] };
+}
 function svgKurabe(it) {
-  const { w, h, pad, foot } = KB, mid = w / 2, top = h - pad - foot, fy = top + foot / 2;
-  const box = (cx, v) => `<rect x="${cx - 95}" y="${fy - 36}" width="190" height="72" rx="10" fill="#fff" stroke="#5c6bc0" stroke-width="3"/>` +
-    (v ? `<text x="${cx}" y="${fy + 17}" text-anchor="middle" font-family="Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, sans-serif" font-weight="900" font-size="${v.length > 4 ? 42 : 50}" fill="#263238">${v}</text>` : '');
-  const sign = it.ks ? `<text x="${mid}" y="${fy + 17}" text-anchor="middle" font-family="Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, sans-serif" font-weight="900" font-size="50" fill="#2e7d32">${KB_SIGNS[it.ks]}</text>` : '';
+  const { w, h, pad, foot } = KB, mid = w / 2;
+  const F = 'Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, sans-serif';
+  const box = ([cx, cy], v) => `<rect x="${cx - 95}" y="${cy - 32}" width="190" height="64" rx="10" fill="#fff" stroke="#5c6bc0" stroke-width="3"/>` +
+    (v ? `<text x="${cx}" y="${cy + 16}" text-anchor="middle" font-family="${F}" font-weight="900" font-size="${v.length > 4 ? 40 : 48}" fill="#263238">${v}</text>` : '');
+  const B = kbBoxes(it.type);
+  const line = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#455a64" stroke-width="3"/>`;
+  if (it.type === 'awase') {
+    return svgTag(w, h, `<rect x="${pad}" y="${pad}" width="${w - pad * 2}" height="${h - pad * 2}" fill="#ffffff" fill-opacity="0.55" stroke="#455a64" stroke-width="3"/>
+      ${line(pad, AW_TOP, w - pad, AW_TOP)}${line(mid, AW_TOP, mid, h - pad)}
+      ${box(B.ka, it.ka)}${box(B.kb, it.kb)}${box(B.kc, it.kc)}`);
+  }
+  const top = h - pad - foot, fy = B.ka[1];
+  const sign = it.ks ? `<text x="${mid}" y="${fy + 17}" text-anchor="middle" font-family="${F}" font-weight="900" font-size="50" fill="#2e7d32">${KB_SIGNS[it.ks]}</text>` : '';
   return svgTag(w, h, `<rect x="${pad}" y="${pad}" width="${w - pad * 2}" height="${top - pad}" fill="#ffffff" fill-opacity="0.55" stroke="#455a64" stroke-width="3"/>
-    <line x1="${mid}" y1="${pad}" x2="${mid}" y2="${top}" stroke="#455a64" stroke-width="3"/>
-    ${box(pad + (mid - pad) / 2, it.ka)}${box(mid + (mid - pad) / 2, it.kb)}
+    ${line(mid, pad, mid, top)}${box(B.ka, it.ka)}${box(B.kb, it.kb)}
     <circle cx="${mid}" cy="${fy}" r="38" fill="#fff" stroke="#5c6bc0" stroke-width="3"/>${sign}`);
 }
 const kbValid = v => typeof v === 'string' && new RegExp(`^\\d{0,${KB_MAX}}$`).test(v);
-// タップした 場所 → 'ka' 左の しかく ／ 'kb' 右の しかく ／ 'ks' まる ／ '' へやの 中
+// 保存：[ka, kb, ks, kc] ／ もどす：おかしな ものは すてる
+const kbSave = it => [it.ka || '', it.kb || '', it.ks || '', it.kc || ''];
+function kbLoad(it, a) {
+  const [ka, kb, ks, kc] = Array.isArray(a) ? a : [];
+  if (kbValid(ka) && ka) it.ka = ka;
+  if (kbValid(kb) && kb) it.kb = kb;
+  if (it.type === 'awase' && kbValid(kc) && kc) it.kc = kc;
+  if (it.type === 'kurabe' && Object.hasOwn(KB_SIGNS, ks)) it.ks = ks;
+  return it;
+}
+// タップした 場所 → 'ka' 'kb' 'kc' 数の しかく ／ 'ks' まる ／ '' へやの 中（it.x, it.y は わくの まんなか）
 function kurabeZone(it, p) {
   const lx = p.x - (it.x - KB.w / 2), ly = p.y - (it.y - KB.h / 2);
+  if (it.type === 'awase') {
+    for (const [k, [cx, cy]] of Object.entries(kbBoxes('awase'))) if (Math.abs(lx - cx) <= 115 && Math.abs(ly - cy) <= 44) return k;
+    return '';
+  }
   if (ly < KB.h - KB.pad - KB.foot) return '';
   if (Math.abs(lx - KB.w / 2) <= 52) return 'ks';
   return lx < KB.w / 2 ? 'ka' : 'kb';
@@ -453,7 +487,7 @@ const kbBg = document.createElement('div');
 kbBg.className = 'dialog-bg'; kbBg.hidden = true;
 kbBg.setAttribute('role', 'dialog'); kbBg.setAttribute('aria-modal', 'true');
 kbBg.innerHTML = `<div class="dialog kbpanel">
-  <div id="kbNum"><h2>かずを かこう</h2><div class="kbshow" id="kbShow"></div>
+  <div id="kbNum"><h2 id="kbTitle">かずを かこう</h2><div class="kbshow" id="kbShow"></div>
     <div class="kbkeys">${[7, 8, 9, 4, 5, 6, 1, 2, 3].map(n => `<button class="btn" data-k="${n}">${n}</button>`).join('')}
       <button class="btn" data-k="del" title="1もじ けす">⌫</button><button class="btn" data-k="0">0</button><button class="btn" data-k="clr" style="font-size:1.2rem">ぜんぶ<br>けす</button></div>
     <div class="row"><button class="btn on" id="kbOk">できた</button><button class="btn" id="kbCancel">やめる</button></div></div>
@@ -467,6 +501,7 @@ function openKurabe(it, key) {
   kbIt = it; kbKey = key; kbVal = it[key] || '';
   kbBg.querySelector('#kbNum').hidden = key === 'ks';
   kbBg.querySelector('#kbSign').hidden = key !== 'ks';
+  kbBg.querySelector('#kbTitle').textContent = it.type === 'awase' ? (key === 'ka' ? 'ぜんぶの かずを かこう' : 'かずを かこう') : 'かずを かこう';
   kbBg.querySelector('#kbShow').textContent = kbVal;
   kbBg.hidden = false;
 }
@@ -509,15 +544,15 @@ const redrawItem = it => draw(it);
 const GROUPS = LOW ? [
   { tab: 'テープ', label: 'テープと かっこ', tools: ['tape1', 'tape2', 'tapeEq', 'braceC', 'braceS', 'word'],
     hint: 'タップで でるよ。はしの つまみで のばせるよ。テープを タップすると かずや ことばが かけるよ。' },
-  { tab: 'カード', label: 'すうじ カード・わく', tools: ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n0', 'plus', 'minus', 'mul', 'eq', 'q', 'box', 'kurabe'],
-    hint: 'くらべる わく … 下の しかくを タップで 数、まるを タップで ＝ ＞ ＜' },
+  { tab: 'カード', label: 'すうじ カード・わく', tools: ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n0', 'plus', 'minus', 'mul', 'eq', 'q', 'box', 'kurabe', 'awase'],
+    hint: 'くらべる わく・あわせる わく … しかくを タップで 数、まるを タップで ＝ ＞ ＜' },
 ] : [
   { tab: 'テープ図', label: 'テープ図', tools: ['tape1', 'tape2', 'tapeEq', 'braceC', 'braceS', 'word'],
     hint: 'はしの つまみで のばす。オレンジの つまみで さかい目を うごかす。テープを タップして かずや ことばを かく。' },
   { tab: '線分図', label: '線分図（3年から）', tools: ['line1', 'line2', 'lineEq', 'braceC', 'braceS', 'word'],
     hint: 'テープを えらんで「〰 せん」を おすと、テープ図を 線分図に かえられるよ。' },
-  { tab: 'カード', label: 'すうじ カード・わく', tools: ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n0', 'plus', 'minus', 'mul', 'div', 'eq', 'q', 'box', 'kurabe'],
-    hint: 'くらべる わく … 下の しかくを タップで 数、まるを タップで ＝ ＞ ＜' },
+  { tab: 'カード', label: 'すうじ カード・わく', tools: ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n0', 'plus', 'minus', 'mul', 'div', 'eq', 'q', 'box', 'kurabe', 'awase'],
+    hint: 'くらべる わく・あわせる わく … しかくを タップで 数、まるを タップで ＝ ＞ ＜' },
 ];
 if (LOW) {
   document.title = 'さんすうボード⑦ テープ図';
@@ -647,7 +682,7 @@ function dims(it) {
   if (it.type === 'brace') return isVert(it) ? { w: BD + braceLabelW(it), h: it.len } : { w: it.len, h: BD + BRACE_LBL };
   if (it.type === 'word') return { w: Math.ceil(textW(it.text, 30)) + 28, h: 52 };
   if (it.type === 'text') { const L = layoutText(it.text, it.fs); return { w: L.w, h: L.h }; }
-  if (it.type === 'kurabe') return { w: KB.w, h: KB.h };
+  if (isKB(it.type)) return { w: KB.w, h: KB.h };
   return { w: 56, h: 68 };   // すうじ カード
 }
 // テープの さかい目の 位置（左から 何px）。parts の r は「くらべた 大きさ」
@@ -732,7 +767,7 @@ function itemSvg(it) {
   if (it.type === 'tape') return tapeSvg(it);
   if (it.type === 'brace') return braceSvg(it);
   if (it.type === 'word') return wordSvg(it);
-  if (it.type === 'kurabe') return svgKurabe(it);
+  if (isKB(it.type)) return svgKurabe(it);
   return CARDS[it.type] ? CARDS[it.type].svg : '';
 }
 
@@ -786,7 +821,7 @@ function place(it) {
   const el = els.get(it.id);
   if (!el) return;
   el.style.transform = `translate3d(${it.x}px, ${it.y}px, 0)`;
-  el.style.zIndex = it.type === 'kurabe' ? 0 : it.z;   // くらべる わくは いつも いちばん 下
+  el.style.zIndex = isKB(it.type) ? 0 : it.z;   // くらべる わくは いつも いちばん 下
 }
 function attach(it) {
   const el = document.createElement('div');
@@ -1076,7 +1111,7 @@ stage.addEventListener('pointerdown', e => {
   it.z = ++zTop;
   el.classList.add('lift');
   // くらべる わくを 動かす ときは、上に のっている ものも いっしょに 動かす
-  const carry = it.type !== 'kurabe' ? [] : items.filter(o => o.type !== 'kurabe' && !grabbed(o) && onKurabe(it, o)).map(o => ({ it: o, ox: o.x - it.x, oy: o.y - it.y }));
+  const carry = !isKB(it.type) ? [] : items.filter(o => !isKB(o.type) && !grabbed(o) && onKurabe(it, o)).map(o => ({ it: o, ox: o.x - it.x, oy: o.y - it.y }));
   drags.set(e.pointerId, { kind: 'item', it, el, dx: it.x - p.x, dy: it.y - p.y, px: p.x - it.x, py: p.y - it.y, snap, moved: false, sx: e.clientX, sy: e.clientY, overTrash: false, carry });
   requestFrame();
 });
@@ -1168,9 +1203,9 @@ function endDrag(e) {
       if (k < 0) k = it.parts.length - 1;
       openLabel(it, k);
     } else if (it.type === 'brace' || it.type === 'word') openLabel(it, 0);
-    else if (it.type === 'kurabe') {
+    else if (isKB(it.type)) {
       // 下の しかく → 数を かく ／ まる → ＝ ＞ ＜ を えらぶ（kurabeZone は まんなかの 位置で しらべる）
-      const zone = kurabeZone({ x: it.x + KB.w / 2, y: it.y + KB.h / 2 }, { x: it.x + d.px, y: it.y + d.py });
+      const zone = kurabeZone({ type: it.type, x: it.x + KB.w / 2, y: it.y + KB.h / 2 }, { x: it.x + d.px, y: it.y + d.py });
       if (zone) openKurabe(it, zone);
     }
     else if (it.type === 'text' && TEACHER) openText(it);
@@ -1647,13 +1682,7 @@ function cleanItem(a) {
   if (a.type === 'word') { const text = str(a.text, 24); return text ? { type: 'word', x, y, text, c: col(a.c) } : null; }
   if (a.type === 'text') { const text = str(a.text, 400); return text ? { type: 'text', x, y, text, fs: TEXT_SIZES.some(s => s.id === a.fs) ? a.fs : 34 } : null; }
   if (CARDS[a.type]) return { type: a.type, x, y };
-  if (a.type === 'kurabe') {
-    const it = { type: 'kurabe', x, y };
-    if (kbValid(a.ka) && a.ka) it.ka = a.ka;
-    if (kbValid(a.kb) && a.kb) it.kb = a.kb;
-    if (Object.hasOwn(KB_SIGNS, a.ks)) it.ks = a.ks;
-    return it;
-  }
+  if (isKB(a.type)) return kbLoad({ type: a.type, x, y }, [a.ka, a.kb, a.ks, a.kc]);
   return null;
 }
 function applyState(data) {
@@ -1792,7 +1821,7 @@ async function makePhoto() {
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
   drawBg(ctx);
-  const order = [...items].sort((a, b) => ((b.type === 'kurabe') - (a.type === 'kurabe')) || (a.z - b.z));   // くらべる わくは いちばん 下
+  const order = [...items].sort((a, b) => (isKB(b.type) - isKB(a.type)) || (a.z - b.z));   // くらべる わくは いちばん 下
   const imgs = await Promise.all(order.map(it => it.type === 'text' ? null : svgImage(itemSvg(it))));
   order.forEach((it, i) => {
     if (it.type === 'text') { drawTextCard(ctx, it); return; }
