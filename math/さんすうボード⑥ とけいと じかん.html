@@ -303,6 +303,8 @@
       <button class="btn" id="setCardOn">だす</button><button class="btn" id="setCardOff">ださない</button></div>
     <div class="setrow"><div class="what">「ふんの すうじ」ボタン<small>ださない と、子どもは ふんの すうじ（5・10・15…）を 出せません</small></div>
       <button class="btn" id="setMinOn">だす</button><button class="btn" id="setMinOff">ださない</button></div>
+    <div class="setrow"><div class="what">じかんの ピース（2ねん）<small>ださない と、道具箱の「じかん」が なくなります（とけいも 少し 大きく なります）</small></div>
+      <button class="btn" id="setPieceOn">だす</button><button class="btn" id="setPieceOff">ださない</button></div>
     <div class="row"><button class="btn" id="setClose">とじる</button></div>
   </div>
 </div>
@@ -397,9 +399,32 @@ WORDS.forEach(([t, c, b], i) => { PIECES['w' + i] = { name: t, kind: 'word', w: 
 // 1ねん で つかう ことば（2ねん は ぜんぶ）
 const WORDS_G1 = ['みじかい はり', 'ながい はり', 'じ', 'ふん', 'ぷん', 'はん', 'ちょうど', 'まだ', 'すぎ'];
 const wordTools = g => WORDS.map((w, i) => 'w' + i).filter(k => g === 2 || WORDS_G1.includes(PIECES[k].name));
+const SEG_LENS = [1, 5, 10, 15, 30, 60];   // じかんの ピースの ながさ（ふん）
+// じかんの ピース（道具箱の 見本）：小さな とけいの ふちに、ながさ ぶんの おうぎ形 ＋ なまえ
+const segName = n => ({ 1: '1ぷん', 5: '5ふん', 10: '10ぷん', 15: '15ふん', 30: '30ぷん', 60: '1じかん' })[n];
+const SEG_COL = { fill: '#ffcdd2', fill2: '#ef9a9a', text: '#b71c1c' };   // ぷん：ながい はりと おなじ あか（うすく）
+const HOUR_COL = { fill: '#bbdefb', fill2: '#bbdefb', text: '#0d47a1' };  // 1じかん：みじかい はりと おなじ あお（うすく）
+function bandPath(r1, r2, a1, a2) {   // おうぎ形の 帯（a は 12 から とけい回りの 角度）
+  const pt = (r, a) => { const t = a * Math.PI / 180; return `${(Math.sin(t) * r).toFixed(2)} ${(-Math.cos(t) * r).toFixed(2)}`; };
+  if (a2 - a1 >= 359.99) {   // ぐるっと 一周：2つの 半円で かく
+    return `M ${pt(r2, a1)} A ${r2} ${r2} 0 1 1 ${pt(r2, a1 + 180)} A ${r2} ${r2} 0 1 1 ${pt(r2, a1)} Z
+            M ${pt(r1, a1)} A ${r1} ${r1} 0 1 0 ${pt(r1, a1 + 180)} A ${r1} ${r1} 0 1 0 ${pt(r1, a1)} Z`;
+  }
+  const big = a2 - a1 > 180 ? 1 : 0;
+  return `M ${pt(r2, a1)} A ${r2} ${r2} 0 ${big} 1 ${pt(r2, a2)} L ${pt(r1, a2)} A ${r1} ${r1} 0 ${big} 0 ${pt(r1, a1)} Z`;
+}
+function svgSegThumb(n) {
+  const col = n === 60 ? HOUR_COL : SEG_COL;
+  return svg(150, 64, `<g transform="translate(32 32)"><circle r="19" fill="#fffdf3" stroke="#9fa8da" stroke-width="2"/>
+    <path d="${bandPath(21, 31, 0, n * 6)}" fill="${n === 60 ? col.fill : col.fill2}" stroke="${n === 60 ? '#1e63d6' : '#e53935'}" stroke-width="1.5" fill-rule="evenodd"/>
+    <line x1="0" y1="0" x2="0" y2="-15" stroke="#e53935" stroke-width="3" stroke-linecap="round"/></g>
+    <text x="104" y="43" text-anchor="middle" font-family="Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, sans-serif" font-weight="900" font-size="${n === 60 ? 25 : 29}" fill="${col.text}">${segName(n)}</text>`);
+}
+for (const n of SEG_LENS) PIECES['p' + n] = { name: segName(n), kind: 'seg', len: n, w: 150, h: 64, svg: svgSegThumb(n) };
 const GROUPS = g => [
   { tab: 'ことば', label: 'ことば カード', tools: wordTools(g) },
   { tab: 'すうじ', label: 'すうじ カード', tools: ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n0', 'plus', 'minus', 'eq', 'q'] },
+  ...(usePieces() ? [{ tab: 'じかん', label: 'じかんの ピース（とけいの ふちに ならぶ）', tools: SEG_LENS.map(n => 'p' + n) }] : []),
 ];
 
 /* ---- ペンの いろ ---- */
@@ -446,7 +471,18 @@ const opt = {                                              // 先生の せっ�
   link: params.get('link') !== '0',      // はりを いっしょに うごかす
   card: params.get('card') !== '0',      // こたえカードを 出す
   minBtn: params.get('minnum') !== '0',  // 「ふんの すうじ」ボタンを 出す
+  piece: params.get('piece') !== '0',    // じかんの ピース（2ねん）を 出す
 };
+/* ---- じかんの ピース（2ねん）----
+   とけいの ふちに、はじめ から おわり まで の あいだを うめる おうぎ形の ピースを ならべる。
+   chains[i] … i ばんめの とけいの ならび { s: 1こ目の はしの 位置（0〜59ふん の 目もり）, segs: [ピースの ながさ(ふん), ...] }
+   ピースは つながって ならぶ（すきま・かさなりは できない）。60ぷんを こえると 外がわの 2だんめに つづく（2じかん まで）。
+   とけい1つ の とき は 0ばん、2つ の とき は おわりの とけい（1ばん）だけに おける。 */
+const SEG_MAX = 120;                                       // 2じかん（2だん）まで
+let chains = [ { s: 0, segs: [] }, { s: 0, segs: [] } ];
+const usePieces = () => grade === 2 && opt.piece;
+const pieceClock = () => count === 2 ? 1 : 0;              // ピースを おける とけい
+const chainSum = ch => ch.segs.reduce((a, b) => a + b, 0);
 if (grade === 1) count = 1;
 const opened = [false, false];         // こたえカードを めくって いるか（とけいごと）
 
@@ -574,7 +610,12 @@ function overToolbox(cx, cy) {
 
 /* =========================== とけいの 絵 =========================== */
 // とけい1つの 大きさと 場所（R は 絵の はこの 半分。文字盤は その 240/290）
-const VB = 290, FACE = 240;
+const FACE = 240;
+// 絵の はこの 半分。2ねん（じかんの ピース あり）は ふちの 外に 2だんぶんの 場所を とるので 大きく する（とけいは 1わりほど 小さく 見える）
+let VB = 290;
+const setVB = () => { VB = usePieces() ? 336 : 290; };
+// じかんの ピースの 帯の 内がわ・外がわ（1だんめ・2だんめ）
+const RINGS = [[247, 288], [293, 334]];
 function geom(i) {
   if (count === 1) return { cx: 600, cy: 290, R: 262 };
   return { cx: i === 0 ? 300 : 900, cy: 300, R: 232 };
@@ -582,7 +623,7 @@ function geom(i) {
 // 文字盤（はり なし）。色あわせ：みじかい はり（あお）は あおい 1〜12 の すうじを、
 // ながい はり（あか）は あかい 目もり と あかい ふんの すうじ を よむ、と 色で わかるように する。
 // ふんの すうじは 文字盤の 外に 出す
-function faceSvg(withMin) {
+function faceSvg() {
   let s = `<circle cx="0" cy="0" r="${FACE}" fill="#fffdf3" stroke="#3949ab" stroke-width="9"/>`;
   for (let k = 0; k < 60; k++) {
     const a = k * 6 * Math.PI / 180, big = k % 5 === 0;
@@ -595,13 +636,65 @@ function faceSvg(withMin) {
     const two = h >= 10;
     s += `<text x="${Math.sin(a) * 158}" y="${-Math.cos(a) * 158 + (two ? 17 : 19)}" text-anchor="middle" font-family="${FONT.replace(/"/g, '')}" font-weight="900" font-size="${two ? 48 : 54}"${two ? ' letter-spacing="-3"' : ''} fill="#1e63d6">${h}</text>`;
   }
-  if (withMin) {
-    for (let k = 0; k < 12; k++) {
-      const a = k * 30 * Math.PI / 180;
-      s += `<text x="${Math.sin(a) * 266}" y="${-Math.cos(a) * 266 + 11}" text-anchor="middle" font-family="${FONT.replace(/"/g, '')}" font-weight="900" font-size="31" fill="#e53935">${k * 5}</text>`;
-    }
+  return s;
+}
+// ふんの すうじ（ピースの 帯の 上に かさなっても 読めるよう、白い ふちどりを つける）
+function minNumSvg() {
+  let s = '';
+  for (let k = 0; k < 12; k++) {
+    const a = k * 30 * Math.PI / 180;
+    s += `<text x="${Math.sin(a) * 266}" y="${-Math.cos(a) * 266 + 11}" text-anchor="middle" font-family="${FONT.replace(/"/g, '')}" font-weight="900" font-size="31" fill="#e53935" stroke="#fff" stroke-width="7" stroke-linejoin="round" paint-order="stroke">${k * 5}</text>`;
   }
   return s;
+}
+// ピース1つ1つの 場所（1だん・2だんに またがる ときは 2つに わける）
+// { k: なんばんめの ピースか, len, ring: 0か1, m1, m2: はじめ からの ふん（だんの 中で 0〜60） }
+function segParts(ch) {
+  const parts = [];
+  let cum = 0;
+  ch.segs.forEach((len, k) => {
+    for (let ring = 0; ring < 2; ring++) {
+      const a = Math.max(cum, ring * 60), b = Math.min(cum + len, ring * 60 + 60);
+      if (b > a) parts.push({ k, len, ring, m1: a - ring * 60, m2: b - ring * 60 });
+    }
+    cum += len;
+  });
+  return parts;
+}
+// ピースの 数字を かく 角度：ふんの すうじ（30°ごと）と かさならない ところを さがす
+function labelAngle(a1, a2, avoid) {
+  const mid = (a1 + a2) / 2;
+  if (!avoid) return mid;
+  let best = mid, bestD = -1;
+  const pad = Math.min(6, (a2 - a1) / 2);
+  for (let a = a1 + pad; a <= a2 - pad + 0.01; a += 1) {
+    const d = Math.abs(angDiff(a, Math.round(a / 30) * 30));
+    if (d > bestD + 0.5 || (Math.abs(d - bestD) <= 0.5 && Math.abs(a - mid) < Math.abs(best - mid))) { best = a; bestD = d; }
+  }
+  return best;
+}
+function chainSvg(ch, withMin) {
+  if (!ch.segs.length) return '';
+  let s = '', lab = '';
+  const parts = segParts(ch);
+  parts.forEach(p => {
+    const hour = p.len === 60, col = hour ? HOUR_COL : SEG_COL;
+    const [r1, r2] = RINGS[p.ring];
+    const a1 = (ch.s + p.m1) * 6, a2 = (ch.s + p.m2) * 6;
+    s += `<path d="${bandPath(r1, r2, a1, a2)}" fill="${p.k % 2 ? col.fill2 : col.fill}" fill-rule="evenodd" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>`;
+    // 数字は ピースの 大きい ほうの かけらに 1つだけ
+    const other = parts.find(q => q.k === p.k && q !== p);
+    if (other && (other.m2 - other.m1 > p.m2 - p.m1 || (other.m2 - other.m1 === p.m2 - p.m1 && other.ring < p.ring))) return;
+    const txt = hour ? '1じかん' : String(p.len);
+    const la = labelAngle(a1, a2, withMin && p.ring === 0) * Math.PI / 180, rr = (r1 + r2) / 2;
+    const fs = hour ? 24 : p.len === 1 ? 20 : 27;
+    // ふんの すうじと まちがえないよう、白い まるい ふだに 入れる
+    const x = Math.sin(la) * rr, y = -Math.cos(la) * rr;
+    const bw = (hour ? fs * 3.6 : txt.length * fs * 0.62) + 14, bh = fs + 8;
+    lab += `<rect x="${(x - bw / 2).toFixed(1)}" y="${(y - bh / 2).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh}" rx="${bh / 2}" fill="#fff" stroke="${hour ? '#1e63d6' : '#e53935'}" stroke-width="2.5"/>
+      <text x="${x.toFixed(1)}" y="${(y + fs * 0.36).toFixed(1)}" text-anchor="middle" font-family="${FONT.replace(/"/g, '')}" font-weight="900" font-size="${fs}" fill="${col.text}">${txt}</text>`;
+  });
+  return s + `<g class="seglab">${lab}</g>`;
 }
 const HOUR_HAND = '<line x1="0" y1="22" x2="0" y2="-128" stroke="#1e63d6" stroke-width="22" stroke-linecap="round"/>';
 const MIN_HAND = '<line x1="0" y1="28" x2="0" y2="-206" stroke="#e53935" stroke-width="11" stroke-linecap="round"/>';
@@ -614,11 +707,16 @@ function handsSvg(c, ghost) {
     <circle cx="0" cy="0" r="15" fill="#263238"/><circle cx="0" cy="0" r="6" fill="#fff"/>`;
 }
 const ghostFor = i => i === 1 && showShadow() ? clocks[0] : null;
-const clockSvg = (c, withMin, ghost) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-VB} ${-VB} ${VB * 2} ${VB * 2}">${faceSvg(withMin)}${handsSvg(c, ghost)}</svg>`;
+// i：なんばんめの とけいか（ピースを かく ため）
+const clockSvg = (c, withMin, ghost, i) => {
+  const ch = usePieces() && i === pieceClock() ? chainSvg(chains[i], withMin) : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-VB} ${-VB} ${VB * 2} ${VB * 2}">${faceSvg()}${ch}${withMin ? minNumSvg() : ''}${handsSvg(c, ghost)}</svg>`;
+};
 
 // とけいの 部品（絵・名ふだ・ボタン・こたえカード）を 作りなおす
 const clockEls = [];
 function renderClocks() {
+  setVB();
   clocksEl.textContent = '';
   clockEls.length = 0;
   if (!opt.link) {
@@ -632,7 +730,7 @@ function renderClocks() {
     const box = document.createElement('div');
     box.className = 'clock';
     Object.assign(box.style, { left: g.cx - g.R + 'px', top: g.cy - g.R + 'px', width: g.R * 2 + 'px', height: g.R * 2 + 'px' });
-    box.innerHTML = clockSvg(c, minNum, ghostFor(i));
+    box.innerHTML = clockSvg(c, minNum, ghostFor(i), i);
     clocksEl.appendChild(box);
     let apEl = null;
     if (showAmpm()) {
@@ -734,6 +832,86 @@ function updateTopButtons() {
   $('shadowBtn').classList.toggle('on', shadow);
   $('ampmBtn').hidden = grade !== 2;
   $('ampmBtn').classList.toggle('on', ampm);
+}
+
+/* =========================== じかんの ピースを ならべる・はずす =========================== */
+// ピースを 1つ たす。1こ目は ながい はり（2つの とけいの ときは かげのはり＝はじめの 時こく）の ところから。
+// 2こ目からは 前の ピースの はしに つながる。
+function addSeg(len) {
+  if (!usePieces()) return false;
+  const i = pieceClock(), ch = chains[i];
+  if (chainSum(ch) + len > SEG_MAX) { toast('ピースは 2じかん（2だん）までだよ'); return false; }
+  const snap = snapshot();
+  if (!ch.segs.length) {
+    ch.s = clocks[count === 2 ? 0 : i].t % 60;
+    if (count === 2) shadow = true;    // はじめの 時こくが 見えるように かげのはりも 出す
+  }
+  ch.segs.push(len);
+  pushUndo(snap);
+  renderClocks();
+  return true;
+}
+// ピースを 1つ はずす。うしろの ピースは つめて ならびなおす
+function removeSeg(i, k) {
+  chains[i].segs.splice(k, 1);
+  renderClocks();
+}
+// ボードの 点 p が どの ピースの 上か（なければ null）
+function hitSeg(p) {
+  if (!usePieces()) return null;
+  const i = pieceClock(), ch = chains[i];
+  if (!ch.segs.length) return null;
+  const g = geom(i), k = VB / g.R;
+  const r = Math.hypot(p.x - g.cx, p.y - g.cy) * k;
+  const ring = RINGS.findIndex(([r1, r2]) => r >= r1 - 3 && r <= r2 + 3);
+  if (ring < 0) return null;
+  const m = mod(angleAt(p, g) / 6 - ch.s, 60) + ring * 60;   // はじめ から なんぷん の ところか
+  let cum = 0;
+  for (let n = 0; n < ch.segs.length; n++) {
+    if (m >= cum && m < cum + ch.segs[n]) return { i, k: n };
+    cum += ch.segs[n];
+  }
+  return null;
+}
+// とけいの 上の ピースを ひっぱって、ごみばこ・道具箱に 入れると はずれる
+const segDrags = new Map();   // pointerId → { i, k, ghost, snap, cx, cy }
+function startSegDrag(e, hit) {
+  e.preventDefault();
+  try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  const type = 'p' + chains[hit.i].segs[hit.k];
+  const ghost = makeEl(type);
+  ghost.classList.add('ghost', 'lift');
+  document.body.appendChild(ghost);
+  const d = { ...hit, type, ghost, snap: snapshot(), cx: e.clientX, cy: e.clientY };
+  segDrags.set(e.pointerId, d);
+  moveSegGhost(d);
+}
+function moveSegGhost(d) {
+  const def = PIECES[d.type];
+  d.ghost.style.transform = `translate3d(${d.cx - def.w * scale / 2}px, ${d.cy - def.h * scale / 2}px, 0) scale(${scale})`;
+  const out = overTrash(toBoard(d.cx, d.cy)) || overToolbox(d.cx, d.cy);
+  trashEl.classList.toggle('hot', out);
+  toolbox.classList.toggle('drop-ok', overToolbox(d.cx, d.cy));
+}
+function moveSeg(e) {
+  const d = segDrags.get(e.pointerId);
+  if (!d) return;
+  d.cx = e.clientX; d.cy = e.clientY;
+  moveSegGhost(d);
+}
+function endSeg(e) {
+  const d = segDrags.get(e.pointerId);
+  if (!d) return;
+  segDrags.delete(e.pointerId);
+  d.ghost.remove();
+  trashEl.classList.remove('hot');
+  toolbox.classList.remove('drop-ok');
+  if (e.type === 'pointercancel') return;
+  if (overTrash(toBoard(d.cx, d.cy)) || overToolbox(d.cx, d.cy)) {
+    if (chains[d.i].segs[d.k] === undefined) return;
+    removeSeg(d.i, d.k);
+    pushUndo(d.snap);
+  }
 }
 
 /* =========================== はりを ひっぱる =========================== */
@@ -905,7 +1083,7 @@ function clockAvoid() {
   const circles = [], rects = [];
   for (let i = 0; i < count; i++) {
     const g = geom(i);
-    circles.push({ x: g.cx, y: g.cy, r: g.R * (minNum ? 285 : FACE + 6) / VB + 8 });
+    circles.push({ x: g.cx, y: g.cy, r: g.R * (usePieces() && i === pieceClock() && chains[i].segs.length ? (chainSum(chains[i]) > 60 ? 336 : 290) : minNum ? 285 : FACE + 6) / VB + 8 });
     rects.push({ l: g.cx - 220, t: g.cy + g.R, r: g.cx + 220, b: g.cy + g.R + 150 });
     if (count === 2) rects.push({ l: g.cx - g.R, t: g.cy - g.R - 16, r: g.cx - g.R + 110, b: g.cy - g.R + 40 });
     if (showAmpm()) rects.push({ l: g.cx + g.R - 140, t: g.cy - g.R - 18, r: g.cx + g.R + 40, b: g.cy - g.R + 42 });
@@ -935,7 +1113,8 @@ function freeSpot(type) {
 const undoStack = [], redoStack = [];
 function snapshot() {
   return { items: items.map(i => ({ ...i })), strokes: strokes.map(s => ({ color: s.color, pts: s.pts.slice() })),
-           clocks: clocks.map(c => ({ ...c })), count, minNum, shadow, ampm };
+           clocks: clocks.map(c => ({ ...c })), count, minNum, shadow, ampm,
+           chains: chains.map(ch => ({ s: ch.s, segs: ch.segs.slice() })) };
 }
 function pushUndo(snap) {
   scheduleSave();
@@ -952,6 +1131,7 @@ function restore(snap) {
   count = grade === 1 ? 1 : snap.count;
   minNum = snap.minNum && opt.minBtn;
   shadow = !!snap.shadow; ampm = !!snap.ampm;
+  if (snap.chains) chains = snap.chains.map(ch => ({ s: ch.s, segs: ch.segs.slice() }));
   opened[0] = opened[1] = false;
   zTop = items.reduce((m, i) => Math.max(m, i.z), 1);
   rebuild();
@@ -961,6 +1141,8 @@ function dropGestures() {
   for (const d of drags.values()) if (d.timer) clearTimeout(d.timer);
   drags.clear();
   handDrags.clear();
+  for (const d of segDrags.values()) d.ghost.remove();
+  segDrags.clear();
   if (drawing.size) {
     const live = [...drawing.values()].map(d => d.stroke);
     strokes = strokes.filter(s => !live.includes(s));
@@ -1006,7 +1188,9 @@ stage.addEventListener('pointerdown', e => {
   if (e.target.closest('.cbtn, .tcard')) return;   // ボタン・こたえカードは クリックで うごく
   const el = e.target.closest('.piece');
   if (!el) {
-    // カードの 上で なければ、とけいの はり
+    // カードの 上で なければ、じかんの ピース → とけいの はり
+    const sh = hitSeg(toBoard(e.clientX, e.clientY));
+    if (sh) { startSegDrag(e, sh); return; }
     const hit = hitClock(toBoard(e.clientX, e.clientY));
     if (hit && ![...handDrags.values()].some(d => d.i === hit.i)) startHand(e, hit);   // 1つの とけいは 1本の 指だけ
     return;
@@ -1024,6 +1208,7 @@ stage.addEventListener('pointerdown', e => {
 });
 stage.addEventListener('pointermove', e => {
   if (handDrags.has(e.pointerId)) { moveHand(e); return; }
+  if (segDrags.has(e.pointerId)) { moveSeg(e); return; }
   const d = drags.get(e.pointerId);
   if (!d) return;
   if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 3) return;
@@ -1057,7 +1242,7 @@ function endDrag(e) {
   }
   requestFrame();
 }
-function endStage(e) { endHand(e); endDrag(e); }
+function endStage(e) { endHand(e); endSeg(e); endDrag(e); }
 stage.addEventListener('pointerup', endStage);
 stage.addEventListener('pointercancel', endStage);
 
@@ -1096,7 +1281,7 @@ function buildToolbox() {
   for (const type of g.tools) {
     const def = PIECES[type];
     const b = document.createElement('div');
-    b.className = 'tb-item' + (def.kind === 'word' && def.w > 120 ? ' wide' : '');
+    b.className = 'tb-item' + ((def.kind === 'word' && def.w > 120) || def.kind === 'seg' ? ' wide' : '');
     b.dataset.type = type;
     const fit = def.kind === 'word' ? Math.min(0.8, 220 / def.w) : 0.85;
     const th = document.createElement('div');
@@ -1147,6 +1332,17 @@ function endTb(e) {
   if (!d) return;
   tbDrags.delete(e.pointerId);
   trashEl.classList.remove('hot');
+  if (PIECES[d.type].kind === 'seg') {   // じかんの ピース：タップでも、ボードに おとしても、とけいの ふちに つながる
+    if (d.ghost) d.ghost.remove();
+    if (e.type === 'pointercancel') return;
+    if (d.ghost) {
+      const p = toBoard(d.cx, d.cy);
+      if (!inBoard(p) || overTrash(p)) return;
+      if (count === 2 && Math.hypot(p.x - geom(0).cx, p.y - geom(0).cy) < geom(0).R) toast('ピースは おわりの とけいに ならぶよ');
+    }
+    addSeg(PIECES[d.type].len);
+    return;
+  }
   if (!d.ghost) {
     if (e.type === 'pointercancel') return;
     const snap = snapshot();
@@ -1305,7 +1501,8 @@ $('ampmBtn').onclick = () => {
 };
 
 // カードと せんを かたづける（とけいは のこす。もどる で もどせる）
-$('clearAll').onclick = () => { if (items.length || strokes.length) $('confirmBg').hidden = false; };
+const hasSegs = () => chains.some(ch => ch.segs.length);
+$('clearAll').onclick = () => { if (items.length || strokes.length || hasSegs()) $('confirmBg').hidden = false; };
 $('confirmNo').onclick = () => { $('confirmBg').hidden = true; };
 $('confirmYes').onclick = () => {
   $('confirmBg').hidden = true;
@@ -1313,6 +1510,7 @@ $('confirmYes').onclick = () => {
   pushUndo(snapshot());
   items = TEACHER ? [] : items.filter(i => i.type === 'text');
   strokes = [];
+  chains.forEach(ch => { ch.segs = []; });
   rebuild();
 };
 
@@ -1330,6 +1528,7 @@ function renderSet() {
   $('setLinkOn').classList.toggle('on', opt.link);  $('setLinkOff').classList.toggle('on', !opt.link);
   $('setCardOn').classList.toggle('on', opt.card);  $('setCardOff').classList.toggle('on', !opt.card);
   $('setMinOn').classList.toggle('on', opt.minBtn); $('setMinOff').classList.toggle('on', !opt.minBtn);
+  $('setPieceOn').classList.toggle('on', opt.piece); $('setPieceOff').classList.toggle('on', !opt.piece);
 }
 function setLink(on) {
   if (opt.link === on) return;
@@ -1349,6 +1548,9 @@ $('setCardOn').onclick = () => changeOpt(() => { opt.card = true; });
 $('setCardOff').onclick = () => changeOpt(() => { opt.card = false; });
 $('setMinOn').onclick = () => changeOpt(() => { opt.minBtn = true; });
 $('setMinOff').onclick = () => changeOpt(() => { opt.minBtn = false; });
+// じかんの ピース：ださない ときは 道具箱の タブも けす（ならべた ピースは のこして おき、だす に もどすと また 見える）
+$('setPieceOn').onclick = () => changeOpt(() => { opt.piece = true; tabNow = 0; buildToolbox(); });
+$('setPieceOff').onclick = () => changeOpt(() => { opt.piece = false; tabNow = 0; buildToolbox(); });
 
 /* =========================== はいけいを えらぶ 画面 =========================== */
 function redrawBg() {
@@ -1468,7 +1670,8 @@ function stateData() {
     v: 1,
     b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color],
     g: grade, n: count, f: minNum ? 1 : 0, h: shadow ? 1 : 0, a: ampm ? 1 : 0,
-    o: [opt.link ? 1 : 0, opt.card ? 1 : 0, opt.minBtn ? 1 : 0],
+    o: [opt.link ? 1 : 0, opt.card ? 1 : 0, opt.minBtn ? 1 : 0, opt.piece ? 1 : 0],
+    p: chains.map(ch => [ch.s, ch.segs.slice()]),
     k: clocks.map(c => [c.t, c.hd]),
     i: items.map(it => it.type === 'text' ? [it.type, r(it.x), r(it.y), it.text, it.fs] : [it.type, r(it.x), r(it.y)]),
     s: strokes.map(st => [st.color, st.pts.filter((p, k) => k % 2 === 0 || k === st.pts.length - 1).flatMap(p => [r(p[0]), r(p[1])])]),
@@ -1497,7 +1700,7 @@ function applyState(data) {
   if (NOTE_SIZES.some(g => g.id === note)) bg.note = note;
   if (BG_COLORS.some(c => c.id === color)) bg.color = color;
   if (data.g === 1 || data.g === 2) grade = data.g;
-  if (Array.isArray(data.o)) { opt.link = data.o[0] !== 0; opt.card = data.o[1] !== 0; opt.minBtn = data.o[2] !== 0; }
+  if (Array.isArray(data.o)) { opt.link = data.o[0] !== 0; opt.card = data.o[1] !== 0; opt.minBtn = data.o[2] !== 0; opt.piece = data.o[3] !== 0; }
   if (Array.isArray(data.k)) {
     data.k.slice(0, 2).forEach((a, i) => {
       if (Array.isArray(a) && num(a[0]) !== null) clocks[i].t = mod(Math.round(a[0]), DAY);
@@ -1507,6 +1710,13 @@ function applyState(data) {
   count = grade === 2 && data.n === 2 ? 2 : 1;
   minNum = data.f === 1 && opt.minBtn;
   shadow = data.h === 1; ampm = data.a === 1;
+  // じかんの ピース（知らない ながさ・2じかんを こえる ぶんは すてる）
+  chains = [0, 1].map(i => {
+    const a = Array.isArray(data.p) && Array.isArray(data.p[i]) ? data.p[i] : [];
+    const ch = { s: num(a[0]) !== null ? mod(Math.round(a[0]), 60) : 0, segs: [] };
+    for (const len of (Array.isArray(a[1]) ? a[1] : [])) if (SEG_LENS.includes(len) && chainSum(ch) + len <= SEG_MAX) ch.segs.push(len);
+    return ch;
+  });
   opened[0] = opened[1] = false;
   items = []; strokes = [];
   for (const a of (Array.isArray(data.i) ? data.i : []).slice(0, 400)) {
@@ -1673,7 +1883,7 @@ async function drawClocks(ctx) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (let i = 0; i < count; i++) {
     const g = geom(i);
-    const img = await svgImage(clockSvg(clocks[i], minNum, ghostFor(i)));
+    const img = await svgImage(clockSvg(clocks[i], minNum, ghostFor(i), i));
     if (img) ctx.drawImage(img, g.cx - g.R, g.cy - g.R, g.R * 2, g.R * 2);
     if (showAmpm()) {
       const pm = isPm(clocks[i]), txt = pm ? '🌙 ごご' : '☀️ ごぜん';
@@ -1743,7 +1953,7 @@ function toast(msg) {
 }
 let leaving = false;   // 先生モードの きりかえで 開きなおす ときは「ページを はなれますか？」を 出さない
 window.addEventListener('beforeunload', e => {
-  if (!leaving && (items.length || strokes.length)) { e.preventDefault(); e.returnValue = ''; }
+  if (!leaving && (items.length || strokes.length || hasSegs())) { e.preventDefault(); e.returnValue = ''; }
 });
 document.addEventListener('contextmenu', e => { if (e.target.closest('.stage, .toolbox')) e.preventDefault(); });
 
@@ -1819,7 +2029,7 @@ if (switched) {
   if (d) applyState(d);
 } else {
   // URL で はじめから 何か きめて いる ときは、つづきからを きかない（先生が くばった アドレスを 優先）
-  const fromUrl = ['grade', 'clocks', 'link', 'card', 'minnum'].some(k => params.has(k));
+  const fromUrl = ['grade', 'clocks', 'link', 'card', 'minnum', 'piece'].some(k => params.has(k));
   const sv = fromUrl ? null : loadSaved();
   if (sv) {
     const d = new Date(sv.at || Date.now());
@@ -1837,9 +2047,10 @@ if (switched) {
     if (tbDrags.has(pid)) endTb(ev);
     if (drags.has(pid)) endDrag(ev);
     if (handDrags.has(pid)) endHand(ev);
+    if (segDrags.has(pid)) endSeg(ev);
     if (drawing.has(pid)) endDraw(ev);
   };
-  const has = pid => tbDrags.has(pid) || drags.has(pid) || handDrags.has(pid) || drawing.has(pid);
+  const has = pid => tbDrags.has(pid) || drags.has(pid) || handDrags.has(pid) || segDrags.has(pid) || drawing.has(pid);
   window.addEventListener('pointerup', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointerup'); });
   window.addEventListener('pointercancel', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointercancel'); });
   for (const el of [toolbox, stage, ink]) el.addEventListener('lostpointercapture', e => {
@@ -1848,7 +2059,7 @@ if (switched) {
   });
   window.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && e.buttons === 0 && has(e.pointerId)) endAll(e.pointerId, 'pointerup'); });
   window.addEventListener('pointerdown', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointercancel'); }, true);
-  const all = () => { for (const pid of new Set([...tbDrags.keys(), ...drags.keys(), ...handDrags.keys(), ...drawing.keys()])) endAll(pid, 'pointercancel'); };
+  const all = () => { for (const pid of new Set([...tbDrags.keys(), ...drags.keys(), ...handDrags.keys(), ...segDrags.keys(), ...drawing.keys()])) endAll(pid, 'pointercancel'); };
   window.addEventListener('blur', all);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') all(); });
 })();
