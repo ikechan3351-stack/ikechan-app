@@ -123,6 +123,21 @@
   .setpanel .den.off { background: #fff !important; color: #9e9e9e; border-style: dashed; }
   .setpanel .note { font-size: 0.85rem; color: #5c6bc0; margin: -8px 0 14px; }
   .setpanel .close { display: block; margin: 4px auto 0; min-width: 160px; }
+  /* ▬テープ｜●円 の きりかえ */
+  .btn .cnt { font-size: 0.75rem; background: rgba(0,0,0,0.12); border-radius: 8px; padding: 0 5px; margin-left: 2px; }
+  .btn.on .cnt { background: rgba(255,255,255,0.3); }
+  ruby rt { font-size: 0.55em; }
+  html body.circle .tape-only { display: none !important; }   /* 先生だけの ボタンより つよく */
+  html body:not(.circle) .circle-only { display: none !important; }
+  /* 円の ピース（扇形）。さわれるのは 色の ついた ところだけ */
+  .cpiece { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .cpiece svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+  .cpiece path { pointer-events: visiblePainted; cursor: grab; }
+  .cpiece .clb { position: absolute; transform: translate(-50%, -50%); pointer-events: none; display: flex; }
+  .cpiece.lift svg { filter: drop-shadow(0 6px 6px rgba(0,0,0,0.25)); }
+  .cpiece.sel path { stroke: #ff6f00; stroke-width: 6px; stroke-dasharray: none; }
+  .tb-item svg { display: block; flex: none; }
+  .tb-item.cw { flex-direction: column; gap: 2px; }
   /* 先生モード */
   .teacher-only { display: none !important; }
   body.teacher .teacher-only { display: inline-flex !important; }
@@ -195,12 +210,21 @@
   <div class="group" id="penColors"></div>
   <button class="btn" id="clearInk" title="せんを ぜんぶ けす"><span class="ic">🧽</span>せんを けす</button>
   <div class="spacer"></div>
-  <div class="group" title="1の ながさ">
+  <div class="group" title="テープ と 円 を きりかえる">
+    <button class="btn" id="vTape" title="テープ"><span class="ic">▬</span>テープ<span class="cnt" id="cntTape">0</span></button>
+    <button class="btn" id="vCirc" title="円（えん）"><span class="ic">●</span><ruby>円<rt>えん</rt></ruby><span class="cnt" id="cntCirc">0</span></button>
+  </div>
+  <div class="group circle-only" title="円の 数">
+    <span class="grouplabel">円の<br>数</span>
+    <button class="btn" id="cc2" title="大きく 2つ"><span class="ic">●●</span>大きく2つ</button>
+    <button class="btn" id="cc3" title="ふつう 3つ"><span class="ic">•••</span>ふつう3つ</button>
+  </div>
+  <div class="group tape-only" title="1の ながさ">
     <span class="grouplabel">1の<br>ながさ</span>
     <button class="btn" id="len1" title="1まで（おおきく）"><span class="ic">▬</span>1まで</button>
     <button class="btn" id="len3" title="3まで（ちいさく）"><span class="ic">▭▭▭</span>3まで</button>
   </div>
-  <button class="btn vl" id="vlineBtn" title="くらべる たての 線を だす・しまう"><span class="ic">↕️</span>たての線</button>
+  <button class="btn vl tape-only" id="vlineBtn" title="くらべる たての 線を だす・しまう"><span class="ic">↕️</span>たての線</button>
   <div class="group">
     <button class="btn" id="undo" title="もどる（Ctrl+Z）" disabled><span class="ic">↩️</span>もどる</button>
     <button class="btn" id="redo" title="やりなおす（Ctrl+Y）" aria-label="やりなおす" disabled><span class="ic">↪️</span></button>
@@ -208,7 +232,7 @@
   <button class="btn" id="photo" title="ボードを しゃしんに する"><span class="ic">📷</span>しゃしん</button>
   <button class="btn" id="openBoard" title="くばられた もんだいの がぞうを ひらく"><span class="ic">📂</span>ひらく</button>
   <button class="btn" id="resetStart" title="くばられた ときの じょうたいに もどす" hidden><span class="ic">⟲</span>はじめに</button>
-  <button class="btn wall teacher-only" id="wallBtn" title="分数の かべ（先生だけ）"><span class="ic">🧱</span>かべ</button>
+  <button class="btn wall teacher-only tape-only" id="wallBtn" title="分数の かべ（先生だけ）"><span class="ic">🧱</span>かべ</button>
   <button class="btn teacher-only" id="addText" title="もんだいカードを かく"><span class="ic">📝</span>もんだい</button>
   <button class="btn teacher-only" id="share" title="子どもに くばる がぞうを つくる"><span class="ic">💾</span>くばる</button>
   <button class="btn teacher-only" id="setBtn" title="せってい（タイルの 字・つかう 分母）"><span class="ic">☰</span>せってい</button>
@@ -226,6 +250,7 @@
       <div class="trash" id="trash"><span class="ic">🗑️</span>ごみばこ</div>
       <div class="qcard" id="qcard" hidden></div>
       <div class="layer pieces" id="pieces"></div>
+      <div class="layer pieces" id="cpieces" hidden></div>
       <div class="layer vlayer" id="vlayer"></div>
       <div class="selbox" id="selbox" hidden></div>
       <canvas class="ink" id="ink"></canvas>
@@ -357,6 +382,10 @@ let labelMode = 'frac';          // タイルの 字：frac 分数 ／ dec 小�
 let useDens = DENOMS.slice();    // 道具箱に 出す 分母
 const selected = new Set();      // えらんだ タイル（まとめて 動かす）
 let qText = '';                  // もんだいカード（先生が 書く）
+let view = 'tape';               // いま 見えている ボード：tape テープ ／ circle 円
+let citems = [];                 // 円の ピース { id, d, c: 円の番号（-1 は おきば）, s: 円の中の 始まりの 目もり, x, y: おきばでの 中心（とがった 所）, z, o }
+let ccount = 3;                  // 円の 数（2 か 3）
+let otherStrokes = [];           // いま 見えて いない ほうの ボードの ペンの線
 let wallOn = false;              // 分数の かべ（先生だけ。ほぞん・くばる には 入れない）
 const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
 if (TEACHER) document.body.classList.add('teacher');
@@ -416,6 +445,7 @@ function overToolbox(cx, cy) {
 function drawBg(ctx) {
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, W, H);
+  if (view === 'circle') { drawCircleBg(ctx); return; }
   const n = maxLen();
   // 1・2・3 の ところに、下まで うすい 点線
   ctx.save();
@@ -641,6 +671,9 @@ function snapshot() {
     items: items.map(i => ({ id: i.id, d: i.d, t: i.t, r: i.r, z: i.z, o: !!i.o })),
     strokes: strokes.map(s => ({ color: s.color, pts: s.pts.slice() })),
     vline: { on: vline.on, t: vline.t }, len: lenMode, q: qText,
+    view, cc: ccount,
+    citems: citems.map(i => ({ id: i.id, d: i.d, c: i.c, s: i.s, x: i.x, y: i.y, z: i.z, o: !!i.o })),
+    other: otherStrokes.map(s => ({ color: s.color, pts: s.pts.slice() })),
   };
 }
 function pushUndo(snap) {
@@ -657,15 +690,24 @@ function restore(snap) {
   vline = { ...snap.vline };
   qText = snap.q || '';
   renderQ();
-  zTop = items.reduce((m, i) => Math.max(m, i.z), 1);
-  if (snap.len !== lenMode) { lenMode = snap.len; updateLenButtons(); redrawBg(); }
+  citems = (snap.citems || []).map(i => ({ ...i }));
+  otherStrokes = (snap.other || []).map(s => ({ color: s.color, pts: s.pts.slice() }));
+  ccount = snap.cc || ccount;
+  if (snap.view && snap.view !== view) view = snap.view;
+  zTop = [...items, ...citems].reduce((m, i) => Math.max(m, i.z), 1);
+  if (snap.len !== lenMode) { lenMode = snap.len; updateLenButtons(); }
   rebuild();
+  crebuild();
+  applyView();
   updateButtons();
 }
 function dropGestures() {
   for (const d of drags.values()) {
     clearTimeout(d.timer);
-    if (d.it) { d.it.dragX = d.it.dragY = null; for (const g of d.group || []) g.it.dragX = g.it.dragY = null; }
+    if (d.it) {
+      for (const o of [d.it, ...(d.group || []).map(g => g.it)]) { o.dragX = o.dragY = null; o.dragA = null; if (d.circ) cplace(o); }
+      if (d.el) d.el.classList.remove('lift');
+    }
     else if (d.vl) vline.dragX = null;
   }
   drags.clear();
@@ -693,8 +735,9 @@ function requestFrame() {
     let hot = false;
     for (const d of drags.values()) {
       if (d.it) {
-        place(d.it);
-        for (const g of d.group) place(g.it);
+        const pl = d.circ ? cplace : place;
+        pl(d.it);
+        for (const g of d.group) pl(g.it);
         if (d.overTrash) hot = true;
       } else if (d.vl) placeVline();
       else if (d.box) {
@@ -715,6 +758,7 @@ function setSelected(ids) {
   selected.clear();
   for (const id of ids) selected.add(id);
   for (const [id, el] of els) el.classList.toggle('sel', selected.has(id));
+  for (const [id, el] of cels) el.classList.toggle('sel', selected.has(id));
 }
 
 stage.addEventListener('pointerdown', e => {
@@ -724,6 +768,7 @@ stage.addEventListener('pointerdown', e => {
   e.preventDefault();
   const p = toBoard(e.clientX, e.clientY);
   try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  if (view === 'circle') { cDown(e, p); requestFrame(); return; }
   if (vl) {
     if (grabbedVline()) return;
     vl.classList.add('lift');
@@ -769,6 +814,7 @@ stage.addEventListener('pointermove', e => {
   d.moved = true;
   clearTimeout(d.timer);
   const p = toBoard(e.clientX, e.clientY);
+  if (d.circ) { cMove(d, e, p); requestFrame(); return; }
   if (d.vl) {
     vline.dragX = Math.max(10, Math.min(W - 10, p.x + d.dx));
   } else if (d.box) {
@@ -789,6 +835,7 @@ function endDrag(e) {
   drags.delete(e.pointerId);
   clearTimeout(d.timer);
   toolbox.classList.remove('drop-ok');
+  if (d.circ) { cEnd(d, e); requestFrame(); return; }
   if (d.vl) {
     d.el.classList.remove('lift');
     if (d.moved && vline.dragX != null) {
@@ -803,7 +850,8 @@ function endDrag(e) {
     $('selbox').hidden = true;
     if (!d.moved || e.type === 'pointercancel') { setSelected([]); return; }
     const l = Math.min(d.x0, d.x1), r = Math.max(d.x0, d.x1), t = Math.min(d.y0, d.y1), b = Math.max(d.y0, d.y1);
-    const hit = items.filter(i => tx(i.t) < r && tx(i.t) + pw(i.d) > l && rowY(i.r) < b && rowY(i.r) + TH > t);
+    const hit = view === 'circle' ? cBoxSelect(l, r, t, b)
+      : items.filter(i => tx(i.t) < r && tx(i.t) + pw(i.d) > l && rowY(i.r) < b && rowY(i.r) + TH > t);
     setSelected(hit.map(i => i.id));
     if (hit.length) toast(`${hit.length}まい えらんだよ。ひっぱると いっしょに うごくよ`);
     return;
@@ -838,6 +886,348 @@ function endDrag(e) {
 stage.addEventListener('pointerup', endDrag);
 stage.addEventListener('pointercancel', endDrag);
 
+/* =====================================================================
+   ●円（えん）モード
+   ・上に 円の わく（2つ か 3つ）、下が「おきば」。タップで 出した ピースは おきばに 出る。
+   ・ピースを 円の 上で はなすと、その 円の 12時から 時計まわりに つめて 入る（入りきらなければ おきばへ もどる）。
+   ・円の 中の 位置は テープと 同じ 目もり（1周 ＝ TICK）で もつので、入るか・つめなおしが 整数で わかる。
+   ===================================================================== */
+const cpiecesEl = $('cpieces');
+const cels = new Map();
+const TAU = Math.PI * 2;
+const cR = () => ccount === 2 ? 160 : 130;                         // 円の 半径
+const cCenter = i => ({ x: W / ccount * (i + 0.5), y: 96 + cR() }); // 円の 中心
+const okibaTop = () => 96 + cR() * 2 + 24;                         // おきばの 上の はし
+const sweep = d => TAU / d;
+// 角度は 12時を 0 に して 時計まわり
+const pt = (cx, cy, r, a) => [cx + r * Math.sin(a), cy - r * Math.cos(a)];
+function wedgePath(cx, cy, r, a0, d) {
+  if (d === 1) return `M ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy} A ${r} ${r} 0 1 1 ${cx - r} ${cy} Z`;
+  const sw = sweep(d), [x1, y1] = pt(cx, cy, r, a0), [x2, y2] = pt(cx, cy, r, a0 + sw);
+  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${sw > Math.PI ? 1 : 0} 1 ${x2} ${y2} Z`;
+}
+// ピースの いまの 形：中心（とがった 所）と 始まりの 角度
+function cgeo(it) {
+  const sw = sweep(it.d);
+  if (it.dragX != null) return { cx: it.dragX, cy: it.dragY, a0: it.dragA };
+  if (it.c >= 0) { const c = cCenter(it.c); return { cx: c.x, cy: c.y, a0: it.s / TICK * TAU }; }
+  return { cx: it.x, cy: it.y, a0: it.d === 1 ? 0 : -sw / 2 };   // おきばでは いつも 上むき
+}
+// 字を 書く 場所と はば
+function clabelPos(d, a0) {
+  const r = cR();
+  if (d === 1) return { lx: 0, ly: 0, w: r };
+  const lr = d === 2 ? r * 0.5 : r * 0.66, mid = a0 + sweep(d) / 2;
+  const [lx, ly] = pt(0, 0, lr, mid);
+  return { lx, ly, w: Math.min(r, 2 * lr * Math.sin(sweep(d) / 2)) };
+}
+function clabelHTML(d, w) {
+  if (labelMode === 'hide') return '';
+  if (labelMode === 'frac') return fracHTML(d, fontFor(w));
+  const t = labelText(d);
+  return `<span class="lb" style="font-size:${Math.max(9, fitFont(t, w - 8, 22))}px">${t}</span>`;
+}
+// 外がわの 四角（えらぶ・おく 場所さがし 用）
+function cbox(cx, cy, a0, d, r = cR()) {
+  if (d === 1) return { l: cx - r, t: cy - r, r: cx + r, b: cy + r };
+  const xs = [cx], ys = [cy], sw = sweep(d);
+  for (let k = 0; k <= 24; k++) { const [x, y] = pt(cx, cy, r, a0 + sw * k / 24); xs.push(x); ys.push(y); }
+  return { l: Math.min(...xs), t: Math.min(...ys), r: Math.max(...xs), b: Math.max(...ys) };
+}
+const cboxOf = it => { const g = cgeo(it); return cbox(g.cx, g.cy, g.a0, it.d); };
+function cmakeEl(it) {
+  const el = document.createElement('div');
+  el.className = 'cpiece' + (it.o ? ' outline' : '');
+  el.dataset.id = it.id;
+  return el;
+}
+// ピースを かく。形（角度・大きさ・字）が かわった ときだけ 中身を 作りなおす（ドラッグ中は 位置だけ）
+function cplace(it) {
+  const el = cels.get(it.id);
+  if (!el) return;
+  const g = cgeo(it), r = cR(), c = COLORS[it.d];
+  const key = `${g.a0}|${r}|${it.o}|${labelMode}`;
+  if (el._key !== key) {
+    el._key = key;
+    const lp = clabelPos(it.d, g.a0);
+    const fill = it.o ? 'rgba(255,255,255,0.35)' : c.bg, stroke = it.o ? c.bg : 'rgba(0,0,0,0.35)';
+    el.innerHTML = `<svg width="${2 * r}" height="${2 * r}" viewBox="0 0 ${2 * r} ${2 * r}">` +
+      `<path d="${wedgePath(r, r, r - 1, g.a0, it.d)}" fill="${fill}" stroke="${stroke}" stroke-width="${it.o ? 4 : 2}"` +
+      `${it.o ? ' stroke-dasharray="10 6"' : ''} stroke-linejoin="round"/></svg>` +
+      `<div class="clb" style="left:${r + lp.lx}px;top:${r + lp.ly}px;color:${it.o ? '#263238' : c.fg}">${clabelHTML(it.d, lp.w)}</div>`;
+  }
+  el.style.transform = `translate3d(${g.cx - r}px, ${g.cy - r}px, 0)`;
+  el.style.zIndex = (it.c >= 0 && it.dragX == null ? 0 : 50000) + zOf(it);   // おきば・ドラッグ中の ピースは 円の 中の ピースより 前
+  el.classList.toggle('sel', selected.has(it.id));
+}
+function cattach(it) {
+  const el = cmakeEl(it);
+  cels.set(it.id, el);
+  cpiecesEl.appendChild(el);
+  cplace(it);
+}
+function crebuild() {
+  for (const id of [...selected]) if (!items.some(i => i.id === id) && !citems.some(i => i.id === id)) selected.delete(id);
+  cpiecesEl.textContent = '';
+  cels.clear();
+  for (const it of citems) cattach(it);
+}
+function cremove(id) {
+  selected.delete(id);
+  citems = citems.filter(i => i.id !== id);
+  const el = cels.get(id);
+  if (el) el.remove();
+  cels.delete(id);
+}
+/* ---- 円の 中の ならび ---- */
+const inCircle = c => citems.filter(i => i.c === c).sort((a, b) => a.s - b.s);
+const used = (c, ex) => inCircle(c).filter(i => !(ex && ex.has(i.id))).reduce((m, i) => m + tw(i.d), 0);
+function repack(c) {   // すきまを つめる（12時から 時計まわり）
+  let cum = 0;
+  for (const i of inCircle(c)) { i.s = cum; cum += tw(i.d); }
+}
+function circleAt(p) {   // ゆびの 下の 円（なければ -1）
+  for (let i = 0; i < ccount; i++) { const c = cCenter(i); if (Math.hypot(p.x - c.x, p.y - c.y) <= cR() + 12) return i; }
+  return -1;
+}
+function tryInsert(it, c) {   // 入れば 円の さいごに つなぐ
+  if (used(c) + tw(it.d) > TICK) return false;
+  it.s = used(c);
+  it.c = c;
+  return true;
+}
+/* ---- おきば ---- */
+// ボードの 中に おさまる ように 中心を ずらす
+function clampFree(it) {
+  const sw = sweep(it.d), a0 = it.d === 1 ? 0 : -sw / 2, b = cbox(0, 0, a0, it.d);
+  it.x = Math.max(4 - b.l, Math.min(W - 4 - b.r, it.x));
+  it.y = Math.max(4 - b.t, Math.min(H - 4 - b.b, it.y));
+}
+// おきばの あいている 場所（ほかの おきばの ピースと かさならない）
+function cfreeSpot(d) {
+  const sw = sweep(d), a0 = d === 1 ? 0 : -sw / 2, b = cbox(0, 0, a0, d);
+  const others = citems.filter(i => i.c < 0).map(cboxOf);
+  const hit = (q) => others.some(o => q.l < o.r + 6 && q.r > o.l - 6 && q.t < o.b + 6 && q.b > o.t - 6);
+  const top = okibaTop();
+  for (let y = top - b.t + 4; y + b.b <= H - 6; y += 16) {
+    for (let x = 14 - b.l; x + b.r <= W - 150; x += 16) {
+      const q = { l: x + b.l, t: y + b.t, r: x + b.r, b: y + b.b };
+      if (!hit(q)) return { x, y };
+    }
+  }
+  return { x: 40 - b.l + Math.random() * 600, y: Math.max(top - b.t, H - 8 - b.b) - Math.random() * 40 };
+}
+function addCPiece(d, x, y) {
+  if (citems.length >= MAX_TILES) { toast(`ピースは ${MAX_TILES}まいまでです`); return null; }
+  const it = { id: nextId++, d, c: -1, s: 0, x, y, z: ++zTop, o: false };
+  clampFree(it);
+  citems.push(it);
+  cattach(it);
+  return it;
+}
+/* ---- 円の 数 ---- */
+function updateCcButtons() {
+  $('cc2').classList.toggle('on', ccount === 2);
+  $('cc3').classList.toggle('on', ccount === 3);
+}
+function setCcount(n) {
+  if (n === ccount) return;
+  dropGestures();
+  if (n === 2 && citems.some(i => i.c === 2)) { toast('3つめの 円に ピースが あるので、2つに できません'); return; }
+  pushUndo(snapshot());
+  ccount = n;
+  for (const i of citems) if (i.c < 0) clampFree(i);
+  updateCcButtons();
+  redrawBg();
+  crebuild();
+}
+$('cc2').onclick = () => setCcount(2);
+$('cc3').onclick = () => setCcount(3);
+/* ---- 円の ボードの はいけい ---- */
+function drawCircleBg(ctx) {
+  const r = cR();
+  for (let i = 0; i < ccount; i++) {
+    const c = cCenter(i);
+    ctx.fillStyle = '#fafafa'; ctx.strokeStyle = '#78909c'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, TAU); ctx.fill(); ctx.stroke();
+    // 12時の しるし
+    ctx.fillStyle = '#455a64';
+    ctx.beginPath(); ctx.moveTo(c.x - 9, c.y - r - 16); ctx.lineTo(c.x + 9, c.y - r - 16); ctx.lineTo(c.x, c.y - r - 3); ctx.closePath(); ctx.fill();
+  }
+  const top = okibaTop() - 10;
+  ctx.save();
+  ctx.strokeStyle = '#cfd8dc'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
+  ctx.beginPath(); ctx.roundRect(8, top, W - 150, H - top - 8, 16); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#90a4ae'; ctx.font = `900 20px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('おきば', 20, top + 8);
+  ctx.textBaseline = 'alphabetic';
+}
+/* ---- しゃしん 用 ---- */
+function drawCPiece(ctx, it) {
+  const g = cgeo(it), r = cR(), c = COLORS[it.d];
+  const path = new Path2D(wedgePath(g.cx, g.cy, r - 1, g.a0, it.d));
+  ctx.save();
+  if (it.o) { ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.strokeStyle = c.bg; ctx.lineWidth = 4; ctx.setLineDash([10, 6]); }
+  else { ctx.fillStyle = c.bg; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; }
+  ctx.lineJoin = 'round';
+  ctx.fill(path); ctx.stroke(path);
+  ctx.restore();
+  if (labelMode === 'hide') return;
+  const lp = clabelPos(it.d, g.a0), x = g.cx + lp.lx, y = g.cy + lp.ly, fg = it.o ? '#263238' : c.fg;
+  ctx.fillStyle = fg; ctx.strokeStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (labelMode !== 'frac') {
+    const t = labelText(it.d);
+    ctx.font = `900 ${Math.max(9, fitFont(t, lp.w - 8, 22))}px ${FONT}`; ctx.fillText(t, x, y + 1);
+  } else if (it.d === 1) { ctx.font = `900 30px ${FONT}`; ctx.fillText('1', x, y + 1); }
+  else {
+    const fs = fontFor(lp.w), half = fs * 0.55 + 2;
+    ctx.font = `900 ${fs}px ${FONT}`;
+    ctx.fillText('1', x, y - half); ctx.fillText(String(it.d), x, y + half);
+    const bw = ctx.measureText(String(it.d)).width + 2;
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - bw / 2, y); ctx.lineTo(x + bw / 2, y); ctx.stroke();
+  }
+  ctx.textBaseline = 'alphabetic';
+}
+/* ---- ドラッグ（円） ---- */
+function cDown(e, p) {
+  const path = e.target.closest('.cpiece path');
+  const el = path && path.closest('.cpiece');
+  if (!el) {
+    if ([...drags.values()].some(d => d.box)) return;
+    drags.set(e.pointerId, { box: true, x0: p.x, y0: p.y, x1: p.x, y1: p.y, moved: false, sx: e.clientX, sy: e.clientY });
+    return;
+  }
+  const it = citems.find(i => i.id === +el.dataset.id);
+  if (!it || grabbed(it)) return;
+  if (!selected.has(it.id) && selected.size) setSelected([]);
+  const snap = snapshot();
+  const start = o => { const g = cgeo(o); o.dragA = g.a0; return g; };
+  const g0 = start(it);
+  const group = [];
+  if (selected.has(it.id)) {
+    for (const o of citems) {
+      if (o === it || !selected.has(o.id) || grabbed(o)) continue;
+      const g = start(o);
+      group.push({ it: o, ox: g.cx - g0.cx, oy: g.cy - g0.cy });
+    }
+  }
+  it.z = ++zTop;
+  for (const q of group) q.it.z = ++zTop;
+  el.classList.add('lift');
+  const d = { circ: true, it, el, dx: g0.cx - p.x, dy: g0.cy - p.y, snap, moved: false, sx: e.clientX, sy: e.clientY, overTrash: false, group };
+  d.timer = setTimeout(() => {
+    if (d.moved || drags.get(e.pointerId) !== d) return;
+    drags.delete(e.pointerId);
+    el.classList.remove('lift');
+    openMenu(it, e.clientX, e.clientY);
+  }, 550);
+  drags.set(e.pointerId, d);
+}
+function cMove(d, e, p) {
+  d.it.dragX = p.x + d.dx;
+  d.it.dragY = p.y + d.dy;
+  for (const q of d.group) { q.it.dragX = d.it.dragX + q.ox; q.it.dragY = d.it.dragY + q.oy; }
+  d.target = circleAt(p);
+  d.overTrash = overTrash(p) || overToolbox(e.clientX, e.clientY);
+  toolbox.classList.toggle('drop-ok', d.overTrash && overToolbox(e.clientX, e.clientY));
+}
+function cEnd(d, e) {
+  d.el.classList.remove('lift');
+  const all = [d.it, ...d.group.map(q => q.it)];
+  const clear = () => { for (const o of all) { o.dragX = o.dragY = null; o.dragA = null; } };
+  if (!d.moved || e.type === 'pointercancel') { clear(); for (const o of all) cplace(o); return; }
+  if (d.overTrash) {
+    const from = new Set(all.filter(o => o.c >= 0).map(o => o.c));
+    for (const o of all) cremove(o.id);
+    for (const c of from) repack(c);
+    pushUndo(d.snap);
+    for (const o of citems) cplace(o);
+    return;
+  }
+  // 1) いったん 円から 出す（もとの 円は つめなおす）
+  const drop = all.map(o => ({ o, x: o.dragX, y: o.dragY, wasIn: o.c >= 0 }));
+  const from = new Set(all.filter(o => o.c >= 0).map(o => o.c));
+  for (const o of all) o.c = -1;
+  for (const c of from) repack(c);
+  clear();
+  // 2) 円の 上で はなした → 入る ものだけ 入れる（もとの ならび順）
+  let left = drop;
+  if (d.target >= 0) {
+    left = [];
+    const order = drop.slice().sort((a, b) => (b.wasIn - a.wasIn) || (a.wasIn ? a.o.s - b.o.s : a.x - b.x));
+    for (const q of order) if (!tryInsert(q.o, d.target)) left.push(q);
+    if (left.length) toast('この 円には もう 入らないよ');
+  }
+  // 3) のこりは おきばへ（ひとつだけ なら はなした 場所。いくつも なら あいている 場所）
+  for (const q of left) {
+    q.o.c = -1;
+    if (left.length === 1 && d.target < 0) { q.o.x = q.x; q.o.y = q.y; clampFree(q.o); }
+    else { const s = cfreeSpot(q.o.d); q.o.x = s.x; q.o.y = s.y; }
+  }
+  pushUndo(d.snap);
+  for (const o of citems) cplace(o);
+}
+// かこんで えらぶ（円）
+function cBoxSelect(l, r, t, b) {
+  return citems.filter(i => { const q = cboxOf(i); return q.l < r && q.r > l && q.t < b && q.b > t; });
+}
+/* ---- 道具箱（円）---- */
+function wedgeIcon(d, size) {
+  const r = size / 2, c = COLORS[d], sw = sweep(d), a0 = d === 1 ? 0 : -sw / 2;
+  const b = cbox(r, r, a0, d, r);
+  return `<svg width="${b.r - b.l + 4}" height="${b.b - b.t + 4}" viewBox="${b.l - 2} ${b.t - 2} ${b.r - b.l + 4} ${b.b - b.t + 4}">` +
+    `<path d="${wedgePath(r, r, r, a0, d)}" fill="${c.bg}" stroke="rgba(0,0,0,0.35)" stroke-width="1.5"/></svg>`;
+}
+// 道具箱から ひっぱって はなした / タップした
+function cFromToolbox(dd, p, tapped) {
+  const snap = snapshot();
+  if (tapped) {
+    const s = cfreeSpot(dd);
+    if (addCPiece(dd, s.x, s.y)) pushUndo(snap);
+    return;
+  }
+  const c = circleAt(p);
+  const sw = sweep(dd), a0 = dd === 1 ? 0 : -sw / 2, b = cbox(0, 0, a0, dd);
+  // 絵の まん中が ゆびの 位置 → とがった 所は そこから ずらす
+  const it = addCPiece(dd, p.x - (b.l + b.r) / 2, p.y - (b.t + b.b) / 2);
+  if (!it) return;
+  if (c >= 0) {
+    if (tryInsert(it, c)) cplace(it);
+    else { const s = cfreeSpot(dd); it.x = s.x; it.y = s.y; cplace(it); toast('この 円には もう 入らないよ'); }
+  }
+  pushUndo(snap);
+}
+/* ---- テープ ⇄ 円 ---- */
+function updateViewButtons() {
+  $('vTape').classList.toggle('on', view === 'tape');
+  $('vCirc').classList.toggle('on', view === 'circle');
+  $('cntTape').textContent = items.length;
+  $('cntCirc').textContent = citems.length;
+}
+function applyView() {
+  document.body.classList.toggle('circle', view === 'circle');
+  piecesEl.hidden = view !== 'tape';
+  vlayer.hidden = view !== 'tape';
+  cpiecesEl.hidden = view !== 'circle';
+  updateViewButtons();
+  updateCcButtons();
+  buildToolbox();
+  redrawBg();
+  redrawInk();
+}
+function setView(v) {
+  if (v === view) return;
+  dropGestures();
+  setSelected([]);
+  [strokes, otherStrokes] = [otherStrokes, strokes];
+  view = v;
+  applyView();
+  scheduleSave();
+}
+$('vTape').onclick = () => setView('tape');
+$('vCirc').onclick = () => setView('circle');
+
 /* =========================== 長おしの メニュー（わくだけ・けす） =========================== */
 let menuItem = null;
 function openMenu(it, cx, cy) {
@@ -854,9 +1244,10 @@ document.addEventListener('pointerdown', e => { if (!$('pmenu').hidden && !e.tar
 $('pmOutline').onclick = () => {
   const it = menuItem;
   closeMenu();
-  if (!it || !items.includes(it)) return;
+  if (!it || !(items.includes(it) || citems.includes(it))) return;
   pushUndo(snapshot());
   it.o = !it.o;
+  if (citems.includes(it)) { crebuild(); return; }
   // ぬった タイルに もどした とき、ほかの タイルと かさなって いたら となりへ
   if (!it.o) settle(it, it.t, it.r);
   rebuild();
@@ -864,8 +1255,9 @@ $('pmOutline').onclick = () => {
 $('pmDel').onclick = () => {
   const it = menuItem;
   closeMenu();
-  if (!it || !items.includes(it)) return;
+  if (!it || !(items.includes(it) || citems.includes(it))) return;
   pushUndo(snapshot());
+  if (citems.includes(it)) { const c = it.c; cremove(it.id); if (c >= 0) { repack(c); crebuild(); } return; }
   removeItem(it.id);
 };
 
@@ -874,11 +1266,21 @@ function buildToolbox() {
   toolbox.textContent = '';
   const lab = document.createElement('div');
   lab.className = 'label';
-  lab.textContent = 'タイル（タップ・ひっぱる）';
+  lab.textContent = view === 'circle' ? 'ピース（タップで おきばへ）' : 'タイル（タップ・ひっぱる）';
   toolbox.appendChild(lab);
   for (const d of DENOMS.filter(x => useDens.includes(x))) {
     const b = document.createElement('div');
     const c = COLORS[d];
+    if (view === 'circle') {
+      b.className = 'tb-item cw' + (d === 1 ? ' one' : '');
+      b.dataset.d = d;
+      b.style.background = '#f7f8fe';
+      b.style.borderColor = c.bg;
+      b.innerHTML = wedgeIcon(d, 44) + (labelMode === 'hide' ? '' : `<span style="font-size:0.85rem">${labelMode === 'frac' ? (d === 1 ? '1' : '1/' + d) : labelText(d)}</span>`);
+      b.title = d === 1 ? '1' : `${d}ぶんの1`;
+      toolbox.appendChild(b);
+      continue;
+    }
     b.className = 'tb-item' + (d === 1 ? ' one' : '');
     b.dataset.d = d;
     b.style.background = c.bg;
@@ -903,9 +1305,20 @@ toolbox.addEventListener('pointermove', e => {
   d.cx = e.clientX; d.cy = e.clientY;
   if (!d.ghost) {
     if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 8) return;
-    d.ghost = makeEl(d.d, pw(d.d));
+    if (view === 'circle') {
+      const it = { id: -1, d: d.d, c: -1, s: 0, x: 0, y: 0, z: 1, o: false };
+      d.ghost = cmakeEl(it);
+      cels.set(-1, d.ghost); cplace(it); cels.delete(-1);
+      const sw = sweep(d.d), b = cbox(0, 0, d.d === 1 ? 0 : -sw / 2, d.d);
+      d.gofs = { x: cR() + (b.l + b.r) / 2, y: cR() + (b.t + b.b) / 2 };   // 絵の まん中を ゆびに あわせる
+    } else d.ghost = makeEl(d.d, pw(d.d));
     d.ghost.classList.add('ghost', 'lift');
     document.body.appendChild(d.ghost);
+  }
+  if (d.gofs) {
+    d.ghost.style.transform = `translate3d(${d.cx - d.gofs.x * scale}px, ${d.cy - d.gofs.y * scale}px, 0) scale(${scale})`;
+    trashEl.classList.toggle('hot', overTrash(toBoard(d.cx, d.cy)));
+    return;
   }
   // つかんだ ところが タイルの 左はし ちかくに なるように（ながい タイルでも 見やすい）
   const gx = Math.min(pw(d.d) / 2, 40) * scale;
@@ -917,6 +1330,14 @@ function endTb(e) {
   if (!d) return;
   tbDrags.delete(e.pointerId);
   trashEl.classList.remove('hot');
+  if (view === 'circle') {
+    if (d.ghost) d.ghost.remove();
+    if (e.type === 'pointercancel') return;
+    const p = toBoard(d.cx, d.cy);
+    if (d.ghost && (!inBoard(p) || overTrash(p))) return;
+    cFromToolbox(d.d, p, !d.ghost);
+    return;
+  }
   if (!d.ghost) {
     if (e.type === 'pointercancel') return;
     const snap = snapshot();
@@ -1065,16 +1486,18 @@ $('vlineBtn').onclick = () => {
 };
 
 // ぜんぶ かたづける（かくにん してから。もどる で もどせる）
-$('clearAll').onclick = () => { if (items.length || strokes.length || (TEACHER && qText)) $('confirmBg').hidden = false; };
+$('clearAll').onclick = () => { if ((view === 'circle' ? citems.length : items.length) || strokes.length || (TEACHER && qText)) $('confirmBg').hidden = false; };
 $('confirmNo').onclick = () => { $('confirmBg').hidden = true; };
 $('confirmYes').onclick = () => {
   $('confirmBg').hidden = true;
   dropGestures();
   pushUndo(snapshot());
-  items = []; strokes = []; lastTap = 0;
+  if (view === 'circle') citems = []; else { items = []; lastTap = 0; }
+  strokes = [];
   if (TEACHER) { qText = ''; renderQ(); }
   selected.clear();
   rebuild();
+  crebuild();
 };
 
 document.addEventListener('keydown', e => {
@@ -1123,8 +1546,11 @@ function makePhoto() {
   const ctx = c.getContext('2d');
   drawBg(ctx);
   drawQ(ctx);
-  for (const it of [...items].sort((a, b) => zOf(a) - zOf(b))) drawTile(ctx, it);
-  if (vline.on) {
+  if (view === 'circle') {
+    const zc = it => (it.c >= 0 ? 0 : 50000) + zOf(it);
+    for (const it of [...citems].sort((a, b) => zc(a) - zc(b))) drawCPiece(ctx, it);
+  } else for (const it of [...items].sort((a, b) => zOf(a) - zOf(b))) drawTile(ctx, it);
+  if (vline.on && view === 'tape') {
     const x = tx(vline.t);
     ctx.fillStyle = '#d81b60';
     ctx.fillRect(x - 2, 56, 4, H - 64);
@@ -1163,7 +1589,7 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
 }
-window.addEventListener('beforeunload', e => { if (leaving) return; if (items.length || strokes.length) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (leaving) return; if (items.length || citems.length || strokes.length || otherStrokes.length) { e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('contextmenu', e => { if (e.target.closest('.stage, .toolbox')) e.preventDefault(); });
 
 /* =========================== つづきから（この 端末に 自動で ほぞん） =========================== */
@@ -1177,10 +1603,15 @@ if (HIGH) {
   $('backLink').textContent = '🏠 ボードえらび';
   try { hubSeen = sessionStorage.getItem(HUB_SEEN) === '1'; sessionStorage.setItem(HUB_SEEN, '1'); } catch (_) {}
 }
+const packStrokes = list => list.map(s => ({ c: s.color, p: s.pts.map(q => [Math.round(q[0]), Math.round(q[1])]) }));
 function stateData() {
   return { v: 1, len: lenMode, vl: { on: vline.on, t: vline.t },
     lb: labelMode, den: useDens, q: qText,
-    i: items.map(i => i.o ? [i.d, i.t, i.r, 1] : [i.d, i.t, i.r]), s: strokes.map(s => ({ c: s.color, p: s.pts.map(q => [Math.round(q[0]), Math.round(q[1])]) })) };
+    i: items.map(i => i.o ? [i.d, i.t, i.r, 1] : [i.d, i.t, i.r]),
+    s: packStrokes(view === 'tape' ? strokes : otherStrokes),
+    cv: view, cc: ccount,
+    ci: citems.map(i => [i.d, i.c, i.s, Math.round(i.x), Math.round(i.y), i.o ? 1 : 0]),
+    cs: packStrokes(view === 'circle' ? strokes : otherStrokes) };
 }
 // 盤面を もどす。fromFile：くばられた がぞう から（先生の せってい を アドレスより ゆうせん する。中身は しんようせず たしかめる）
 function applyState(d, fromFile) {
@@ -1197,12 +1628,38 @@ function applyState(d, fromFile) {
     it.t = Math.max(xt(4), Math.min(xt(W - 4) - tw(den), it.t));
     items.push(it);
   }
-  strokes = [];
-  for (const st of (Array.isArray(d.s) ? d.s : []).slice(0, 500)) {
-    if (!st || !PEN_COLORS.some(c => c.color === st.c) || !Array.isArray(st.p)) continue;
-    const pts = st.p.filter(q => Array.isArray(q) && num(q[0]) && num(q[1])).slice(0, 5000);
-    if (pts.length) strokes.push({ color: st.c, pts });
+  const readStrokes = list => {
+    const out = [];
+    for (const st of (Array.isArray(list) ? list : []).slice(0, 500)) {
+      if (!st || !PEN_COLORS.some(c => c.color === st.c) || !Array.isArray(st.p)) continue;
+      const pts = st.p.filter(q => Array.isArray(q) && num(q[0]) && num(q[1])).slice(0, 5000);
+      if (pts.length) out.push({ color: st.c, pts });
+    }
+    return out;
+  };
+  // 円の ボード
+  ccount = d.cc === 2 ? 2 : 3;
+  citems = [];
+  for (const a of (Array.isArray(d.ci) ? d.ci : []).slice(0, MAX_TILES)) {
+    if (!Array.isArray(a)) continue;
+    const [den, c, st, x, y, o] = a;
+    if (!COLORS[den] || !num(x) || !num(y)) continue;
+    const it = { id: nextId++, d: den, c: Number.isInteger(c) && c >= 0 && c < ccount ? c : -1, s: num(st) ? st : 0, x, y, z: ++zTop, o: !!o };
+    if (it.c < 0) clampFree(it);
+    citems.push(it);
   }
+  // 円に 入りきらない ものは おきばへ（こわれた データ よけ）
+  for (let c = 0; c < ccount; c++) {
+    let cum = 0;
+    for (const i of inCircle(c)) {
+      if (cum + tw(i.d) > TICK) { i.c = -1; const sp = cfreeSpot(i.d); i.x = sp.x; i.y = sp.y; continue; }
+      i.s = cum; cum += tw(i.d);
+    }
+  }
+  view = d.cv === 'circle' ? 'circle' : 'tape';
+  const ts = readStrokes(d.s), cs = readStrokes(d.cs);
+  strokes = view === 'tape' ? ts : cs;
+  otherStrokes = view === 'tape' ? cs : ts;
   qText = typeof d.q === 'string' ? d.q.slice(0, 200) : '';
   // せってい
   if ((fromFile || !URL_LABEL) && LABELS.some(l => l.id === d.lb)) labelMode = d.lb;
@@ -1211,23 +1668,24 @@ function applyState(d, fromFile) {
   lastTap = 0;
   buildToolbox();
   updateLenButtons();
-  redrawBg();
   renderQ();
   rebuild();
+  crebuild();
+  applyView();
 }
 let saveTimer = 0, saveDirty = false;
-function scheduleSave() { saveDirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 600); }
+function scheduleSave() { updateViewButtons(); saveDirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 600); }
 function saveNow() {
   clearTimeout(saveTimer);
   if (!saveDirty || !$('resumeBg').hidden) return;
   try {
     const d = stateData();
-    if (!d.i.length && !d.s.length && !d.q) localStorage.removeItem(SAVE_KEY);
+    if (!d.i.length && !d.s.length && !d.q && !d.ci.length && !d.cs.length) localStorage.removeItem(SAVE_KEY);
     else localStorage.setItem(SAVE_KEY, JSON.stringify({ ...d, at: Date.now() }));
   } catch (_) { /* ほぞんできなくても 動きつづける */ }
 }
 function loadSaved() {
-  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return d && Array.isArray(d.i) && Array.isArray(d.s) && (d.i.length || d.s.length || d.q) ? d : null; }
+  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return d && Array.isArray(d.i) && Array.isArray(d.s) && (d.i.length || d.s.length || d.q || (d.ci && d.ci.length) || (d.cs && d.cs.length)) ? d : null; }
   catch (_) { return null; }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveNow(); });
@@ -1281,6 +1739,7 @@ function settingsChanged() {
   scheduleSave();
   buildToolbox();
   rebuild();
+  crebuild();
   renderSettings();
 }
 $('setBtn').onclick = () => { renderSettings(); $('setBg').hidden = false; };
@@ -1412,7 +1871,7 @@ async function makeBoardPng() {
 }
 let shareBlob = null;
 $('share').onclick = async () => {
-  if (!items.length && !strokes.length && !qText) { toast('ボードに なにも ありません。📝もんだい だけでも くばれます'); return; }
+  if (!items.length && !citems.length && !strokes.length && !otherStrokes.length && !qText) { toast('ボードに なにも ありません。📝もんだい だけでも くばれます'); return; }
   shareBlob = await makeBoardPng();
   const prev = $('sharePrev');
   if (prev.src) URL.revokeObjectURL(prev.src);
@@ -1484,7 +1943,8 @@ $('teacherYes').onclick = () => { $('teacherBg').hidden = true; switchTeacher(tr
 if (HIGH && TEACHER) $('backLink').href = '算数セット 中高学年.html?teacher=1';
 
 /* =========================== はじめる =========================== */
-buildToolbox();
+if (URL_P.get('board') === 'circle') view = 'circle';
+applyView();
 updateLenButtons();
 setMode('move');
 layout();
