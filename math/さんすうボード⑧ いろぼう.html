@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>さんすうボード⑧ いろぼう（キュイジネール棒）</title>
+<style>
+  /* ===== 色のきまり（さんすうボード①〜⑦ と そろえた やさしい色） ===== */
+  :root {
+    --ink: #263238; --accent: #3949ab; --accent-dark: #283593; --soft: #c5cae9;
+    --draw: #ff6f00; --board: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3f4fb 0%, #dfe3f5 100%);
+    height: 100dvh; overflow: hidden;
+    display: flex; flex-direction: column; padding: 6px 8px 8px; gap: 6px;
+    -webkit-user-select: none; user-select: none;
+  }
+  button { font-family: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ===== 上の ツールバー ===== */
+  .topbar, .subbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; padding: 4px 8px; min-height: 44px; display: inline-flex; align-items: center; }
+  h1 { margin: 0 4px 0 0; font-size: clamp(1rem, 1.8vw, 1.25rem); color: var(--accent-dark); white-space: nowrap; }
+  h1 small { font-size: 0.75em; color: #5c6bc0; font-weight: normal; }
+  .spacer { flex: 1; }
+  .group { display: flex; gap: 4px; align-items: center; background: rgba(255,255,255,0.55); border-radius: 14px; padding: 3px; flex-wrap: wrap; }
+  .group .glabel { font-size: 0.85rem; font-weight: bold; color: var(--accent-dark); padding: 0 4px; }
+  .btn {
+    min-height: 52px; min-width: 52px; padding: 2px 8px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.12); line-height: 1.15;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .btn .ic { font-size: 1.35rem; }
+  .btn:active { transform: translateY(2px); box-shadow: none; }
+  .btn:disabled { opacity: 0.35; cursor: default; transform: none; box-shadow: none; }
+  .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.draw.on { background: var(--draw); border-color: var(--draw); }
+  .subbar .btn { min-height: 44px; min-width: 44px; font-size: 0.95rem; }
+  .pen { min-width: 44px; width: 44px; padding: 0; }
+  .pen .dot { width: 24px; height: 24px; border-radius: 50%; border: 3px solid rgba(0,0,0,0.15); }
+  .pen.on { background: #fff3e0; border-color: var(--draw); border-width: 4px; }
+  .chip { min-width: 40px; width: 40px; padding: 0; font-size: 0.9rem; }
+  .chip.on { outline: 4px solid var(--accent); outline-offset: 1px; background: inherit; color: inherit; border-color: rgba(0,0,0,0.3); }
+
+  /* ===== 道具箱 と ボード ===== */
+  .main { flex: 1; min-height: 0; display: flex; gap: 8px; }
+  .toolbox {
+    width: 240px; flex: none; background: #fff; border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 8px;
+    display: flex; flex-direction: column; gap: 6px;
+    touch-action: pan-y; overflow-y: auto;
+  }
+  .toolbox.drop-ok { outline: 4px dashed #ef9a9a; outline-offset: -4px; background: #fff5f5; }
+  .toolbox .label { font-weight: 900; color: var(--accent-dark); font-size: 0.9rem; padding: 2px 4px 0; }
+  .toolbox .tbhint { font-size: 0.8rem; color: #5c6bc0; padding: 4px; line-height: 1.5; }
+  .tb-item { display: flex; align-items: center; min-height: 34px; cursor: grab; touch-action: none; border-radius: 8px; padding: 2px; }
+  .tb-item:active { background: #e8eaf6; }
+  .tb-item .rod { position: relative; }
+  .tb-item .stretch { margin-left: 6px; font-size: 0.85rem; color: #ad1457; font-weight: bold; white-space: nowrap; }
+
+  .boardwrap { flex: 1; min-width: 0; position: relative; background: var(--board); border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+  .stage { position: absolute; inset: 0; touch-action: none; }
+  .stage canvas { position: absolute; left: 0; top: 0; }
+  .layer { position: absolute; inset: 0; }
+  .ink { pointer-events: none; }
+  body.drawing .ink { pointer-events: auto; cursor: crosshair; }
+  body.drawing .rod.onboard { pointer-events: none; }
+
+  /* ===== ぼう ===== */
+  .rod {
+    position: absolute; border: 2px solid rgba(0,0,0,0.45); border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; line-height: 1; color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  }
+  .rod.light { color: #263238; text-shadow: none; }
+  .rod.onboard { cursor: grab; touch-action: none; box-shadow: 0 2px 3px rgba(0,0,0,0.18); }
+  .rod.dragging { cursor: grabbing; box-shadow: 0 8px 16px rgba(0,0,0,0.3); z-index: 5; opacity: 0.92; }
+  .rod .ticks { position: absolute; inset: 0; pointer-events: none; }
+  .rod .lab { position: relative; pointer-events: none; display: inline-flex; align-items: center; }
+  .frac { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; }
+  .frac .bar { align-self: stretch; height: 2px; background: currentColor; margin: 1px 0; min-width: 0.9em; }
+  .rod .handle {
+    position: absolute; width: 30px; height: 30px; border-radius: 50%;
+    background: #fff; border: 3px solid #ad1457; color: #ad1457;
+    display: flex; align-items: center; justify-content: center; font-size: 15px; text-shadow: none;
+    cursor: ew-resize; touch-action: none; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .rod.vert .handle { cursor: ns-resize; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: rgba(38,50,56,0.92); color: #fff; padding: 10px 20px; border-radius: 24px;
+    font-size: 1.05rem; font-weight: bold; pointer-events: none; opacity: 0; transition: opacity .25s; z-index: 50;
+  }
+  .toast.show { opacity: 1; }
+  .dialog-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 40; }
+  .dialog { background: #fff; border-radius: 18px; padding: 20px 24px; max-width: 90vw; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,0.25); }
+  .dialog h2 { margin: 0 0 14px; color: var(--accent-dark); font-size: 1.25rem; }
+  .dialog .row { display: flex; gap: 10px; justify-content: center; }
+
+  @media (max-width: 760px) {
+    .main { flex-direction: column; }
+    .toolbox { width: auto; height: 120px; flex-direction: row; flex-wrap: wrap; align-content: flex-start; }
+    .toolbox .tbhint, .toolbox .label, h1 small, .back-link { display: none; }
+    body { gap: 4px; padding: 4px; }
+    .topbar, .subbar { gap: 3px; }
+    .btn, .subbar .btn { min-height: 40px; min-width: 40px; font-size: 0.8rem; padding: 2px 5px; }
+    .btn .ic { font-size: 1.05rem; }
+    .pen { width: 40px; }
+    .chip { width: 34px; min-width: 34px; }
+    .group .glabel { font-size: 0.75rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 上の ツールバー ===== -->
+<div class="topbar">
+  <a class="back-link" href="../index.html">← トップ</a>
+  <h1>さんすうボード⑧ いろぼう <small>（キュイジネール棒）</small></h1>
+  <div class="group">
+    <button class="btn on" id="modeMove" title="うごかす"><span class="ic">✋</span>うごかす</button>
+    <button class="btn draw" id="modeDraw" title="かく"><span class="ic">✏️</span>かく</button>
+  </div>
+  <div class="group" id="penColors"></div>
+  <button class="btn" id="clearInk" title="せんを ぜんぶ けす"><span class="ic">🧽</span>せんを けす</button>
+  <div class="spacer"></div>
+  <div class="group">
+    <button class="btn" id="undo" title="もどる（Ctrl+Z）" disabled><span class="ic">↩️</span>もどる</button>
+    <button class="btn" id="redo" title="やりなおす（Ctrl+Y）" aria-label="やりなおす" disabled><span class="ic">↪️</span></button>
+  </div>
+  <button class="btn" id="stairs" title="1から10を かいだんに ならべる"><span class="ic">🪜</span>かいだん</button>
+  <button class="btn" id="photo" title="ボードを しゃしんに する"><span class="ic">📷</span>しゃしん</button>
+  <button class="btn" id="clearAll" title="ぜんぶ かたづける"><span class="ic">🧹</span>かたづける</button>
+</div>
+
+<div class="subbar">
+  <div class="group" id="labelModes"><span class="glabel">ぼうの かず</span></div>
+  <div class="group" id="unitBox" hidden><span class="glabel">「1」に する ぼう</span><span id="unitChips" style="display:flex;gap:4px;flex-wrap:wrap"></span>
+    <button class="btn" id="reduceBtn" title="やくぶん して あらわす（5年）">やくぶん</button>
+  </div>
+  <div class="group">
+    <button class="btn" id="gridBtn" title="マスめを だす"><span class="ic">▦</span>マスめ</button>
+    <button class="btn" id="tickBtn" title="ぼうに 1の めもりを だす"><span class="ic">┊</span>めもり</button>
+  </div>
+</div>
+
+<!-- ===== 道具箱 と ボード ===== -->
+<div class="main">
+  <div class="toolbox" id="toolbox"></div>
+  <div class="boardwrap" id="boardwrap">
+    <div class="stage" id="stage">
+      <canvas id="bgc"></canvas>
+      <div class="layer" id="pieces"></div>
+      <canvas class="ink" id="ink"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="dialog-bg" role="dialog" aria-modal="true" id="resumeBg" hidden>
+  <div class="dialog">
+    <h2>まえの つづきから はじめる？</h2>
+    <div class="row">
+      <button class="btn on" id="resumeYes">▶ つづきから</button>
+      <button class="btn" id="resumeNo">🆕 はじめから</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* =========================== ぼうの きまり =========================== */
+// 1〜10 の ぼうの 色（キュイジネール棒の ならわしの 色）。11 は のびる ぼう
+const COLORS = {
+  1: '#f5f5f5', 2: '#e53935', 3: '#8bc34a', 4: '#8e24aa', 5: '#fdd835',
+  6: '#00897b', 7: '#546e7a', 8: '#6d4c41', 9: '#3949ab', 10: '#f4511e', c: '#d81b60'
+};
+const LIGHT = { 1: true, 3: true, 5: true };      // 字を 黒く する 明るい色
+const LETTERS = 'abcdefghij';
+const MAX_LEN = 30;
+const SAVE_KEY = 'sansu-board8-irobou';
+
+const MODES = [
+  ['none', 'なし'], ['int', '1〜10'], ['dec', '0.1〜1'], ['frac', 'ぶんすう'], ['let', 'もじ']
+];
+
+let rods = [];        // { id, len, x, y, v(たて), c(のびる ぼう) } x,y,len は 1マス（ぼう1こ分）が 単位
+let strokes = [];     // { color, pts:[[x,y],…] } 単位は マス
+const set = { mode: 'int', unit: 10, reduce: false, grid: true, ticks: false };
+let nextId = 1;
+let U = 40;           // 1マスの 大きさ（px）
+
+const stage = $('stage'), pieces = $('pieces'), bgc = $('bgc'), ink = $('ink');
+const isLight = r => !r.c && LIGHT[r.len];
+const colorOf = r => r.c ? COLORS.c : COLORS[r.len];
+
+/* =========================== かずの あらわし方 =========================== */
+function gcd(a, b) { while (b) [a, b] = [b, a % b]; return a; }
+// { t:'text', s } か { t:'frac', n, d } を かえす
+function valueOf(len, custom) {
+  switch (set.mode) {
+    case 'none': return null;
+    case 'int': return { t: 'text', s: String(len) };
+    case 'dec': return { t: 'text', s: len % 10 === 0 ? String(len / 10) : (len / 10).toFixed(1) };
+    case 'let': return { t: 'text', s: custom ? 'x' : LETTERS[len - 1] };
+    case 'frac': {
+      const u = set.unit;
+      if (len % u === 0) return { t: 'text', s: String(len / u) };
+      let n = len, d = u;
+      if (set.reduce) { const g = gcd(n, d); n /= g; d /= g; }
+      return { t: 'frac', n, d };
+    }
+  }
+  return null;
+}
+function labelHTML(val) {
+  if (!val) return '';
+  if (val.t === 'text') return val.s;
+  return `<span class="frac"><span>${val.n}</span><span class="bar"></span><span>${val.d}</span></span>`;
+}
+
+/* =========================== ぼうを えがく =========================== */
+function styleRod(el, r, unit) {
+  const w = (r.v ? 1 : r.len) * unit, h = (r.v ? r.len : 1) * unit;
+  el.style.width = w + 'px'; el.style.height = h + 'px';
+  el.style.background = colorOf(r);
+  el.classList.toggle('light', isLight(r));
+  el.classList.toggle('vert', !!r.v);
+  const val = valueOf(r.len, r.c);
+  const fs = val && val.t === 'frac' ? unit * 0.34 : Math.min(unit * 0.55, val && val.s.length > 2 ? unit * 0.42 : 99);
+  let ticks = '';
+  if (set.ticks && r.len > 1) {
+    const lineCol = isLight(r) ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.55)';
+    const dir = r.v ? 'to bottom' : 'to right';
+    ticks = `<div class="ticks" style="background:repeating-linear-gradient(${dir}, transparent 0, transparent ${unit - 1.5}px, ${lineCol} ${unit - 1.5}px, ${lineCol} ${unit}px)"></div>`;
+  }
+  el.innerHTML = ticks + `<span class="lab" style="font-size:${fs}px">${labelHTML(val)}</span>`;
+}
+
+function render() {
+  pieces.innerHTML = '';
+  for (const r of rods) {
+    const el = document.createElement('div');
+    el.className = 'rod onboard';
+    el.dataset.id = r.id;
+    styleRod(el, r, U);
+    el.style.left = r.x * U + 'px'; el.style.top = r.y * U + 'px';
+    if (r.c) {
+      const h = document.createElement('div');
+      h.className = 'handle'; h.textContent = r.v ? '↕' : '↔';
+      if (r.v) { h.style.left = (U / 2 - 15) + 'px'; h.style.bottom = '-17px'; }
+      else { h.style.top = (U / 2 - 15) + 'px'; h.style.right = '-17px'; }
+      el.appendChild(h);
+    }
+    pieces.appendChild(el);
+  }
+  renderInk();
+}
+
+function drawBg() {
+  const w = stage.clientWidth, h = stage.clientHeight, dpr = devicePixelRatio || 1;
+  bgc.width = w * dpr; bgc.height = h * dpr; bgc.style.width = w + 'px'; bgc.style.height = h + 'px';
+  const g = bgc.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  paintBg(g, w, h, U);
+}
+function paintBg(g, w, h, unit) {
+  g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+  if (!set.grid) return;
+  g.strokeStyle = '#e3e6f3'; g.lineWidth = 1;
+  g.beginPath();
+  for (let x = 0; x <= w; x += unit) { g.moveTo(Math.round(x) + 0.5, 0); g.lineTo(Math.round(x) + 0.5, h); }
+  for (let y = 0; y <= h; y += unit) { g.moveTo(0, Math.round(y) + 0.5); g.lineTo(w, Math.round(y) + 0.5); }
+  g.stroke();
+}
+
+function layout() {
+  const w = stage.clientWidth;
+  U = Math.max(24, Math.min(56, Math.floor(w / 24)));
+  const dpr = devicePixelRatio || 1;
+  ink.width = w * dpr; ink.height = stage.clientHeight * dpr;
+  ink.style.width = w + 'px'; ink.style.height = stage.clientHeight + 'px';
+  drawBg(); render();
+}
+new ResizeObserver(layout).observe(stage);
+
+/* =========================== 道具箱 =========================== */
+function buildToolbox() {
+  const tb = $('toolbox');
+  tb.innerHTML = '<div class="label">ぼうを ボードへ</div>';
+  const mini = 19;
+  const list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 'c'];
+  for (const k of list) {
+    const r = k === 'c' ? { len: 4, c: true } : { len: k };
+    const item = document.createElement('div');
+    item.className = 'tb-item';
+    item.dataset.k = k;
+    const el = document.createElement('div');
+    el.className = 'rod';
+    styleRod(el, r, mini);
+    item.appendChild(el);
+    if (r.c) item.insertAdjacentHTML('beforeend', '<span class="stretch">↔ のびる ぼう</span>');
+    item.addEventListener('pointerdown', e => startFromToolbox(e, k));
+    tb.appendChild(item);
+  }
+  tb.insertAdjacentHTML('beforeend',
+    '<div class="tbhint">✋ ひっぱって ボードに おく<br>👆 タップで たて・よこ<br>⏱ ながおしで コピー<br>🗑 ここへ もどすと けせる<br>↔ ピンクの ぼうは ○を ひっぱって のばせる</div>');
+}
+
+/* =========================== もどる・やりなおす =========================== */
+const undoStack = [], redoStack = [];
+const snapshot = () => JSON.stringify({ rods, strokes });
+function restore(s) { const d = JSON.parse(s); rods = d.rods; strokes = d.strokes; render(); }
+function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 80) undoStack.shift(); redoStack.length = 0; updateButtons(); }
+function updateButtons() { $('undo').disabled = !undoStack.length; $('redo').disabled = !redoStack.length; }
+function changed() { updateButtons(); scheduleSave(); }
+$('undo').onclick = () => { if (!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); changed(); };
+$('redo').onclick = () => { if (!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); changed(); };
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); $('undo').click(); }
+  else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); $('redo').click(); }
+});
+
+/* =========================== ぼうを うごかす =========================== */
+let toastTimer = 0;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1800); }
+
+function stagePt(e) { const b = stage.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; }
+function overToolbox(e) { const b = $('toolbox').getBoundingClientRect(); return e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom; }
+function overStage(e) { const b = stage.getBoundingClientRect(); return e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom; }
+function clampRod(r) {
+  const cols = Math.floor(stage.clientWidth / U), rows = Math.floor(stage.clientHeight / U);
+  const w = r.v ? 1 : r.len, h = r.v ? r.len : 1;
+  r.x = Math.max(0, Math.min(r.x, cols - w)); r.y = Math.max(0, Math.min(r.y, rows - h));
+}
+// あいている ところを 上から さがす（タップで おいたとき）
+function freeSpot(len) {
+  const cols = Math.floor(stage.clientWidth / U), rows = Math.floor(stage.clientHeight / U);
+  const busy = (x, y) => rods.some(r => {
+    const w = r.v ? 1 : r.len, h = r.v ? r.len : 1;
+    return y >= r.y && y < r.y + h && x < r.x + w && x + len > r.x;
+  });
+  for (let y = 1; y < rows - 1; y++) for (let x = 1; x + len < cols; x++) if (!busy(x, y)) return { x, y };
+  return { x: 1, y: 1 };
+}
+
+let drag = null;   // いま うごかしている もの
+function startFromToolbox(e, k) {
+  if (e.button > 0) return;
+  e.preventDefault();
+  const len = k === 'c' ? 4 : k;
+  const el = document.createElement('div');
+  el.className = 'rod onboard dragging';
+  const r = { id: nextId++, len, x: 0, y: 0, v: false, c: k === 'c' };
+  styleRod(el, r, U);
+  el.style.position = 'fixed'; el.style.left = '-999px';
+  document.body.appendChild(el);
+  drag = { kind: 'new', r, el, sx: e.clientX, sy: e.clientY, moved: false, pid: e.pointerId };
+}
+pieces.addEventListener('pointerdown', e => {
+  if (document.body.classList.contains('drawing') || e.button > 0) return;
+  const el = e.target.closest('.rod'); if (!el) return;
+  e.preventDefault();
+  const r = rods.find(o => o.id == el.dataset.id); if (!r) return;
+  const p = stagePt(e);
+  if (e.target.classList.contains('handle')) {
+    drag = { kind: 'resize', r, el, before: snapshot(), pid: e.pointerId };
+    return;
+  }
+  drag = { kind: 'move', r, el, sx: e.clientX, sy: e.clientY, ox: p.x - r.x * U, oy: p.y - r.y * U, moved: false, before: snapshot(), pid: e.pointerId };
+  drag.lp = setTimeout(() => {
+    if (!drag || drag.moved) return;
+    pushUndo();
+    const copy = { ...r, id: nextId++ };
+    if (r.v) copy.x += 1; else copy.y += 1;
+    clampRod(copy);
+    rods.push(copy);
+    drag = null; render(); changed(); toast('📋 コピーしたよ');
+  }, 600);
+});
+window.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  if (drag.kind === 'resize') {
+    const p = stagePt(e), r = drag.r;
+    const d = r.v ? p.y - r.y * U : p.x - r.x * U;
+    const len = Math.max(1, Math.min(MAX_LEN, Math.round(d / U)));
+    if (len !== r.len) { r.len = len; clampRod(r); render(); drag.el = pieces.querySelector(`[data-id="${r.id}"]`); }
+    return;
+  }
+  if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 8) return;
+  if (!drag.moved) { drag.moved = true; clearTimeout(drag.lp); drag.el.classList.add('dragging'); if (drag.kind === 'move') pieces.appendChild(drag.el); }
+  $('toolbox').classList.toggle('drop-ok', drag.kind === 'move' && overToolbox(e));
+  if (drag.kind === 'new') {
+    drag.el.style.left = (e.clientX - U / 2) + 'px'; drag.el.style.top = (e.clientY - U / 2) + 'px';
+  } else {
+    const p = stagePt(e);
+    drag.el.style.left = (p.x - drag.ox) + 'px'; drag.el.style.top = (p.y - drag.oy) + 'px';
+  }
+});
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.pid) return;
+  const d = drag; drag = null;
+  clearTimeout(d.lp);
+  $('toolbox').classList.remove('drop-ok');
+  if (d.kind === 'resize') {
+    if (d.before !== snapshot()) { undoStack.push(d.before); redoStack.length = 0; changed(); }
+    return;
+  }
+  if (d.kind === 'new') {
+    d.el.remove();
+    if (!d.moved) {                       // タップ → あいている ところに おく
+      pushUndo(); Object.assign(d.r, freeSpot(d.r.len)); rods.push(d.r); render(); changed(); return;
+    }
+    if (!overStage(e)) return;
+    const p = stagePt(e);
+    pushUndo();
+    d.r.x = Math.round((p.x - U / 2) / U); d.r.y = Math.round((p.y - U / 2) / U);
+    clampRod(d.r); rods.push(d.r); render(); changed();
+    return;
+  }
+  // ボードの 上の ぼう
+  const r = d.r;
+  if (!d.moved) {                         // タップ → たて・よこ
+    undoStack.push(d.before); redoStack.length = 0;
+    r.v = !r.v; clampRod(r); render(); changed(); return;
+  }
+  undoStack.push(d.before); redoStack.length = 0;
+  if (overToolbox(e)) { rods = rods.filter(o => o !== r); render(); changed(); toast('🗑 けしたよ'); return; }
+  const p = stagePt(e);
+  r.x = Math.round((p.x - d.ox) / U); r.y = Math.round((p.y - d.oy) / U);
+  clampRod(r);
+  rods = rods.filter(o => o !== r); rods.push(r);    // いちばん 上に
+  render(); changed();
+}
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', e => { if (drag && drag.el && drag.kind === 'new') drag.el.remove(); if (drag) { clearTimeout(drag.lp); drag = null; $('toolbox').classList.remove('drop-ok'); render(); } });
+
+/* =========================== かく（ペン） =========================== */
+const PENS = ['#e53935', '#1e88e5', '#263238', '#43a047'];
+let penColor = PENS[0];
+function buildPens() {
+  const box = $('penColors');
+  PENS.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'btn pen' + (c === penColor ? ' on' : '');
+    b.innerHTML = `<span class="dot" style="background:${c}"></span>`;
+    b.title = 'ペンの いろ';
+    b.onclick = () => { penColor = c; box.querySelectorAll('.pen').forEach(x => x.classList.toggle('on', x === b)); setDraw(true); };
+    box.appendChild(b);
+  });
+}
+function setDraw(on) {
+  document.body.classList.toggle('drawing', on);
+  $('modeDraw').classList.toggle('on', on); $('modeMove').classList.toggle('on', !on);
+}
+$('modeMove').onclick = () => setDraw(false);
+$('modeDraw').onclick = () => setDraw(true);
+function paintStrokes(g, unit) {
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const s of strokes) {
+    g.strokeStyle = s.color; g.lineWidth = Math.max(3, unit * 0.1);
+    g.beginPath();
+    s.pts.forEach(([x, y], i) => i ? g.lineTo(x * unit, y * unit) : g.moveTo(x * unit, y * unit));
+    if (s.pts.length === 1) g.lineTo(s.pts[0][0] * unit + 0.1, s.pts[0][1] * unit);
+    g.stroke();
+  }
+}
+function renderInk() {
+  const g = ink.getContext('2d'), dpr = devicePixelRatio || 1;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, ink.width, ink.height);
+  paintStrokes(g, U);
+}
+let cur = null;
+ink.addEventListener('pointerdown', e => {
+  e.preventDefault(); ink.setPointerCapture(e.pointerId);
+  pushUndo();
+  const p = stagePt(e);
+  cur = { color: penColor, pts: [[p.x / U, p.y / U]] }; strokes.push(cur); renderInk();
+});
+ink.addEventListener('pointermove', e => { if (!cur) return; const p = stagePt(e); cur.pts.push([p.x / U, p.y / U]); renderInk(); });
+const endInk = () => { if (cur) { cur = null; changed(); } };
+ink.addEventListener('pointerup', endInk); ink.addEventListener('pointercancel', endInk);
+$('clearInk').onclick = () => { if (!strokes.length) return; pushUndo(); strokes = []; renderInk(); changed(); };
+
+/* =========================== かずの ひょうじ・マスめ・めもり =========================== */
+function buildSettings() {
+  const lm = $('labelModes');
+  MODES.forEach(([k, name]) => {
+    const b = document.createElement('button');
+    b.className = 'btn'; b.dataset.mode = k; b.textContent = name;
+    b.onclick = () => { set.mode = k; refreshSettings(); };
+    lm.appendChild(b);
+  });
+  const uc = $('unitChips');
+  for (let n = 1; n <= 10; n++) {
+    const b = document.createElement('button');
+    b.className = 'btn chip'; b.dataset.unit = n; b.textContent = n;
+    b.style.background = COLORS[n]; b.style.color = LIGHT[n] ? '#263238' : '#fff';
+    b.title = `${n}の ぼうを 1に する`;
+    b.onclick = () => { set.unit = n; refreshSettings(); };
+    uc.appendChild(b);
+  }
+  $('reduceBtn').onclick = () => { set.reduce = !set.reduce; refreshSettings(); };
+  $('gridBtn').onclick = () => { set.grid = !set.grid; refreshSettings(); };
+  $('tickBtn').onclick = () => { set.ticks = !set.ticks; refreshSettings(); };
+}
+function refreshSettings() {
+  document.querySelectorAll('#labelModes .btn').forEach(b => b.classList.toggle('on', b.dataset.mode === set.mode));
+  document.querySelectorAll('#unitChips .chip').forEach(b => b.classList.toggle('on', +b.dataset.unit === set.unit));
+  $('unitBox').hidden = set.mode !== 'frac';
+  $('reduceBtn').classList.toggle('on', set.reduce);
+  $('gridBtn').classList.toggle('on', set.grid);
+  $('tickBtn').classList.toggle('on', set.ticks);
+  buildToolbox(); drawBg(); render(); scheduleSave();
+}
+
+/* =========================== かいだん・かたづける =========================== */
+$('stairs').onclick = () => {
+  pushUndo();
+  const rows = Math.floor(stage.clientHeight / U);
+  const top = Math.max(0, Math.min(1, rows - 10));
+  for (let n = 1; n <= 10; n++) { const r = { id: nextId++, len: n, x: 1, y: top + n - 1, v: false, c: false }; clampRod(r); rods.push(r); }
+  render(); changed();
+};
+$('clearAll').onclick = () => {
+  if (!rods.length && !strokes.length) return;
+  pushUndo(); rods = []; strokes = []; render(); changed(); toast('🧹 かたづけたよ（もどるで もどせる）');
+};
+
+/* =========================== しゃしん =========================== */
+function paintRod(g, r, unit) {
+  const x = r.x * unit, y = r.y * unit, w = (r.v ? 1 : r.len) * unit, h = (r.v ? r.len : 1) * unit;
+  g.fillStyle = colorOf(r); g.fillRect(x, y, w, h);
+  if (set.ticks) {
+    g.strokeStyle = isLight(r) ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.55)'; g.lineWidth = 1.5;
+    g.beginPath();
+    for (let i = 1; i < r.len; i++) { if (r.v) { g.moveTo(x, y + i * unit); g.lineTo(x + w, y + i * unit); } else { g.moveTo(x + i * unit, y); g.lineTo(x + i * unit, y + h); } }
+    g.stroke();
+  }
+  g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, w - 2, h - 2);
+  const val = valueOf(r.len, r.c); if (!val) return;
+  const cx = x + w / 2, cy = y + h / 2;
+  g.fillStyle = isLight(r) ? '#263238' : '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const font = s => `900 ${s}px "Hiragino Sans", "Yu Gothic", sans-serif`;
+  if (val.t === 'text') { g.font = font(Math.min(unit * 0.55, val.s.length > 2 ? unit * 0.42 : 99)); g.fillText(val.s, cx, cy + 1); }
+  else {
+    const s = unit * 0.34; g.font = font(s);
+    g.fillText(val.n, cx, cy - s * 0.6); g.fillText(val.d, cx, cy + s * 0.7);
+    g.fillRect(cx - s * 0.6, cy - 1, s * 1.2, 2);
+  }
+}
+$('photo').onclick = () => {
+  const w = stage.clientWidth, h = stage.clientHeight, k = 2;
+  const c = document.createElement('canvas'); c.width = w * k; c.height = h * k;
+  const g = c.getContext('2d'); g.scale(k, k);
+  paintBg(g, w, h, U);
+  rods.forEach(r => paintRod(g, r, U));
+  paintStrokes(g, U);
+  c.toBlob(blob => {
+    const n = new Date();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `いろぼう_${n.getMonth() + 1}月${n.getDate()}日.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast('📷 しゃしんを ほぞんしたよ');
+  }, 'image/png');
+};
+
+/* =========================== つづきから（この パソコンの 中に ほぞん） =========================== */
+let saveTimer = 0;
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 500); }
+function saveNow() {
+  if (!$('resumeBg').hidden) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ rods, strokes, set })); } catch (_) {}
+}
+window.addEventListener('pagehide', saveNow);
+function loadSaved() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (_) { return null; } }
+$('resumeYes').onclick = () => {
+  $('resumeBg').hidden = true;
+  const d = loadSaved();
+  if (d) { rods = d.rods || []; strokes = d.strokes || []; nextId = rods.reduce((m, r) => Math.max(m, r.id), 0) + 1; render(); toast('▶ つづきから はじめるよ'); }
+};
+$('resumeNo').onclick = () => { $('resumeBg').hidden = true; saveNow(); };
+
+/* =========================== はじめ =========================== */
+(function init() {
+  const saved = loadSaved();
+  if (saved && saved.set) Object.assign(set, saved.set);
+  buildPens(); buildSettings(); refreshSettings();
+  if (saved && ((saved.rods && saved.rods.length) || (saved.strokes && saved.strokes.length))) $('resumeBg').hidden = false;
+})();
+</script>
+</body>
+</html>
