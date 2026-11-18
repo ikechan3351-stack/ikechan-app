@@ -103,6 +103,26 @@
   .fr { display: inline-flex; flex-direction: column; align-items: center; font-weight: 900; line-height: 1; pointer-events: none; }
   .fr i { display: block; height: 0; border-top: 2px solid currentColor; align-self: stretch; margin: 2px 0; }
   .fr.one { font-size: 30px; }
+  .lb { font-weight: 900; line-height: 1; white-space: nowrap; pointer-events: none; }
+  /* わくだけ タイル（色を ぬらない。中に ほかの タイルを 入れて「いくつ 入るかな」に つかう） */
+  .piece.outline { background: rgba(255,255,255,0.35) !important; border-width: 4px; border-style: dashed; }
+  /* えらんだ タイル（まとめて 動かす） */
+  .piece.sel { box-shadow: 0 0 0 4px #ff6f00, 0 0 0 7px #fff; }
+  .selbox { position: absolute; left: 0; top: 0; border: 3px dashed #ff6f00; background: rgba(255,111,0,0.08);
+            border-radius: 6px; pointer-events: none; z-index: 6; }
+  /* 長おしの メニュー */
+  .pmenu { position: fixed; z-index: 70; background: #fff; border-radius: 14px; padding: 6px; display: flex; gap: 6px;
+           box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+  .pmenu .btn { min-height: 52px; font-size: 1rem; }
+  /* ☰ せってい */
+  .setpanel { width: min(720px, 94vw); max-height: 92vh; overflow-y: auto; text-align: left; padding: 20px 24px; }
+  .setpanel h2 { margin: 0 0 6px; font-size: 1.1rem; color: var(--accent-dark); }
+  .setpanel .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .setpanel .btn { min-width: 0; margin: 0; font-size: 1rem; min-height: 56px; }
+  .setpanel .den { min-width: 58px; color: #fff; border-width: 3px; }
+  .setpanel .den.off { background: #fff !important; color: #9e9e9e; border-style: dashed; }
+  .setpanel .note { font-size: 0.85rem; color: #5c6bc0; margin: -8px 0 14px; }
+  .setpanel .close { display: block; margin: 4px auto 0; min-width: 160px; }
   .ghost { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; transform-origin: 0 0; opacity: 0.85; }
 
   /* ===== くらべる たての 線 ===== */
@@ -170,6 +190,7 @@
   </div>
   <button class="btn" id="photo" title="ボードを しゃしんに する"><span class="ic">📷</span>しゃしん</button>
   <button class="btn" id="clearAll" title="ぜんぶ かたづける"><span class="ic">🧹</span>かたづける</button>
+  <button class="btn" id="setBtn" title="せってい（タイルの 字・つかう 分母）"><span class="ic">☰</span>せってい</button>
 </div>
 
 <!-- ===== 道具箱 と ボード ===== -->
@@ -181,8 +202,26 @@
       <div class="trash" id="trash"><span class="ic">🗑️</span>ごみばこ</div>
       <div class="layer pieces" id="pieces"></div>
       <div class="layer vlayer" id="vlayer"></div>
+      <div class="selbox" id="selbox" hidden></div>
       <canvas class="ink" id="ink"></canvas>
     </div>
+  </div>
+</div>
+
+<div class="pmenu" id="pmenu" hidden>
+  <button class="btn" id="pmOutline"><span class="ic">⬚</span><span id="pmOutlineLbl">わくだけ</span></button>
+  <button class="btn" id="pmDel"><span class="ic">🗑️</span>けす</button>
+</div>
+<div class="dialog-bg" role="dialog" aria-modal="true" id="setBg" hidden>
+  <div class="dialog setpanel">
+    <h2>タイルの 字</h2>
+    <div class="row" id="setLabels"></div>
+    <p class="note">小数・百分率で わりきれない ものは「0.33…」のように「…」が つきます。百分率は 5年で ならいます。</p>
+    <h2>つかう 分母（道具箱に 出す タイル）</h2>
+    <div class="row" id="setDens"></div>
+    <p class="note">おすと 出す・出さない が かわります。ボードに ある タイルは そのまま のこります。<br>
+      アドレスの おわりに <b>?den=2,4,8&amp;label=hide</b> のように つけても えらべます（ブックマークして くばれます）。</p>
+    <button class="btn close" id="setClose">とじる</button>
   </div>
 </div>
 
@@ -259,6 +298,15 @@ let mode = 'move';
 let straight = false;
 let penColor = PEN_COLORS[0].color;
 let lastTap = 0;    // さいごに タップで 出した タイル（つぎの タップは その となりに つなぐ）
+let labelMode = 'frac';          // タイルの 字：frac 分数 ／ dec 小数 ／ pct 百分率 ／ hide かくす
+let useDens = DENOMS.slice();    // 道具箱に 出す 分母
+const selected = new Set();      // えらんだ タイル（まとめて 動かす）
+const LABELS = [
+  { id: 'frac', name: '分数', sample: '½' },
+  { id: 'dec',  name: '小数', sample: '0.5' },
+  { id: 'pct',  name: '百分率', sample: '50%' },
+  { id: 'hide', name: 'かくす', sample: '？' },
+];
 
 const $ = id => document.getElementById(id);
 const stage = $('stage'), wrap = $('boardwrap'), piecesEl = $('pieces'), vlayer = $('vlayer'), trashEl = $('trash');
@@ -346,33 +394,69 @@ function fracHTML(d, fs) {
   return `<span class="fr" style="font-size:${fs}px"><span>1</span><i></i><span>${d}</span></span>`;
 }
 const fontFor = w => Math.max(12, Math.min(24, Math.floor(w * 0.42)));
-function makeEl(d, w) {
+/* ---- 小数・百分率の 字。わりきれない ものは 切りすてて「…」を つける（0.33… など） ---- */
+function labelText(d) {
+  if (labelMode === 'dec') {
+    if ([1, 2, 4, 5, 8, 10].includes(d)) return String(1 / d);
+    return (Math.floor(100 / d) / 100).toFixed(2) + '…';
+  }
+  if (labelMode === 'pct') {
+    if ([1, 2, 4, 5, 8, 10].includes(d)) return (100 / d) + '%';
+    return (Math.floor(1000 / d) / 10).toFixed(1) + '…%';
+  }
+  return '';
+}
+// 字の 大きさ。よこに 入りきらない ほそい タイルでは、たてに（-90° まわして）書く
+const measureCtx = document.createElement('canvas').getContext('2d');
+function fitFont(t, avail, max) {
+  measureCtx.font = `900 100px ${FONT}`;
+  return Math.min(max, Math.floor(100 * avail / measureCtx.measureText(t).width));
+}
+function textFont(w, t) {
+  const fs = fitFont(t, w - 10, 22);
+  if (fs >= 13) return { fs, rot: false };
+  return { fs: Math.max(8, Math.min(fitFont(t, TH - 10, 16), Math.floor(w * 0.6))), rot: true };
+}
+function labelHTML(d, w) {
+  if (labelMode === 'hide') return '';
+  if (labelMode === 'frac') return fracHTML(d, fontFor(w));
+  const t = labelText(d), f = textFont(w, t);
+  return `<span class="lb" style="font-size:${f.fs}px${f.rot ? ';transform:rotate(-90deg)' : ''}">${t}</span>`;
+}
+function makeEl(d, w, outline) {
   const el = document.createElement('div');
   const c = COLORS[d];
-  el.className = 'piece';
+  el.className = 'piece' + (outline ? ' outline' : '');
   el.style.width = w + 'px';
-  el.style.height = TH + 'px';
+  el.style.height = (outline ? TH + OUT * 2 : TH) + 'px';
   el.style.background = c.bg;
-  el.style.color = c.fg;
-  el.innerHTML = fracHTML(d, fontFor(w));
+  el.style.color = outline ? '#263238' : c.fg;
+  if (outline) el.style.borderColor = c.bg;
+  el.innerHTML = labelHTML(d, w);
   return el;
 }
+// わくだけ タイルは 上下に OUT だけ 大きく して、中に タイルを 入れても わくが 見える ように する
+const OUT = 6;
+// わくだけ タイルは いつも ぬった タイルの うしろ（中に タイルを 入れられるように）
+const zOf = it => it.o ? it.z : it.z + 100000;
 function place(it) {
   const el = els.get(it.id);
   if (!el) return;   // ごみばこに すてた あと
   const x = it.dragX != null ? it.dragX : tx(it.t);
-  const y = it.dragY != null ? it.dragY : rowY(it.r);
+  const y = (it.dragY != null ? it.dragY : rowY(it.r)) - (it.o ? OUT : 0);
   el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-  el.style.zIndex = it.z;
+  el.style.zIndex = zOf(it);
 }
 function attach(it) {
-  const el = makeEl(it.d, pw(it.d));
+  const el = makeEl(it.d, pw(it.d), it.o);
   el.dataset.id = it.id;
+  if (selected.has(it.id)) el.classList.add('sel');
   els.set(it.id, el);
   piecesEl.appendChild(el);
   place(it);
 }
 function rebuild() {
+  for (const id of [...selected]) if (!items.some(i => i.id === id)) selected.delete(id);
   piecesEl.textContent = '';
   els.clear();
   for (const it of items) attach(it);
@@ -380,6 +464,7 @@ function rebuild() {
   redrawInk();
 }
 function removeItem(id) {
+  selected.delete(id);
   items = items.filter(i => i.id !== id);
   const el = els.get(id);
   if (el) el.remove();
@@ -388,25 +473,28 @@ function removeItem(id) {
 
 /* =========================== すいつき =========================== */
 // 同じ 列の ほかの タイルと かさなるか
-function overlaps(t, d, r, self) {
-  const a = t, b = t + tw(d);
-  return items.some(o => o !== self && o.r === r && o.t < b - 1 && o.t + tw(o.d) > a + 1);
+// わくだけ タイルとは かさなって よい（中に 入れるため）。ex は いっしょに 動かして いる タイル（じゃまに しない）
+function overlaps(t, d, r, self, ex) {
+  const a = t, b = t + tw(d), selfO = self && self.o;
+  return items.some(o => o !== self && o.r === r && !(ex && ex.has(o.id)) && !(o.o || selfO)
+                         && o.t < b - 1 && o.t + tw(o.d) > a + 1);
 }
 // 左はしの 目もり t0（ゆびを はなした 場所）を、列の 左はし・となりの タイルの 端に すいつける。
 // ほかの 列の タイルには すいつかない（そろって いない ものが そろって 見えないように）。
-function settle(it, t0, r) {
+function settle(it, t0, r, ex) {
   const w = tw(it.d);
   const cands = [0];
   for (const o of items) {
-    if (o === it || o.r !== r) continue;
+    if (o === it || o.r !== r || (ex && ex.has(o.id))) continue;
     cands.push(o.t + tw(o.d));     // となりの 右に つなぐ
     cands.push(o.t - w);           // となりの 左に つなぐ
+    if (o.o || it.o) { cands.push(o.t); cands.push(o.t + tw(o.d) - w); }   // わくの 中：左はし・右はしを そろえる
   }
   const pxDist = c => Math.abs(c - t0) / TICK * unit();
-  const free = cands.filter(c => !overlaps(c, it.d, r, it)).sort((a, b) => pxDist(a) - pxDist(b));
+  const free = cands.filter(c => !overlaps(c, it.d, r, it, ex)).sort((a, b) => pxDist(a) - pxDist(b));
   let t = t0;
   if (free.length && pxDist(free[0]) <= SNAP) t = free[0];
-  else if (overlaps(t0, it.d, r, it) && free.length && pxDist(free[0]) <= pw(it.d)) t = free[0];   // かさなる ときは すぐ となりへ
+  else if (overlaps(t0, it.d, r, it, ex) && free.length && pxDist(free[0]) <= pw(it.d)) t = free[0];   // かさなる ときは すぐ となりへ
   // ボードの 外に 出さない
   const minT = xt(4), maxT = xt(W - 4) - w;
   it.t = Math.max(minT, Math.min(maxT, t));
@@ -464,7 +552,7 @@ function snapVline(x) {
 const undoStack = [], redoStack = [];
 function snapshot() {
   return {
-    items: items.map(i => ({ id: i.id, d: i.d, t: i.t, r: i.r, z: i.z })),
+    items: items.map(i => ({ id: i.id, d: i.d, t: i.t, r: i.r, z: i.z, o: !!i.o })),
     strokes: strokes.map(s => ({ color: s.color, pts: s.pts.slice() })),
     vline: { on: vline.on, t: vline.t }, len: lenMode,
   };
@@ -487,8 +575,14 @@ function restore(snap) {
   updateButtons();
 }
 function dropGestures() {
-  for (const d of drags.values()) { if (d.it) { d.it.dragX = d.it.dragY = null; } else vline.dragX = null; }
+  for (const d of drags.values()) {
+    clearTimeout(d.timer);
+    if (d.it) { d.it.dragX = d.it.dragY = null; for (const g of d.group || []) g.it.dragX = g.it.dragY = null; }
+    else if (d.vl) vline.dragX = null;
+  }
   drags.clear();
+  $('selbox').hidden = true;
+  closeMenu();
   if (drawing.size) {
     const live = [...drawing.values()].map(d => d.stroke);
     strokes = strokes.filter(s => !live.includes(s));
@@ -510,49 +604,92 @@ function requestFrame() {
     rafWaiting = false;
     let hot = false;
     for (const d of drags.values()) {
-      if (d.it) { place(d.it); if (d.overTrash) hot = true; } else placeVline();
+      if (d.it) {
+        place(d.it);
+        for (const g of d.group) place(g.it);
+        if (d.overTrash) hot = true;
+      } else if (d.vl) placeVline();
+      else if (d.box) {
+        const b = $('selbox'), l = Math.min(d.x0, d.x1), t = Math.min(d.y0, d.y1);
+        b.style.transform = `translate(${l}px, ${t}px)`;
+        b.style.width = Math.abs(d.x1 - d.x0) + 'px';
+        b.style.height = Math.abs(d.y1 - d.y0) + 'px';
+        b.hidden = !d.moved;
+      }
     }
     trashEl.classList.toggle('hot', hot);
   });
 }
 function isPalm(e) { return e.pointerType === 'touch' && (e.width > PALM || e.height > PALM); }
 const grabbedVline = () => [...drags.values()].some(d => d.vl);
+const grabbed = it => [...drags.values()].some(d => d.it === it || (d.group || []).some(g => g.it === it));
+function setSelected(ids) {
+  selected.clear();
+  for (const id of ids) selected.add(id);
+  for (const [id, el] of els) el.classList.toggle('sel', selected.has(id));
+}
 
 stage.addEventListener('pointerdown', e => {
   if (mode !== 'move' || isPalm(e)) return;
   const vl = e.target.closest('.vline');
   const el = vl ? null : e.target.closest('.piece');
-  if (!vl && !el) return;
   e.preventDefault();
   const p = toBoard(e.clientX, e.clientY);
+  try { stage.setPointerCapture(e.pointerId); } catch (_) {}
   if (vl) {
     if (grabbedVline()) return;
-    try { stage.setPointerCapture(e.pointerId); } catch (_) {}
     vl.classList.add('lift');
     drags.set(e.pointerId, { vl: true, el: vl, dx: tx(vline.t) - p.x, snap: snapshot(), moved: false, sx: e.clientX, sy: e.clientY });
     return;
   }
+  if (!el) {
+    // なにも ない ところを ひっぱる → かこんだ タイルを えらぶ（タップだけ なら えらぶのを やめる）
+    if ([...drags.values()].some(d => d.box)) return;
+    drags.set(e.pointerId, { box: true, x0: p.x, y0: p.y, x1: p.x, y1: p.y, moved: false, sx: e.clientX, sy: e.clientY });
+    return;
+  }
   const it = items.find(i => i.id === +el.dataset.id);
-  if (!it || [...drags.values()].some(d => d.it === it)) return;
-  try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  if (!it || grabbed(it)) return;
+  // えらんで いない タイルを さわったら、えらぶのを やめて その 1まいだけ 動かす
+  if (!selected.has(it.id) && selected.size) setSelected([]);
   const snap = snapshot();
+  const group = [];
+  if (selected.has(it.id)) {
+    for (const o of items) {
+      if (o === it || !selected.has(o.id) || grabbed(o)) continue;
+      group.push({ it: o, ox: tx(o.t) - tx(it.t), oy: rowY(o.r) - rowY(it.r) });
+    }
+  }
   it.z = ++zTop;
+  for (const g of group) g.it.z = ++zTop;
   el.classList.add('lift');
-  drags.set(e.pointerId, { it, el, dx: tx(it.t) - p.x, dy: rowY(it.r) - p.y, snap, moved: false, sx: e.clientX, sy: e.clientY, overTrash: false });
+  const d = { it, el, dx: tx(it.t) - p.x, dy: rowY(it.r) - p.y, snap, moved: false, sx: e.clientX, sy: e.clientY, overTrash: false, group, t0: it.t, r0: it.r };
+  // 長おし（うごかさずに 0.55びょう）→ わくだけ・けす の メニュー
+  d.timer = setTimeout(() => {
+    if (d.moved || drags.get(e.pointerId) !== d) return;
+    drags.delete(e.pointerId);
+    el.classList.remove('lift');
+    openMenu(it, e.clientX, e.clientY);
+  }, 550);
+  drags.set(e.pointerId, d);
   requestFrame();
 });
 stage.addEventListener('pointermove', e => {
   const d = drags.get(e.pointerId);
   if (!d) return;
-  if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 3) return;
+  if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 6) return;
   d.moved = true;
+  clearTimeout(d.timer);
   const p = toBoard(e.clientX, e.clientY);
   if (d.vl) {
     vline.dragX = Math.max(10, Math.min(W - 10, p.x + d.dx));
+  } else if (d.box) {
+    d.x1 = Math.max(0, Math.min(W, p.x)); d.y1 = Math.max(0, Math.min(H, p.y));
   } else {
     const w = pw(d.it.d);
     d.it.dragX = Math.max(0, Math.min(W - w, p.x + d.dx));
     d.it.dragY = Math.max(0, Math.min(H - TH, p.y + d.dy));
+    for (const g of d.group) { g.it.dragX = d.it.dragX + g.ox; g.it.dragY = d.it.dragY + g.oy; }
     d.overTrash = overTrash(p) || overToolbox(e.clientX, e.clientY);
     toolbox.classList.toggle('drop-ok', d.overTrash && overToolbox(e.clientX, e.clientY));
   }
@@ -562,9 +699,10 @@ function endDrag(e) {
   const d = drags.get(e.pointerId);
   if (!d) return;
   drags.delete(e.pointerId);
-  d.el.classList.remove('lift');
+  clearTimeout(d.timer);
   toolbox.classList.remove('drop-ok');
   if (d.vl) {
+    d.el.classList.remove('lift');
     if (d.moved && vline.dragX != null) {
       vline.t = snapVline(vline.dragX);
       pushUndo(d.snap);
@@ -573,25 +711,75 @@ function endDrag(e) {
     placeVline();
     return;
   }
-  const it = d.it;
-  if (d.overTrash) {
-    it.dragX = it.dragY = null;
-    removeItem(it.id);
+  if (d.box) {
+    $('selbox').hidden = true;
+    if (!d.moved || e.type === 'pointercancel') { setSelected([]); return; }
+    const l = Math.min(d.x0, d.x1), r = Math.max(d.x0, d.x1), t = Math.min(d.y0, d.y1), b = Math.max(d.y0, d.y1);
+    const hit = items.filter(i => tx(i.t) < r && tx(i.t) + pw(i.d) > l && rowY(i.r) < b && rowY(i.r) + TH > t);
+    setSelected(hit.map(i => i.id));
+    if (hit.length) toast(`${hit.length}まい えらんだよ。ひっぱると いっしょに うごくよ`);
+    return;
+  }
+  d.el.classList.remove('lift');
+  const it = d.it, all = [it, ...d.group.map(g => g.it)];
+  if (d.overTrash && e.type !== 'pointercancel') {
+    for (const o of all) { o.dragX = o.dragY = null; removeItem(o.id); }
     pushUndo(d.snap);
-  } else if (d.moved && it.dragX != null) {
-    const t0 = xt(it.dragX), r = rowOf(it.dragY);
-    it.dragX = it.dragY = null;
-    settle(it, t0, r);
+  } else if (d.moved && it.dragX != null && e.type !== 'pointercancel') {
+    // 列の ずれ（dr）は、みんなが ボードの 列に おさまる ように する
+    let dr = rowOf(it.dragY) - d.r0;
+    const rs = all.map(o => o.r);
+    dr = Math.max(-Math.min(...rs), Math.min(ROWS - 1 - Math.max(...rs), dr));
+    const ex = new Set(all.map(o => o.id));
+    settle(it, xt(it.dragX), d.r0 + dr, ex);
+    const dt = it.t - d.t0;
+    for (const g of d.group) {
+      const o = g.it;
+      o.r += dr;
+      o.t = Math.max(xt(4), Math.min(xt(W - 4) - tw(o.d), o.t + dt));
+    }
+    for (const o of all) o.dragX = o.dragY = null;
     lastTap = 0;
     pushUndo(d.snap);
   } else {
-    it.dragX = it.dragY = null;
+    for (const o of all) o.dragX = o.dragY = null;
   }
-  place(it);
+  for (const o of all) place(o);
   requestFrame();
 }
 stage.addEventListener('pointerup', endDrag);
 stage.addEventListener('pointercancel', endDrag);
+
+/* =========================== 長おしの メニュー（わくだけ・けす） =========================== */
+let menuItem = null;
+function openMenu(it, cx, cy) {
+  menuItem = it;
+  $('pmOutlineLbl').textContent = it.o ? 'いろを ぬる' : 'わくだけ';
+  const m = $('pmenu');
+  m.hidden = false;
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, cx - r.width / 2)) + 'px';
+  m.style.top = Math.max(8, cy - r.height - 30) + 'px';
+}
+function closeMenu() { $('pmenu').hidden = true; menuItem = null; }
+document.addEventListener('pointerdown', e => { if (!$('pmenu').hidden && !e.target.closest('.pmenu')) closeMenu(); }, true);
+$('pmOutline').onclick = () => {
+  const it = menuItem;
+  closeMenu();
+  if (!it || !items.includes(it)) return;
+  pushUndo(snapshot());
+  it.o = !it.o;
+  // ぬった タイルに もどした とき、ほかの タイルと かさなって いたら となりへ
+  if (!it.o) settle(it, it.t, it.r);
+  rebuild();
+};
+$('pmDel').onclick = () => {
+  const it = menuItem;
+  closeMenu();
+  if (!it || !items.includes(it)) return;
+  pushUndo(snapshot());
+  removeItem(it.id);
+};
 
 /* =========================== 道具箱 =========================== */
 function buildToolbox() {
@@ -600,14 +788,14 @@ function buildToolbox() {
   lab.className = 'label';
   lab.textContent = 'タイル（タップ・ひっぱる）';
   toolbox.appendChild(lab);
-  for (const d of DENOMS) {
+  for (const d of DENOMS.filter(x => useDens.includes(x))) {
     const b = document.createElement('div');
     const c = COLORS[d];
     b.className = 'tb-item' + (d === 1 ? ' one' : '');
     b.dataset.d = d;
     b.style.background = c.bg;
     b.style.color = c.fg;
-    b.innerHTML = fracHTML(d, 20);
+    b.innerHTML = labelMode === 'frac' ? fracHTML(d, 20) : labelHTML(d, 66);
     b.title = d === 1 ? '1' : `${d}ぶんの1`;
     toolbox.appendChild(b);
   }
@@ -796,6 +984,7 @@ $('confirmYes').onclick = () => {
   dropGestures();
   pushUndo(snapshot());
   items = []; strokes = []; lastTap = 0;
+  selected.clear();
   rebuild();
 };
 
@@ -804,16 +993,32 @@ document.addEventListener('keydown', e => {
   const dlgOpen = [...document.querySelectorAll('.dialog-bg')].some(d => !d.hidden);
   if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); if (!dlgOpen) undo(); }
   else if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); if (!dlgOpen) redo(); }
-  else if (e.key === 'Escape') $('confirmBg').hidden = true;
+  else if (e.key === 'Escape') { $('confirmBg').hidden = true; $('setBg').hidden = true; closeMenu(); setSelected([]); }
 });
 
 /* =========================== しゃしん =========================== */
 function drawTile(ctx, it) {
   const x = tx(it.t), y = rowY(it.r), w = pw(it.d), c = COLORS[it.d];
-  ctx.fillStyle = c.bg; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.roundRect(x + 1, y + 1, w - 2, TH - 2, 6); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = c.fg; ctx.strokeStyle = c.fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (it.o) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.strokeStyle = c.bg; ctx.lineWidth = 4; ctx.setLineDash([10, 6]);
+    ctx.beginPath(); ctx.roundRect(x + 2, y - OUT + 2, w - 4, TH + OUT * 2 - 4, 6); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  } else {
+    ctx.fillStyle = c.bg; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(x + 1, y + 1, w - 2, TH - 2, 6); ctx.fill(); ctx.stroke();
+  }
+  const fg = it.o ? '#263238' : c.fg;
+  ctx.fillStyle = fg; ctx.strokeStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const cx = x + w / 2, cy = y + TH / 2;
+  if (labelMode === 'hide') return;
+  if (labelMode !== 'frac') {
+    const t = labelText(it.d), f = textFont(w, t);
+    ctx.font = `900 ${f.fs}px ${FONT}`;
+    if (f.rot) { ctx.save(); ctx.translate(cx, cy); ctx.rotate(-Math.PI / 2); ctx.fillText(t, 0, 1); ctx.restore(); }
+    else ctx.fillText(t, cx, cy + 1);
+    return;
+  }
   if (it.d === 1) { ctx.font = `900 30px ${FONT}`; ctx.fillText('1', cx, cy + 1); return; }
   const fs = fontFor(w), half = fs * 0.55 + 2;
   ctx.font = `900 ${fs}px ${FONT}`;
@@ -827,7 +1032,7 @@ function makePhoto() {
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
   drawBg(ctx);
-  for (const it of [...items].sort((a, b) => a.z - b.z)) drawTile(ctx, it);
+  for (const it of [...items].sort((a, b) => zOf(a) - zOf(b))) drawTile(ctx, it);
   if (vline.on) {
     const x = tx(vline.t);
     ctx.fillStyle = '#d81b60';
@@ -883,18 +1088,24 @@ if (HIGH) {
 }
 function stateData() {
   return { v: 1, len: lenMode, vl: { on: vline.on, t: vline.t },
-    i: items.map(i => [i.d, i.t, i.r]), s: strokes.map(s => ({ c: s.color, p: s.pts.map(q => [Math.round(q[0]), Math.round(q[1])]) })) };
+    lb: labelMode, den: useDens,
+    i: items.map(i => i.o ? [i.d, i.t, i.r, 1] : [i.d, i.t, i.r]), s:strokes.map(s => ({ c: s.color, p: s.pts.map(q => [Math.round(q[0]), Math.round(q[1])]) })) };
 }
 function applyState(d) {
   lenMode = d.len === 3 ? 3 : 1;
   vline = { on: !!(d.vl && d.vl.on), t: d.vl && Number.isFinite(d.vl.t) ? d.vl.t : TICK / 2 };
   items = []; zTop = 1;
   for (const a of d.i) {
-    const [den, t, r] = a;
+    const [den, t, r, o] = a;
     if (!COLORS[den] || !Number.isFinite(t) || !Number.isInteger(r)) continue;
-    items.push({ id: nextId++, d: den, t, r: Math.max(0, Math.min(ROWS - 1, r)), z: ++zTop });
+    items.push({ id: nextId++, d: den, t, r: Math.max(0, Math.min(ROWS - 1, r)), z: ++zTop, o: !!o });
   }
   strokes = (d.s || []).map(s => ({ color: s.c, pts: s.p }));
+  // せってい（アドレスで えらんで ある ときは アドレスを ゆうせん）
+  if (!URL_LABEL && LABELS.some(l => l.id === d.lb)) labelMode = d.lb;
+  if (!URL_DENS && Array.isArray(d.den)) { const u = d.den.filter(x => COLORS[x]); if (u.length) useDens = u; }
+  selected.clear();
+  buildToolbox();
   updateLenButtons();
   redrawBg();
   rebuild();
@@ -922,6 +1133,53 @@ $('resumeYes').onclick = () => {
   if (d) { applyState(d); undoStack.length = 0; redoStack.length = 0; updateButtons(); toast('▶ つづきから はじめるよ'); }
 };
 $('resumeNo').onclick = () => { $('resumeBg').hidden = true; try { localStorage.removeItem(SAVE_KEY); } catch (_) {} };
+
+/* =========================== ☰ せってい（タイルの 字・つかう 分母） =========================== */
+// アドレスでも えらべる：?label=frac|dec|pct|hide ?den=2,4,8
+const URL_P = new URLSearchParams(location.search);
+const URL_LABEL = LABELS.some(l => l.id === URL_P.get('label')) ? URL_P.get('label') : null;
+const URL_DENS = (() => {
+  const v = (URL_P.get('den') || '').split(',').map(Number).filter(x => COLORS[x]);
+  return v.length ? [...new Set(v)].sort((a, b) => a - b) : null;
+})();
+if (URL_LABEL) labelMode = URL_LABEL;
+if (URL_DENS) useDens = URL_DENS;
+function renderSettings() {
+  const lb = $('setLabels');
+  lb.textContent = '';
+  for (const l of LABELS) {
+    const b = document.createElement('button');
+    b.className = 'btn' + (labelMode === l.id ? ' on' : '');
+    b.innerHTML = `<span class="ic">${l.sample}</span>${l.name}`;
+    b.onclick = () => { labelMode = l.id; settingsChanged(); };
+    lb.appendChild(b);
+  }
+  const dn = $('setDens');
+  dn.textContent = '';
+  for (const d of DENOMS) {
+    const b = document.createElement('button');
+    const on = useDens.includes(d);
+    b.className = 'btn den' + (on ? '' : ' off');
+    b.style.background = COLORS[d].bg;
+    b.style.borderColor = COLORS[d].bg;
+    if (on) b.style.color = COLORS[d].fg;
+    b.innerHTML = d === 1 ? '1' : `1/${d}`;
+    b.onclick = () => {
+      if (on && useDens.length === 1) { toast('1つは のこしてね'); return; }
+      useDens = on ? useDens.filter(x => x !== d) : [...useDens, d].sort((a, b) => a - b);
+      settingsChanged();
+    };
+    dn.appendChild(b);
+  }
+}
+function settingsChanged() {
+  scheduleSave();
+  buildToolbox();
+  rebuild();
+  renderSettings();
+}
+$('setBtn').onclick = () => { renderSettings(); $('setBg').hidden = false; };
+$('setClose').onclick = () => { $('setBg').hidden = true; };
 
 /* =========================== はじめる =========================== */
 buildToolbox();
