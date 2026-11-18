@@ -8,7 +8,7 @@
   /* ===== 色のきまり（ほかの教材とそろえた やさしい色） ===== */
   :root {
     --ink: #263238; --accent: #3949ab; --accent-dark: #283593; --soft: #c5cae9;
-    --draw: #ff6f00; --board: #ffffff;
+    --draw: #ff6f00; --tie: #2e9d4a; --board: #ffffff;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -41,6 +41,7 @@
   .btn:disabled { opacity: 0.35; cursor: default; transform: none; box-shadow: none; }
   .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn.draw.on { background: var(--draw); border-color: var(--draw); }
+  .btn.tie.on { background: var(--tie); border-color: var(--tie); }
   /* ペンの いろ ボタン */
   .pen { min-width: 44px; width: 44px; padding: 0; }
   .pen .dot { width: 24px; height: 24px; border-radius: 50%; border: 3px solid rgba(0,0,0,0.15); }
@@ -62,6 +63,7 @@
     cursor: grab; font-weight: bold; font-size: 0.875rem; line-height: 1.1; touch-action: none; padding: 4px 2px; text-align: center;
   }
   .tb-item:active { background: #e8eaf6; }
+  .toolbox .tbhint { grid-column: 1 / -1; font-size: 0.8rem; font-weight: bold; color: #5c6bc0; line-height: 1.5; padding: 6px 4px 0; }
   .thumb { position: relative; pointer-events: none; flex: none; }
   .thumb .piece { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
   /* 道具箱の タブ（もの・わく・カード） */
@@ -96,6 +98,34 @@
     touch-action: none; overflow: hidden;
   }
   .stage.drawing { outline-color: var(--draw); }   /* かく ときは ふちが オレンジ */
+  .stage.tying { outline-color: var(--tie); }       /* まとめる ときは ふちが みどり */
+  .stage.tying .piece { cursor: crosshair; }
+  /* まとめる ときに かく かこみの 線 */
+  .lasso { position: absolute; left: 0; top: 0; width: 1200px; height: 720px; z-index: 5; pointer-events: none; overflow: visible; }
+  .lasso path { fill: rgba(46,157,74,0.10); stroke: var(--tie); stroke-width: 5; stroke-dasharray: 12 8; stroke-linejoin: round; stroke-linecap: round; }
+  .lasso.fade path { transition: opacity .35s; opacity: 0; }
+  /* えらんだ ものの 番号 */
+  .marks { z-index: 5; }
+  .pickmark { position: absolute; left: 0; top: 0; width: 32px; height: 32px; margin: -16px 0 0 -16px; border-radius: 50%;
+              background: var(--tie); color: #fff; border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px; }
+  .piece.picked { filter: drop-shadow(0 0 4px var(--tie)) drop-shadow(0 0 2px var(--tie)); }
+  /* まとめて できた 十の まとまりが ぽんっと 出る */
+  .piece.born svg { animation: bornin .35s ease-out; }
+  @keyframes bornin { 0% { transform: scale(0.6); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
+  /* あつまる・ばらけて 広がる うごき */
+  .piece.pop { transition: transform .38s cubic-bezier(.2,.8,.3,1.2); }
+  /* ながおしの わ（いっぱいに なると ばらける） */
+  .ring { position: absolute; left: 0; top: 0; width: 84px; height: 84px; margin: -42px 0 0 -42px; z-index: 6; pointer-events: none; }
+  .ring circle { fill: rgba(255,255,255,0.75); stroke: #ff6f00; stroke-width: 9; stroke-linecap: round;
+                 stroke-dasharray: 220; stroke-dashoffset: 220; transform: rotate(-90deg); transform-origin: 50% 50%; }
+  /* すぐに はなす タップでは 出さない（0.15びょう たってから 見せる） */
+  .ring { opacity: 0; }
+  .ring.go { animation: ringshow 0s .15s forwards; }
+  .ring.go circle { animation: ringfill var(--long, 0.45s) .15s linear forwards; }
+  @keyframes ringshow { to { opacity: 1; } }
+  .ring .ic { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+  @keyframes ringfill { to { stroke-dashoffset: 0; } }
   /* かさなりの じゅん：ごみばこ → わく・おさら → かぞえる もの → ペンの線 */
   .layer { position: absolute; inset: 0; pointer-events: none; }
   .frames { z-index: 1; }
@@ -177,6 +207,7 @@
     <button class="btn on" id="modeMove" title="うごかす"><span class="ic">✋</span>うごかす</button>
     <button class="btn draw" id="modeDraw" title="かく"><span class="ic">✏️</span>かく</button>
     <button class="btn draw" id="modeLine" title="まっすぐな 線を ひく"><span class="ic">📏</span>ちょくせん</button>
+    <button class="btn tie" id="modeTie" title="10こ えらんで 十の まとまりに する"><span class="ic">🔗</span>まとめる</button>
   </div>
   <div class="group" id="penColors"></div>
   <button class="btn" id="clearInk" title="せんを ぜんぶ けす"><span class="ic">🧽</span>せんを けす</button>
@@ -206,6 +237,9 @@
       <div class="layer frames" id="frames"></div>
       <div class="layer pieces" id="pieces"></div>
       <canvas class="ink" id="ink"></canvas>
+      <div class="layer marks" id="marks"></div>
+      <svg class="lasso" id="lasso" viewBox="0 0 1200 720"><path d=""/></svg>
+      <div class="ring" id="ring" hidden><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="35"/></svg><span class="ic">✂️</span></div>
     </div>
   </div>
 </div>
@@ -303,10 +337,10 @@ function svgBlock(fill, dark) {
     <rect x="5" y="5" width="56" height="56" rx="6" fill="none" stroke="#fff" stroke-opacity="0.35" stroke-width="2"/>${shine(22, 16, 12, 5)}`);
 }
 // もよう：'' なし ／ 'ring' まんなかに わ ／ 'dots' 白い てん3つ（色だけで 区別しないため）
-function svgOha(fill, dark, mark) {
+function svgOha(fill, dark, mark, dot = '#fff') {   // dot：てんの 色（色が ぬけた ときは こい 色に する）
   const marks = {
     ring: `<circle cx="31" cy="31" r="11" fill="none" stroke="${dark}" stroke-width="4"/>`,
-    dots: `<circle cx="31" cy="23" r="4" fill="#fff"/><circle cx="24" cy="36" r="4" fill="#fff"/><circle cx="38" cy="36" r="4" fill="#fff"/>`,
+    dots: `<circle cx="31" cy="23" r="4" fill="${dot}"/><circle cx="24" cy="36" r="4" fill="${dot}"/><circle cx="38" cy="36" r="4" fill="${dot}"/>`,
   };
   return svg(62, 62, `<circle cx="31" cy="31" r="29" fill="${fill}" stroke="${dark}" stroke-width="2.5"/>
     ${marks[mark] || ''}${shine(22, 15, 9, 5)}`);
@@ -372,14 +406,15 @@ function svgPlate() {       // おさら
 }
 
 /* ---- 素材の 定義表：ここに1行足すと 道具がふえる ----
-   kind: 'count' かぞえる もの ／ 'frame' わく（マスに すいつく）／ 'plate' おさら（のせて いっしょに 動かす） */
+   kind: 'count' かぞえる もの ／ 'frame' わく（マスに すいつく）／ 'plate' おさら（のせて いっしょに 動かす）／ 'ten' 十の まとまり
+   off: タップで 色が ぬけた ときの 絵（ない ものは うすくした 絵に なる） */
 const frameDef = (name, cols, rows) => ({ name, kind: 'frame', cols, rows, w: cols * CELL + PAD * 2, h: rows * CELL + PAD * 2, svg: svgFrame(cols, rows) });
 const PIECES = {
-  block:  { name: 'ブロック(あお)', kind: 'count', w: 66, h: 66, svg: svgBlock('#3f7fd9', '#2a5fae') },
-  blockR: { name: 'ブロック(あか)', kind: 'count', w: 66, h: 66, svg: svgBlock('#e0524e', '#a8302d') },
-  ohaR:   { name: 'おはじき(あか)',  kind: 'count', w: 62, h: 62, svg: svgOha('#e2504c', '#a8302d', '') },
-  ohaY:   { name: 'おはじき(きいろ)', kind: 'count', w: 62, h: 62, svg: svgOha('#f4c430', '#a37e10', 'ring') },
-  ohaB:   { name: 'おはじき(あお)',  kind: 'count', w: 62, h: 62, svg: svgOha('#3d7bd9', '#1f4f9a', 'dots') },
+  block:  { name: 'ブロック(あお)', kind: 'count', w: 66, h: 66, svg: svgBlock('#3f7fd9', '#2a5fae'), off: svgBlock('#ffffff', '#2a5fae') },
+  blockR: { name: 'ブロック(あか)', kind: 'count', w: 66, h: 66, svg: svgBlock('#e0524e', '#a8302d'), off: svgBlock('#ffffff', '#a8302d') },
+  ohaR:   { name: 'おはじき(あか)',  kind: 'count', w: 62, h: 62, svg: svgOha('#e2504c', '#a8302d', ''), off: svgOha('#ffffff', '#a8302d', '') },
+  ohaY:   { name: 'おはじき(きいろ)', kind: 'count', w: 62, h: 62, svg: svgOha('#f4c430', '#a37e10', 'ring'), off: svgOha('#ffffff', '#a37e10', 'ring') },
+  ohaB:   { name: 'おはじき(あお)',  kind: 'count', w: 62, h: 62, svg: svgOha('#3d7bd9', '#1f4f9a', 'dots'), off: svgOha('#ffffff', '#1f4f9a', 'dots', '#1f4f9a') },
   cake:   { name: 'ケーキ',    kind: 'count', w: 66, h: 66, svg: svgCake() },
   chou:   { name: 'ちょうちょ', kind: 'count', w: 66, h: 66, svg: svgButterfly() },
   hana:   { name: 'はな',      kind: 'count', w: 66, h: 66, svg: svgFlower() },
@@ -390,6 +425,8 @@ const PIECES = {
   waku20:  frameDef('20の わく', 10, 2),
   waku100: frameDef('100の わく', 10, 10),
   sara:   { name: 'おさら', kind: 'plate', w: 230, h: 230, svg: svgPlate() },
+  // 十の まとまり（🔗まとめる で 10こ えらぶと できる。道具箱には ない。中の 10こは 1つずつ ちがう ので 絵は あとで つくる）
+  ten:    { name: '十の まとまり', kind: 'ten', w: 260, h: 116, svg: '' },
   // もんだいカード（先生だけが つくれる。大きさは 文字に あわせて きまる）
   text:   { name: 'もんだいカード', kind: 'text', w: 100, h: 60, svg: '' },
 };
@@ -408,6 +445,35 @@ Object.assign(PIECES, {
   lt:    { name: '＜', kind: 'card', w: 56, h: 68, svg: svgCard('＜', '#37474f') },
   q:     { name: '？', kind: 'card', w: 56, h: 68, svg: svgCard('？', '#8e44ad') },
 });
+/* ---- 色が ぬけた 絵：きまって いない もの（ケーキ・はな など）は うすく する ---- */
+for (const def of Object.values(PIECES)) {
+  if (def.kind === 'count' && !def.off) def.off = def.svg.replace(/(<svg[^>]*>)([\s\S]*)<\/svg>$/, '$1<g opacity="0.25">$2</g></svg>');
+}
+/* ---- 十の まとまりの 絵：5こ × 2だんの ケースに、まとめた ときの 色・しゅるいの まま 入れる ----
+   mem は 10この 文字の ならび。'block' のように しゅるいの 名前、色が ぬけて いる ときは うしろに ! を つける（'ohaR!'） */
+const TEN_CELL = 48, TEN_PAD = 10;
+const memOf = s => ({ type: s.replace(/!$/, ''), off: s.endsWith('!') });
+const memValid = s => typeof s === 'string' && !!PIECES[memOf(s).type] && PIECES[memOf(s).type].kind === 'count';
+function svgParts(str) {   // SVG の 文字から 大きさと 中身を とりだす（ケースの 中に 小さく 入れる ため）
+  const m = str.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"[^>]*>([\s\S]*)<\/svg>$/);
+  return { w: +m[1], h: +m[2], body: m[3] };
+}
+function svgTen(mem) {
+  const { w, h } = PIECES.ten;
+  let body = `<rect x="2" y="2" width="${w - 4}" height="${h - 4}" rx="16" fill="#f1f8e9" stroke="#2e9d4a" stroke-width="4"/>
+    <line x1="${TEN_PAD}" y1="${h / 2}" x2="${w - TEN_PAD}" y2="${h / 2}" stroke="#a5d6a7" stroke-width="2"/>`;
+  mem.forEach((s, i) => {
+    const { type, off } = memOf(s), p = svgParts(off ? PIECES[type].off : PIECES[type].svg);
+    const x = TEN_PAD + (i % 5) * TEN_CELL + 3, y = TEN_PAD + Math.floor(i / 5) * TEN_CELL + 3;
+    body += `<svg x="${x}" y="${y}" width="42" height="42" viewBox="0 0 ${p.w} ${p.h}">${p.body}</svg>`;
+  });
+  return svg(w, h, body);
+}
+// ボードの 上の 1こ 1この 絵（色が ぬけた もの・十の まとまりは それに あわせた 絵）
+function itemSvg(it) {
+  if (it.type === 'ten') return svgTen(it.mem);
+  return it.off ? PIECES[it.type].off : PIECES[it.type].svg;
+}
 const isHolder = type => PIECES[type].kind === 'frame' || PIECES[type].kind === 'plate';   // ほかの ものを のせられる 部品
 
 /* ---- ボードの 表：あとから ここに ボードを足す（?board=名前 で えらべる） ---- */
@@ -632,13 +698,24 @@ function makeEl(type) {
   d.innerHTML = def.svg;
   return d;
 }
+// ボードの 上の 1こ（色が ぬけて いる・十の まとまり なども その 絵で つくる）
+function makeItemEl(it) {
+  const d = makeEl(it.type);
+  d.innerHTML = itemSvg(it);
+  return d;
+}
+// 絵が かわった とき（色が ぬけた など）に つくりなおす
+function redrawItem(it) {
+  const el = els.get(it.id);
+  if (el) el.innerHTML = itemSvg(it);
+}
 function place(it) {
   const el = els.get(it.id), def = dims(it);
   el.style.transform = `translate3d(${it.x - def.w / 2}px, ${it.y - def.h / 2}px, 0)`;
   el.style.zIndex = it.z;
 }
 function attach(it) {
-  const el = it.type === 'text' ? makeTextEl(it) : makeEl(it.type);
+  const el = it.type === 'text' ? makeTextEl(it) : makeItemEl(it);
   el.dataset.id = it.id;
   els.set(it.id, el);
   (isHolder(it.type) ? framesEl : piecesEl).appendChild(el);
@@ -712,7 +789,7 @@ function snapToGrid(it) {
   moveIfFree(it, cx, cy);
 }
 function snapItem(it) {
-  if (isHolder(it.type) || it.type === 'text') return;
+  if (isHolder(it.type) || it.type === 'text' || it.type === 'ten') return;   // 十の まとまりは マスに すいつかない
   if (!snapToFrame(it)) snapToGrid(it);
   place(it);
 }
@@ -721,7 +798,7 @@ function snapItem(it) {
 function overlapsTrash(rc) { return rc.r > W - 150 && rc.b > H - 150; }
 function freeSpot(type) {
   const d = PIECES[type];
-  const holders = items.filter(i => isHolder(i.type) || i.type === 'text');   // もんだいカードの 上も さける
+  const holders = items.filter(i => isHolder(i.type) || i.type === 'text' || i.type === 'ten');   // もんだいカード・十の まとまりの 上も さける
   const hit = (a, b) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
   if (isHolder(type)) {
     // わく・おさら：ボードの 上の ものと かさならない 場所
@@ -765,7 +842,9 @@ function restore(snap) {
   items = snap.items.map(i => ({ ...i }));
   strokes = snap.strokes.map(s => ({ color: s.color, pts: s.pts.slice() }));
   zTop = items.reduce((m, i) => Math.max(m, i.z), 1);
+  picked = [];
   rebuild();
+  drawMarks();
   updateButtons();
 }
 // つかんでいる 途中・かいている 途中の ものを やめる（もどる・かたづける・ひらく の 前に よぶ。
@@ -773,6 +852,9 @@ function restore(snap) {
 function dropGestures() {
   for (const d of drags.values()) if (d.timer) clearTimeout(d.timer);
   drags.clear();
+  hideRing();
+  lasso = null;
+  lassoPath.setAttribute('d', '');
   if (drawing.size) {
     const live = [...drawing.values()].map(d => d.stroke);
     strokes = strokes.filter(s => !live.includes(s));
@@ -838,14 +920,84 @@ stage.addEventListener('pointerdown', e => {
       carry.push({ it: o, ox: o.x - it.x, oy: o.y - it.y });
     }
   }
-  drags.set(e.pointerId, { it, el, dx: it.x - p.x, dy: it.y - p.y, snap, moved: false, sx: e.clientX, sy: e.clientY, overTrash: false, carry });
+  const d = { it, el, dx: it.x - p.x, dy: it.y - p.y, snap, moved: false, sx: e.clientX, sy: e.clientY, overTrash: false, carry, timer: 0 };
+  drags.set(e.pointerId, d);
+  // 十の まとまりは ながおしで ばらす
+  if (it.type === 'ten' && !TOO_MANY_FINGERS()) {
+    d.timer = setTimeout(() => longPress(e.pointerId), LONG_MS);
+    showRing(p);
+  }
   requestFrame();
 });
+/* ---- ながおし ---- */
+const LONG_MS = 600;                 // これだけ おしつづけると ばらける（ミリ秒）
+const MOVE_TOL = 8;                  // これより 小さい 指の ぶれは「うごかしていない」と みる（px）
+const TOO_MANY_FINGERS = () => [...drags.values()].some(d => d.timer);   // わは 1つずつ
+const ring = $('ring');
+function showRing(p) {
+  ring.style.setProperty('--long', (LONG_MS - 150) / 1000 + 's');
+  ring.style.transform = `translate(${p.x}px, ${p.y}px)`;
+  ring.hidden = false;
+  ring.classList.remove('go');
+  void ring.offsetWidth;             // アニメーションを はじめから
+  ring.classList.add('go');
+}
+function hideRing() { ring.hidden = true; ring.classList.remove('go'); }
+function cancelLong(d) {
+  if (!d.timer) return;
+  clearTimeout(d.timer);
+  d.timer = 0;
+  hideRing();
+}
+function longPress(pid) {
+  const d = drags.get(pid);
+  if (!d) return;
+  d.timer = 0;
+  hideRing();
+  drags.delete(pid);
+  d.el.classList.remove('lift');
+  if (splitTen(d.it)) pushUndo(d.snap);
+  requestFrame();
+}
+/* ---- ばらす：十の まとまりを、まとめる 前の 10こ（色・しゅるい・色ぬけ その まま）に もどして 広げる ---- */
+function splitTen(it) {
+  const mem = it.mem.map(memOf);
+  for (const type of new Set(mem.map(m => m.type))) {
+    if (items.filter(i => i.type === type).length + mem.filter(m => m.type === type).length > MAX_PER_TYPE) {
+      toast(`${PIECES[type].name}が おおすぎて ばらせません`);
+      return false;
+    }
+  }
+  // 5こ × 2だんに ならべる（ケースの ならびと おなじ）
+  const step = 74;
+  const targets = mem.map((m, i) => ({ x: it.x + (i % 5 - 2) * step, y: it.y + (Math.floor(i / 5) - 0.5) * step }));
+  // ボードから はみ出す ときは まとめて ずらす
+  const l = Math.min(...targets.map(t => t.x)) - 33, r = Math.max(...targets.map(t => t.x)) + 33;
+  const t0 = Math.min(...targets.map(t => t.y)) - 33, b0 = Math.max(...targets.map(t => t.y)) + 33;
+  const sx = l < 0 ? -l : (r > W ? W - r : 0), sy = t0 < 0 ? -t0 : (b0 > H ? H - b0 : 0);
+  // はじめは ケースの 中の 場所に おき、そこから 広がる
+  const pl = it.x - PIECES.ten.w / 2 + TEN_PAD, pt = it.y - PIECES.ten.h / 2 + TEN_PAD;
+  removeItem(it.id);
+  const born = [];
+  mem.forEach((m, i) => {
+    const c = addItem(m.type, pl + (i % 5 + 0.5) * TEN_CELL, pt + (Math.floor(i / 5) + 0.5) * TEN_CELL, m.off ? { off: true } : undefined);
+    if (!c) return;
+    els.get(c.id).classList.add('pop');
+    born.push([c, targets[i].x + sx, targets[i].y + sy]);
+  });
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    for (const [c, x, y] of born) { c.x = x; c.y = y; clampItem(c); place(c); }
+  }));
+  setTimeout(() => born.forEach(([c]) => { const el = els.get(c.id); if (el) el.classList.remove('pop'); }), 450);
+  toast('✂️ 10こに ばらしたよ');
+  return true;
+}
 stage.addEventListener('pointermove', e => {
   const d = drags.get(e.pointerId);
   if (!d) return;
-  if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 3) return;
+  if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < MOVE_TOL) return;
   d.moved = true;
+  cancelLong(d);
   const p = toBoard(e.clientX, e.clientY);
   d.it.x = p.x + d.dx;
   d.it.y = p.y + d.dy;
@@ -859,6 +1011,7 @@ function endDrag(e) {
   const d = drags.get(e.pointerId);
   if (!d) return;
   drags.delete(e.pointerId);
+  cancelLong(d);
   d.el.classList.remove('lift');
   toolbox.classList.remove('drop-ok');
   if (d.overTrash && d.it.type === 'text' && !TEACHER) {
@@ -884,6 +1037,14 @@ function endDrag(e) {
     pushUndo(d.snap);
   } else if (TEACHER && d.it.type === 'text') {
     openText(d.it);   // 先生が もんだいカードを タップ → なおす
+  } else if (e.type === 'pointerup' && PIECES[d.it.type].kind === 'count') {
+    // かぞえる ものを タップ → 色が ぬける ／ もう1回 で もどる（とった ものを しめす ときに つかう）
+    d.it.off = !d.it.off;
+    if (!d.it.off) delete d.it.off;
+    redrawItem(d.it);
+    pushUndo(d.snap);
+  } else if (e.type === 'pointerup' && d.it.type === 'ten') {
+    toast('✋ ながおし すると 10こに ばらせるよ');
   }
   requestFrame();
 }
@@ -931,6 +1092,12 @@ function buildToolbox() {
         b.appendChild(t);
       }
       toolbox.appendChild(b);
+    }
+    if (g.tools.some(t => PIECES[t].kind === 'count')) {
+      const h = document.createElement('div');
+      h.className = 'tbhint';
+      h.innerHTML = '👆 タップ … 色が ぬける／もどる<br>🔗 まとめる … 10こ えらぶ・かこむ<br>✋ ながおし … 十の まとまりを ばらす';
+      toolbox.appendChild(h);
     }
   }
 }
@@ -983,6 +1150,122 @@ function endTb(e) {
 }
 toolbox.addEventListener('pointerup', endTb);
 toolbox.addEventListener('pointercancel', endTb);
+
+/* =========================== まとめる（タップで えらぶ ／ かこむ） ===========================
+   えらんだ ものには 1・2・3… と 番号が つく。10こ そろうと「十の まとまり」に なる。
+   色や しゅるいが ちがっても まとめられる（あお 8こ と あか 2こ → その 色の まま 入る。くり上がりが 見える）。
+   ・タップ：1こずつ えらぶ／もう1回 タップで はずす（数えながら えらべる）
+   ・かこむ：かこみの 中の ものを まとめて えらぶ（すこし ずれても 入るように あまく しらべる） */
+const lassoEl = $('lasso'), lassoPath = lassoEl.querySelector('path'), marksEl = $('marks');
+let lasso = null;     // { pid, pts, len, startEl }  かこみは 1つずつ
+let picked = [];      // えらんだ もの（えらんだ じゅん）
+function drawMarks() {
+  picked = picked.filter(it => items.includes(it));
+  marksEl.textContent = '';
+  picked.forEach((it, i) => {
+    const m = document.createElement('div');
+    m.className = 'pickmark';
+    m.textContent = i + 1;
+    m.style.transform = `translate(${it.x}px, ${it.y}px)`;
+    marksEl.appendChild(m);
+    els.get(it.id).classList.add('picked');
+  });
+  document.querySelectorAll('.piece.picked').forEach(el => {
+    if (!picked.some(it => it.id === +el.dataset.id)) el.classList.remove('picked');
+  });
+}
+function clearPicks() { picked = []; drawMarks(); }
+stage.addEventListener('pointerdown', e => {
+  if (mode !== 'tie' || isPalm(e) || lasso) return;
+  e.preventDefault();
+  try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  const p = toBoard(e.clientX, e.clientY);
+  lasso = { pid: e.pointerId, pts: [[p.x, p.y]], len: 0, startEl: e.target.closest('.piece') };
+  lassoEl.classList.remove('fade');
+  lassoPath.setAttribute('d', '');
+});
+stage.addEventListener('pointermove', e => {
+  if (!lasso || lasso.pid !== e.pointerId) return;
+  const p = toBoard(e.clientX, e.clientY), last = lasso.pts[lasso.pts.length - 1];
+  const step = Math.hypot(p.x - last[0], p.y - last[1]);
+  if (step < 4) return;
+  lasso.len += step;
+  lasso.pts.push([p.x, p.y]);
+  lassoPath.setAttribute('d', 'M' + lasso.pts.map(q => q[0].toFixed(0) + ' ' + q[1].toFixed(0)).join(' L') + ' Z');
+});
+function endLasso(e) {
+  if (!lasso || lasso.pid !== e.pointerId) return;
+  const L = lasso;
+  lasso = null;
+  lassoEl.classList.add('fade');
+  setTimeout(() => { if (!lasso) lassoPath.setAttribute('d', ''); }, 400);
+  if (e.type !== 'pointerup' || mode !== 'tie') return;   // かこんでいる 途中で べつの 道具に かえたら なにも しない
+  if (L.len < 25) {
+    // タップ：その ものを えらぶ／はずす。なにも ない ところは えらびなおし
+    const it = L.startEl && items.find(i => i.id === +L.startEl.dataset.id);
+    if (it && PIECES[it.type].kind === 'count') pickItems([it], true);
+    else if (it && it.type === 'ten') toast('これは もう 十の まとまりだよ（✋うごかす で ながおし すると ばらせるよ）');
+    else if (picked.length) { clearPicks(); toast('えらびなおしだよ'); }
+    return;
+  }
+  const got = items.filter(it => PIECES[it.type].kind === 'count' && lassoHits(it, L.pts));
+  if (!got.length) { toast('かこんだ なかに おはじきや ブロックが ないよ'); return; }
+  pickItems(got.sort((a, b) => a.y - b.y || a.x - b.x), false);
+}
+stage.addEventListener('pointerup', endLasso);
+stage.addEventListener('pointercancel', endLasso);
+// 点が かこみの 中に あるか（よく つかわれる「線を 何回 またぐか」の しらべ方）
+function insidePoly(x, y, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// かこみに 入ったか：まんなか、または 部品の 中の 9この 点の うち 4こ いじょうが 入っていれば 入った とみる
+function lassoHits(it, pts) {
+  if (insidePoly(it.x, it.y, pts)) return true;
+  const d = dims(it);
+  let n = 0;
+  for (const fx of [-0.35, 0, 0.35]) for (const fy of [-0.35, 0, 0.35]) if (insidePoly(it.x + fx * d.w, it.y + fy * d.h, pts)) n++;
+  return n >= 4;
+}
+function pickItems(list, toggle) {
+  if (toggle && picked.includes(list[0])) {
+    picked = picked.filter(i => i !== list[0]);
+  } else {
+    for (const it of list) if (!picked.includes(it)) picked.push(it);
+  }
+  drawMarks();
+  const n = picked.length;
+  if (n === 10) tieItems(picked.slice());
+  else if (n > 10) toast(`${n}こ えらんだよ。10こに してね（タップで はずせるよ）`);
+  else if (n) toast(`${n}こ。あと ${10 - n}こで 十の まとまりに なるよ`);
+}
+function tieItems(got) {
+  if (items.filter(i => i.type === 'ten').length >= MAX_PER_TYPE) { toast(`十の まとまりは ${MAX_PER_TYPE}こまでです`); return; }
+  const snap = snapshot();
+  const cx = got.reduce((a, i) => a + i.x, 0) / got.length, cy = got.reduce((a, i) => a + i.y, 0) / got.length;
+  const mem = got.map(i => i.type + (i.off ? '!' : ''));   // えらんだ じゅんに ケースへ 入れる
+  picked = [];
+  drawMarks();
+  // まんなかに あつまってから、1つの 十の まとまりに なる
+  for (const it of got) {
+    els.get(it.id).classList.add('pop');
+    it.x = cx; it.y = cy; it.z = ++zTop;
+    place(it);
+  }
+  setTimeout(() => {
+    if (got.some(it => !items.includes(it))) return;   // とちゅうで もどる を おしたとき
+    got.forEach(it => removeItem(it.id));
+    const b = addItem('ten', cx, cy, { mem });
+    if (!b) return;
+    els.get(b.id).classList.add('born');
+    pushUndo(snap);
+    toast('🔗 十の まとまりに なったよ');
+  }, 380);
+}
 
 /* =========================== ペン =========================== */
 const drawing = new Map();   // pointerId → { stroke, snap }
@@ -1074,16 +1357,20 @@ ink.addEventListener('pointercancel', endDraw);
 
 /* =========================== ツールバー =========================== */
 function setMode(m) {
+  if (m !== 'tie' && typeof clearPicks === 'function') clearPicks();
   mode = m;
   $('modeMove').classList.toggle('on', m === 'move');
   $('modeDraw').classList.toggle('on', m === 'draw' && !straight);
   $('modeLine').classList.toggle('on', m === 'draw' && straight);
+  $('modeTie').classList.toggle('on', m === 'tie');
   stage.classList.toggle('drawing', m === 'draw');
+  stage.classList.toggle('tying', m === 'tie');
   document.querySelectorAll('.pen').forEach(b => b.classList.toggle('on', m === 'draw' && b.dataset.color === penColor));
 }
 $('modeMove').onclick = () => setMode('move');
 $('modeDraw').onclick = () => { straight = false; setMode('draw'); };
 $('modeLine').onclick = () => { straight = true; setMode('draw'); };   // ペンの いろは そのまま
+$('modeTie').onclick = () => { setMode('tie'); toast('🔗 10こ、タップで えらぶか ゆびで かこんでね'); };
 for (const c of PEN_COLORS) {
   const b = document.createElement('button');
   b.className = 'btn pen';
@@ -1108,6 +1395,7 @@ $('confirmNo').onclick = () => { $('confirmBg').hidden = true; };
 $('confirmYes').onclick = () => {
   $('confirmBg').hidden = true;
   dropGestures();
+  clearPicks();
   pushUndo(snapshot());
   items = TEACHER ? [] : items.filter(i => i.type === 'text');   // 子どもは もんだいカードを のこす
   strokes = [];
@@ -1253,7 +1541,10 @@ function stateData() {
   const data = {
     v: 1,
     b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color, bg.split],
-    i: items.map(it => it.type === 'text' ? [it.type, r(it.x), r(it.y), it.text, it.fs] : [it.type, r(it.x), r(it.y)]),
+    // 4つめ：もんだいカードは 文字、十の まとまりは 中の 10こ、色が ぬけた ものは 1
+    i: items.map(it => it.type === 'text' ? [it.type, r(it.x), r(it.y), it.text, it.fs]
+      : it.type === 'ten' ? [it.type, r(it.x), r(it.y), it.mem]
+      : it.off ? [it.type, r(it.x), r(it.y), 1] : [it.type, r(it.x), r(it.y)]),
     s: strokes.map(st => [st.color, st.pts.filter((p, k) => k % 2 === 0 || k === st.pts.length - 1).flatMap(p => [r(p[0]), r(p[1])])]),
   };
   return data;
@@ -1275,6 +1566,7 @@ async function unpackState(str) {
 // 文字列から もどした 盤面を つくる（知らない 種類や おかしな 数は すてる）
 function applyState(data) {
   dropGestures();
+  clearPicks();
   const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
   const [kind, grid, note, color, sdir] = Array.isArray(data.b) ? data.b : [];
   if (BG_KINDS.some(k => k.id === kind) && kind !== 'image') bg.kind = kind;
@@ -1291,7 +1583,11 @@ function applyState(data) {
       it.text = String(a[3] || '').slice(0, 400);
       it.fs = TEXT_SIZES.some(s => s.id === a[4]) ? a[4] : 34;
       if (!it.text) continue;
-    }
+    } else if (type === 'ten') {
+      // 中の 10こが そろって いない ものは すてる
+      if (!Array.isArray(a[3]) || a[3].length !== 10 || !a[3].every(memValid)) continue;
+      it.mem = a[3].slice();
+    } else if (PIECES[type].kind === 'count' && a[3] === 1) it.off = true;
     items.push(it);
   }
   for (const st of (Array.isArray(data.s) ? data.s : []).slice(0, 500)) {
@@ -1425,17 +1721,17 @@ document.addEventListener('drop', e => {
 
 /* =========================== しゃしん =========================== */
 // 素材の SVG を 画像にして おいておき、ボードを 1まいの 絵に かきなおす
-const imgCache = {};
-function pieceImage(type) {
-  if (!imgCache[type]) {
-    imgCache[type] = new Promise(res => {
+const imgCache = new Map();   // 絵の 文字 → 画像（色ぬけ・十の まとまりも 絵ごとに おぼえる）
+function pieceImage(svgText) {
+  if (!imgCache.has(svgText)) {
+    imgCache.set(svgText, new Promise(res => {
       const img = new Image();
       img.onload = () => res(img);
       img.onerror = () => res(null);
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(PIECES[type].svg);
-    });
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgText);
+    }));
   }
-  return imgCache[type];
+  return imgCache.get(svgText);
 }
 function drawTextCard(ctx, it) {
   const L = layoutText(it.text, it.fs), l = it.x - L.w / 2, t = it.y - L.h / 2;
@@ -1454,7 +1750,7 @@ async function makePhoto() {
   const order = [...items].sort((a, b) => (isHolder(b.type) - isHolder(a.type)) || (a.z - b.z));
   for (const it of order) {
     if (it.type === 'text') { drawTextCard(ctx, it); continue; }
-    const img = await pieceImage(it.type), d = PIECES[it.type];
+    const img = await pieceImage(itemSvg(it)), d = PIECES[it.type];
     if (img) ctx.drawImage(img, it.x - d.w / 2, it.y - d.h / 2, d.w, d.h);
   }
   for (const s of strokes) drawStroke(ctx, s);
@@ -1586,9 +1882,9 @@ if (switched) {
     if (tbDrags.has(pid)) endTb(ev);
     if (drags.has(pid)) endDrag(ev);
     if (drawing.has(pid)) endDraw(ev);
-    
+    if (lasso && lasso.pid === pid) endLasso(ev);
   };
-  const has = pid => tbDrags.has(pid) || drags.has(pid) || drawing.has(pid);
+  const has = pid => tbDrags.has(pid) || drags.has(pid) || drawing.has(pid) || (lasso && lasso.pid === pid);
   // はなした しらせが、ふだんの 場所（道具箱・ボード）に とどかなかった とき
   window.addEventListener('pointerup', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointerup'); });
   window.addEventListener('pointercancel', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointercancel'); });
