@@ -90,7 +90,20 @@ for r in tl:
     elif r[1] - r[0] > w // 4:
         # 色でうまった マス（わくと絵が つながって 1本の太い線に見える）は、その左右の はしを わくとする
         lines += [(r[0], r[0]), (r[1], r[1])]
-if len(lines) == 6 and all(lines[i + 1][0] - lines[i][1] > w // 5 for i in (0, 2, 4)):
+# 絵の中の 細いたて線（矢など）が まじって 6本より多いときは、
+# 「3つのマスの はばが そろい、マスの間の すき間も そろう」6本の組を えらぶ
+from itertools import combinations
+best = None
+for c in combinations(lines, 6):
+    ws = [c[i + 1][1] - c[i][0] for i in (0, 2, 4)]
+    gs = [c[2][0] - c[1][1], c[4][0] - c[3][1]]
+    if min(ws) <= w // 5 or min(gs) < 0:
+        continue
+    score = max(ws) - min(ws) + abs(gs[0] - gs[1])
+    if best is None or score < best[0]:
+        best = (score, c)
+if best and best[0] <= 30:
+    lines = best[1]
     xs = [(lines[i][0], lines[i + 1][1]) for i in (0, 2, 4)]
 # 絵が小さいマスがあると 上の方法では3つそろわないことがある。わくの線で見つかれば それでよい
 if len(xs) != 3 or len(ys) != 2:
