@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>代数タイルボード</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* ===== 色のきまり（ほかの数学教材とそろえる） =====
+     正（プラス）＝オレンジ・実線 ／ 負（マイナス）＝青・点線＋「−」
+     そろった＝緑 ／ まちがい・注意＝赤紫（⚠ の記号もつける） */
+  :root {
+    --ink: #263238; --accent: #3949ab; --accent-dark: #283593; --soft: #c5cae9;
+    --ok: #2e7d32; --warn: #ad1457; --draw: #ff6f00;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3f4fb 0%, #dfe3f5 100%);
+    height: 100dvh; overflow: hidden;
+    display: flex; flex-direction: column; padding: 6px 8px 8px; gap: 6px;
+    -webkit-user-select: none; user-select: none;
+  }
+  button, select { font-family: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ===== 上の ツールバー ===== */
+  .topbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; padding: 4px 8px; min-height: 44px; display: inline-flex; align-items: center; }
+  h1 { margin: 0 4px 0 0; font-size: clamp(1rem, 1.8vw, 1.25rem); color: var(--accent-dark); white-space: nowrap; }
+  .spacer { flex: 1; }
+  .group { display: flex; gap: 4px; align-items: center; background: rgba(255,255,255,0.55); border-radius: 14px; padding: 3px; }
+  .group .cap { font-size: 0.8rem; font-weight: bold; color: var(--accent-dark); padding: 0 2px 0 6px; }
+  .btn {
+    min-height: 48px; min-width: 48px; padding: 2px 8px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 0.95rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.12); line-height: 1.15;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .btn .ic { font-size: 1.25rem; }
+  .btn:active { transform: translateY(2px); box-shadow: none; }
+  .btn:disabled { opacity: 0.35; cursor: default; transform: none; box-shadow: none; }
+  .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.draw.on { background: var(--draw); border-color: var(--draw); }
+  .pen { min-width: 44px; width: 44px; padding: 0; }
+  .pen .dot { width: 22px; height: 22px; border-radius: 50%; border: 3px solid rgba(0,0,0,0.15); }
+  .pen.on { background: #fff3e0; border-color: var(--draw); border-width: 4px; }
+  .teacher-only { display: none !important; }
+  body.teacher .teacher-only { display: inline-flex !important; }
+
+  /* ===== 道具箱 と ボード ===== */
+  .main { flex: 1; min-height: 0; display: flex; gap: 8px; }
+  .toolbox {
+    width: 200px; flex: none; background: #fff; border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 6px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-content: start;
+    touch-action: pan-y; overflow-y: auto;
+  }
+  .toolbox.drop-ok { outline: 4px dashed #ef9a9a; outline-offset: -4px; background: #fff5f5; }
+  .tabs { grid-column: 1 / -1; display: flex; gap: 4px; }
+  .tabs button { flex: 1; min-height: 46px; border: 2px solid var(--soft); background: #fff; border-radius: 10px;
+                 font-weight: 900; font-size: 1rem; cursor: pointer; touch-action: manipulation; padding: 0; }
+  .tabs button.on.pos { background: #ef6c00; border-color: #ef6c00; color: #fff; }
+  .tabs button.on.neg { background: #1565c0; border-color: #1565c0; color: #fff; }
+  .tb-item {
+    min-height: 72px; border: 2px solid var(--soft); border-radius: 12px; background: #f7f8fe;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    cursor: grab; font-weight: bold; font-size: 0.85rem; touch-action: none; padding: 4px 2px;
+  }
+  .tb-item:active { background: #e8eaf6; }
+  .tb-item .tile { position: relative !important; left: auto !important; top: auto !important; pointer-events: none; }
+  .tb-note { grid-column: 1 / -1; font-size: 0.78rem; line-height: 1.45; color: #5c6bc0; padding: 4px 2px; }
+  .tb-note b { color: var(--accent-dark); }
+
+  .boardwrap { flex: 1; min-width: 0; position: relative; }
+  /* ボードは きまった大きさ（よこ1200×たて720）で作り、画面に合わせて まるごと拡大・縮小する */
+  .stage {
+    position: absolute; left: 0; top: 0; width: 1200px; height: 720px;
+    transform-origin: 0 0; background: #fff; border-radius: 18px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.12); outline: 6px solid transparent;
+    touch-action: none; overflow: hidden;
+  }
+  .stage.drawing { outline-color: var(--draw); }
+  .layer { position: absolute; inset: 0; pointer-events: none; }
+  .mats { z-index: 0; }
+  .tiles { z-index: 2; }
+  .ink { position: absolute; left: 0; top: 0; width: 1200px; height: 720px; z-index: 3; pointer-events: none; }
+  .stage.drawing .ink { pointer-events: auto; cursor: crosshair; }
+
+  /* ===== 上の 式の 表示（ボードの 中なので しゃしんにも 入る） ===== */
+  .hud { position: absolute; left: 0; top: 0; right: 0; height: 96px; z-index: 1; padding: 6px 16px 0;
+         display: flex; flex-direction: column; gap: 2px; pointer-events: none; }
+  .hud .task { font-size: 22px; font-weight: 900; color: var(--accent-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 30px; }
+  .hud .expr { font-size: 34px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .02em;
+               font-family: "Times New Roman", "Hiragino Mincho ProN", serif; }
+  .hud .expr .jp { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif; font-size: 22px; color: #5c6bc0; }
+  .hud .expr.ok { color: var(--ok); }
+  .status { position: absolute; right: 116px; bottom: 14px; z-index: 4; max-width: 600px; pointer-events: none;
+            font-size: 20px; font-weight: bold; line-height: 1.4; padding: 8px 14px; border-radius: 14px;
+            background: rgba(255,255,255,0.92); border: 3px solid var(--soft); }
+  .status.ok { border-color: var(--ok); color: var(--ok); background: #f1f8e9; }
+  .status.warn { border-color: var(--warn); color: var(--warn); background: #fce4ec; }
+  .status:empty { display: none; }
+  .trip { pointer-events: auto; margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .trip .btn { min-height: 44px; font-size: 0.9rem; }
+
+  /* ===== マット ===== */
+  .mat { position: absolute; border-radius: 16px; }
+  .mat .name { position: absolute; left: 12px; bottom: 8px; font-size: 16px; font-weight: bold; color: #9aa0bf; }
+  .mat-expr { background: #fffaf0; border: 3px dashed #ffcc80; }
+  .mat-side { background: #f7f9ff; border: 3px solid #c5cae9; }
+  .eqsign { position: absolute; font: 900 72px "Times New Roman", serif; color: var(--accent-dark); }
+  .mat-band { background: #eceff1; border: 3px solid #b0bec5; border-radius: 10px; }
+  .mat-band .name { left: auto; right: 10px; bottom: auto; top: 4px; }
+  .mat-inner { border: 3px solid #90a4ae; border-radius: 4px;
+               background-color: #fff;
+               background-image: linear-gradient(#eef1f5 1px, transparent 1px), linear-gradient(90deg, #eef1f5 1px, transparent 1px);
+               background-size: 36px 36px; }
+  .mat-corner { display: flex; align-items: center; justify-content: center; font: 900 36px sans-serif; color: #78909c; }
+
+  /* ===== タイル ===== */
+  .tile { position: absolute; left: 0; top: 0; border-radius: 4px; border: 2px solid rgba(0,0,0,0.35);
+          display: flex; align-items: center; justify-content: center; font-weight: 900; pointer-events: auto;
+          cursor: grab; font-family: "Times New Roman", serif; font-style: italic; }
+  .tile.neg { border-style: dashed; border-width: 3px; }
+  .tile.lift { filter: drop-shadow(0 6px 6px rgba(0,0,0,0.3)); cursor: grabbing; z-index: 10; }
+  .tile.pop { animation: pop .35s ease-in forwards; }
+  @keyframes pop { 0% { transform: scale(1); opacity: 1; } 40% { transform: scale(1.15); } 100% { transform: scale(0.2); opacity: 0; } }
+  .tile.flip { animation: flip .25s ease-out; }
+  @keyframes flip { 0% { transform: scaleX(0.1); } 100% { transform: scaleX(1); } }
+  .hidelabels .stage .tile span { visibility: hidden; }
+  /* 細い タイルは、さわれる はんいを 見た目より 少し 広げる */
+  .tile::before { content: ''; position: absolute; inset: -6px; }
+
+  /* ごみばこ（ボードの 右下） */
+  .trash { position: absolute; right: 12px; bottom: 12px; width: 92px; height: 92px; z-index: 1;
+           border: 4px dashed #cfd3e6; border-radius: 20px; display: flex; flex-direction: column;
+           align-items: center; justify-content: center; color: #8a90b0; font-weight: bold; font-size: 16px; pointer-events: none; }
+  .trash .ic { font-size: 38px; line-height: 1; }
+  .trash.hot { background: #ffebee; border-color: #e57373; color: #c62828; }
+
+  /* ===== ダイアログ ===== */
+  .dialog-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 80; display: flex; align-items: center; justify-content: center; }
+  .dialog { background: #fff; border-radius: 18px; padding: 18px 22px; width: min(640px, 94vw); max-height: 92vh; overflow-y: auto; box-shadow: 0 6px 24px rgba(0,0,0,0.25); }
+  .dialog h2 { margin: 0 0 10px; font-size: 1.15rem; color: var(--accent-dark); }
+  .dialog h3 { margin: 12px 0 6px; font-size: 1rem; color: var(--accent-dark); }
+  .dialog .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .dialog .row .btn { font-size: 1rem; }
+  .dialog .note { font-size: 0.85rem; color: #5c6bc0; margin: 8px 0 0; line-height: 1.5; }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 30px); background: #263238; color: #fff;
+           padding: 12px 20px; border-radius: 14px; font-weight: bold; opacity: 0; transition: .25s; z-index: 90; pointer-events: none; max-width: 92vw; }
+  .toast.show { opacity: 0.95; transform: translate(-50%, 0); }
+
+  /* ===== スマホの たて向き：道具箱を 下に ===== */
+  @media (max-width: 760px) {
+    .main { flex-direction: column-reverse; }
+    .toolbox { width: auto; height: 118px; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 88px; grid-template-rows: 46px 1fr; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; }
+    .tabs { grid-row: 1; grid-column: 1 / span 3; }
+    .tb-item { grid-row: 2; min-height: 0; }
+    .tb-note { display: none; }
+    h1 { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-link" href="../index.html">← もどる</a>
+  <h1>代数タイルボード</h1>
+  <div class="group" title="下じき（マット）をえらぶ">
+    <span class="cap">マット</span>
+    <button class="btn" data-mat="none">なし</button>
+    <button class="btn" data-mat="expr">式</button>
+    <button class="btn" data-mat="eq">方程式</button>
+    <button class="btn" data-mat="prod">かけ算</button>
+  </div>
+  <div class="group" title="タイルをタップしたときの動き（ながおしは、もう一方の動き）">
+    <span class="cap">タップ</span>
+    <button class="btn" id="tapFlip"><span class="ic">±</span>うらがえす</button>
+    <button class="btn" id="tapRot"><span class="ic">↻</span>まわす</button>
+  </div>
+  <div class="group">
+    <button class="btn" id="zeroAll" title="正と負の組（ゼロペア）をぜんぶ消す"><span class="ic">🧹</span>ゼロペア</button>
+    <button class="btn" id="lockEq" hidden title="いまの方程式を はじめの式として きめる"><span class="ic">🔒</span>この式で はじめる</button>
+    <button class="btn teacher-only" id="answer"><span class="ic">✨</span>こたえ</button>
+    <button class="btn" id="taskBtn"><span class="ic">📝</span>おだい</button>
+  </div>
+  <span class="spacer"></span>
+  <div class="group">
+    <button class="btn draw" id="drawBtn" title="ペンでかく"><span class="ic">✏️</span></button>
+    <button class="btn pen" data-pen="#e53935" hidden><span class="dot" style="background:#e53935"></span></button>
+    <button class="btn pen" data-pen="#263238" hidden><span class="dot" style="background:#263238"></span></button>
+    <button class="btn pen" data-pen="#2e7d32" hidden><span class="dot" style="background:#2e7d32"></span></button>
+    <button class="btn" id="inkClear" hidden title="ペンの線をぜんぶ消す"><span class="ic">🧽</span></button>
+  </div>
+  <div class="group">
+    <button class="btn" id="viewBtn" title="式・文字・すいつき・y の表示"><span class="ic">👁️</span></button>
+    <button class="btn" id="undo" title="ひとつもどす"><span class="ic">↩</span></button>
+    <button class="btn" id="reset" title="ぜんぶ消して、はじめから"><span class="ic">🗑️</span></button>
+    <button class="btn" id="photo" title="ボードをしゃしんにする"><span class="ic">📷</span></button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="toolbox" id="toolbox"></div>
+  <div class="boardwrap" id="wrap">
+    <div class="stage" id="stage">
+      <div class="layer mats" id="mats"></div>
+      <div class="hud"><div class="task" id="taskLine"></div><div class="expr" id="exprLine"></div></div>
+      <div class="status" id="status"></div>
+      <div class="trash" id="trash"><span class="ic">🗑️</span>すてる</div>
+      <div class="layer tiles" id="tiles"></div>
+      <canvas class="ink" id="ink" width="1200" height="720"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- 表示の せってい -->
+<div class="dialog-bg" id="viewBg" hidden>
+  <div class="dialog">
+    <h2>👁️ ひょうじ</h2>
+    <div class="row">
+      <button class="btn" id="vExpr">式を 見せる</button>
+      <button class="btn" id="vLabel">タイルの 文字</button>
+      <button class="btn" id="vSnap">🧲 すいつく</button>
+      <button class="btn" id="vZero">ゼロペアを 重ねると 消える</button>
+      <button class="btn" id="vY">y の タイルも つかう</button>
+    </div>
+    <p class="note">「式を 見せる」を けすと、式が「？」になります。タイルを見て 式を 考えるときに つかいます。<br>
+      ゼロペア：＋x と −x のように、正と負の 同じタイルの 組。あわせると 0 になります。</p>
+    <div class="row" style="margin-top:12px"><button class="btn" id="viewClose">とじる</button></div>
+  </div>
+</div>
+
+<!-- おだい -->
+<div class="dialog-bg" id="taskBg" hidden>
+  <div class="dialog">
+    <h2>📝 おだい</h2>
+    <h3>式マット（中1 文字式）</h3>
+    <div class="row">
+      <button class="btn" data-task="make">🎲 式を つくろう</button>
+      <button class="btn" data-task="simp">🎲 まとめよう（同類項）</button>
+    </div>
+    <h3>方程式マット（中1 一次方程式）</h3>
+    <div class="row">
+      <button class="btn" data-task="eq1">🎲 x の係数が 1</button>
+      <button class="btn" data-task="eq2">🎲 両辺に x</button>
+      <button class="btn" data-task="eq3">🎲 負の数も</button>
+    </div>
+    <h3>かけ算マット（中3 展開と因数分解）</h3>
+    <div class="row">
+      <button class="btn" data-task="exp">🎲 展開しよう</button>
+      <button class="btn" data-task="fac">🎲 因数分解しよう</button>
+      <button class="btn" data-task="facn">🎲 因数分解（負の数も）</button>
+      <button class="btn" data-task="sq">🎲 (x + a)² の形</button>
+    </div>
+    <p class="note">展開：(x + 2)(x + 3) のような かけ算を、たし算の式 x² + 5x + 6 に なおすこと。<br>
+      因数分解：たし算の式を、かけ算の形に なおすこと（展開の 反対）。タイルでは、ぜんぶを 長方形に ならべて、たて と よこ を しらべます。<br>
+      負の数がある 因数分解は、ゼロペアを 足すと 長方形が つくれることが あります。</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="taskClear">おだいを けす</button>
+      <button class="btn" id="taskClose">とじる</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   代数タイルボード
+   ---------------------------------------------------------------------
+   ・タイル：1（小さい正方形）・x（細長い長方形）・x²（大きい正方形）、
+             y・y²・xy（「y の タイルも つかう」で出る）
+   ・正（＋）はオレンジ・実線、負（−）は青・点線と「−」
+   ・マット：なし／式／方程式（左辺＝右辺）／かけ算（たて×よこ＝面積）
+   ・タイルの大きさ：1 は 36px。x は 1 の整数倍に ならない長さ（140px）にして、
+     「x は 1 が いくつ分」と 決まらないことを 見せる。y は 96px。
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const W = 1200, H = 720;
+const U = 36, X = 140, Y = 96;               // 1・x・y の長さ（ボードの点の数）
+const TEACHER = new URLSearchParams(location.search).get('teacher') === '1';
+if (TEACHER) document.body.classList.add('teacher');
+
+/* ---- タイルの しゅるい：もとの大きさ（よこ・たて）と 文字 ---- */
+const KINDS = {
+  x2: { w: X, h: X, name: 'x²' },
+  xy: { w: X, h: Y, name: 'xy' },
+  y2: { w: Y, h: Y, name: 'y²' },
+  x:  { w: X, h: U, name: 'x' },
+  y:  { w: Y, h: U, name: 'y' },
+  '1': { w: U, h: U, name: '1' }
+};
+const ORDER = ['x2', 'xy', 'y2', 'x', 'y', '1'];   // 式に書く じゅん
+// 色（正はオレンジのなかま、負は青のなかま。うすい色には こい文字）
+const COLOR = {
+  1:  { x2: ['#ef6c00', '#fff'], xy: ['#ff8f00', '#fff'], y2: ['#d84315', '#fff'], x: ['#ffb74d', '#4e2600'], y: ['#ff8a65', '#4e1a00'], '1': ['#ffe0b2', '#4e2600'] },
+  '-1': { x2: ['#1565c0', '#fff'], xy: ['#1e88e5', '#fff'], y2: ['#283593', '#fff'], x: ['#64b5f6', '#0d2a4a'], y: ['#7986cb', '#fff'], '1': ['#bbdefb', '#0d2a4a'] }
+};
+const dims = t => { const k = KINDS[t.kind]; return t.rot ? { w: k.h, h: k.w } : { w: k.w, h: k.h }; };
+const label = t => (t.sign < 0 ? '−' : '') + KINDS[t.kind].name;
+
+/* ---- ボードの 状態 ---- */
+let tiles = [];          // { id, kind, rot(0/1), sign(1/-1), x, y }（x, y は左上）
+let strokes = [];        // ペンの線
+let mat = 'expr';        // none / expr / eq / prod
+let task = null;         // おだい { type, text, target, ... }
+let lockEq = null;       // 方程式の はじめの式 { text, sol }
+let tapMode = 'flip';    // タップで うらがえす／まわす
+let palSign = 1;         // 道具箱の ＋／−
+let nextId = 1;
+let tripStreak = 0;      // つりあいが くずれたままの 回数
+const DEFAULTS = { showExpr: true, labels: true, snap: true, zero: true, useY: false };
+let settings = { ...DEFAULTS };
+
+/* =========================== ワークシート =========================== */
+Worksheet.init({
+  title: '代数タイルボード',
+  question: 'タイルを ならべたり 消したりする 操作は、式の計算の どんな きまりと 同じだろうか？',
+  predictions: ['同じ文字の タイルだけ まとめられる', '正と負の 組（ゼロペア）は 0 になる', 'たて × よこ の 長方形の 面積が かけ算の 答えになる', 'わからない'],
+  fields: [
+    { key: 'mat', label: 'マット', math: false },
+    { key: 'shiki', label: '式', math: false },
+    { key: 'memo', label: 'わかったこと', math: false }
+  ],
+  operationNote: 'タイルを ならべて、式が できたら「記録する」を おそう。',
+  capture: () => {
+    const s = exprText();
+    if (!s) { toast('先に タイルを ならべてね'); return null; }
+    return { mat: { none: 'なし', expr: '式', eq: '方程式', prod: 'かけ算' }[mat], shiki: s, memo: '' };
+  },
+  summaryHint: '「x と 1 は まとめられない」「＋x と −x で 0」「(x + a)(x + b) は たて x + a、よこ x + b の 長方形」のように 書いてみよう。',
+  open: false,
+  teacher: {
+    hint: '式マットで 同類項（同じ大きさのタイルだけ まとめられる）とゼロペア、方程式マットで「両辺から同じものをとる」（つりあい）、かけ算マットで面積図としての展開・因数分解を扱う。x の長さは 1 の整数倍にしていないので、「x は 1 が何こ分か決まらない」ことにも気づかせたい。',
+    answer: '同じ大きさ（同じ文字・同じ次数）のタイルだけをまとめられる＝同類項。正と負の組は 0。方程式は両辺に同じ操作をしてもつりあいは変わらない。(x + a)(x + b) は たて × よこ の長方形で、x² が1こ、x が a + b こ、1 が ab こ。'
+  }
+});
+try { Object.assign(settings, Worksheet.appData('settings') || {}); } catch (e) { /* 読めなくても よい */ }
+const saveSettings = () => { try { Worksheet.appData('settings', { ...settings }); } catch (e) { /* 保存できなくても よい */ } };
+
+/* =========================== マットの 形 =========================== */
+// どの場所が どのはんいか（タイルの まん中で きめる）
+const TOP = 104;                                     // 上の式の表示の下から マットを置く
+const G = {
+  expr: { x: 16, y: TOP, w: 1060, h: H - TOP - 12 },
+  eqL:  { x: 16, y: TOP, w: 500, h: H - TOP - 12 },
+  eqR:  { x: 578, y: TOP, w: 500, h: H - TOP - 12 },
+  // かけ算マット：左上の ×、上の帯（よこ）、左の帯（たて）、中（面積）
+  corner: { x: 24, y: TOP + 4, w: 60, h: 60 },
+  bandTop: { x: 92, y: TOP + 4, w: 984, h: 60 },
+  bandLeft: { x: 24, y: TOP + 72, w: 60, h: H - TOP - 88 },
+  inner: { x: 92, y: TOP + 72, w: 984, h: H - TOP - 88 }
+};
+const inR = (t, r) => { const d = dims(t), cx = t.x + d.w / 2, cy = t.y + d.h / 2; return cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h; };
+
+function drawMats() {
+  const m = $('mats');
+  m.innerHTML = '';
+  const add = (cls, r, name, html) => {
+    const d = document.createElement('div');
+    d.className = 'mat ' + cls;
+    Object.assign(d.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+    if (name) d.innerHTML = `<span class="name">${name}</span>`;
+    if (html) d.innerHTML = html;
+    m.appendChild(d);
+  };
+  if (mat === 'expr') add('mat-expr', G.expr, '式マット');
+  if (mat === 'eq') {
+    add('mat-side', G.eqL, '左辺');
+    add('mat-side', G.eqR, '右辺');
+    const s = document.createElement('div');
+    s.className = 'eqsign'; s.textContent = '=';
+    Object.assign(s.style, { left: '532px', top: (TOP + (H - TOP) / 2 - 50) + 'px' });
+    m.appendChild(s);
+  }
+  if (mat === 'prod') {
+    add('mat-band mat-corner', G.corner, '', '×');
+    add('mat-band', G.bandTop, 'よこ');
+    add('mat-band', G.bandLeft, '');
+    add('mat-inner', G.inner, '');
+    const t = document.createElement('div');
+    t.className = 'mat'; t.innerHTML = '<span class="name" style="position:static">たて</span>';
+    Object.assign(t.style, { left: '30px', top: (H - 50) + 'px' });
+    m.appendChild(t);
+  }
+  document.querySelectorAll('[data-mat]').forEach(b => b.classList.toggle('on', b.dataset.mat === mat));
+  $('lockEq').hidden = mat !== 'eq';
+}
+
+/* =========================== 式の 計算 =========================== */
+// 式は { x2: 係数, x: 係数, '1': 係数, ... } で持つ
+function polyOf(list) {
+  const p = {};
+  for (const t of list) p[t.kind] = (p[t.kind] || 0) + t.sign;
+  return p;
+}
+function polyStr(p) {
+  let s = '';
+  for (const k of ORDER) {
+    const c = p[k] || 0;
+    if (!c) continue;
+    const a = Math.abs(c), body = k === '1' ? String(a) : (a === 1 ? '' : a) + KINDS[k].name;
+    if (!s) s = (c < 0 ? '−' : '') + body;
+    else s += (c < 0 ? ' − ' : ' + ') + body;
+  }
+  return s || '0';
+}
+const nTerms = p => ORDER.filter(k => p[k]).length;
+const isEmpty = p => nTerms(p) === 0;
+const samePoly = (a, b) => ORDER.every(k => (a[k] || 0) === (b[k] || 0));
+const absSame = (a, b) => ORDER.every(k => Math.abs(a[k] || 0) === Math.abs(b[k] || 0));
+// かけ算（わくの タイルは x・y・1 だけ）
+const MUL = { 'x,x': 'x2', 'x,y': 'xy', 'y,x': 'xy', 'y,y': 'y2', 'x,1': 'x', '1,x': 'x', 'y,1': 'y', '1,y': 'y', '1,1': '1' };
+function polyMul(a, b) {
+  const p = {};
+  for (const i in a) for (const j in b) { const k = MUL[i + ',' + j]; p[k] = (p[k] || 0) + a[i] * b[j]; }
+  return p;
+}
+// 分数（方程式の 解）：既約分数の 文字列にする
+const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; };
+function fracStr(n, d) {
+  if (d < 0) { n = -n; d = -d; }
+  const g = gcd(n, d); n /= g; d /= g;
+  return d === 1 ? (n < 0 ? '−' : '') + Math.abs(n) : (n < 0 ? '−' : '') + Math.abs(n) + '/' + d;
+}
+// 方程式 a1x + b1 = a2x + b2 の 解（'all'＝どんな x でも、'none'＝解なし）
+function solve(L, R) {
+  const a = (L.x || 0) - (R.x || 0), b = (R['1'] || 0) - (L['1'] || 0);
+  if (a === 0) return b === 0 ? 'all' : 'none';
+  return fracStr(b, a);
+}
+const onlyX1 = p => ORDER.every(k => k === 'x' || k === '1' || !p[k]);
+
+/* ---- いまの マットで、どのタイルが どこに あるか ---- */
+function parts() {
+  if (mat === 'none') return { all: tiles };
+  if (mat === 'expr') return { all: tiles.filter(t => inR(t, G.expr)) };
+  if (mat === 'eq') return { L: tiles.filter(t => inR(t, G.eqL)), R: tiles.filter(t => inR(t, G.eqR)) };
+  return { top: tiles.filter(t => inR(t, G.bandTop)), left: tiles.filter(t => inR(t, G.bandLeft)), inner: tiles.filter(t => inR(t, G.inner)) };
+}
+// わくに置いた タイルの 長さ（よこの帯は はば、たての帯は 高さ）
+const lenKind = n => n === X ? 'x' : n === Y ? 'y' : '1';
+function factorOf(list, along) {
+  const p = {}; let bad = false;
+  for (const t of list) {
+    const d = dims(t), len = along === 'w' ? d.w : d.h, thick = along === 'w' ? d.h : d.w;
+    if (thick !== U) bad = true;                  // たおれていない（太さが 1 でない）
+    const k = lenKind(len); p[k] = (p[k] || 0) + t.sign;
+  }
+  return { p, bad };
+}
+const wrap = (p) => nTerms(p) > 1 ? `(${polyStr(p)})` : polyStr(p);
+// たて × よこ を 式に（どちらも かっこなら (x + 1)(x + 2)、それ以外は × を書く）
+function prodStr(a, b) {
+  const A = isEmpty(a) ? '？' : wrap(a), B = isEmpty(b) ? '？' : wrap(b);
+  return nTerms(a) > 1 && nTerms(b) > 1 ? A + B : A + ' × ' + B;
+}
+
+/* 式マット・方程式マット・かけ算マットの 「いまの式」を 文字にする（ワークシート用にも つかう） */
+function exprText() {
+  const P = parts();
+  if (mat === 'none' || mat === 'expr') return P.all.length ? polyStr(polyOf(P.all)) : '';
+  if (mat === 'eq') return (P.L.length || P.R.length) ? polyStr(polyOf(P.L)) + ' = ' + polyStr(polyOf(P.R)) : '';
+  const a = factorOf(P.left, 'h').p, b = factorOf(P.top, 'w').p, c = polyOf(P.inner);
+  if (isEmpty(a) && isEmpty(b) && isEmpty(c)) return '';
+  return `${prodStr(a, b)} = ${isEmpty(c) ? '？' : polyStr(c)}`;
+}
+
+/* =========================== 上の表示 と はんてい =========================== */
+let lastStatus = { cls: '', html: '' };
+function setStatus(cls, html) {
+  const s = $('status');
+  s.className = 'status ' + cls; s.innerHTML = html;
+  lastStatus = { cls, html };
+}
+function update(fromAction) {
+  const P = parts();
+  const e = $('exprLine');
+  e.classList.remove('ok');
+  $('taskLine').textContent = task ? '📝 ' + task.text : (lockEq ? '🔒 はじめの式：' + lockEq.text : '');
+  let txt = exprText(), st = ['', ''];
+  const hide = !settings.showExpr;
+
+  if (mat === 'expr' || mat === 'none') {
+    const p = P.all.length ? polyOf(P.all) : null;
+    if (task && p && (task.type === 'make' || task.type === 'simp')) {
+      if (task.type === 'make' && samePoly(p, task.target)) {
+        st = ['ok', '✅ できた！ ' + polyStr(task.target)];
+      } else if (task.type === 'simp') {
+        const zeroLeft = ORDER.some(k => P.all.some(t => t.kind === k && t.sign > 0) && P.all.some(t => t.kind === k && t.sign < 0));
+        if (!zeroLeft && samePoly(p, task.target)) st = ['ok', '✅ まとまった！ ' + polyStr(task.target) + '<br><small>のこった タイルを 式に すると…</small>'];
+        else if (zeroLeft) st = ['', '＋ と − の 同じタイルの 組（ゼロペア）を 重ねて 消そう'];
+      }
+    }
+    if (p && mat === 'expr' && !task && P.all.length !== tiles.length) st = ['', '式マットの 外の タイルは 式に 入らないよ'];
+    e.innerHTML = !txt ? '<span class="jp">タイルを 左の 道具箱から ならべよう</span>' : (hide ? '式：？' : (mat === 'none' ? '' : '') + txt);
+    if (mat === 'none' && !txt) e.innerHTML = '<span class="jp">マット なし：自由に ならべよう</span>';
+    if (st[0] === 'ok') e.classList.add('ok');
+  }
+
+  if (mat === 'eq') {
+    const L = polyOf(P.L), R = polyOf(P.R);
+    if (!P.L.length && !P.R.length) {
+      e.innerHTML = '<span class="jp">左辺と 右辺に タイルを ならべて、方程式を つくろう</span>';
+    } else {
+      e.innerHTML = hide ? '？ = ？' : txt;
+      if (!onlyX1(L) || !onlyX1(R)) st = ['warn', '⚠ 方程式マットでは x と 1 の タイルだけ つかおう'];
+      else {
+        const sol = solve(L, R);
+        const cur = lockEq ? (sol === lockEq.sol) : true;
+        // x = ○ の形（どちらかが x 1こだけ、もう一方は 数だけ）
+        const single = (A, B) => (A.x || 0) !== 0 && nTerms(A) === 1 && !(B.x || 0);
+        if (lockEq && !cur) {
+          if (fromAction) tripStreak++;
+          const warnFinal = tripStreak >= 2 || single(L, R) || single(R, L);
+          st = ['warn', '⚖ つりあいが くずれているよ。もう かたほうの 辺にも 同じことを しよう' +
+            (warnFinal ? '<br><b>⚠ あなたのつまずき：かたほうの辺だけ かえた</b><br><small>両辺から 同じものを とる（同じものを たす）と、つりあいは かわらない</small><div class="trip"><button class="btn" data-act="undo">↩ ひとつもどす</button><button class="btn" data-act="relock">はじめの式に もどす</button></div>' : '')];
+        } else {
+          tripStreak = 0;
+          if (single(L, R) || single(R, L)) {
+            const A = single(L, R) ? L : R, B = A === L ? R : L, a = A.x, b = B['1'] || 0;
+            if (a === 1) { st = ['ok', `🎉 とけた！ x = ${fracStr(b, 1)}`]; e.classList.add('ok'); }
+            else if (a === -1) st = ['', `あと すこし：−x = ${polyStr(B)}。両辺の タイルを ぜんぶ うらがえすと？`];
+            else st = ['', `あと すこし：${polyStr(A)} = ${polyStr(B)}。両辺を ${Math.abs(a)} つの 同じ グループに 分けると、x 1こ ぶんは？` + (TEACHER ? `<br><small>（先生：x = ${fracStr(b, a)}）</small>` : '')];
+          } else if (lockEq) st = ['ok', '⚖ つりあっている'];
+          else st = ['', '方程式が できたら「🔒 この式で はじめる」を おそう'];
+        }
+      }
+    }
+  }
+
+  if (mat === 'prod') {
+    const A = factorOf(P.left, 'h'), B = factorOf(P.top, 'w'), C = polyOf(P.inner);
+    if (isEmpty(A.p) && isEmpty(B.p) && isEmpty(C)) {
+      e.innerHTML = '<span class="jp">上と左の 帯に たて・よこ、中に 面積の タイルを ならべよう</span>';
+    } else {
+      e.innerHTML = hide ? '？ × ？ = ？' : txt;
+      if (A.bad || B.bad) st = ['warn', '⚠ 帯（たて・よこ）の タイルは、細い向きに まわして ならべよう'];
+      else if (!isEmpty(A.p) && !isEmpty(B.p) && !isEmpty(C)) {
+        const want = polyMul(A.p, B.p);
+        if (samePoly(want, C)) { st = ['ok', '✅ ぴったり！ たて × よこ ＝ 面積'];
+          e.classList.add('ok'); }
+        else if (absSame(want, C)) st = ['warn', '<b>⚠ あなたのつまずき：符号</b><br>大きさは あっているよ。<br>（＋）×（＋）＝（＋）、（−）×（−）＝（＋）、（＋）×（−）＝（−）'];
+        else st = ['', 'まだ ちがうよ。中が たて × よこ の 長方形に なっているかな'];
+      } else if (!isEmpty(C) && (isEmpty(A.p) || isEmpty(B.p))) st = ['', '中の タイルを 長方形に ならべて、たて と よこ の 長さを 帯に おこう'];
+      else if (isEmpty(C)) st = ['', '中を タイルで うめて、たて × よこ の 長方形を つくろう'];
+    }
+  }
+  setStatus(st[0], st[1]);
+  $('undo').disabled = hist.length === 0;
+}
+$('status').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  if (b.dataset.act === 'undo') undo();
+  if (b.dataset.act === 'relock' && lockEq) { pushHist(); restore(lockEq.snap, true); toast('はじめの式に もどしたよ'); }
+});
+
+/* =========================== タイルを かく =========================== */
+function tileEl(t, scale = 1) {
+  const d = dims(t), c = COLOR[t.sign][t.kind];
+  const el = document.createElement('div');
+  el.className = 'tile' + (t.sign < 0 ? ' neg' : '');
+  Object.assign(el.style, { width: d.w * scale + 'px', height: d.h * scale + 'px', background: c[0], color: c[1],
+    fontSize: Math.max(11, Math.min(30, Math.min(d.w, d.h) * 0.62) * scale) + 'px' });
+  el.innerHTML = `<span>${label(t)}</span>`;
+  return el;
+}
+const els = new Map();
+function render() {
+  const lay = $('tiles');
+  lay.innerHTML = ''; els.clear();
+  for (const t of tiles) {
+    const el = tileEl(t);
+    el.style.transform = `translate(${t.x}px, ${t.y}px)`;
+    el.dataset.id = t.id;
+    lay.appendChild(el); els.set(t.id, el);
+  }
+  update();
+}
+
+/* =========================== 道具箱 =========================== */
+function buildToolbox() {
+  const tb = $('toolbox');
+  tb.innerHTML = `<div class="tabs"><button class="pos ${palSign > 0 ? 'on' : ''}" data-s="1">＋ 正</button><button class="neg ${palSign < 0 ? 'on' : ''}" data-s="-1">− 負</button></div>`;
+  const list = [['x2', 0], ['x', 0], ['x', 1], ['1', 0]];
+  if (settings.useY) list.push(['y2', 0], ['y', 0], ['y', 1], ['xy', 0], ['xy', 1]);
+  for (const [kind, rot] of list) {
+    const t = { kind, rot, sign: palSign };
+    const b = document.createElement('div');
+    b.className = 'tb-item';
+    const big = Math.max(dims(t).w, dims(t).h);
+    b.appendChild(tileEl(t, Math.min(1, 56 / big)));
+    b.dataset.kind = kind; b.dataset.rot = rot;
+    tb.appendChild(b);
+  }
+  const n = document.createElement('div');
+  n.className = 'tb-note';
+  n.innerHTML = '<b>ドラッグ</b>で ボードへ。<br><b>タップ</b>：' + (tapMode === 'flip' ? 'うらがえす（＋⇔−）' : 'まわす') +
+    '<br><b>ながおし</b>：' + (tapMode === 'flip' ? 'まわす' : 'うらがえす') + '<br>道具箱か 🗑️ に もどすと すてる。<br>' +
+    '<a href="さんすうボード⑨ かずのブロック.html" style="color:#3949ab">小学校：かずのブロック（1・10・100）</a><br>' +
+    '<a href="同類項タイル.html" style="color:#3949ab">同類項タイル</a>・<a href="乗法公式タイル.html" style="color:#3949ab">乗法公式タイル</a>';
+  tb.appendChild(n);
+  tb.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { palSign = +b.dataset.s; buildToolbox(); });
+}
+$('toolbox').addEventListener('pointerdown', e => {
+  const it = e.target.closest('.tb-item'); if (!it || drawing) return;
+  e.preventDefault();
+  const p = toStage(e), t = { id: nextId++, kind: it.dataset.kind, rot: +it.dataset.rot, sign: palSign, x: 0, y: 0 };
+  const d = dims(t); t.x = p.x - d.w / 2; t.y = p.y - d.h / 2;
+  pushHist();
+  tiles.push(t); render();
+  startDrag(e, t, true);
+});
+
+/* =========================== ボードの 大きさ =========================== */
+let scale = 1;
+function layout() {
+  const r = $('wrap').getBoundingClientRect();
+  scale = Math.min(r.width / W, r.height / H);
+  const st = $('stage');
+  st.style.transform = `scale(${scale})`;
+  st.style.left = (r.width - W * scale) / 2 + 'px';
+  st.style.top = '0px';
+}
+window.addEventListener('resize', layout);
+function toStage(e) {
+  const r = $('stage').getBoundingClientRect();
+  return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale };
+}
+
+/* =========================== うごかす =========================== */
+let drag = null;
+function startDrag(e, t, fresh) {
+  const p = toStage(e);
+  drag = { t, dx: p.x - t.x, dy: p.y - t.y, sx: e.clientX, sy: e.clientY, moved: !!fresh, fresh, long: null, id: e.pointerId };
+  const el = els.get(t.id);
+  el.classList.add('lift');
+  $('tiles').appendChild(el);                              // いちばん上に
+  if (!fresh) {
+    drag.long = setTimeout(() => {                         // ながおし：もう一方の 動き
+      if (drag && !drag.moved) { const t2 = drag.t; endLift(); drag = null; pushHist(); tapAction(t2, tapMode === 'flip' ? 'rot' : 'flip'); }
+    }, 550);
+  }
+}
+$('tiles').addEventListener('pointerdown', e => {
+  const el = e.target.closest('.tile'); if (!el || drawing) return;
+  e.preventDefault();
+  const t = tiles.find(q => q.id === +el.dataset.id); if (!t) return;
+  startDrag(e, t, false);
+});
+window.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 8) { drag.moved = true; clearTimeout(drag.long); pushHist(); }
+  if (!drag.moved) return;
+  const p = toStage(e), t = drag.t;
+  t.x = p.x - drag.dx; t.y = p.y - drag.dy;
+  els.get(t.id).style.transform = `translate(${t.x}px, ${t.y}px)`;
+  const over = overDelete(e);
+  $('trash').classList.toggle('hot', over === 'trash');
+  $('toolbox').classList.toggle('drop-ok', over === 'box');
+});
+window.addEventListener('pointerup', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  clearTimeout(drag.long);
+  const t = drag.t, moved = drag.moved;
+  const over = overDelete(e);
+  endLift(); drag = null;
+  $('trash').classList.remove('hot'); $('toolbox').classList.remove('drop-ok');
+  if (!moved) { pushHist(); tapAction(t, tapMode); return; }
+  if (over) { tiles = tiles.filter(q => q !== t); render(); update(true); return; }
+  dropTile(t);
+});
+window.addEventListener('pointercancel', () => { if (drag) { clearTimeout(drag.long); endLift(); drag = null; render(); } });
+function endLift() { if (drag) { const el = els.get(drag.t.id); if (el) el.classList.remove('lift'); } }
+function overDelete(e) {
+  const b = $('toolbox').getBoundingClientRect();
+  if (e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom) return 'box';
+  const tr = $('trash').getBoundingClientRect();
+  if (e.clientX >= tr.left && e.clientX <= tr.right && e.clientY >= tr.top && e.clientY <= tr.bottom) return 'trash';
+  const s = $('stage').getBoundingClientRect();
+  if (e.clientX < s.left - 10 || e.clientX > s.right + 10 || e.clientY < s.top - 10 || e.clientY > s.bottom + 10) return 'box';
+  return null;
+}
+
+/* タップ：うらがえす（正⇔負）／まわす（たて⇔よこ。まん中を中心に） */
+function tapAction(t, how) {
+  if (how === 'flip') t.sign = -t.sign;
+  else {
+    const d = dims(t); if (d.w === d.h) { render(); toast('正方形は まわしても 同じ形だよ'); return; }
+    const cx = t.x + d.w / 2, cy = t.y + d.h / 2; t.rot = 1 - t.rot;
+    const d2 = dims(t); t.x = cx - d2.w / 2; t.y = cy - d2.h / 2;
+    snapTile(t);
+  }
+  render();
+  const el = els.get(t.id); if (el && how === 'flip') el.classList.add('flip');
+  update(true);
+}
+
+/* 置いたとき：①ゼロペアなら消す ②となりの タイルや マットの線に すいつく */
+function dropTile(t) {
+  if (settings.zero) {
+    const d = dims(t);
+    const o = tiles.find(q => q !== t && q.kind === t.kind && q.sign === -t.sign && dims(q).w === d.w &&
+      overlap(t, q) >= 0.45 * d.w * d.h);
+    if (o) { removePair(t, o); return; }
+  }
+  snapTile(t);
+  render(); update(true);
+}
+function overlap(a, b) {
+  const da = dims(a), db = dims(b);
+  const w = Math.min(a.x + da.w, b.x + db.w) - Math.max(a.x, b.x), h = Math.min(a.y + da.h, b.y + db.h) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+function removePair(a, b, quiet) {
+  [a, b].forEach(t => { const el = els.get(t.id); if (el) el.classList.add('pop'); });
+  tiles = tiles.filter(q => q !== a && q !== b);
+  setTimeout(() => { render(); update(true); }, 330);
+  if (!quiet) toast(`ゼロペア：${label(a)} と ${label(b)} で 0`);
+}
+function snapTile(t) {
+  // かけ算マットの 帯の中は、帯の まん中の線に そろえる
+  const d = dims(t);
+  if (mat === 'prod') {
+    if (inR(t, G.bandTop)) t.y = G.bandTop.y + G.bandTop.h / 2 - d.h / 2;
+    if (inR(t, G.bandLeft)) t.x = G.bandLeft.x + G.bandLeft.w / 2 - d.w / 2;
+  }
+  if (!settings.snap) return;
+  const TH = 16;
+  const xs = [], ys = [];
+  for (const o of tiles) {
+    if (o === t) continue;
+    const e = dims(o);
+    xs.push(o.x, o.x + e.w, o.x - d.w, o.x + e.w - d.w);
+    ys.push(o.y, o.y + e.h, o.y - d.h, o.y + e.h - d.h);
+  }
+  if (mat === 'prod') { xs.push(G.inner.x); ys.push(G.inner.y); }
+  const best = (v, arr) => { let b = v, bd = TH; for (const a of arr) { const dd = Math.abs(a - v); if (dd < bd) { bd = dd; b = a; } } return b; };
+  // 帯の中では、帯の 向きと ちがう方向だけ すいつかせる
+  const inTop = mat === 'prod' && inR(t, G.bandTop), inLeft = mat === 'prod' && inR(t, G.bandLeft);
+  if (!inLeft) t.x = best(t.x, xs);
+  if (!inTop) t.y = best(t.y, ys);
+}
+
+/* ゼロペアを ぜんぶ 消す（同じ はんいの中で、同じ大きさの 正と負を 組にする） */
+$('zeroAll').onclick = () => {
+  const P = parts(), groups = mat === 'eq' ? [P.L, P.R] : mat === 'prod' ? [P.top, P.left, P.inner] : [P.all];
+  const gone = new Set();
+  for (const g of groups) for (const k of ORDER) {
+    const pos = g.filter(t => t.kind === k && t.sign > 0), neg = g.filter(t => t.kind === k && t.sign < 0);
+    for (let i = 0; i < Math.min(pos.length, neg.length); i++) { gone.add(pos[i]); gone.add(neg[i]); }
+  }
+  if (!gone.size) { toast('ゼロペアは ないよ'); return; }
+  pushHist();
+  gone.forEach(t => { const el = els.get(t.id); if (el) el.classList.add('pop'); });
+  tiles = tiles.filter(t => !gone.has(t));
+  setTimeout(() => { render(); update(true); }, 330);
+  toast(`ゼロペアを ${gone.size / 2} 組 消したよ`);
+};
+
+/* =========================== もどす・リセット =========================== */
+let hist = [];
+const snapState = () => JSON.stringify({ tiles, strokes, mat, task, lockEq, nextId });
+function pushHist() { hist.push(snapState()); if (hist.length > 80) hist.shift(); $('undo').disabled = false; }
+function restore(s, keepLock) {
+  const o = JSON.parse(s);
+  tiles = o.tiles; strokes = o.strokes; mat = o.mat; task = o.task; nextId = o.nextId;
+  if (!keepLock) lockEq = o.lockEq;
+  drawMats(); render(); redrawInk();
+}
+function undo() { if (!hist.length) return; restore(hist.pop()); tripStreak = 0; update(); }
+$('undo').onclick = undo;
+$('reset').onclick = () => {
+  if (!tiles.length && !strokes.length && !task) return;
+  if (!confirm('タイルと ペンの線を ぜんぶ 消して、はじめからに しますか？')) return;
+  pushHist();
+  tiles = []; strokes = []; task = null; lockEq = null; tripStreak = 0;
+  render(); redrawInk();
+};
+
+/* =========================== マットの 切りかえ =========================== */
+document.querySelectorAll('[data-mat]').forEach(b => b.onclick = () => {
+  if (mat === b.dataset.mat) return;
+  pushHist();
+  mat = b.dataset.mat; lockEq = null; tripStreak = 0;
+  if (task && task.mat !== mat) task = null;
+  drawMats(); render();
+});
+function setTap(m) {
+  tapMode = m;
+  $('tapFlip').classList.toggle('on', m === 'flip'); $('tapRot').classList.toggle('on', m === 'rot');
+  buildToolbox();
+}
+$('tapFlip').onclick = () => setTap('flip');
+$('tapRot').onclick = () => setTap('rot');
+$('lockEq').onclick = () => {
+  const P = parts(), L = polyOf(P.L), R = polyOf(P.R);
+  if (!P.L.length || !P.R.length) { toast('左辺と 右辺の 両方に タイルを おいてね'); return; }
+  if (!onlyX1(L) || !onlyX1(R)) { toast('x と 1 の タイルだけで つくってね'); return; }
+  const sol = solve(L, R);
+  if (sol === 'all' || sol === 'none') { toast('この式は x が 1つに きまらないよ'); return; }
+  lockEq = { text: polyStr(L) + ' = ' + polyStr(R), sol, snap: snapState() };
+  tripStreak = 0; update(); toast('🔒 この式で はじめるよ。両辺から 同じものを とっていこう');
+};
+
+/* =========================== ひょうじの せってい =========================== */
+function applySettings() {
+  document.body.classList.toggle('hidelabels', !settings.labels);
+  const set = (id, on) => $(id).classList.toggle('on', on);
+  set('vExpr', settings.showExpr); set('vLabel', settings.labels); set('vSnap', settings.snap); set('vZero', settings.zero); set('vY', settings.useY);
+  buildToolbox(); update();
+}
+$('viewBtn').onclick = () => { $('viewBg').hidden = false; };
+$('viewClose').onclick = () => { $('viewBg').hidden = true; };
+[['vExpr', 'showExpr'], ['vLabel', 'labels'], ['vSnap', 'snap'], ['vZero', 'zero'], ['vY', 'useY']].forEach(([id, k]) => {
+  $(id).onclick = () => { settings[k] = !settings[k]; saveSettings(); applySettings(); };
+});
+
+/* =========================== おだい（乱数。答えを 先に きめてから 式を つくる） =========================== */
+const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+let lastTask = '';
+function tilesFor(p) {          // 式 → タイルの ならび（大きいもの から）
+  const out = [];
+  for (const k of ORDER) { const c = p[k] || 0; for (let i = 0; i < Math.abs(c); i++) out.push({ id: nextId++, kind: k, rot: 0, sign: c > 0 ? 1 : -1, x: 0, y: 0 }); }
+  return out;
+}
+// はんい r の中に、左上から つめて ならべる（同じ しゅるいは 同じ 行に）
+function arrange(list, r, gap = 8) {
+  let x = r.x + 16, y = r.y + 16, rowH = 0, prev = null;
+  for (const t of list) {
+    const d = dims(t);
+    if ((prev && prev !== t.kind + t.sign) || x + d.w > r.x + r.w - 16) {
+      if (prev && prev !== t.kind + t.sign && x + d.w + 24 <= r.x + r.w - 16 && d.h === rowH) { x += 16; }
+      else { x = r.x + 16; y += rowH + gap; rowH = 0; }
+    }
+    t.x = x; t.y = y; x += d.w + gap; rowH = Math.max(rowH, d.h); prev = t.kind + t.sign;
+  }
+  return list;
+}
+const P = (o) => o;   // 式を 書きやすく するため（{x: 2, '1': -3} など）
+function makeTask(type) {
+  let t, key, guard = 0;
+  do {
+    t = genTask(type); key = t.key;
+  } while (key === lastTask && ++guard < 20);   // 同じ問題が 続けて 出ないように
+  lastTask = key;
+  return t;
+}
+function genTask(type) {
+  if (type === 'make') {
+    const a = ri(-3, 3) || 2, b = ri(-4, 4) || -2, sq = Math.random() < 0.35 ? ri(1, 2) : 0;
+    const target = P({ x2: sq, x: a, 1: b });
+    return { type, mat: 'expr', target, text: `${polyStr(target)} を タイルで つくろう`, key: polyStr(target), tiles: [] };
+  }
+  if (type === 'simp') {
+    // 答え（まとめた式）を 先にきめて、ゼロペアを まぜる
+    const a = ri(-3, 3), b = ri(-4, 4), za = ri(1, 2), zb = ri(1, 3);
+    const target = P({ x: a, 1: b });
+    if (!a && !b) return genTask(type);
+    const e1 = P({ x: a + za, 1: b - zb }), e2 = P({ x: -za, 1: zb });
+    const list = tilesFor(e1).concat(tilesFor(e2));
+    list.sort(() => Math.random() - 0.5);
+    return { type, mat: 'expr', target, text: `(${polyStr(e1)}) + (${polyStr(e2)}) を まとめよう`, key: polyStr(e1) + polyStr(e2), tiles: list, scatter: true };
+  }
+  if (type === 'eq1' || type === 'eq2' || type === 'eq3') {
+    for (let g = 0; g < 200; g++) {
+      const s = type === 'eq3' ? ri(-4, 4) : ri(1, 5);
+      const a1 = type === 'eq1' ? 1 : ri(2, 3), a2 = type === 'eq1' ? 0 : type === 'eq2' ? ri(1, a1 - 1) : ri(-1, a1 - 1);
+      const b1 = type === 'eq3' ? ri(-4, 4) : ri(1, 5);
+      const b2 = a1 * s + b1 - a2 * s;
+      if (a1 === a2 || Math.abs(b2) > 9 || (type !== 'eq3' && b2 < 0) || (type === 'eq3' && a2 >= 0 && b1 >= 0 && b2 >= 0)) continue;
+      const L = P({ x: a1, 1: b1 }), R = P({ x: a2, 1: b2 });
+      return { type, mat: 'eq', L, R, text: `${polyStr(L)} = ${polyStr(R)} を とこう`, key: polyStr(L) + polyStr(R), ans: s };
+    }
+  }
+  if (type === 'exp') {
+    const a = ri(1, 4), b = ri(1, 3);
+    return { type, mat: 'prod', a, b, text: `(x + ${a})(x + ${b}) の 中を うめて、展開しよう`, key: 'e' + a + b };
+  }
+  if (type === 'fac' || type === 'facn' || type === 'sq') {
+    let a, b;
+    if (type === 'fac') { a = ri(1, 4); b = ri(1, 4); }
+    else if (type === 'sq') { a = b = ri(1, 4) * (Math.random() < 0.3 ? -1 : 1); }
+    else { do { a = ri(-3, 4); b = ri(-3, 4); } while (!a || !b || (a > 0 && b > 0)); }
+    const target = P({ x2: 1, x: a + b, 1: a * b });
+    return { type, mat: 'prod', a, b, target, text: `${polyStr(target)} を 長方形に ならべて 因数分解しよう`, key: 'f' + polyStr(target) };
+  }
+}
+document.querySelectorAll('[data-task]').forEach(b => b.onclick = () => {
+  $('taskBg').hidden = true;
+  pushHist();
+  const tk = makeTask(b.dataset.task);
+  tiles = []; strokes = []; lockEq = null; tripStreak = 0;
+  mat = tk.mat; task = tk;
+  if (tk.type === 'simp') {
+    // ばらばらに おく（重ならないように 区画ごとに）
+    tk.tiles.forEach((t, i) => { const d = dims(t); t.x = 60 + (i % 6) * 165 + ri(0, 20); t.y = TOP + 40 + Math.floor(i / 6) * 120 + ri(0, 30); t.x = Math.min(t.x, 1060 - d.w); });
+    tiles = tk.tiles;
+  }
+  if (tk.mat === 'eq') {
+    tiles = arrange(tilesFor(tk.L), G.eqL).concat(arrange(tilesFor(tk.R), G.eqR));
+    drawMats(); render();
+    lockEq = { text: tk.text.replace(' を とこう', ''), sol: fracStr(tk.ans, 1), snap: snapState() };
+  }
+  if (tk.type === 'exp') tiles = factorTiles(P({ x: 1, 1: tk.a }), P({ x: 1, 1: tk.b }));
+  if (tk.target && tk.mat === 'prod') {
+    // 中に 入れる タイルを マットの 下の方に ばらして おく
+    tiles = arrange(tilesFor(tk.target), { x: G.inner.x + 380, y: G.inner.y + 150, w: 600, h: 380 });
+  }
+  delete task.tiles;
+  drawMats(); render(); redrawInk();
+});
+$('taskBtn').onclick = () => { $('taskBg').hidden = false; };
+$('taskClose').onclick = () => { $('taskBg').hidden = true; };
+$('taskClear').onclick = () => { $('taskBg').hidden = true; task = null; update(); };
+
+/* かけ算マット：たて（左の帯）と よこ（上の帯）の タイルを ならべる */
+function factorTiles(left, top) {
+  const tops = [], lefts = [];
+  let x = G.inner.x;
+  for (const t of tilesFor(top)) { const d = dims(t); t.x = x; t.y = G.bandTop.y + G.bandTop.h / 2 - d.h / 2; x += d.w; tops.push(t); }
+  let y = G.inner.y;
+  for (const t of tilesFor(left)) { if (t.kind !== '1') t.rot = 1; const d = dims(t); t.y = y; t.x = G.bandLeft.x + G.bandLeft.w / 2 - d.w / 2; y += d.h; lefts.push(t); }
+  const out = tops.concat(lefts); out.tops = tops; out.lefts = lefts;
+  return out;
+}
+/* ✨ こたえ（先生モード）：かけ算マットは 中を うめる。方程式は 解を 出す */
+$('answer').onclick = () => {
+  if (mat === 'eq') {
+    const P2 = parts(), L = polyOf(P2.L), R = polyOf(P2.R);
+    const sol = lockEq ? lockEq.sol : solve(L, R);
+    toast(sol === 'all' || sol === 'none' ? 'x は 1つに きまりません' : `こたえ：x = ${sol}`);
+    return;
+  }
+  if (mat !== 'prod') { toast('こたえは 方程式マット・かけ算マットで つかえます'); return; }
+  pushHist();
+  let P2 = parts();
+  let left = factorOf(P2.left, 'h').p, top = factorOf(P2.top, 'w').p;
+  if (task && task.target && (isEmpty(left) || isEmpty(top))) { left = P({ x: 1, 1: task.a }); top = P({ x: 1, 1: task.b }); }
+  if (isEmpty(left) || isEmpty(top)) { hist.pop(); toast('先に たて と よこ の 帯に タイルを おいてね'); return; }
+  // 帯を ならべなおして、たて × よこ の タイルで 中を うめる（正と負は 符号の かけ算）
+  tiles = tiles.filter(t => !inR(t, G.inner) && !inR(t, G.bandTop) && !inR(t, G.bandLeft) && !(task && task.target));
+  const fr = factorTiles(left, top);
+  const tops = fr.tops, lefts = fr.lefts;
+  for (const a of lefts) for (const b of tops) {
+    const da = dims(a), db = dims(b), kind = MUL[lenKind(da.h) + ',' + lenKind(db.w)];
+    const t = { id: nextId++, kind, rot: 0, sign: a.sign * b.sign, x: b.x, y: a.y };
+    if (dims(t).w !== db.w) t.rot = 1;
+    fr.push(t);
+  }
+  tiles = tiles.concat(Array.from(fr));
+  render();
+};
+
+/* =========================== ペン =========================== */
+let drawing = false, penColor = '#e53935', cur = null;
+const ictx = $('ink').getContext('2d');
+$('drawBtn').onclick = () => {
+  drawing = !drawing;
+  $('drawBtn').classList.toggle('on', drawing); $('stage').classList.toggle('drawing', drawing);
+  document.querySelectorAll('.pen, #inkClear').forEach(b => b.hidden = !drawing);
+};
+document.querySelectorAll('.pen').forEach(b => b.onclick = () => {
+  penColor = b.dataset.pen;
+  document.querySelectorAll('.pen').forEach(q => q.classList.toggle('on', q === b));
+});
+document.querySelector('.pen').classList.add('on');
+$('inkClear').onclick = () => { if (!strokes.length) return; pushHist(); strokes = []; redrawInk(); };
+function drawStroke(ctx, s) {
+  ctx.strokeStyle = s.c; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); s.p.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.stroke();
+}
+function redrawInk() { ictx.clearRect(0, 0, W, H); strokes.forEach(s => drawStroke(ictx, s)); }
+$('ink').addEventListener('pointerdown', e => {
+  if (!drawing) return;
+  pushHist();
+  const p = toStage(e); cur = { c: penColor, p: [[p.x, p.y]] }; strokes.push(cur);
+  $('ink').setPointerCapture(e.pointerId);
+});
+$('ink').addEventListener('pointermove', e => {
+  if (!cur) return;
+  const p = toStage(e); cur.p.push([p.x, p.y]); redrawInk();
+});
+$('ink').addEventListener('pointerup', () => { cur = null; });
+
+/* =========================== しゃしん =========================== */
+function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function makePhoto() {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  // マット
+  const box = (r, fill, line, dash) => { ctx.fillStyle = fill; ctx.strokeStyle = line; ctx.lineWidth = 3; ctx.setLineDash(dash || []); roundRect(ctx, r.x, r.y, r.w, r.h, 12); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); };
+  if (mat === 'expr') box(G.expr, '#fffaf0', '#ffcc80', [10, 6]);
+  if (mat === 'eq') { box(G.eqL, '#f7f9ff', '#c5cae9'); box(G.eqR, '#f7f9ff', '#c5cae9'); ctx.fillStyle = '#283593'; ctx.font = '900 72px serif'; ctx.fillText('=', 532, TOP + (H - TOP) / 2 + 20); }
+  if (mat === 'prod') { box(G.corner, '#eceff1', '#b0bec5'); box(G.bandTop, '#eceff1', '#b0bec5'); box(G.bandLeft, '#eceff1', '#b0bec5'); box(G.inner, '#fff', '#90a4ae'); }
+  // タイル
+  for (const t of tiles) {
+    const d = dims(t), col = COLOR[t.sign][t.kind];
+    ctx.fillStyle = col[0]; ctx.fillRect(t.x, t.y, d.w, d.h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = t.sign < 0 ? 3 : 2; ctx.setLineDash(t.sign < 0 ? [6, 4] : []);
+    ctx.strokeRect(t.x + 1, t.y + 1, d.w - 2, d.h - 2); ctx.setLineDash([]);
+    if (settings.labels) {
+      ctx.fillStyle = col[1]; ctx.font = `italic 900 ${Math.max(11, Math.min(30, Math.min(d.w, d.h) * 0.62))}px "Times New Roman", serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label(t), t.x + d.w / 2, t.y + d.h / 2 + 1);
+    }
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  strokes.forEach(s => drawStroke(ctx, s));
+  // 上の 式
+  ctx.fillStyle = '#283593'; ctx.font = '900 22px sans-serif'; ctx.fillText($('taskLine').textContent, 16, 32);
+  ctx.fillStyle = '#263238'; ctx.font = '900 34px "Times New Roman", serif'; ctx.fillText($('exprLine').textContent, 16, 76);
+  const now = new Date();
+  ctx.fillStyle = '#9aa0bf'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText(`${now.getMonth() + 1}月${now.getDate()}日`, W - 120, H - 16);
+  return c;
+}
+$('photo').onclick = async () => {
+  const blob = new Promise(res => makePhoto().toBlob(res, 'image/png'));
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    toast('📷 コピーしました。ロイロで Ctrl＋V で はりつけてね');
+  } catch (_) {
+    const a = document.createElement('a'), d = new Date();
+    a.href = URL.createObjectURL(await blob); a.download = `代数タイル_${d.getMonth() + 1}月${d.getDate()}日.png`; a.click();
+    toast('📷 しゃしんを ほぞんしました');
+  }
+};
+
+/* =========================== そのほか =========================== */
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') ['viewBg', 'taskBg'].forEach(id => { $(id).hidden = true; });
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+});
+['viewBg', 'taskBg'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) $(id).hidden = true; }));
+document.addEventListener('contextmenu', e => { if (e.target.closest('.stage, .toolbox')) e.preventDefault(); });
+window.addEventListener('beforeunload', e => { if (tiles.length || strokes.length) { e.preventDefault(); e.returnValue = ''; } });
+// ワークシートの 開け閉めで ボードの はばが かわる
+new ResizeObserver(layout).observe($('wrap'));
+
+/* =========================== はじめる =========================== */
+const qm = new URLSearchParams(location.search).get('mat');
+if (['none', 'expr', 'eq', 'prod'].includes(qm)) mat = qm;
+setTap('flip');
+drawMats();
+applySettings();
+render();
+layout();
+</script>
+</body>
+</html>
