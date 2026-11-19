@@ -2,10 +2,11 @@
 """漢字ガンバ：まとめ絵（横3×たて2のマス）を1字ずつの絵に切り分ける。
 
 使い方：
-  python3 tools/kanji-ganba-slice.py <まとめ絵の画像> 春夏秋冬雪
+  python3 tools/kanji-ganba-slice.py <まとめ絵の画像> 春夏秋冬雪 [--full 鳥]
 
 - マスのわくを自動で見つけ、わくの内がわの まん中を正方形に切りぬく（横長のマスは 左右が少し切れる）
 - 400×400、256色にへらした PNG にして japanese/kanji-ganba/img/字.png に保存する
+- --full のあとに書いた字は 色をへらさない（うすい空のグラデーションに 四角いまだらが出るとき用。ファイルは大きくなる）
 - 画像の読みこみと拡大・縮小には macOS の sips を使う（ほかのライブラリはいらない）
 """
 import struct
@@ -19,6 +20,7 @@ SIZE = 400      # できあがりの大きさ
 INSET = 16      # わくの線と角の丸みをよけるため、内がわに入る はば
 
 src, chars = Path(sys.argv[1]), sys.argv[2]
+full = sys.argv[4] if len(sys.argv) > 4 and sys.argv[3] == '--full' else ''
 out_dir = Path(__file__).resolve().parent.parent / 'japanese' / 'kanji-ganba' / 'img'
 tmp = Path(tempfile.mkdtemp())
 
@@ -126,6 +128,9 @@ for k, ((x0, x1), (y0, y1)) in zip(chars, boxes):
     subprocess.run(['sips', '-c', str(side), str(side), '--cropOffset', str(top), str(left), str(tmp / 'a.bmp'),
                     '--out', str(crop)], check=True, capture_output=True)
     subprocess.run(['sips', '-z', str(SIZE), str(SIZE), str(crop)], check=True, capture_output=True)
-    _, _, rows = read_bmp(crop, 'c.bmp')
-    write_png8(out_dir / f'{k}.png', rows)
+    if k in full:
+        subprocess.run(['sips', '-s', 'format', 'png', str(crop), '--out', str(out_dir / f'{k}.png')], check=True, capture_output=True)
+    else:
+        _, _, rows = read_bmp(crop, 'c.bmp')
+        write_png8(out_dir / f'{k}.png', rows)
     print(f'{k}.png  （マス {x0},{y0}〜{x1},{y1}）  {(out_dir / f"{k}.png").stat().st_size // 1024}KB')
