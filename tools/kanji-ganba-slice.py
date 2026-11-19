@@ -63,6 +63,17 @@ row = [sum(ink(px[y][x]) for x in range(0, w, 4)) > w // 40 for y in range(h)]
 xs, ys = runs(col, w // 6), runs(row, h // 4)
 if len(xs) != 3 or len(ys) != 2:
     sys.exit(f'マスが 横3×たて2 に見つかりません（横 {xs}・たて {ys}）')
+# わくの線が細く、わくの内がわに白いすき間がある絵では、上で見つかるのは 絵の部分だけ。
+# 外がわ40画素以内（となりのマスとの まん中まで）に「たてに長い線（わく）」があれば、そこまで広げる
+tall = lambda x: sum(ink(px[y][x]) for y in range(0, h, 2)) > h // 2 * 0.6
+def widen(i):
+    x0, x1 = xs[i]
+    lo = (xs[i - 1][1] + x0) // 2 + 1 if i > 0 else 0
+    hi = (x1 + xs[i + 1][0]) // 2 - 1 if i < len(xs) - 1 else w - 1
+    left = [x for x in range(max(lo, x0 - 40), x0) if tall(x)]
+    right = [x for x in range(x1 + 1, min(hi, x1 + 40) + 1) if tall(x)]
+    return (left[0] if left else x0, right[-1] if right else x1)
+xs = [widen(i) for i in range(len(xs))]
 # 上下の はしは、左はしの マスの「わくの たて線」から決める（白っぽい絵でも まちがえないため）。
 # わくの角は丸いので、たて線は 上下に 少し みじかい。その分（RADIUS）を 足す
 RADIUS = 10
