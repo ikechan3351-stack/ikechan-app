@@ -161,7 +161,49 @@
   body.teacher .tile { width: 96px; height: 96px; font-size: 3.4rem; }
   body.teacher .q-title { font-size: 1.6rem; }
 
+  /* かく */
+  .tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .tab { border: 3px solid #9fd0f3; background: #fff; border-radius: 999px; padding: 7px 18px; font-size: 1.05rem; font-weight: bold; }
+  .tab.on { background: var(--sky-d); border-color: var(--sky-d); color: #fff; }
+  .tab.glow { animation: glow 1s ease-in-out infinite; }
+  .wbox { position: relative; width: 340px; height: 340px; max-width: 86vw; max-height: 86vw; border: 4px solid var(--navy); border-radius: 12px; background: #fffef8; touch-action: none; }
+  .wbox svg, .wbox canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wbox canvas { cursor: crosshair; }
+  .wbox .guide { stroke: #d9c9a3; stroke-width: .6; stroke-dasharray: 2 2; }
+  .stk { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .stk.base { stroke: #e3e3e3; stroke-width: 7; }
+  .stk.ink { stroke: var(--navy); stroke-width: 5; }
+  .stk.next { stroke: #ffcf99; stroke-width: 7; }
+  .stk.faint { stroke: #c8d6e6; stroke-width: 5; }
+  .snum { font-size: 7px; fill: #d0452f; font-family: var(--ui); font-weight: bold; }
+  .startdot { fill: #2e9e5b; }
+  body.teacher .wbox { width: 470px; height: 470px; }
+  .nigate { width: 100%; border: 3px solid #f6c48d; background: #fff7ec; border-radius: 16px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .nigate .ks { font-family: var(--kj); font-size: 1.6rem; letter-spacing: .12em; }
+  .mini { border: none; background: none; color: #8a6d4c; font-size: .85rem; text-decoration: underline; }
+
+  /* プリント（いんさつのときだけ出す） */
+  #print { display: none; }
+  @media print {
+    @page { size: A4 portrait; margin: 12mm; }
+    body { background: #fff; display: block; }
+    .top, .wrap, .credit { display: none !important; }
+    #print { display: block; color: #000; font-family: var(--ui); }
+    .p-head { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 6mm; }
+    .p-head b { font-size: 16pt; }
+    .p-row { display: flex; align-items: center; gap: 2mm; margin-bottom: 5mm; break-inside: avoid; }
+    .p-info { width: 22mm; text-align: center; font-size: 9pt; line-height: 1.4; }
+    .p-box { width: 24mm; height: 24mm; border: 1.2px solid #000; position: relative; flex-shrink: 0; }
+    .p-box svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .p-box .guide { stroke: #999; stroke-width: .5; stroke-dasharray: 2 2; }
+    .p-box .stk.ink { stroke: #000; stroke-width: 4; }
+    .p-box .stk.trace { stroke: #bbb; stroke-width: 4; }
+    .p-box .snum { fill: #c00; font-size: 9.5px; }
+    .p-foot { font-size: 7pt; color: #555; margin-top: 4mm; }
+  }
+
   .credit { font-size: .75rem; color: #e9f4fd; text-align: center; padding: 0 16px 10px; }
+  .credit a { color: #e9f4fd; }
 
   @media (max-width: 640px) {
     .big { font-size: 5rem; } .word { font-size: 3.2rem; padding: 4px 16px; } .yomi { font-size: 2.4rem; padding: 6px 14px; }
@@ -181,8 +223,10 @@
   <span id="topRight" style="min-width:60px;text-align:right"></span>
 </div>
 <div class="wrap"><div class="card" id="view"></div></div>
-<div class="credit">漢字ガンバ（小学1年の漢字 80字）</div>
+<div class="credit">漢字ガンバ（小学1年の漢字 80字）　書きじゅんのデータ：<a href="https://kanjivg.tagaini.net/" target="_blank" rel="noopener">KanjiVG</a>（CC BY-SA 3.0）</div>
+<div id="print"></div>
 
+<script src="kanji-ganba/strokes.js"></script>
 <script>
 // ───────── 漢字のデータ ─────────
 // 字｜音読み｜訓読み｜ことば｜ことばのよみ｜仮の絵（絵文字）｜使い方の文
@@ -292,7 +336,22 @@ const STEPS = [
   { n: 4, t: '漢字→よみ', s: 'よみを 一文字ずつ ならべる' },
   { n: 5, t: 'よむ', s: 'こえに 出して よむ' },
   { n: 6, t: 'よみ→漢字', s: 'よみに あう 漢字を さがす' },
+  { n: 7, t: 'かく', s: '書きじゅんを 見て、なぞって、書く' },
 ];
+const STROKES = window.KANJI_STROKES || {};
+const ALL_STEPS = [1, 2, 3, 4, 5, 6, 7];
+
+// ───────── にがてな字（まちがえた字）の記録 ─────────
+// まちがえると 2、つぎから1回目で正解するたびに 1へる。0になったら消える
+function loadNG() { try { return JSON.parse(load('nigate') || '{}') || {}; } catch (e) { return {}; } }
+function saveNG(ng) { save('nigate', JSON.stringify(ng)); }
+function markMiss(k) { if (teacher()) return; const ng = loadNG(); ng[k] = 2; saveNG(ng); }
+function markGood(k) {
+  if (teacher()) return;
+  const ng = loadNG(); if (!ng[k]) return;
+  if (--ng[k] <= 0) delete ng[k]; saveNG(ng);
+}
+const nigateList = () => ORDER.filter(k => loadNG()[k]);
 const PRAISE = ['できたね！', 'すごい！', 'ばっちり！', 'よく できました！', 'その ちょうし！'];
 const KANA = 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわん';
 
@@ -358,6 +417,8 @@ function home() {
       <button class="mode" data-m="student">👤 ひとりで</button>
       <button class="mode" data-m="teacher">🧑‍🏫 先生と（電子黒板）</button>
     </div>
+    ${(() => { const ng = nigateList(); return ng.length ? `<div class="nigate"><b>🔁 にがてな字</b><span class="ks">${ng.slice(0, 10).join('')}</span>
+      <button class="go" id="ngGo" style="padding:8px 22px;font-size:1rem">れんしゅうする ▶</button><button class="mini" id="ngClr">きろくを けす</button></div>` : ''; })()}
     <p class="lead">れんしゅうする 漢字を えらんでね</p>
     <div class="groups">${GROUPS.map((g, i) => `<button class="grp" data-g="${i}"><span class="no">${i + 1}</span><span class="ks">${g}</span></button>`).join('')}</div>
     <button class="pick-toggle" id="pt">✋ 1字ずつ えらぶ</button>
@@ -369,6 +430,10 @@ function home() {
   paint();
   view.querySelectorAll('.mode').forEach(b => b.onclick = () => { setMode(b.dataset.m); paint(); });
   view.querySelectorAll('.grp').forEach(b => b.onclick = () => { S.set = [...GROUPS[+b.dataset.g]]; menu(); });
+  const ngGo = view.querySelector('#ngGo');
+  if (ngGo) ngGo.onclick = () => { S.set = nigateList().slice(0, 10); menu(); };
+  const ngClr = view.querySelector('#ngClr');
+  if (ngClr) ngClr.onclick = () => { if (confirm('にがてな字の きろくを けしますか？')) { saveNG({}); home(); } };
   const picked = new Set();
   view.querySelector('#pt').onclick = () => view.querySelector('#picker').classList.toggle('open');
   view.querySelectorAll('.kbtn').forEach(b => b.onclick = () => {
@@ -398,15 +463,16 @@ function menu() {
     <div class="chosen">${S.set.join('')}</div>
     <div class="menu">
       <button class="step card-btn" data-s="card"><span class="n">📖</span><span><b>カードで 見る</b><small>絵・よみかた・つかいかたを 見る</small></span></button>
-      <button class="all" data-s="all"><span class="ic">🚀</span><span><b>まとめて やる</b><small>ステップ 1から6まで とおして やるよ</small></span></button>
+      <button class="all" data-s="all"><span class="ic">🚀</span><span><b>まとめて やる</b><small>ステップ 1から7まで とおして やるよ</small></span></button>
       <div class="or">または 1つずつ やるね</div>
-      ${STEPS.map(s => `<button class="step" data-s="${s.n}"><span class="n">${s.n}</span><span><b>${s.t}</b><small>${s.s}</small></span></button>`).join('')}
-      <button class="step" disabled><span class="n">✏️</span><span><b>かく</b><small>じゅんびちゅう（つぎの バージョンで できるよ）</small></span></button>
+      ${STEPS.map(s => `<button class="step" data-s="${s.n}"><span class="n">${s.n === 7 ? '✏️' : s.n}</span><span><b>${s.t}</b><small>${s.s}</small></span></button>`).join('')}
+      <button class="step card-btn" data-s="print"><span class="n">🖨️</span><span><b>プリントを つくる</b><small>書きじゅん・なぞり書き・れんしゅうの プリント（A4）</small></span></button>
     </div>`;
   view.querySelectorAll('[data-s]').forEach(b => b.onclick = () => {
     const s = b.dataset.s;
     if (s === 'card') return cards(0);
-    startCourse(s === 'all' ? [1, 2, 3, 4, 5, 6] : [+s]);
+    if (s === 'print') return printSheet();
+    startCourse(s === 'all' ? ALL_STEPS : [+s]);
   });
 }
 
@@ -433,10 +499,11 @@ function cards(i) {
 
 // ───────── もんだいの進め方 ─────────
 function startCourse(steps) { S.course = steps; S.ci = 0; startStep(); }
-function startStep() {
-  S.list = shuffle(S.set); S.qi = 0; S.done = S.list.map(() => false);
+function startStep(only) {
+  S.list = shuffle(only || S.set); S.qi = 0; S.done = S.list.map(() => false); S.missed = new Set();
   question();
 }
+function noteMiss(k) { S.missed.add(k); markMiss(k); }
 function stepInfo() { return STEPS[S.course[S.ci] - 1]; }
 
 function navi(i, n) {
@@ -460,7 +527,7 @@ function question() {
   const courseLabel = S.course.length > 1 ? `🚀 ${S.ci + 1}/${S.course.length}  ` : '';
   $pos.textContent = `${courseLabel}${st.n} ${st.t}  ${S.qi + 1} / ${S.list.length}`;
   let html = '', say = null;
-  const ansBtn = teacher() ? '<button class="btn ans" id="ans">こたえを 見る</button>' : '';
+  const ansBtn = teacher() && st.n !== 7 ? '<button class="btn ans" id="ans">こたえを 見る</button>' : '';
   const actRow = `<div class="msg" id="msg"></div><div class="acts">${ansBtn}<button class="btn main hidden" id="go">つぎへ ▶</button></div>`;
 
   if (st.n === 1) {
@@ -499,6 +566,20 @@ function question() {
     html = `<p class="q-title">よみに あう 漢字を さがそう！</p>
       <div class="stage">${pic(k)}<div class="yomi">${esc(d.yomi)}</div><button class="say" data-say="${esc(d.yomi)}">🔊 おとを きく</button></div>
       <div class="choices">${ch.map(c => `<button class="ch wordch" data-c="${c}">${esc(K[c].word)}</button>`).join('')}</div>`;
+  } else if (st.n === 7) {
+    html = `<p class="q-title" id="wtitle">書きじゅんを 見よう！</p>
+      <div class="tabs">
+        <button class="tab" data-w="see">👀 見る</button>
+        <button class="tab" data-w="trace">☝️ なぞる</button>
+        <button class="tab" data-w="free">✍️ 書く</button>
+      </div>
+      <div class="stage" style="gap:18px">
+        <div style="text-align:center"><div class="word" style="font-size:2.6rem;padding:2px 18px">${esc(d.word)}</div>
+          <div style="font-size:1.2rem;margin-top:6px">${esc(d.yomi)}</div>
+          <div style="font-size:1rem;margin-top:4px;color:#4d6488">${(STROKES[k] || { s: [] }).s.length}かく</div></div>
+        <div class="wbox" id="wbox"></div>
+      </div>
+      <div class="acts" id="wacts"></div>`;
   }
   view.innerHTML = html + actRow + navi(S.qi, S.list.length);
   bindNavi(S.qi, S.list.length, i => { S.qi = i; question(); }, stepDone);
@@ -509,6 +590,7 @@ function question() {
 
   if (st.n === 4) return bindBuild(d);
   if (st.n === 5) return bindRead(d);
+  if (st.n === 7) return bindWrite(k, d);
   bindChoice(k, d);
 }
 
@@ -532,8 +614,10 @@ function bindChoice(k, d) {
     if (teacher()) { btns.forEach(x => x.classList.toggle('sel', x === b)); return; }
     if (b === right) {
       finished = true; b.classList.add('ok'); btns.forEach(x => { if (x !== b) x.classList.add('dim'); });
+      if (!miss) markGood(k);
       success(d);
     } else {
+      if (!miss) noteMiss(k);
       miss++; b.classList.add('shake'); setTimeout(() => b.classList.add('dim'), 350);
       msg.className = 'msg try'; msg.textContent = 'おしい！ もう いちど';
       if (miss >= 1 && btns.filter(x => x !== right && !x.classList.contains('dim')).length <= 1) {
@@ -556,7 +640,7 @@ function bindBuild(d) {
   const slots = [...view.querySelectorAll('.slot')];
   const tiles = [...view.querySelectorAll('.tile')];
   const msg = view.querySelector('#msg');
-  let pos = 0, finished = false;
+  let pos = 0, finished = false, miss = 0;
   const stack = [];
   const paintCur = () => slots.forEach((s, i) => s.classList.toggle('cur', i === pos && !finished));
   const finish = () => {
@@ -570,6 +654,7 @@ function bindBuild(d) {
   tiles.forEach(t => t.onclick = () => {
     if (finished || t.classList.contains('used')) return;
     if (teacher()) {
+      if (pos >= chars.length) return;
       slots[pos].textContent = t.textContent; t.classList.add('used'); stack.push(t); pos++;
       if (pos >= chars.length) {
         const ok = slots.every((s, i) => s.textContent === chars[i]);
@@ -580,8 +665,10 @@ function bindBuild(d) {
     if (t.textContent === chars[pos]) {
       slots[pos].textContent = t.textContent; t.classList.add('used'); pos++;
       msg.textContent = '';
-      if (pos >= chars.length) finish(); else paintCur();
+      if (pos >= chars.length) { if (!miss) markGood(d.k); finish(); } else paintCur();
     } else {
+      if (!miss) noteMiss(d.k);
+      miss++;
       t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake');
       msg.className = 'msg try'; msg.textContent = 'おしい！ もう いちど';
       const right = tiles.find(x => !x.classList.contains('used') && x.textContent === chars[pos]);
@@ -611,16 +698,168 @@ function bindRead(d) {
   };
 }
 
+// ───────── かく（7） ─────────
+const SVGNS = 'http://www.w3.org/2000/svg';
+const GUIDE = '<line class="guide" x1="54.5" y1="0" x2="54.5" y2="109"/><line class="guide" x1="0" y1="54.5" x2="109" y2="54.5"/>';
+function strokeSvg(k, cls, opt = {}) {
+  const st = STROKES[k]; if (!st) return '';
+  const paths = st.s.map((d, i) => `<path class="stk ${typeof cls === 'function' ? cls(i) : cls}" data-i="${i}" d="${d}"/>`).join('');
+  const nums = opt.nums ? st.n.map((p, i) => `<text class="snum" x="${p[0]}" y="${p[1]}">${i + 1}</text>`).join('') : '';
+  return `<svg viewBox="0 0 109 109" xmlns="${SVGNS}">${opt.guide === false ? '' : GUIDE}${paths}${nums}</svg>`;
+}
+
+function bindWrite(k, d) {
+  const st = STROKES[k];
+  const box = view.querySelector('#wbox'), acts = view.querySelector('#wacts'), msg = view.querySelector('#msg');
+  const title = view.querySelector('#wtitle');
+  const tabs = [...view.querySelectorAll('.tab')];
+  if (!st) { box.innerHTML = ''; msg.className = 'msg try'; msg.textContent = '書きじゅんの データが よみこめませんでした'; return; }
+  let timer = null, tab = '';
+  const stop = () => { if (timer) { clearTimeout(timer); timer = null; } };
+
+  // 👀 見る：1画ずつ アニメーション
+  function see() {
+    title.textContent = '書きじゅんを 見よう！';
+    box.innerHTML = strokeSvg(k, 'base') ;
+    const svg = box.querySelector('svg');
+    let shown = 0;
+    const inkPaths = st.s.map((dd, i) => {
+      const p = document.createElementNS(SVGNS, 'path'); p.setAttribute('d', dd); p.setAttribute('class', 'stk ink');
+      svg.appendChild(p); const L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; p._L = L; return p;
+    });
+    const nums = st.n.map((pt, i) => { const t = document.createElementNS(SVGNS, 'text'); t.setAttribute('class', 'snum'); t.setAttribute('x', pt[0]); t.setAttribute('y', pt[1]); t.textContent = i + 1; t.style.display = 'none'; svg.appendChild(t); return t; });
+    const draw = i => {
+      const p = inkPaths[i]; nums[i].style.display = '';
+      p.style.transition = 'none'; p.style.strokeDashoffset = p._L; void p.getBoundingClientRect();
+      p.style.transition = `stroke-dashoffset ${Math.max(0.45, p._L / 90)}s linear`; p.style.strokeDashoffset = 0;
+      return Math.max(450, p._L / 90 * 1000) + 250;
+    };
+    const reset = () => { stop(); shown = 0; inkPaths.forEach(p => { p.style.transition = 'none'; p.style.strokeDashoffset = p._L; }); nums.forEach(t => t.style.display = 'none'); };
+    const playAll = () => {
+      reset();
+      const loop = () => { if (shown >= inkPaths.length) { timer = null; if (!teacher()) tabs[1].classList.add('glow'); return; } timer = setTimeout(loop, draw(shown++)); };
+      loop();
+    };
+    const one = () => { stop(); if (shown >= inkPaths.length) reset(); draw(shown++); };
+    acts.innerHTML = `<button class="btn" id="wPlay">▶ さいしょから</button><button class="btn" id="wOne">1かくずつ ▶</button>
+      <button class="btn main" id="wToTrace">☝️ なぞって みよう</button>`;
+    acts.querySelector('#wPlay').onclick = playAll;
+    acts.querySelector('#wOne').onclick = one;
+    acts.querySelector('#wToTrace').onclick = () => setTab('trace');
+    if (teacher()) reset(); else playAll();
+  }
+
+  // 書いた線を うけとる キャンバス
+  function makeCanvas(onStroke) {
+    const cv = document.createElement('canvas'); box.appendChild(cv);
+    const r = box.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    cv.width = r.width * dpr; cv.height = r.height * dpr;
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1f3a6b'; ctx.lineWidth = Math.max(8, r.width / 30);
+    let pts = null;
+    const at = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+    cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); pts = [at(e)]; ctx.beginPath(); ctx.moveTo(...pts[0]); ctx.lineTo(...pts[0]); ctx.stroke(); };
+    cv.onpointermove = e => { if (!pts) return; const p = at(e); pts.push(p); ctx.lineTo(...p); ctx.stroke(); };
+    const end = () => { if (!pts) return; const p = pts; pts = null; const b = cv.getBoundingClientRect(); onStroke(p.map(q => [q[0] / b.width * 109, q[1] / b.height * 109])); };
+    cv.onpointerup = end; cv.onpointercancel = end;
+    return { clear: () => ctx.clearRect(0, 0, cv.width, cv.height) };
+  }
+
+  // ☝️ なぞる：1画ずつ、だいたい あっていれば つぎの画へ
+  function trace() {
+    title.textContent = '● から なぞろう！';
+    tabs[1].classList.remove('glow');
+    box.innerHTML = strokeSvg(k, i => i === 0 ? 'next' : 'base');
+    const svg = box.querySelector('svg');
+    const paths = [...svg.querySelectorAll('path.stk')];
+    const dot = document.createElementNS(SVGNS, 'circle'); dot.setAttribute('r', '4'); dot.setAttribute('class', 'startdot'); svg.appendChild(dot);
+    let cur = 0, missHere = 0;
+    const sample = p => { const L = p.getTotalLength(), n = Math.max(6, Math.round(L / 4)); return Array.from({ length: n + 1 }, (_, i) => { const q = p.getPointAtLength(L * i / n); return [q.x, q.y]; }); };
+    const placeDot = () => { if (cur < paths.length) { const q = paths[cur].getPointAtLength(0); dot.setAttribute('cx', q.x); dot.setAttribute('cy', q.y); } else dot.remove(); };
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    const near = (pt, line) => line.reduce((m, q) => Math.min(m, dist(pt, q)), 1e9);
+    function judge(drawn) {
+      const ref = sample(paths[cur]); const L = paths[cur].getTotalLength();
+      if (drawn.length < 2) drawn = [drawn[0], drawn[0]];
+      let len = 0; for (let i = 1; i < drawn.length; i++) len += dist(drawn[i - 1], drawn[i]);
+      const tol = 15;
+      const startOk = dist(drawn[0], ref[0]) < tol + 4;
+      const endOk = dist(drawn[drawn.length - 1], ref[ref.length - 1]) < tol + 6;
+      const cover = ref.filter(q => near(q, drawn) < tol).length / ref.length;
+      const stray = drawn.filter(q => near(q, ref) > tol + 8).length / drawn.length;
+      return startOk && endOk && cover > 0.7 && stray < 0.25 && len > L * 0.5;
+    }
+    const pad = makeCanvas(drawn => {
+      if (cur >= paths.length) return;
+      if (judge(drawn)) {
+        paths[cur].setAttribute('class', 'stk ink'); cur++; missHere = 0;
+        if (cur < paths.length) paths[cur].setAttribute('class', 'stk next');
+        placeDot(); msg.textContent = ''; pad.clear();
+        if (cur >= paths.length) { title.textContent = 'なぞれたね！'; success(d); acts.querySelector('#wToFree').classList.add('main'); }
+      } else {
+        missHere++; pad.clear();
+        msg.className = 'msg try'; msg.textContent = missHere >= 2 ? '● から、オレンジの 線の 上を ゆっくり なぞってね' : 'おしい！ ● から もう いちど';
+      }
+    });
+    placeDot();
+    acts.innerHTML = `<button class="btn" id="wRe">🔄 さいしょから</button><button class="btn" id="wToFree">✍️ 自分で 書いて みよう</button>`;
+    acts.querySelector('#wRe').onclick = trace;
+    acts.querySelector('#wToFree').onclick = () => setTab('free');
+  }
+
+  // ✍️ 書く：じゆうに 書いて、自分で たしかめる
+  function free() {
+    title.textContent = '見ないで 書いて みよう！';
+    box.innerHTML = `<svg viewBox="0 0 109 109" xmlns="${SVGNS}">${GUIDE}</svg>`;
+    const model = document.createElement('div'); model.style.cssText = 'position:absolute;inset:0;display:none'; model.innerHTML = strokeSvg(k, 'faint', { guide: false });
+    box.appendChild(model);
+    const pad = makeCanvas(() => {});
+    acts.innerHTML = `<button class="btn" id="wClr">🧽 けす</button><button class="btn" id="wModel">👀 お手本を 出す</button>
+      <button class="btn main" id="wOk">⭕ できた！</button>`;
+    acts.querySelector('#wClr').onclick = () => { pad.clear(); };
+    acts.querySelector('#wModel').onclick = e => { const on = model.style.display === 'none'; model.style.display = on ? 'block' : 'none'; e.target.textContent = on ? '🙈 お手本を けす' : '👀 お手本を 出す'; };
+    acts.querySelector('#wOk').onclick = () => { model.style.display = 'block'; title.textContent = 'お手本と くらべて みよう'; success(d); };
+  }
+
+  function setTab(t) {
+    stop(); tab = t; msg.textContent = '';
+    tabs.forEach(b => b.classList.toggle('on', b.dataset.w === t));
+    ({ see, trace, free })[t]();
+  }
+  tabs.forEach(b => b.onclick = () => setTab(b.dataset.w));
+  setTab('see');
+}
+
+// ───────── プリント ─────────
+function printSheet() {
+  const ks = S.set.filter(k => STROKES[k]);
+  const box = inner => `<div class="p-box">${inner}</div>`;
+  const svg = inner => `<svg viewBox="0 0 109 109" xmlns="${SVGNS}">${GUIDE}${inner}</svg>`;
+  document.getElementById('print').innerHTML = `
+    <div class="p-head"><b>漢字ガンバ　かく れんしゅう</b><span>　月　　日　　なまえ（　　　　　　　　　）</span></div>
+    ${ks.map(k => `<div class="p-row">
+      <div class="p-info"><div style="font-size:9pt">${esc(K[k].word)}</div><div>${esc(K[k].yomi)}</div><div>${STROKES[k].s.length}かく</div></div>
+      ${box(strokeSvg(k, 'ink', { nums: true }))}
+      ${box(strokeSvg(k, 'trace'))}${box(strokeSvg(k, 'trace'))}${box(strokeSvg(k, 'trace'))}
+      ${box(svg(''))}${box(svg(''))}${box(svg(''))}
+    </div>`).join('')}
+    <div class="p-foot">1ばん左は お手本（赤い数字が 書きじゅん）、うすい字は なぞり書き、白い ますは 自分で 書く れんしゅうです。　書きじゅんのデータ：KanjiVG（CC BY-SA 3.0）</div>`;
+  window.print();
+}
+
 // ───────── ステップのおわり ─────────
 function stepDone() {
   const st = stepInfo(), more = S.ci < S.course.length - 1;
   const allDone = !more && S.course.length > 1;
+  const missed = ORDER.filter(k => S.missed && S.missed.has(k));
   $pos.textContent = '';
   view.innerHTML = `
     <div class="done-big">${allDone ? '🏆' : '🌟'}</div>
     <p class="lead" style="font-size:1.6rem">${allDone ? 'ぜんぶの ステップが おわったよ！' : `ステップ${st.n}「${st.t}」 できたね！`}</p>
     <div class="chosen">${S.set.join('')}</div>
     <p class="sub">${allDone ? 'さいごまで ガンバったね。' : 'よく ガンバりました。'}</p>
+    ${missed.length ? `<div class="nigate"><b>🔁 まちがえた字</b><span class="ks">${missed.join('')}</span>
+      <button class="btn" id="retry">この字だけ もう いちど</button></div>` : ''}
     <div class="acts">
       ${more ? `<button class="btn main" id="nx">つぎの ステップへ ▶</button>` : ''}
       <button class="btn" id="again">もう いちど</button>
@@ -628,12 +867,13 @@ function stepDone() {
     </div>`;
   if (!teacher()) speak(allDone ? 'ぜんぶ おわったよ。よく ガンバったね' : 'できたね');
   const nx = view.querySelector('#nx'); if (nx) nx.onclick = () => { S.ci++; startStep(); };
-  view.querySelector('#again').onclick = startStep;
+  const rt = view.querySelector('#retry'); if (rt) rt.onclick = () => startStep(missed);
+  view.querySelector('#again').onclick = () => startStep();
   view.querySelector('#mn').onclick = menu;
 }
 
 // ───────── URLで直接ひらく ─────────
-// ?mode=teacher|student  ?g=1〜16（まとまり）  ?kanji=山川木  ?step=1〜6|all|card
+// ?mode=teacher|student  ?g=1〜16（まとまり）  ?kanji=山川木  ?step=1〜7|all|card
 (function init() {
   const p = new URLSearchParams(location.search);
   setMode(p.get('mode') || load('mode') || 'student');
@@ -643,9 +883,9 @@ function stepDone() {
   else if (g >= 1 && g <= GROUPS.length) S.set = [...GROUPS[g - 1]];
   if (!S.set.length) return home();
   const step = p.get('step');
-  if (step === 'all') startCourse([1, 2, 3, 4, 5, 6]);
+  if (step === 'all') startCourse(ALL_STEPS);
   else if (step === 'card') cards(0);
-  else if (/^[1-6]$/.test(step || '')) startCourse([+step]);
+  else if (/^[1-7]$/.test(step || '')) startCourse([+step]);
   else menu();
 })();
 </script>
