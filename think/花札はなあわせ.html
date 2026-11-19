@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>花札 はなあわせ</title>
+<style>
+  * { box-sizing: border-box; }
+  :root { --cw: clamp(40px, calc((100vw - 52px) / 7.6), 74px); }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #fdf3e3 0%, #f6e0c4 100%);
+    color: #3e2723; margin: 0; padding: 10px;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .back-link { align-self: flex-start; font-size: 0.85rem; color: #8d3b2b; text-decoration: none; margin-bottom: 2px; }
+  h1 { margin: 2px 0; font-size: 1.45rem; color: #8b1a1a; text-align: center; }
+  h1 rt { font-size: 0.45em; }
+  .subtitle { margin: 0 0 8px; font-size: 0.85rem; color: #8d3b2b; text-align: center; }
+  .panel { width: 100%; max-width: 920px; display: flex; flex-direction: column; gap: 8px; }
+  .box { background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 3px 10px rgba(0,0,0,0.12); }
+  h2 { margin: 0 0 10px; font-size: 1.15rem; color: #8b1a1a; }
+  [hidden] { display: none !important; }
+
+  .btn {
+    font-family: inherit; border: none; border-radius: 12px; padding: 12px 18px;
+    font-size: 1.05rem; font-weight: bold; cursor: pointer;
+    background: #c62828; color: #fff; box-shadow: 0 3px 0 #7f1414;
+  }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #7f1414; }
+  .btn.sub { background: #efebe9; color: #4e342e; box-shadow: 0 3px 0 #bcaaa4; }
+  .btn.small { padding: 7px 11px; font-size: 0.88rem; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+
+  /* はじめの画面 */
+  .field-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .field-row label { font-weight: bold; min-width: 5.5em; }
+  .field-row input {
+    font-family: inherit; font-size: 1rem; padding: 8px 10px; border-radius: 10px;
+    border: 2px solid #d7ccc8; width: 180px;
+  }
+  .toggle { display: flex; border-radius: 10px; overflow: hidden; border: 2px solid #bcaaa4; }
+  .toggle button {
+    font-family: inherit; border: none; background: #fff; padding: 8px 14px;
+    font-size: 0.95rem; font-weight: bold; cursor: pointer; color: #6d4c41;
+  }
+  .toggle button.on { background: #c62828; color: #fff; }
+  .rule-mini { font-size: 0.93rem; line-height: 1.7; margin: 6px 0 12px; padding-left: 1.3em; }
+  .sample { display: flex; gap: 6px; justify-content: center; margin: 4px 0 12px; flex-wrap: wrap; }
+  .sample .hc { width: 52px; }
+
+  /* 札 */
+  .hc {
+    position: relative; width: var(--cw); aspect-ratio: 2 / 3; border-radius: 6px; flex: none;
+    background: #fffaf0; box-shadow: 0 2px 4px rgba(0,0,0,0.35); overflow: hidden;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
+    transition: transform 0.15s;
+  }
+  .hc svg { display: block; width: 100%; height: 100%; }
+  .hc.back {
+    background:
+      radial-gradient(circle at 50% 50%, #8e2b22 0 22%, transparent 23%),
+      repeating-linear-gradient(45deg, #4a1410 0 4px, #5e1b15 4px 8px);
+    border: 2px solid #2b0b08;
+  }
+  .hc.small { width: 24px; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+  .hc.mini { width: 16px; border-radius: 2px; border-width: 1px; }
+  .hc.field { width: calc(var(--cw) * 0.92); }
+
+  /* 盤 */
+  .table {
+    border-radius: 18px; padding: 8px; display: flex; flex-direction: column; gap: 8px;
+    background:
+      repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0 3px, rgba(0,0,0,0.03) 3px 6px),
+      linear-gradient(180deg, #2e6b3a 0%, #1f4f2a 100%);
+    box-shadow: 0 5px 14px rgba(0,0,0,0.3);
+  }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: #fff; flex-wrap: wrap; }
+  .topbar .round { font-weight: bold; font-size: 1rem; }
+  .opps { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .pl {
+    background: rgba(255,255,255,0.92); border-radius: 12px; padding: 6px 8px; cursor: pointer;
+    border: 3px solid transparent; min-width: 0;
+  }
+  .pl.turn { border-color: #ffca28; box-shadow: 0 0 10px #ffca28; }
+  .pl .nm { font-weight: bold; font-size: 0.95rem; display: flex; justify-content: space-between; gap: 4px; }
+  .pl .nm .sc { color: #8b1a1a; white-space: nowrap; }
+  .pl .think { font-size: 0.8rem; color: #e65100; font-weight: bold; height: 1.1em; }
+  .backs { display: flex; gap: 2px; margin: 2px 0; min-height: 24px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 3px; font-size: 0.75rem; }
+  .chips span { background: #efebe9; border-radius: 6px; padding: 1px 5px; white-space: nowrap; }
+  .chips span.y { background: #ffecb3; color: #8b1a1a; font-weight: bold; }
+
+  .mid { display: flex; gap: 8px; align-items: flex-start; }
+  .deckcol { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #fff; font-size: 0.75rem; flex: none; width: calc(var(--cw) * 0.95); }
+  .slot { min-height: calc(var(--cw) * 1.4); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .slot .lb { font-size: 0.68rem; text-align: center; line-height: 1.2; }
+  .fieldarea {
+    flex: 1; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; justify-content: center;
+    min-height: calc(var(--cw) * 2.9); padding: 6px; border-radius: 12px; background: rgba(0,0,0,0.15);
+  }
+  .hc.hl { outline: 3px solid #ffca28; outline-offset: 1px; }
+  .hc.pick { outline: 4px solid #ffca28; outline-offset: 1px; cursor: pointer; animation: pulse 0.8s infinite alternate; }
+  @keyframes pulse { from { transform: translateY(0); } to { transform: translateY(-5px); } }
+  .hc.new { animation: pop 0.35s; }
+  @keyframes pop { from { transform: scale(1.3); } to { transform: scale(1); } }
+
+  .msg {
+    background: #fff8e1; color: #4e342e; border-radius: 10px; padding: 7px 10px; font-weight: bold;
+    text-align: center; font-size: 0.98rem; min-height: 2.3em; display: flex; align-items: center; justify-content: center;
+  }
+  .me { background: rgba(255,255,255,0.92); border-radius: 12px; padding: 6px 8px; border: 3px solid transparent; }
+  .me.turn { border-color: #ffca28; box-shadow: 0 0 10px #ffca28; }
+  .mycaps { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+  .mycaps .grp { display: flex; gap: 1px; align-items: center; }
+  .hand { display: flex; gap: 5px; justify-content: center; padding: 10px 0 2px; min-height: calc(var(--cw) * 1.5 + 12px); }
+  .hand .hc { cursor: pointer; }
+  .hand .hc.sel { transform: translateY(-10px); outline: 3px solid #c62828; outline-offset: 1px; }
+
+  /* 重ねて出す画面 */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 12px;
+  }
+  .overlay .box { max-width: 640px; width: 100%; max-height: 92vh; overflow-y: auto; }
+  .zoomcard { width: min(62vw, 260px); }
+  .zoomcard .hc { width: 100%; border-radius: 14px; }
+  .yaku-pop {
+    position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 60;
+    background: #fff8e1; border: 4px solid #c62828; border-radius: 18px; padding: 14px 26px;
+    font-size: 1.6rem; font-weight: bold; color: #8b1a1a; text-align: center; pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); animation: yk 0.35s;
+  }
+  .yaku-pop small { display: block; font-size: 1rem; color: #4e342e; }
+  @keyframes yk { from { transform: translate(-50%, -50%) scale(0.5); } to { transform: translate(-50%, -50%) scale(1); } }
+
+  /* 一覧・結果 */
+  .list-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid #efebe9; }
+  .list-row .mo { width: 5.6em; font-size: 0.85rem; font-weight: bold; flex: none; line-height: 1.25; }
+  .list-row .mo small { font-weight: normal; color: #8d6e63; }
+  .list-row .cell { display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 0.62rem; width: 44px; text-align: center; line-height: 1.15; }
+  .list-row .cell .hc { width: 40px; }
+  table.t { border-collapse: collapse; width: 100%; font-size: 0.9rem; margin: 6px 0 10px; }
+  table.t th, table.t td { border: 1px solid #d7ccc8; padding: 4px 6px; text-align: center; }
+  table.t th { background: #efebe9; }
+  table.t td.l { text-align: left; }
+  .winner { background: #fff8e1; font-weight: bold; }
+  .caps-big { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+  .caps-big .hc { width: 40px; }
+  .note { font-size: 0.82rem; color: #6d4c41; line-height: 1.6; }
+
+  @media (min-width: 700px) {
+    .hc.small { width: 30px; }
+  }
+</style>
+</head>
+<body>
+<a class="back-link" href="../index.html">← もどる</a>
+<h1>🎴 <ruby>花札<rt>はなふだ</rt></ruby> はなあわせ</h1>
+<p class="subtitle">ロボ2体と3人で遊ぶ はなあわせ。3回戦の合計で勝負！</p>
+
+<div class="panel">
+  <!-- はじめの画面 -->
+  <section id="startScreen" class="box">
+    <h2>はじめる まえに</h2>
+    <div class="sample" id="sample"></div>
+    <div class="field-row">
+      <label for="nameIn">なまえ</label>
+      <input id="nameIn" maxlength="8" value="あなた">
+    </div>
+    <div class="field-row">
+      <label>ロボの強さ</label>
+      <div class="toggle" id="levelToggle">
+        <button data-lv="easy" class="on">やさしい</button>
+        <button data-lv="hard">つよい</button>
+      </div>
+    </div>
+    <ol class="rule-mini">
+      <li>手札（7まい）から1まい出す。場に<b>同じ月の札</b>があれば、2まいとも取れる。なければ場に置く。</li>
+      <li>つぎに山札を1まいめくって、同じように取る。</li>
+      <li>3人が7回ずつ出したら1回戦おわり。取った札の点数と「役」で勝負。3回戦の合計で順位が決まる。</li>
+    </ol>
+    <div class="btn-row">
+      <button class="btn" id="startBtn">はじめる</button>
+      <button class="btn sub" data-open-list>📖 札の一覧と役</button>
+    </div>
+  </section>
+
+  <!-- 対戦画面 -->
+  <section id="playScreen" class="table" hidden>
+    <div class="topbar">
+      <span class="round" id="roundLb">第1回戦</span>
+      <span class="btn-row">
+        <button class="btn sub small" data-open-list>📖 札の一覧</button>
+        <button class="btn sub small" id="quitBtn">やめる</button>
+      </span>
+    </div>
+    <div class="opps">
+      <div class="pl" id="pl1"></div>
+      <div class="pl" id="pl2"></div>
+    </div>
+    <div class="mid">
+      <div class="deckcol">
+        <div class="hc back field" id="deckCard"></div>
+        <span id="deckLb">山札 21</span>
+        <div class="slot" id="slot"></div>
+      </div>
+      <div class="fieldarea" id="fieldArea"></div>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="me" id="me">
+      <div class="pl-head"></div>
+      <div class="hand" id="hand"></div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="ov" hidden><div class="box" id="ovBox"></div></div>
+
+<script>
+// ===ENGINE START===
+// 12か月の名前と、昔の月の名前
+const MONTHS = [null,'松','梅','桜','藤','菖蒲','牡丹','萩','芒','菊','紅葉','柳','桐'];
+const MONTH_YOMI = [null,'まつ','うめ','さくら','ふじ','あやめ','ぼたん','はぎ','すすき','きく','もみじ','やなぎ','きり'];
+const OLD = [null,'睦月','如月','弥生','卯月','皐月','水無月','文月','葉月','長月','神無月','霜月','師走'];
+// 札の点数（ここを直すと点数が変わる）
+const PTS = { '光':20, 'タネ':10, '短冊':5, 'カス':1 };
+const BASE = 88;   // 264 ÷ 3
+// 役の点数（ここを直すと役の点数が変わる）
+const YAKU_PTS = { '五光':200, '四光':60, '三光':30, '赤短':40, '青短':40, '猪鹿蝶':20, '花見で一杯':20, '月見で一杯':20 };
+
+// 札の表：[種類, 絵の名前, 札の名前]
+const DEF = {
+  1: [['光','tsuru','松に鶴'],['短冊','aka','松に赤短'],['カス','k1','松のカス'],['カス','k2','松のカス']],
+  2: [['タネ','uguisu','梅に鶯'],['短冊','aka','梅に赤短'],['カス','k1','梅のカス'],['カス','k2','梅のカス']],
+  3: [['光','maku','桜に幕'],['短冊','aka','桜に赤短'],['カス','k1','桜のカス'],['カス','k2','桜のカス']],
+  4: [['タネ','hototogisu','藤にほととぎす'],['短冊','tan','藤に短冊'],['カス','k1','藤のカス'],['カス','k2','藤のカス']],
+  5: [['タネ','yatsuhashi','菖蒲に八橋'],['短冊','tan','菖蒲に短冊'],['カス','k1','菖蒲のカス'],['カス','k2','菖蒲のカス']],
+  6: [['タネ','chou','牡丹に蝶'],['短冊','ao','牡丹に青短'],['カス','k1','牡丹のカス'],['カス','k2','牡丹のカス']],
+  7: [['タネ','inoshishi','萩に猪'],['短冊','tan','萩に短冊'],['カス','k1','萩のカス'],['カス','k2','萩のカス']],
+  8: [['光','tsuki','芒に月'],['タネ','kari','芒に雁'],['カス','k1','芒のカス'],['カス','k2','芒のカス']],
+  9: [['タネ','sakazuki','菊に盃'],['短冊','ao','菊に青短'],['カス','k1','菊のカス'],['カス','k2','菊のカス']],
+  10:[['タネ','shika','紅葉に鹿'],['短冊','ao','紅葉に青短'],['カス','k1','紅葉のカス'],['カス','k2','紅葉のカス']],
+  11:[['光','ame','柳に雨'],['タネ','tsubame','柳に燕'],['短冊','tan','柳に短冊'],['カス','kaminari','柳のカス']],
+  12:[['光','houou','桐に鳳凰'],['カス','k1','桐のカス'],['カス','k2','桐のカス'],['カス','k3','桐のカス']],
+};
+const CARDS = [];
+for (let m = 1; m <= 12; m++) DEF[m].forEach(([t, art, name]) => CARDS.push({ id: CARDS.length, m, t, art, name, p: PTS[t] }));
+const byName = n => CARDS.find(c => c.name === n).id;
+const ID = {
+  ame: byName('柳に雨'), maku: byName('桜に幕'), tsuki: byName('芒に月'), sake: byName('菊に盃'),
+  ino: byName('萩に猪'), shika: byName('紅葉に鹿'), chou: byName('牡丹に蝶'),
+};
+const LIGHTS = CARDS.filter(c => c.t === '光').map(c => c.id);
+const AKA = CARDS.filter(c => c.art === 'aka').map(c => c.id);
+const AO = CARDS.filter(c => c.art === 'ao').map(c => c.id);
+
+// 役を調べる
+function yakuOf(caps) {
+  const has = id => caps.includes(id);
+  const res = [];
+  const L = LIGHTS.filter(has).length;
+  const nr = LIGHTS.filter(id => id !== ID.ame && has(id)).length;
+  if (L === 5) res.push('五光');
+  else if (nr === 4) res.push('四光');
+  else if (nr === 3) res.push('三光');
+  if (AKA.every(has)) res.push('赤短');
+  if (AO.every(has)) res.push('青短');
+  if (has(ID.ino) && has(ID.shika) && has(ID.chou)) res.push('猪鹿蝶');
+  if (has(ID.maku) && has(ID.sake)) res.push('花見で一杯');
+  if (has(ID.tsuki) && has(ID.sake)) res.push('月見で一杯');
+  return res.map(n => ({ name: n, pts: YAKU_PTS[n] }));
+}
+// 1回戦の点数
+function scoreOf(caps) {
+  const count = { '光':0, 'タネ':0, '短冊':0, 'カス':0 };
+  let cardPts = 0;
+  caps.forEach(id => { count[CARDS[id].t]++; cardPts += CARDS[id].p; });
+  const yaku = yakuOf(caps);
+  const yakuPts = yaku.reduce((s, y) => s + y.pts, 0);
+  return { count, cardPts, yaku, yakuPts, total: cardPts - BASE + yakuPts };
+}
+
+function shuffle(a, rnd) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+// 配る：手札7まい×3人、場札6まい、山札21まい。場に同じ月が4まいあれば配り直す。
+function deal(rnd) {
+  for (;;) {
+    const d = shuffle(CARDS.map(c => c.id), rnd);
+    const st = { hands: [d.slice(0, 7), d.slice(7, 14), d.slice(14, 21)], field: d.slice(21, 27), deck: d.slice(27), caps: [[], [], []] };
+    const cnt = {};
+    st.field.forEach(id => { const m = CARDS[id].m; cnt[m] = (cnt[m] || 0) + 1; });
+    if (Object.values(cnt).some(n => n >= 4)) continue;
+    st.hands.forEach(h => h.sort((a, b) => a - b));
+    return st;
+  }
+}
+const matchesOf = (field, card) => field.filter(f => CARDS[f].m === CARDS[card].m);
+// 札を出す（めくる）。取った札を返す。同じ月が2まいあるときは pick を取る。
+function resolve(st, p, card, pick) {
+  const ms = matchesOf(st.field, card);
+  let take;
+  if (ms.length === 0) { st.field.push(card); return []; }
+  if (ms.length === 1) take = [ms[0]];
+  else if (ms.length === 2) take = [ms.includes(pick) ? pick : ms[0]];
+  else take = ms;
+  st.field = st.field.filter(f => !take.includes(f));
+  const got = [card, ...take];
+  st.caps[p].push(...got);
+  return got;
+}
+
+// ---- ロボ ----
+const GROUPS = [
+  { ids: LIGHTS.filter(id => id !== ID.ame), pts: 60 },
+  { ids: AKA, pts: 40 }, { ids: AO, pts: 40 },
+  { ids: [ID.ino, ID.shika, ID.chou], pts: 20 },
+  { ids: [ID.maku, ID.sake], pts: 20 }, { ids: [ID.tsuki, ID.sake], pts: 20 },
+];
+// その札が、その人の役づくりにどれだけ役立つか
+function yakuBonus(st, p, card) {
+  let b = 0;
+  GROUPS.forEach(g => {
+    if (!g.ids.includes(card)) return;
+    const others = st.caps.some((c, q) => q !== p && g.ids.some(id => c.includes(id)));
+    if (others) return;
+    const own = g.ids.filter(id => st.caps[p].includes(id)).length;
+    b += g.pts * (own + 1) / g.ids.length * 0.4;
+  });
+  return b;
+}
+function gainValue(st, p, cards) {
+  let v = 0;
+  cards.forEach(id => {
+    v += CARDS[id].p + yakuBonus(st, p, id);
+    for (let q = 0; q < 3; q++) if (q !== p) v += yakuBonus(st, q, id) * 0.5; // じゃまする
+  });
+  return v;
+}
+function robotPick(st, p, card, options, level) {
+  if (level === 'easy') return options.slice().sort((a, b) => CARDS[b].p - CARDS[a].p)[0];
+  return options.slice().sort((a, b) => gainValue(st, p, [card, b]) - gainValue(st, p, [card, a]))[0];
+}
+function robotPlay(st, p, level, rnd) {
+  const hand = st.hands[p];
+  if (level === 'easy') {
+    const can = hand.filter(c => matchesOf(st.field, c).length > 0);
+    if (can.length) { const c = can[Math.floor(rnd() * can.length)]; return c; }
+    const minP = Math.min(...hand.map(c => CARDS[c].p));
+    const low = hand.filter(c => CARDS[c].p === minP);
+    return low[Math.floor(rnd() * low.length)];
+  }
+  let best = null, bestV = -Infinity;
+  hand.forEach(c => {
+    const ms = matchesOf(st.field, c);
+    let v;
+    if (ms.length === 0) {
+      // 場に置くと、だれかに取られるかもしれない
+      let risk = CARDS[c].p;
+      for (let q = 0; q < 3; q++) if (q !== p) risk = Math.max(risk, CARDS[c].p + yakuBonus(st, q, c));
+      v = -0.6 * risk - 0.3 * yakuBonus(st, p, c);
+    } else if (ms.length === 2) {
+      v = Math.max(...ms.map(m => gainValue(st, p, [c, m])));
+    } else {
+      v = gainValue(st, p, [c, ...ms]);
+    }
+    v += rnd() * 0.5;
+    if (v > bestV) { bestV = v; best = c; }
+  });
+  return best;
+}
+// ===ENGINE END===
+
+// ================= 札の絵 =================
+const f1 = n => n.toFixed(1);
+function petals(cx, cy, r, col, cc) {
+  let s = '';
+  for (let k = 0; k < 5; k++) {
+    const a = k * 72 * Math.PI / 180 - Math.PI / 2;
+    s += `<circle cx="${f1(cx + Math.cos(a) * r * 0.85)}" cy="${f1(cy + Math.sin(a) * r * 0.85)}" r="${f1(r * 0.6)}" fill="${col}"/>`;
+  }
+  return s + `<circle cx="${cx}" cy="${cy}" r="${f1(r * 0.32)}" fill="${cc}"/>`;
+}
+function star(cx, cy, r, rot, col, n = 5, inner = 0.45) {
+  let pts = [];
+  for (let k = 0; k < n * 2; k++) {
+    const rr = k % 2 ? r * inner : r;
+    const a = (k * Math.PI / n) + rot;
+    pts.push(f1(cx + Math.sin(a) * rr) + ',' + f1(cy - Math.cos(a) * rr));
+  }
+  return `<polygon points="${pts.join(' ')}" fill="${col}"/>`;
+}
+function chrysan(cx, cy, r, col, cc) {
+  let s = '';
+  for (let k = 0; k < 16; k++) {
+    const a = k * 22.5;
+    s += `<ellipse cx="${cx}" cy="${f1(cy - r * 0.55)}" rx="${f1(r * 0.16)}" ry="${f1(r * 0.48)}" fill="${col}" stroke="#b26a00" stroke-width="0.3" transform="rotate(${a} ${cx} ${cy})"/>`;
+  }
+  return s + `<circle cx="${cx}" cy="${cy}" r="${f1(r * 0.3)}" fill="${cc}"/>`;
+}
+function iris(cx, cy) {
+  return `<g fill="#4a2ea0" stroke="#2a1660" stroke-width="0.4">
+    <ellipse cx="${cx - 4}" cy="${cy + 2}" rx="2.6" ry="6" transform="rotate(-40 ${cx - 4} ${cy + 2})"/>
+    <ellipse cx="${cx + 4}" cy="${cy + 2}" rx="2.6" ry="6" transform="rotate(40 ${cx + 4} ${cy + 2})"/>
+    <ellipse cx="${cx}" cy="${cy - 3}" rx="2.4" ry="6"/></g><circle cx="${cx}" cy="${cy + 2}" r="1.2" fill="#fdd835"/>`;
+}
+function plant(m, v) {
+  switch (m) {
+    case 1: { // 松
+      let s = `<path d="M32 90 C27 76 36 62 29 47 C25 38 31 30 28 20" stroke="#5d4037" stroke-width="4" fill="none"/>`;
+      [[15, 52, 13], [45, 45, 13], [20, 31, 11], [42, 68, 12], [32, 19, 9]].forEach(([x, y, w]) => {
+        s += `<ellipse cx="${x}" cy="${y}" rx="${w}" ry="${f1(w * 0.45)}" fill="#1f5e2a"/>`;
+        for (let k = -2; k <= 2; k++) s += `<line x1="${x + k * w * 0.35}" y1="${y - w * 0.4}" x2="${x + k * w * 0.2}" y2="${y + w * 0.2}" stroke="#4caf50" stroke-width="0.6"/>`;
+      });
+      return s;
+    }
+    case 2: { // 梅
+      let s = `<path d="M4 90 L18 64 L12 42 L28 20 M18 64 L38 50 L50 28 M28 20 L40 8" stroke="#3e2723" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+      [[12, 42, 5], [28, 20, 5], [38, 50, 5], [50, 28, 5], [20, 64, 4.5], [40, 8, 4]].forEach(([x, y, r]) => s += petals(x, y, r, '#e53935', '#ffeb3b'));
+      [[24, 34], [45, 40], [8, 56]].forEach(([x, y]) => s += `<circle cx="${x}" cy="${y}" r="1.8" fill="#c62828"/>`);
+      return s;
+    }
+    case 3: { // 桜
+      let s = `<path d="M0 30 Q20 26 34 36 Q46 42 60 36" stroke="#5d4037" stroke-width="2.5" fill="none"/>`;
+      [[8, 12, 6], [22, 8, 6], [36, 14, 6], [52, 9, 5.5], [15, 26, 6], [30, 25, 5.5], [46, 26, 6], [8, 40, 5], [24, 42, 5], [40, 44, 5], [55, 42, 5]].forEach(([x, y, r]) => s += petals(x, y, r, '#f8a5c2', '#fff'));
+      return s;
+    }
+    case 4: { // 藤
+      let s = `<path d="M0 6 Q30 0 60 8" stroke="#33691e" stroke-width="2" fill="none"/>`;
+      [[6, 4], [24, 2], [42, 3], [56, 6]].forEach(([x, y]) => s += `<ellipse cx="${x}" cy="${y + 3}" rx="6" ry="2.5" fill="#558b2f"/>`);
+      [12, 30, 48].forEach((x, i) => {
+        for (let j = 0; j < 8; j++) s += `<ellipse cx="${f1(x + Math.sin(j * 0.9) * 1.5)}" cy="${10 + j * 6}" rx="${f1(5 - j * 0.45)}" ry="3.2" fill="${j % 2 ? '#8e44ad' : '#6a1b9a'}"/>`;
+      });
+      return s;
+    }
+    case 5: { // 菖蒲
+      let s = '';
+      ['M8 90 Q14 52 8 22', 'M18 90 Q20 60 26 30', 'M44 90 Q40 60 46 38', 'M54 90 Q50 66 56 44', 'M30 90 Q32 70 30 50'].forEach(d => s += `<path d="${d}" stroke="#2e7d32" stroke-width="3" fill="none" stroke-linecap="round"/>`);
+      s += iris(24, 26) + iris(46, 36);
+      return s;
+    }
+    case 6: { // 牡丹
+      let s = '';
+      [[12, 44], [48, 30], [34, 70], [8, 70], [52, 60]].forEach(([x, y]) => s += `<ellipse cx="${x}" cy="${y}" rx="8" ry="4.5" fill="#2e7d32" transform="rotate(-30 ${x} ${y})"/>`);
+      [[22, 32, 11], [42, 54, 10]].forEach(([x, y, r]) => s += `<circle cx="${x}" cy="${y}" r="${r}" fill="#b71c1c"/><circle cx="${x}" cy="${y}" r="${r * 0.7}" fill="#e53935"/><circle cx="${x}" cy="${y}" r="${r * 0.38}" fill="#ef9a9a"/>`);
+      return s;
+    }
+    case 7: { // 萩
+      let s = '';
+      [[4, 90, 22, 50, 54, 18], [16, 90, 30, 60, 58, 46], [2, 70, 18, 40, 30, 8]].forEach(([x0, y0, x1, y1, x2, y2]) => {
+        s += `<path d="M${x0} ${y0} Q${x1} ${y1} ${x2} ${y2}" stroke="#6d4c41" stroke-width="1.4" fill="none"/>`;
+        for (let k = 1; k <= 7; k++) {
+          const t = k / 8, x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * x1 + t * t * x2, y = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * y1 + t * t * y2;
+          s += `<ellipse cx="${f1(x - 3)}" cy="${f1(y + 1)}" rx="2.6" ry="1.4" fill="#689f38" transform="rotate(30 ${f1(x - 3)} ${f1(y + 1)})"/><circle cx="${f1(x + 2)}" cy="${f1(y - 2)}" r="1.9" fill="#d81b60"/>`;
+        }
+      });
+      return s;
+    }
+    case 8: { // 芒
+      let s = `<path d="M0 54 Q30 34 60 50 L60 90 L0 90Z" fill="#1d1d1d"/>`;
+      for (let k = 0; k < 9; k++) {
+        const x = 3 + k * 7;
+        s += `<path d="M${x} 90 Q${x + 2} 66 ${x + 6} ${46 + Math.abs(4 - k) * 2}" stroke="#f3eee0" stroke-width="0.8" fill="none"/>`;
+      }
+      return s;
+    }
+    case 9: { // 菊
+      let s = `<path d="M30 90 Q28 60 30 36 M16 90 Q18 74 16 60" stroke="#2e7d32" stroke-width="2" fill="none"/>`;
+      [[40, 48], [10, 72], [50, 74]].forEach(([x, y]) => s += `<ellipse cx="${x}" cy="${y}" rx="6" ry="3.5" fill="#33691e"/>`);
+      s += chrysan(30, 28, 13, '#fbc02d', '#e65100') + chrysan(16, 58, 8, '#fff59d', '#e65100');
+      return s;
+    }
+    case 10: { // 紅葉
+      let s = `<path d="M60 4 Q36 14 24 30 Q14 44 4 50" stroke="#4e342e" stroke-width="2" fill="none"/>`;
+      [[14, 14, 8, 0.2], [34, 10, 7, -0.3], [50, 22, 8, 0.5], [22, 34, 7, 0.1], [44, 42, 7, -0.2], [10, 52, 6, 0.4], [32, 54, 6, 0.0]].forEach(([x, y, r, a], i) => s += star(x, y, r, a, i % 2 ? '#e64a19' : '#c62828', 5, 0.42));
+      return s;
+    }
+    case 11: { // 柳
+      let s = '';
+      [8, 20, 34, 48, 58].forEach((x, i) => {
+        const len = 50 + (i % 2) * 18;
+        s += `<path d="M${x} 0 Q${x + 7} ${len / 2} ${x + 2} ${len}" stroke="#9ccc65" stroke-width="1.3" fill="none"/>`;
+        for (let k = 1; k < 7; k++) s += `<ellipse cx="${f1(x + 4 + Math.sin(k) * 1.5)}" cy="${f1(k * len / 7)}" rx="1.2" ry="2.6" fill="#7cb342"/>`;
+      });
+      return s;
+    }
+    case 12: { // 桐
+      let s = '';
+      [[16, 78, -20], [44, 80, 20], [30, 70, 0]].forEach(([x, y, a]) => s += `<path d="M${x} ${y + 12} C${x - 16} ${y} ${x - 10} ${y - 16} ${x} ${y - 10} C${x + 10} ${y - 16} ${x + 16} ${y} ${x} ${y + 12}Z" fill="#2e7d32" stroke="#1b5e20" stroke-width="0.6" transform="rotate(${a} ${x} ${y})"/>`);
+      s += `<path d="M30 60 L30 34" stroke="#33691e" stroke-width="1.5"/>`;
+      for (let r = 0; r < 4; r++) for (let k = -r; k <= r; k++) s += `<circle cx="${30 + k * 4}" cy="${16 + r * 5}" r="2.2" fill="${(r + k) % 2 ? '#8e24aa' : '#6a1b9a'}"/>`;
+      return s;
+    }
+  }
+  return '';
+}
+function item(c) {
+  switch (c.art) {
+    case 'aka': case 'ao': case 'tan': {
+      const col = c.art === 'ao' ? '#1a47a0' : '#d32f2f';
+      let s = `<g transform="rotate(-10 30 46)"><rect x="25" y="24" width="10" height="44" rx="1" fill="${col}" stroke="#2b1d1d" stroke-width="0.6"/>`;
+      if (c.art !== 'tan') s += `<path d="M28 31 h4 M30 30 v6 M28 42 q2 3 4 0 M30 50 v7 M28 54 h4" stroke="#111" stroke-width="1" fill="none"/>`;
+      return s + '</g>';
+    }
+    case 'tsuru':
+      return `<circle cx="46" cy="16" r="10" fill="#e53935"/>
+        <path d="M34 64 Q40 52 44 40" stroke="#fff" stroke-width="3" fill="none"/><path d="M34 64 Q40 52 44 40" stroke="#333" stroke-width="0.4" fill="none"/>
+        <ellipse cx="28" cy="66" rx="13" ry="7" fill="#fff" stroke="#333" stroke-width="0.6"/>
+        <path d="M15 66 Q10 70 12 76 L22 70Z" fill="#222"/>
+        <circle cx="44" cy="39" r="2.6" fill="#fff" stroke="#333" stroke-width="0.4"/><circle cx="44" cy="37" r="1.2" fill="#e53935"/>
+        <path d="M46 39 L52 41 L46 40Z" fill="#555"/>
+        <path d="M26 72 L24 86 M30 72 L32 86" stroke="#333" stroke-width="1"/>`;
+    case 'uguisu':
+      return `<g transform="translate(36 58)"><path d="M-8 2 L-15 6 L-13 0Z" fill="#6b7a2a"/><ellipse cx="0" cy="0" rx="8" ry="5" fill="#8d9a3c" stroke="#4e5a1a" stroke-width="0.5"/>
+        <circle cx="7" cy="-4" r="3.8" fill="#9aa845"/><path d="M10 -4 L13.5 -3 L10 -2.4Z" fill="#333"/><circle cx="8" cy="-4.6" r="0.8" fill="#111"/>
+        <path d="M-2 5 L-3 9 M2 5 L2 9" stroke="#5d4037" stroke-width="0.8"/></g>`;
+    case 'maku':
+      return `<rect x="1" y="48" width="58" height="41" fill="#fafafa"/>
+        <rect x="1" y="48" width="58" height="6" fill="#c62828"/>
+        <path d="M10 54 v35 M22 54 v35 M34 54 v35 M46 54 v35" stroke="#d7ccc8" stroke-width="1"/>
+        ${[16, 40].map(x => `<circle cx="${x}" cy="70" r="6" fill="none" stroke="#c62828" stroke-width="1.6"/><circle cx="${x}" cy="70" r="2" fill="#c62828"/>`).join('')}
+        <rect x="1" y="83" width="58" height="6" fill="#c62828"/>`;
+    case 'hototogisu':
+      return `<circle cx="46" cy="70" r="8" fill="#fdd835"/><circle cx="50" cy="67" r="7" fill="#fffaf0"/>
+        <path d="M14 66 Q22 58 28 64 Q34 56 44 58 Q34 62 30 68 Q24 70 20 74 Z" fill="#212121"/><path d="M28 64 L33 62" stroke="#e53935" stroke-width="1"/>`;
+    case 'yatsuhashi':
+      return `<g fill="#8d6e63" stroke="#4e342e" stroke-width="0.6"><polygon points="2,72 30,62 32,68 4,78"/><polygon points="30,62 58,70 56,76 32,68"/></g>
+        <path d="M8 80 v8 M24 72 v14 M40 72 v14 M52 78 v10" stroke="#4e342e" stroke-width="1.5"/>`;
+    case 'chou': {
+      const b = (x, y, s, c1, c2) => `<g transform="translate(${x} ${y}) scale(${s})"><ellipse cx="-5" cy="-3" rx="5" ry="4" fill="${c1}"/><ellipse cx="5" cy="-3" rx="5" ry="4" fill="${c1}"/><ellipse cx="-4" cy="3" rx="3.5" ry="3" fill="${c2}"/><ellipse cx="4" cy="3" rx="3.5" ry="3" fill="${c2}"/><rect x="-0.6" y="-5" width="1.2" height="10" fill="#222"/></g>`;
+      return b(36, 76, 1.1, '#ffb300', '#4fc3f7') + b(16, 64, 0.8, '#4fc3f7', '#ffb300');
+    }
+    case 'inoshishi':
+      return `<g transform="translate(30 70)"><ellipse cx="0" cy="0" rx="15" ry="8" fill="#5d4037"/><path d="M-14 -6 Q0 -12 14 -6" stroke="#3e2723" stroke-width="2" fill="none"/>
+        <polygon points="12,-6 24,2 22,6 12,6" fill="#6d4c41"/><circle cx="18" cy="-1" r="0.9" fill="#fff"/><path d="M22 4 l3 -2" stroke="#fff" stroke-width="1.2"/>
+        <rect x="-11" y="5" width="3" height="9" fill="#3e2723"/><rect x="7" y="5" width="3" height="9" fill="#3e2723"/></g>`;
+    case 'tsuki':
+      return `<circle cx="30" cy="28" r="15" fill="#fff8e1" stroke="#e0c070" stroke-width="0.6"/>`;
+    case 'kari': {
+      let s = '';
+      [[18, 14], [30, 20], [42, 12]].forEach(([x, y]) => s += `<path d="M${x - 6} ${y} Q${x - 2} ${y - 4} ${x} ${y} Q${x + 2} ${y - 4} ${x + 6} ${y}" stroke="#222" stroke-width="1.8" fill="none"/>`);
+      return s;
+    }
+    case 'sakazuki':
+      return `<ellipse cx="30" cy="66" rx="14" ry="4" fill="#e53935" stroke="#7f1414" stroke-width="0.6"/>
+        <path d="M16 66 Q30 84 44 66" fill="#c62828" stroke="#7f1414" stroke-width="0.6"/><rect x="25" y="76" width="10" height="4" rx="1" fill="#b71c1c"/>
+        <circle cx="30" cy="72" r="3" fill="#fdd835"/>`;
+    case 'shika':
+      return `<g transform="translate(28 70)"><ellipse cx="0" cy="0" rx="13" ry="6" fill="#a1662f"/>
+        <circle cx="-4" cy="-2" r="1" fill="#fff"/><circle cx="3" cy="-1" r="1" fill="#fff"/><circle cx="-1" cy="2" r="1" fill="#fff"/>
+        <path d="M10 -2 L16 -14" stroke="#a1662f" stroke-width="4"/><ellipse cx="18" cy="-16" rx="4.5" ry="3" fill="#a1662f"/>
+        <path d="M17 -18 L14 -27 M15 -23 L11 -26 M19 -18 L22 -27 M21 -23 L25 -25" stroke="#5d4037" stroke-width="1.2" fill="none"/>
+        <path d="M-9 4 L-10 16 M-5 5 L-5 16 M6 4 L6 16 M10 3 L11 16" stroke="#7b4a1e" stroke-width="1.6"/></g>`;
+    case 'ame':
+      return `<path d="M6 60 Q20 46 34 60 Z" fill="#b71c1c" stroke="#5a0b0b" stroke-width="0.6"/><path d="M20 60 v6" stroke="#5d4037" stroke-width="1"/>
+        <path d="M14 64 L26 64 L28 86 L12 86Z" fill="#1565c0"/><circle cx="20" cy="62" r="3" fill="#ffe0b2"/>
+        <ellipse cx="46" cy="84" rx="4" ry="2.6" fill="#7cb342"/><circle cx="44" cy="82" r="1.2" fill="#7cb342"/><circle cx="48" cy="82" r="1.2" fill="#7cb342"/>
+        <path d="M40 30 L38 38 M50 40 L48 48 M8 30 L6 38 M54 60 L52 68" stroke="#90caf9" stroke-width="0.8"/>`;
+    case 'tsubame':
+      return `<g transform="translate(32 54) rotate(-15)"><path d="M-14 -2 Q-4 -10 6 -2 Q12 -6 16 -2 Q10 0 6 2 Q-2 4 -14 -2Z" fill="#1a237e"/>
+        <path d="M-12 -1 L-20 -6 M-12 0 L-20 4" stroke="#1a237e" stroke-width="1.5"/><circle cx="10" cy="-1" r="1.4" fill="#e53935"/></g>`;
+    case 'houou':
+      return `<g transform="translate(30 36)">
+        <path d="M-4 4 Q-20 20 -24 36" stroke="#1565c0" stroke-width="2" fill="none"/><path d="M-2 6 Q-12 24 -10 40" stroke="#fbc02d" stroke-width="2" fill="none"/><path d="M0 6 Q-2 22 4 38" stroke="#e53935" stroke-width="2" fill="none"/>
+        <path d="M-2 -2 Q-18 -14 -22 -4 Q-14 -2 -4 4Z" fill="#2e7d32"/><path d="M2 -2 Q18 -16 24 -6 Q14 -2 4 4Z" fill="#43a047"/>
+        <ellipse cx="0" cy="0" rx="6" ry="8" fill="#e53935"/><circle cx="2" cy="-10" r="3.5" fill="#fbc02d"/><path d="M5 -10 L9 -9 L5 -8Z" fill="#e65100"/>
+        <path d="M0 -13 L-2 -18 M2 -13 L2 -19 M4 -13 L6 -18" stroke="#e53935" stroke-width="1"/></g>`;
+    case 'kaminari': {
+      let s = '';
+      for (let k = 0; k < 14; k++) s += `<path d="M${(k * 13) % 58 + 2} ${(k * 23) % 70 + 4} l-2 9" stroke="#b0bec5" stroke-width="0.9"/>`;
+      return s + `<polygon points="34,6 24,40 32,40 22,80 44,32 34,32 42,6" fill="#fdd835" stroke="#f57f17" stroke-width="0.6"/>`;
+    }
+  }
+  return '';
+}
+const SVG_CACHE = {};
+function cardSVG(id) {
+  if (SVG_CACHE[id]) return SVG_CACHE[id];
+  const c = CARDS[id];
+  let bg = '#fffaf0';
+  if (c.art === 'ame' || c.art === 'kaminari') bg = '#2f3e46';
+  if (c.art === 'houou' || (c.m === 12 && c.art === 'k3')) bg = '#fff3c4';
+  let s = `<svg viewBox="0 0 60 90" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="90" fill="${bg}"/>`;
+  if (c.art === 'tsuki') s += `<rect width="60" height="56" fill="#d84315"/>`;
+  const mirror = c.art === 'k2';
+  if (c.art !== 'kaminari') s += mirror ? `<g transform="translate(60 0) scale(-1 1)">${plant(c.m)}</g>` : plant(c.m);
+  s += item(c);
+  s += `<rect x="1" y="1" width="58" height="88" rx="3" fill="none" stroke="#3b2f2f" stroke-width="1.6"/></svg>`;
+  return SVG_CACHE[id] = s;
+}
+function cardEl(id, cls = '') { return `<div class="hc ${cls}" data-id="${id}">${cardSVG(id)}</div>`; }
+
+// ================= 画面と進行 =================
+const $ = id => document.getElementById(id);
+const rnd = Math.random;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let G = null;          // いまの試合
+let gen = 0;           // やめたときに古い進行を止める番号
+let level = 'easy';
+
+function loadPref() {
+  try {
+    const n = localStorage.getItem('hanaawase-name'); if (n) $('nameIn').value = n;
+    const l = localStorage.getItem('hanaawase-level'); if (l === 'hard' || l === 'easy') setLevel(l);
+  } catch (e) {}
+}
+function savePref() { try { localStorage.setItem('hanaawase-name', $('nameIn').value); localStorage.setItem('hanaawase-level', level); } catch (e) {} }
+function setLevel(l) { level = l; document.querySelectorAll('#levelToggle button').forEach(b => b.classList.toggle('on', b.dataset.lv === l)); }
+
+$('levelToggle').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setLevel(b.dataset.lv); });
+$('sample').innerHTML = [byName('松に鶴'), byName('桜に幕'), byName('芒に月'), byName('柳に雨'), byName('桐に鳳凰')].map(id => cardEl(id)).join('');
+
+$('startBtn').addEventListener('click', () => {
+  const name = ($('nameIn').value.trim() || 'あなた').slice(0, 8);
+  savePref();
+  G = { names: [name, 'ロボ・うめ', 'ロボ・さくら'], round: 0, totals: [0, 0, 0], history: [] };
+  $('startScreen').hidden = true; $('playScreen').hidden = false;
+  startRound();
+});
+$('quitBtn').addEventListener('click', () => {
+  if (!confirm('試合をやめて、はじめの画面にもどりますか？')) return;
+  gen++; G = null; closeOv();
+  $('playScreen').hidden = true; $('startScreen').hidden = false;
+});
+
+function startRound() {
+  const st = deal(rnd);
+  Object.assign(G, st, { turn: -1, slot: null, hl: [], pickOpts: [], sel: null, waitHand: null, waitPick: null, yakuSeen: [[], [], []], fresh: [] });
+  G.start = G.round % 3;
+  playRound(++gen);
+}
+
+async function playRound(myGen) {
+  render(); setMsg(`第${G.round + 1}回戦をはじめます`);
+  await sleep(900); if (myGen !== gen) return;
+  for (let t = 0; t < 21; t++) {
+    const p = (G.start + t) % 3;
+    G.turn = p;
+    // 手札から出す
+    let card;
+    if (p === 0) {
+      setMsg('あなたの番：手札をタップ → もう一度タップで出す');
+      render();
+      card = await new Promise(r => G.waitHand = r);
+      G.waitHand = null; G.sel = null;
+    } else {
+      setMsg(`${G.names[p]} が考えています…`);
+      render();
+      await sleep(level === 'hard' ? 1000 : 800); if (myGen !== gen) return;
+      card = robotPlay(G, p, level, rnd);
+    }
+    if (myGen !== gen) return;
+    G.hands[p] = G.hands[p].filter(c => c !== card);
+    if (!await doCard(myGen, p, card, `${G.names[p]} が出した札`)) return;
+    // 山札をめくる
+    const d = G.deck.pop();
+    if (!await doCard(myGen, p, d, `山札からめくった札`)) return;
+  }
+  G.turn = -1; G.slot = null; render();
+  setMsg('この回戦はおしまい！');
+  await sleep(800); if (myGen !== gen) return;
+  showRoundResult();
+}
+
+// 1まいの札を場に出して、取るか置くかを決める
+async function doCard(myGen, p, card, label) {
+  G.slot = { card, label }; G.hl = matchesOf(G.field, card);
+  setMsg(label.startsWith('山札') ? `${G.names[p]} が山札をめくりました` : `${G.names[p]} が札を出しました`);
+  render();
+  await sleep(p === 0 ? 600 : 800); if (myGen !== gen) return false;
+  const ms = G.hl;
+  let pick = null;
+  if (ms.length === 2) {
+    if (p === 0) {
+      setMsg('どちらの札を取りますか？（動いている札をタップ）');
+      G.pickOpts = ms; render();
+      pick = await new Promise(r => G.waitPick = r);
+      G.waitPick = null; G.pickOpts = [];
+      if (myGen !== gen) return false;
+    } else pick = robotPick(G, p, card, ms, level);
+  }
+  const got = resolve(G, p, card, pick);
+  G.slot = null; G.hl = [];
+  G.fresh = got.length ? [] : [card];
+  if (got.length) setMsg(`${G.names[p]} が ${got.length}まい取りました`);
+  else setMsg(`${G.names[p]}：取れる札がないので場に置きました`);
+  render();
+  await sleep(500); if (myGen !== gen) return false;
+  // 新しい役
+  const ys = yakuOf(G.caps[p]).filter(y => !G.yakuSeen[p].includes(y.name));
+  for (const y of ys) {
+    G.yakuSeen[p].push(y.name);
+    await yakuPop(G.names[p], y);
+    if (myGen !== gen) return false;
+  }
+  return true;
+}
+
+async function yakuPop(name, y) {
+  const el = document.createElement('div');
+  el.className = 'yaku-pop';
+  el.innerHTML = `🎉 ${y.name}！<small>${esc(name)} ＋${y.pts}点</small>`;
+  document.body.appendChild(el);
+  await sleep(1500);
+  el.remove();
+}
+
+function setMsg(t) { $('msg').textContent = t; }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+function chipsHTML(caps) {
+  const sc = scoreOf(caps);
+  let s = ['光', 'タネ', '短冊', 'カス'].map(t => `<span>${t} ${sc.count[t]}</span>`).join('');
+  s += `<span>${sc.cardPts}点</span>`;
+  sc.yaku.forEach(y => s += `<span class="y">${y.name}</span>`);
+  return s;
+}
+function plHTML(p) {
+  const think = G.turn === p ? (p === 0 ? 'あなたの番' : '考え中…') : '';
+  return `<div class="nm"><span>${esc(G.names[p])}</span><span class="sc">合計 ${G.totals[p]}</span></div>
+    <div class="think">${think}</div>
+    ${p ? `<div class="backs">${G.hands[p].map(() => '<div class="hc back mini"></div>').join('')}</div>` : ''}
+    <div class="chips">${chipsHTML(G.caps[p])}</div>`;
+}
+function render() {
+  if (!G) return;
+  $('roundLb').textContent = `第${G.round + 1}回戦 / 3`;
+  [1, 2].forEach(p => { const el = $('pl' + p); el.innerHTML = plHTML(p); el.classList.toggle('turn', G.turn === p); });
+  $('deckLb').textContent = `山札 ${G.deck.length}`;
+  $('deckCard').style.visibility = G.deck.length ? 'visible' : 'hidden';
+  $('slot').innerHTML = G.slot ? `${cardEl(G.slot.card, 'field new')}<span class="lb">${esc(G.slot.label)}</span>` : '';
+  $('fieldArea').innerHTML = G.field.map(id => {
+    let cls = 'field';
+    if (G.pickOpts.includes(id)) cls += ' pick';
+    else if (G.hl.includes(id)) cls += ' hl';
+    if (G.fresh.includes(id)) cls += ' new';
+    return cardEl(id, cls);
+  }).join('');
+  const me = $('me');
+  me.classList.toggle('turn', G.turn === 0);
+  const groups = ['光', 'タネ', '短冊', 'カス'].map(t => {
+    const ids = G.caps[0].filter(id => CARDS[id].t === t).sort((a, b) => a - b);
+    return ids.length ? `<div class="grp">${ids.map(id => cardEl(id, 'small')).join('')}</div>` : '';
+  }).join('');
+  me.querySelector('.pl-head').innerHTML = `<div class="nm" style="font-weight:bold;display:flex;justify-content:space-between"><span>${esc(G.names[0])}</span><span style="color:#8b1a1a">合計 ${G.totals[0]}</span></div>
+    <div class="mycaps">${groups}</div><div class="chips">${chipsHTML(G.caps[0])}</div>`;
+  $('hand').innerHTML = G.hands[0].map(id => cardEl(id, G.sel === id ? 'sel' : '')).join('');
+}
+
+// ---- タップと長押し ----
+let pressTimer = null, longPressed = false;
+document.addEventListener('pointerdown', e => {
+  const c = e.target.closest('.hc[data-id]');
+  if (!c || c.closest('.overlay')) return;
+  longPressed = false;
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => { longPressed = true; showZoom(+c.dataset.id); }, 550);
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => document.addEventListener(ev, () => clearTimeout(pressTimer)));
+document.addEventListener('contextmenu', e => { if (e.target.closest('.hc')) e.preventDefault(); });
+
+$('hand').addEventListener('click', e => {
+  if (longPressed) { longPressed = false; return; }
+  const c = e.target.closest('.hc[data-id]');
+  if (!c || !G || !G.waitHand) return;
+  const id = +c.dataset.id;
+  if (G.sel === id) G.waitHand(id);
+  else { G.sel = id; render(); }
+});
+$('fieldArea').addEventListener('click', e => {
+  if (longPressed) { longPressed = false; return; }
+  const c = e.target.closest('.hc[data-id]');
+  if (!c || !G || !G.waitPick) return;
+  const id = +c.dataset.id;
+  if (G.pickOpts.includes(id)) G.waitPick(id);
+});
+[1, 2].forEach(p => $('pl' + p).addEventListener('click', () => showCaps(p)));
+
+// ---- 重ねて出す画面 ----
+function openOv(html, wide) { $('ovBox').innerHTML = html; $('ov').hidden = false; }
+function closeOv() { $('ov').hidden = true; $('ovBox').innerHTML = ''; }
+$('ov').addEventListener('click', e => {
+  if (e.target.id === 'ov' || e.target.closest('[data-close]')) closeOv();
+});
+function showZoom(id) {
+  openOv(`<div style="display:flex;flex-direction:column;align-items:center;gap:10px"><div class="zoomcard">${cardEl(id)}</div><button class="btn sub" data-close>とじる</button></div>`);
+}
+function showCaps(p) {
+  if (!G) return;
+  const sc = scoreOf(G.caps[p]);
+  const ids = G.caps[p].slice().sort((a, b) => a - b);
+  openOv(`<h2>${esc(G.names[p])} が取った札</h2>
+    <div class="caps-big">${ids.map(id => cardEl(id)).join('') || 'まだありません'}</div>
+    <div class="chips">${chipsHTML(G.caps[p])}</div>
+    <p class="note">手札はのこり ${G.hands[p].length}まい。</p>
+    <div class="btn-row"><button class="btn sub" data-close>とじる</button></div>`);
+}
+function showList() {
+  let rows = '';
+  for (let m = 1; m <= 12; m++) {
+    const ids = CARDS.filter(c => c.m === m);
+    rows += `<div class="list-row"><div class="mo">${m}月 ${MONTHS[m]}<br><small>${MONTH_YOMI[m]}・${OLD[m]}</small></div>` +
+      ids.map(c => `<div class="cell">${cardEl(c.id)}<span>${c.t}</span></div>`).join('') + '</div>';
+  }
+  const ex = (names) => names.map(n => cardEl(byName(n), 'small')).join('');
+  openOv(`<h2>📖 札の一覧</h2>
+    <p class="note">同じ月の札どうしを合わせて取ります。点数は 光20・タネ10・短冊5・カス1（ぜんぶで264点）。</p>
+    ${rows}
+    <h2 style="margin-top:14px">役の点数</h2>
+    <table class="t">
+      <tr><th>役</th><th>そろえる札</th><th>点</th></tr>
+      <tr><td>五光</td><td class="l">光を5まい ${ex(['松に鶴', '桜に幕', '芒に月', '柳に雨', '桐に鳳凰'])}</td><td>${YAKU_PTS['五光']}</td></tr>
+      <tr><td>四光</td><td class="l">「柳に雨」いがいの光4まい</td><td>${YAKU_PTS['四光']}</td></tr>
+      <tr><td>三光</td><td class="l">「柳に雨」いがいの光3まい</td><td>${YAKU_PTS['三光']}</td></tr>
+      <tr><td>赤短</td><td class="l">字のある赤い短冊3まい ${ex(['松に赤短', '梅に赤短', '桜に赤短'])}</td><td>${YAKU_PTS['赤短']}</td></tr>
+      <tr><td>青短</td><td class="l">青い短冊3まい ${ex(['牡丹に青短', '菊に青短', '紅葉に青短'])}</td><td>${YAKU_PTS['青短']}</td></tr>
+      <tr><td>猪鹿蝶</td><td class="l">${ex(['萩に猪', '紅葉に鹿', '牡丹に蝶'])}</td><td>${YAKU_PTS['猪鹿蝶']}</td></tr>
+      <tr><td>花見で一杯</td><td class="l">${ex(['桜に幕', '菊に盃'])}</td><td>${YAKU_PTS['花見で一杯']}</td></tr>
+      <tr><td>月見で一杯</td><td class="l">${ex(['芒に月', '菊に盃'])}</td><td>${YAKU_PTS['月見で一杯']}</td></tr>
+    </table>
+    <p class="note">1回戦の得点 ＝ 取った札の点数 − 88点 ＋ 役の点数。88点は、264点を3人で分けたときの1人分です。<br>
+    場に同じ月の札が2まいあるときは、どちらか1まいを選んで取ります。3まいあるときは、4まいぜんぶ取れます。</p>
+    <div class="btn-row"><button class="btn sub" data-close>とじる</button></div>`);
+}
+document.querySelectorAll('[data-open-list]').forEach(b => b.addEventListener('click', showList));
+
+function showRoundResult() {
+  const scs = [0, 1, 2].map(p => scoreOf(G.caps[p]));
+  scs.forEach((s, p) => G.totals[p] += s.total);
+  G.history.push(scs.map(s => s.total));
+  render();
+  const last = G.round === 2;
+  let rows = [0, 1, 2].map(p => {
+    const s = scs[p];
+    return `<tr><td>${esc(G.names[p])}</td><td>${s.count['光']}</td><td>${s.count['タネ']}</td><td>${s.count['短冊']}</td><td>${s.count['カス']}</td>
+      <td>${s.cardPts}</td><td class="l">${s.yaku.map(y => `${y.name} ${y.pts}`).join('<br>') || '－'}</td><td><b>${s.total > 0 ? '+' : ''}${s.total}</b></td><td>${G.totals[p]}</td></tr>`;
+  }).join('');
+  const left = G.field.length ? `<p class="note">場にのこった札（だれの点にもならない）：${G.field.length}まい</p>` : '';
+  openOv(`<h2>第${G.round + 1}回戦の結果</h2>
+    <div style="overflow-x:auto"><table class="t">
+      <tr><th>なまえ</th><th>光</th><th>タネ</th><th>短冊</th><th>カス</th><th>札の点</th><th>役</th><th>得点</th><th>合計</th></tr>${rows}
+    </table></div>
+    <p class="note">得点 ＝ 札の点 − 88 ＋ 役の点</p>${left}
+    <div class="btn-row"><button class="btn" id="nextBtn">${last ? '最終結果を見る' : `第${G.round + 2}回戦へ`}</button></div>`);
+  $('nextBtn').addEventListener('click', () => {
+    closeOv();
+    if (last) showFinal();
+    else { G.round++; startRound(); }
+  });
+}
+function showFinal() {
+  const order = [0, 1, 2].sort((a, b) => G.totals[b] - G.totals[a]);
+  const medal = ['🥇', '🥈', '🥉'];
+  let rank = 0;
+  const rows = order.map((p, i) => {
+    if (i > 0 && G.totals[p] < G.totals[order[i - 1]]) rank = i;
+    return `<tr class="${rank === 0 ? 'winner' : ''}"><td>${medal[rank]} ${rank + 1}位</td><td>${esc(G.names[p])}</td>${G.history.map(h => `<td>${h[p]}</td>`).join('')}<td><b>${G.totals[p]}</b></td></tr>`;
+  }).join('');
+  const win = G.totals[0] === Math.max(...G.totals);
+  openOv(`<h2>${win ? '🎉 あなたの勝ち！' : 'おしまい！'}</h2>
+    <table class="t"><tr><th>順位</th><th>なまえ</th><th>1回戦</th><th>2回戦</th><th>3回戦</th><th>合計</th></tr>${rows}</table>
+    <div class="btn-row"><button class="btn" id="againBtn">もう一度</button><button class="btn sub" id="topBtn">はじめの画面へ</button></div>`);
+  $('againBtn').addEventListener('click', () => { closeOv(); G.round = 0; G.totals = [0, 0, 0]; G.history = []; startRound(); });
+  $('topBtn').addEventListener('click', () => { closeOv(); gen++; G = null; $('playScreen').hidden = true; $('startScreen').hidden = false; });
+}
+
+loadPref();
+</script>
+</body>
+</html>
