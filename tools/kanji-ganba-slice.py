@@ -74,6 +74,15 @@ def widen(i):
     right = [x for x in range(x1 + 1, min(hi, x1 + 40) + 1) if tall(x)]
     return (left[0] if left else x0, right[-1] if right else x1)
 xs = [widen(i) for i in range(len(xs))]
+# 白い地のマス（わくの線だけが たてに長い）なら、わくの線を 直接さがす。
+# 上下2段をつらぬく たて線が ちょうど6本なら、2本ずつが 1つのマスの 左右の はし
+# （木のみきや塔のような はばの広いものは のぞく。空白のマスの わくは みじかいので、長さは 画面の35%以上でよい）
+cols = [sum(ink(px[y][x]) for y in range(0, h, 2)) for x in range(w)]
+lines = [r for r in runs([c > h // 2 * 0.35 for c in cols], 1) if r[1] - r[0] <= 16]
+if len(lines) == 6 and all(lines[i + 1][0] - lines[i][1] > w // 5 for i in (0, 2, 4)):
+    xs = [(lines[i][0], lines[i + 1][1]) for i in (0, 2, 4)]
+if '--dry' in sys.argv:
+    print('横', xs)
 # 上下の はしは、左はしの マスの「わくの たて線」から決める（白っぽい絵でも まちがえないため）。
 # わくの角は丸いので、たて線は 上下に 少し みじかい。その分（RADIUS）を 足す
 RADIUS = 10
@@ -132,6 +141,9 @@ def write_png8(path, rows):
 
 
 for k, ((x0, x1), (y0, y1)) in zip(chars, boxes):
+    if '--dry' in sys.argv:
+        print(k, x0, y0, x1, y1)
+        continue
     side = min(x1 - x0, y1 - y0) - INSET * 2
     cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
     left, top = cx - side // 2, cy - side // 2
