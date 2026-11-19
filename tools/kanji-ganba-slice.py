@@ -78,7 +78,13 @@ xs = [widen(i) for i in range(len(xs))]
 # 上下2段をつらぬく たて線が ちょうど6本なら、2本ずつが 1つのマスの 左右の はし
 # （木のみきや塔のような はばの広いものは のぞく。空白のマスの わくは みじかいので、長さは 画面の35%以上でよい）
 cols = [sum(ink(px[y][x]) for y in range(0, h, 2)) for x in range(w)]
-lines = [r for r in runs([c > h // 2 * 0.35 for c in cols], 1) if r[1] - r[0] <= 16]
+lines = []
+for r in runs([c > h // 2 * 0.35 for c in cols], 1):
+    if r[1] - r[0] <= 16:
+        lines.append(r)
+    elif r[1] - r[0] > w // 5:
+        # 色でうまった マス（わくと絵が つながって 1本の太い線に見える）は、その左右の はしを わくとする
+        lines += [(r[0], r[0]), (r[1], r[1])]
 if len(lines) == 6 and all(lines[i + 1][0] - lines[i][1] > w // 5 for i in (0, 2, 4)):
     xs = [(lines[i][0], lines[i + 1][1]) for i in (0, 2, 4)]
 if '--dry' in sys.argv:
