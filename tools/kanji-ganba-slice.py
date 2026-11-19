@@ -4,7 +4,7 @@
 使い方：
   python3 tools/kanji-ganba-slice.py <まとめ絵の画像> 春夏秋冬雪
 
-- マスのわくを自動で見つけ、わくの内がわを正方形に切りぬく
+- マスのわくを自動で見つけ、わくの内がわの まん中を正方形に切りぬく（横長のマスは 左右が少し切れる）
 - 400×400、256色にへらした PNG にして japanese/kanji-ganba/img/字.png に保存する
 - 画像の読みこみと拡大・縮小には macOS の sips を使う（ほかのライブラリはいらない）
 """
@@ -61,8 +61,13 @@ row = [sum(ink(px[y][x]) for x in range(0, w, 4)) > w // 40 for y in range(h)]
 xs, ys = runs(col, w // 6), runs(row, h // 4)
 if len(xs) != 3 or len(ys) != 2:
     sys.exit(f'マスが 横3×たて2 に見つかりません（横 {xs}・たて {ys}）')
-# マスは正方形なので、下の はしは 上の はし＋横はば にする（白っぽい絵の下の はしを 見のがさないため）
-ys = [(y0, y0 + (xs[0][1] - xs[0][0])) for y0, _ in ys]
+# 上下の はしは、左はしの マスの「わくの たて線」から決める（白っぽい絵でも まちがえないため）。
+# わくの角は丸いので、たて線は 上下に 少し みじかい。その分（RADIUS）を 足す
+RADIUS = 10
+lx = xs[0][0] + 3
+edge = runs([ink(px[y][lx]) for y in range(h)], h // 6)
+if len(edge) == 2:
+    ys = [(max(0, y0 - RADIUS), min(h - 1, y1 + RADIUS)) for y0, y1 in edge]
 boxes = [(x, y) for y in ys for x in xs]
 
 
