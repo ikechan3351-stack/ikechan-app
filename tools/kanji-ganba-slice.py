@@ -114,9 +114,25 @@ if '--dry' in sys.argv:
 # わくの角は丸いので、たて線は 上下に 少し みじかい。その分（RADIUS）を 足す
 RADIUS = 10
 lx = xs[0][0] + 3
+inset = INSET
 edge = runs([ink(px[y][lx]) for y in range(h)], h // 6)
 if len(edge) == 2:
     ys = [(max(0, y0 - RADIUS), min(h - 1, y1 + RADIUS)) for y0, y1 in edge]
+    # 角の丸みが大きい絵では RADIUS では足りない。たて線のはしから 外へ50画素以内で、
+    # マスの はばの6割以上が線になっている「わくの横線」があれば、そこを上下の はしにする
+    fx0, fx1 = xs[0]
+    hline = lambda y: sum(ink(px[y][x]) for x in range(fx0 + 40, fx1 - 40, 2)) > (fx1 - fx0 - 80) // 2 * 0.6
+    # 上の段の下と 下の段の上は、2段の あいだの まん中より 先は さがさない（となりの段の わくを まちがえないため）
+    mid = (edge[0][1] + edge[1][0]) // 2
+    def outer(y0, y1, lo, hi):
+        top = [y for y in range(max(lo, y0 - 50), y0) if hline(y)]
+        bot = [y for y in range(y1 + 1, min(hi, y1 + 51)) if hline(y)]
+        return (top[0] if top else max(0, y0 - RADIUS), bot[-1] if bot else min(h - 1, y1 + RADIUS))
+    ys = [outer(*edge[0], 0, mid), outer(*edge[1], mid + 1, h)]
+    if "--dry" in sys.argv: print("edge", edge, "ys", ys)
+    # 角の丸みが大きいほど、切りぬく正方形の角に わくの丸い線が 入りやすい。丸みに合わせて 内がわへ 入る
+    corner = max(edge[0][0] - ys[0][0], ys[0][1] - edge[0][1])
+    inset = max(INSET, int(corner * 0.4) + 10)
 boxes = [(x, y) for y in ys for x in xs]
 
 
@@ -171,7 +187,7 @@ for k, ((x0, x1), (y0, y1)) in zip(chars, boxes):
     if '--dry' in sys.argv:
         print(k, x0, y0, x1, y1)
         continue
-    side = min(x1 - x0, y1 - y0) - INSET * 2
+    side = min(x1 - x0, y1 - y0) - inset * 2
     cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
     left, top = cx - side // 2, cy - side // 2
     crop = tmp / 'c.png'
