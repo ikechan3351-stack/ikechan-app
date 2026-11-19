@@ -61,8 +61,6 @@ ink = lambda p: min(p) < 235
 col = [sum(ink(px[y][x]) for y in range(0, h, 4)) > h // 40 for x in range(w)]
 row = [sum(ink(px[y][x]) for x in range(0, w, 4)) > w // 40 for y in range(h)]
 xs, ys = runs(col, w // 6), runs(row, h // 4)
-if len(xs) != 3 or len(ys) != 2:
-    sys.exit(f'マスが 横3×たて2 に見つかりません（横 {xs}・たて {ys}）')
 # わくの線が細く、わくの内がわに白いすき間がある絵では、上で見つかるのは 絵の部分だけ。
 # 外がわ40画素以内（となりのマスとの まん中まで）に「たてに長い線（わく）」があれば、そこまで広げる
 tall = lambda x: sum(ink(px[y][x]) for y in range(0, h, 2)) > h // 2 * 0.6
@@ -73,20 +71,30 @@ def widen(i):
     left = [x for x in range(max(lo, x0 - 40), x0) if tall(x)]
     right = [x for x in range(x1 + 1, min(hi, x1 + 40) + 1) if tall(x)]
     return (left[0] if left else x0, right[-1] if right else x1)
-xs = [widen(i) for i in range(len(xs))]
+xs = [widen(i) for i in range(len(xs))] if len(xs) == 3 else xs
 # 白い地のマス（わくの線だけが たてに長い）なら、わくの線を 直接さがす。
 # 上下2段をつらぬく たて線が ちょうど6本なら、2本ずつが 1つのマスの 左右の はし
 # （木のみきや塔のような はばの広いものは のぞく。空白のマスの わくは みじかいので、長さは 画面の35%以上でよい）
 cols = [sum(ink(px[y][x]) for y in range(0, h, 2)) for x in range(w)]
 lines = []
+tl = []
 for r in runs([c > h // 2 * 0.35 for c in cols], 1):
+    # わくの線と 色でうまった絵の あいだの 小さな すき間（8画素以下）は つなげる
+    if tl and r[0] - tl[-1][1] <= 8:
+        tl[-1] = (tl[-1][0], r[1])
+    else:
+        tl.append(r)
+for r in tl:
     if r[1] - r[0] <= 16:
         lines.append(r)
-    elif r[1] - r[0] > w // 5:
+    elif r[1] - r[0] > w // 4:
         # 色でうまった マス（わくと絵が つながって 1本の太い線に見える）は、その左右の はしを わくとする
         lines += [(r[0], r[0]), (r[1], r[1])]
 if len(lines) == 6 and all(lines[i + 1][0] - lines[i][1] > w // 5 for i in (0, 2, 4)):
     xs = [(lines[i][0], lines[i + 1][1]) for i in (0, 2, 4)]
+# 絵が小さいマスがあると 上の方法では3つそろわないことがある。わくの線で見つかれば それでよい
+if len(xs) != 3 or len(ys) != 2:
+    sys.exit(f'マスが 横3×たて2 に見つかりません（横 {xs}・たて {ys}）')
 if '--dry' in sys.argv:
     print('横', xs)
 # 上下の はしは、左はしの マスの「わくの たて線」から決める（白っぽい絵でも まちがえないため）。
