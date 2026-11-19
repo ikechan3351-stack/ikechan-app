@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>さんすうボード⑩ 数直線</title>
+<style>
+  /* ===== 色のきまり（さんすうボード①〜⑨ と そろえた やさしい色） ===== */
+  :root {
+    --ink: #263238; --accent: #3949ab; --accent-dark: #283593; --soft: #c5cae9;
+    --draw: #ff6f00; --board: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3f4fb 0%, #dfe3f5 100%);
+    height: 100dvh; overflow: hidden;
+    display: flex; flex-direction: column; padding: 6px 8px 8px; gap: 6px;
+    -webkit-user-select: none; user-select: none;
+  }
+  button { font-family: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ===== 上の ツールバー ===== */
+  .topbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; padding: 4px 8px; min-height: 44px; display: inline-flex; align-items: center; }
+  h1 { margin: 0 4px 0 0; font-size: clamp(1rem, 1.8vw, 1.25rem); color: var(--accent-dark); white-space: nowrap; }
+  .spacer { flex: 1; }
+  .group { display: flex; gap: 4px; align-items: center; background: rgba(255,255,255,0.55); border-radius: 14px; padding: 3px; }
+  .btn {
+    min-height: 52px; min-width: 52px; padding: 2px 8px;
+    border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.12); line-height: 1.15;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .btn .ic { font-size: 1.35rem; }
+  .btn:active { transform: translateY(2px); box-shadow: none; }
+  .btn:disabled { opacity: 0.35; cursor: default; transform: none; box-shadow: none; }
+  .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.draw.on { background: var(--draw); border-color: var(--draw); }
+  .pen { min-width: 44px; width: 44px; padding: 0; }
+  .pen .dot { width: 24px; height: 24px; border-radius: 50%; border: 3px solid rgba(0,0,0,0.15); }
+  .pen.on { background: #fff3e0; border-color: var(--draw); border-width: 4px; }
+
+  /* ===== 道具箱 と ボード ===== */
+  .main { flex: 1; min-height: 0; display: flex; gap: 8px; }
+  .toolbox {
+    width: 262px; flex: none; background: #fff; border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 6px;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; align-content: start;
+    touch-action: pan-y; overflow-y: auto;
+  }
+  .toolbox.drop-ok { outline: 4px dashed #ef9a9a; outline-offset: -4px; }
+  .toolbox .label { grid-column: 1 / -1; font-weight: 900; color: var(--accent-dark); font-size: 0.9rem; padding: 2px 4px 0; }
+  .toolbox .tbhint { grid-column: 1 / -1; font-size: 0.8rem; color: #5c6bc0; padding: 4px; line-height: 1.4; }
+  .tb-item {
+    min-height: 74px; border: 2px solid var(--soft); border-radius: 14px; background: #f7f8fe;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    cursor: grab; font-weight: bold; font-size: 0.8rem; line-height: 1.15; touch-action: none; padding: 4px 2px; text-align: center;
+  }
+  .tb-item.wide { grid-column: 1 / -1; }
+  .tb-item:active { background: #e8eaf6; }
+  .thumb { position: relative; pointer-events: none; flex: none; }
+  .thumb .piece { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .tabs { grid-column: 1 / -1; display: flex; gap: 4px; margin-bottom: 2px; }
+  .tabs button { flex: 1; min-height: 44px; border: 2px solid var(--soft); background: #fff; border-radius: 10px;
+                 font-weight: 900; font-size: 0.9rem; cursor: pointer; touch-action: manipulation; padding: 0; }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  /* もんだいカード */
+  .textcard { background: #fffef5; border: 3px solid #3949ab; border-radius: 12px; padding: 10px 16px;
+              font-weight: 900; line-height: 1.4; white-space: nowrap; color: var(--ink); overflow: hidden;
+              font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif; }
+  .teacher-only { display: none !important; }
+  body.teacher .teacher-only { display: inline-flex !important; }
+  .txtpanel { width: min(720px, 94vw); text-align: left; padding: 20px 24px; }
+  .txtpanel h2 { margin: 0 0 8px; font-size: 1.1rem; color: var(--accent-dark); }
+  .txtpanel textarea { width: 100%; font-size: 1.5rem; font-weight: bold; padding: 10px; border: 3px solid var(--soft);
+                       border-radius: 12px; font-family: inherit; resize: vertical; user-select: text; -webkit-user-select: text; }
+  .txtpanel .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+  .txtpanel .btn { margin: 0; min-width: 0; font-size: 1rem; }
+  .txtpanel .hint { font-size: 0.85rem; color: #5c6bc0; margin: 8px 0 0; }
+  #shareBg .dialog { max-height: 94vh; overflow-y: auto; }
+  .shareprev { display: block; width: 100%; max-height: 42vh; aspect-ratio: 5 / 3; object-fit: contain; border: 2px solid var(--soft); border-radius: 10px; background: #f5f5f5; }
+
+  .boardwrap { flex: 1; min-width: 0; position: relative; }
+  /* ボードは きまった大きさ（よこ1200×たて720）で作り、画面に合わせて まるごと拡大・縮小する */
+  .stage {
+    position: absolute; left: 0; top: 0; width: 1200px; height: 720px;
+    transform-origin: 0 0; background: var(--board); border-radius: 18px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.12); outline: 6px solid transparent;
+    touch-action: none; overflow: hidden;
+  }
+  .stage.drawing { outline-color: var(--draw); }
+  .layer { position: absolute; inset: 0; pointer-events: none; }
+  .pieces { z-index: 2; }
+  .layer .piece { pointer-events: auto; }
+  /* ジャンプ・やじるしは、線と 数の ところだけ さわれる（弧の 内がわは 下の 数直線や ピンを さわれる） */
+  .layer .piece.thin { pointer-events: none; }
+  .piece.thin svg .hs { pointer-events: stroke; }
+  .piece.thin svg .ha { pointer-events: all; }
+  .bgc { position: absolute; left: 0; top: 0; width: 1200px; height: 720px; z-index: 0; pointer-events: none; border-radius: 18px; }
+  .ink { position: absolute; left: 0; top: 0; width: 1200px; height: 720px; z-index: 3; pointer-events: none; }
+  .stage.drawing .ink { pointer-events: auto; cursor: crosshair; }
+  .stage.drawing .ui { display: none; }
+
+  /* ごみばこ（ボードの 右下） */
+  .trash {
+    position: absolute; right: 16px; bottom: 16px; width: 110px; height: 110px; z-index: 0;
+    border: 4px dashed #cfd3e6; border-radius: 22px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #8a90b0; font-weight: bold; font-size: 18px;
+    pointer-events: none; transition: background .12s, border-color .12s;
+  }
+  .trash .ic { font-size: 46px; line-height: 1; }
+  .trash.hot { background: #ffebee; border-color: #e57373; color: #c62828; z-index: 4; opacity: 0.9; }
+
+  /* ===== 部品（中身は SVG の 絵） ===== */
+  .piece { position: absolute; left: 0; top: 0; cursor: grab; }
+  .piece svg { display: block; pointer-events: none; overflow: visible; }
+  .piece.lift { will-change: transform; filter: drop-shadow(0 6px 6px rgba(0,0,0,0.25)); cursor: grabbing; }
+  .piece.sel { filter: drop-shadow(0 0 4px rgba(57,73,171,0.65)); }
+  .ghost { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; transform-origin: 0 0; opacity: 0.85; }
+
+  /* ===== えらんだ 部品の つまみ と ミニ ツールバー（しゃしんには うつらない） ===== */
+  .ui { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+  .handle {
+    position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
+    background: #fff; border: 4px solid var(--accent); box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+    pointer-events: auto; cursor: ew-resize; touch-action: none;
+  }
+  .handle.end { width: 26px; height: 64px; margin: -32px 0 0 -13px; border-radius: 13px; }
+  .handle.end::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 18px; margin: -9px 0 0 -2px; background: var(--accent); border-radius: 2px; }
+  .guide { position: absolute; top: 0; width: 0; height: 720px; border-left: 3px dashed #00897b; pointer-events: none; }
+  .mini {
+    position: absolute; display: flex; gap: 6px; padding: 6px; background: rgba(255,255,255,0.97);
+    border: 3px solid var(--soft); border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+    pointer-events: auto; white-space: nowrap;
+  }
+  .mini button {
+    min-height: 56px; min-width: 56px; padding: 0 10px; border: 2px solid var(--soft); background: #fff; border-radius: 12px;
+    font-size: 20px; font-weight: 900; cursor: pointer; touch-action: manipulation; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .mini button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .mini .sep { width: 2px; background: #e0e3f3; margin: 4px 2px; }
+
+  /* ===== おしらせ と かくにん ===== */
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 80;
+    background: #263238; color: #fff; padding: 14px 24px; border-radius: 16px; font-weight: bold; font-size: 1.15rem;
+    opacity: 0; pointer-events: none; transition: opacity .2s; max-width: 90vw; text-align: center;
+  }
+  .toast.show { opacity: 0.95; }
+  .dialog-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; display: flex; align-items: center; justify-content: center; }
+  .dialog { background: #fff; border-radius: 20px; padding: 28px 32px; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+  .dialog p { font-size: 1.4rem; font-weight: 900; margin: 0 0 20px; }
+  .dialog .btn { min-width: 140px; min-height: 60px; font-size: 1.2rem; margin: 0 8px; }
+  .dialog .yes { background: #ffebee; border-color: #e57373; }
+
+  /* ===== かずを かく 画面 ===== */
+  .labpanel { width: min(760px, 96vw); max-height: 94vh; overflow-y: auto; text-align: left; padding: 16px 20px; }
+  .labpanel h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent-dark); }
+  .labpanel .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .labpanel .btn { margin: 0; min-width: 52px; min-height: 52px; font-size: 1.15rem; }
+  .labpanel .btn.key { min-width: 56px; font-size: 1.5rem; }
+  .labpanel .btn.chip { font-size: 1.05rem; background: #f3f4fb; }
+  .labpanel .btn.chip.on { background: var(--accent); color: #fff; }
+  .labin { width: 100%; font-size: 2rem; font-weight: 900; padding: 6px 12px; border: 3px solid var(--accent); border-radius: 12px;
+           font-family: inherit; margin-bottom: 10px; user-select: text; -webkit-user-select: text; }
+  .labpanel .sample { width: 28px; height: 28px; border-radius: 6px; border: 3px solid; display: inline-block; }
+  .labpanel .foot { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 4px; }
+  .labpanel .foot .btn { min-width: 120px; min-height: 56px; }
+  .labpanel .note { font-size: 0.85rem; color: #5c6bc0; margin: -4px 0 10px; }
+
+  /* ===== 数直線の せってい ===== */
+  .linepanel { width: min(820px, 96vw); max-height: 94vh; overflow-y: auto; text-align: left; padding: 16px 20px; }
+  .linepanel h2 { margin: 10px 0 6px; font-size: 1.05rem; color: var(--accent-dark); }
+  .linepanel h2:first-child { margin-top: 0; }
+  .linepanel .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .linepanel .btn { margin: 0; min-width: 52px; min-height: 52px; font-size: 1.1rem; }
+  .linepanel .val { min-width: 110px; text-align: center; font-size: 1.6rem; font-weight: 900; color: var(--accent-dark); }
+  .linepanel .close { display: block; margin: 16px auto 0; min-width: 160px; }
+  .linepanel .head { position: sticky; top: -16px; z-index: 1; background: #fff; display: flex; align-items: center; justify-content: space-between;
+                     gap: 8px; margin: -16px -20px 6px; padding: 10px 20px 8px; border-bottom: 2px solid #e8eaf6; }
+  .linepanel .head b { font-size: 1.15rem; color: var(--accent-dark); }
+  .linepanel .head .btn { min-width: 110px; }
+  .frc { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; font-size: 0.9em; }
+  .frc b { border-top: 2px solid currentColor; padding-top: 1px; font-weight: 900; }
+
+  @media (max-width: 1500px) {
+    h1 { display: none; }
+    .btn { font-size: 0.9rem; padding: 2px 6px; gap: 2px; }
+    .btn .ic { font-size: 1.2rem; }
+    .topbar { gap: 4px; }
+    .topbar .btn { flex-direction: column; gap: 0; font-size: 0.8rem; padding: 2px 5px; }
+    .topbar .btn .ic { font-size: 1.25rem; }
+  }
+
+  /* ===== はいけいを えらぶ 画面 ===== */
+  .bgpanel { max-width: min(760px, 94vw); max-height: 92vh; overflow-y: auto; text-align: left; padding: 20px 24px; }
+  .bgpanel h2 { margin: 0 0 6px; font-size: 1.1rem; color: var(--accent-dark); }
+  .bgpanel .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .bgpanel .btn { min-width: 0; margin: 0; font-size: 1rem; min-height: 56px; }
+  .bgpanel .sample { width: 54px; height: 40px; border-radius: 6px; border: 2px solid rgba(0,0,0,0.15); display: inline-block; }
+  .bgpanel .close { display: block; margin: 4px auto 0; min-width: 160px; }
+  .bgpanel .note { font-size: 0.85rem; color: #5c6bc0; margin: -8px 0 14px; }
+
+  @media (max-width: 900px) {
+    .main { flex-direction: column; }
+    .toolbox { width: auto; display: flex; overflow-x: auto; overflow-y: hidden; flex: none; height: 150px; align-items: stretch; touch-action: pan-x; }
+    .tb-item { flex: none; min-width: 110px; }
+    .toolbox .label, .toolbox .tbhint { display: none; }
+    .toolbox .tabs { flex: none; flex-direction: column; width: 96px; margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 上の ツールバー ===== -->
+<div class="topbar">
+  <a class="back-link" id="backLink" href="../index.html">← トップ</a>
+  <h1 id="title">さんすうボード⑩ 数直線</h1>
+  <div class="group">
+    <button class="btn on" id="modeMove" title="うごかす"><span class="ic">✋</span>うごかす</button>
+    <button class="btn draw" id="modeDraw" title="かく"><span class="ic">✏️</span>かく</button>
+    <button class="btn draw" id="modeLine" title="まっすぐな 線を ひく"><span class="ic">📏</span>ちょくせん</button>
+  </div>
+  <div class="group" id="penColors"></div>
+  <button class="btn" id="clearInk" title="せんを ぜんぶ けす"><span class="ic">🧽</span>せんを けす</button>
+  <div class="spacer"></div>
+  <div class="group">
+    <button class="btn" id="undo" title="もどる（Ctrl+Z）" disabled><span class="ic">↩️</span>もどる</button>
+    <button class="btn" id="redo" title="やりなおす（Ctrl+Y）" aria-label="やりなおす" disabled><span class="ic">↪️</span></button>
+  </div>
+  <button class="btn" id="visBtn" title="数を 見せる・かくす"><span class="ic">👁️</span>ひょうじ</button>
+  <button class="btn" id="bgBtn" title="はいけいを かえる"><span class="ic">🖼️</span>はいけい</button>
+  <button class="btn" id="photo" title="ボードを しゃしんに する"><span class="ic">📷</span>しゃしん</button>
+  <button class="btn" id="openBoard" title="くばられた もんだいの がぞうを ひらく"><span class="ic">📂</span>ひらく</button>
+  <button class="btn" id="resetStart" title="くばられた ときの じょうたいに もどす" hidden><span class="ic">⟲</span>はじめに</button>
+  <button class="btn teacher-only" id="addText" title="もんだいカードを つくる"><span class="ic">📝</span>もんだい</button>
+  <button class="btn teacher-only" id="share" title="子どもに くばる がぞうを つくる"><span class="ic">💾</span>くばる</button>
+  <input type="file" id="boardFile" accept="image/png,image/*" hidden>
+  <button class="btn" id="clearAll" title="ぜんぶ かたづける"><span class="ic">🧹</span>かたづける</button>
+  <button class="btn" id="teacherBtn" title="先生モード（先生用の ボタンを だす）"><span class="ic">🧑‍🏫</span><span id="teacherLbl">せんせい</span></button>
+</div>
+
+<!-- ===== 道具箱 と ボード ===== -->
+<div class="main">
+  <div class="toolbox" id="toolbox"></div>
+  <div class="boardwrap" id="boardwrap">
+    <div class="stage" id="stage">
+      <canvas class="bgc" id="bgc"></canvas>
+      <div class="trash" id="trash"><span class="ic">🗑️</span>ごみばこ</div>
+      <div class="layer pieces" id="pieces"></div>
+      <canvas class="ink" id="ink"></canvas>
+      <div class="ui" id="ui"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<!-- かず・ことばを かく 画面 -->
+<div class="dialog-bg" role="dialog" aria-modal="true" id="labBg" hidden>
+  <div class="dialog labpanel">
+    <h2 id="labTitle">かずを かこう</h2>
+    <div class="row" id="labModes"></div>
+    <p class="note" id="labNote"></p>
+    <input class="labin" id="labIn" maxlength="16" autocomplete="off" placeholder="れい）25">
+    <div class="row" id="labKeys"></div>
+    <div class="row" id="labWords"></div>
+    <div id="labColorBox">
+      <h2>いろ</h2>
+      <div class="row" id="labColors"></div>
+    </div>
+    <div class="foot">
+      <button class="btn" id="labCancel">やめる</button>
+      <button class="btn on" id="labOk">できた</button>
+    </div>
+  </div>
+</div>
+<!-- 数直線の せってい -->
+<div class="dialog-bg" role="dialog" aria-modal="true" id="lineBg" hidden>
+  <div class="dialog linepanel" id="linePanel"></div>
+</div>
+<!-- 見せる・かくす -->
+<div class="dialog-bg" role="dialog" aria-modal="true" id="visBg" hidden>
+  <div class="dialog linepanel" id="visPanel"></div>
+</div>
+<div class="dialog-bg" role="dialog" aria-modal="true" id="bgBg" hidden>
+  <div class="dialog bgpanel">
+    <h2>かみ</h2>
+    <div class="row" id="bgKinds"></div>
+    <div id="bgSizeBox"><h2 id="bgSizeTitle">マスの おおきさ</h2><div class="row" id="bgSizes"></div></div>
+    <div id="bgImgBox">
+      <h2>がぞう</h2>
+      <div class="row">
+        <button class="btn" id="bgPick">📂 がぞうを えらぶ</button>
+        <button class="btn" id="bgFade">うすくする</button>
+      </div>
+      <p class="note">がぞうは この パソコンの 中だけで つかいます（どこにも おくりません）。</p>
+      <input type="file" id="bgFile" accept="image/*" hidden>
+    </div>
+    <h2>かみの いろ</h2>
+    <div class="row" id="bgColors"></div>
+    <button class="btn close" id="bgClose">とじる</button>
+  </div>
+</div>
+<div class="dialog-bg" role="dialog" aria-modal="true" id="txtBg" hidden>
+  <div class="dialog txtpanel">
+    <h2>もんだいカード</h2>
+    <textarea id="txtIn" rows="3" placeholder="れい）50 ＋ 25 を 数直線で あらわそう。"></textarea>
+    <p class="hint">Enter で ぎょうを かえられます。ながい ぶんは じどうで おりかえします。</p>
+    <h2 style="margin-top:12px">もじの おおきさ</h2>
+    <div class="row" id="txtSizes"></div>
+    <div class="row">
+      <button class="btn on" id="txtOk">できた</button>
+      <button class="btn" id="txtDel">🗑 けす</button>
+      <button class="btn" id="txtCancel">やめる</button>
+    </div>
+  </div>
+</div>
+<div class="dialog-bg" role="dialog" aria-modal="true" id="shareBg" hidden>
+  <div class="dialog txtpanel">
+    <h2>子どもに くばる がぞう</h2>
+    <img id="sharePrev" class="shareprev" alt="くばる がぞう">
+    <p class="hint">この がぞうの 中に、いまの ボード（もんだいカード・数直線・ジャンプ・ピン・ふだ・ことば・ペンの線・はいけい・ひょうじ）が 入っています。<br>
+      ① 「ほぞんする」で PNG ファイルに する → ② Classroom などで くばる → ③ 子どもは がぞうを ほぞんして、ボードの「📂ひらく」で えらぶ と、うごかせる ボードに もどります。<br>
+      先生も「📂ひらく」で ひらけば、あとから なおせます。</p>
+    <p class="hint" id="shareImgNote" hidden>※ とりこんだ がぞうの はいけいは 入りません（むじに なります）。</p>
+    <div class="row"><button class="btn on" id="shareSave">💾 ほぞんする</button><button class="btn" id="shareClose">とじる</button></div>
+  </div>
+</div>
+<div class="dialog-bg" role="dialog" aria-modal="true" id="resumeBg" hidden>
+  <div class="dialog">
+    <p>まえの つづきから はじめますか？</p>
+    <p id="resumeInfo" style="font-size:1rem;font-weight:bold;color:#5c6bc0;margin:-8px 0 18px"></p>
+    <button class="btn yes" id="resumeYes">▶ つづきから</button>
+    <button class="btn" id="resumeNo">あたらしく</button>
+  </div>
+</div>
+<div class="dialog-bg" role="dialog" aria-modal="true" id="teacherBg" hidden>
+  <div class="dialog">
+    <p>先生モードに しますか？</p>
+    <p style="font-size:1rem;font-weight:bold;color:#5c6bc0;margin:-8px 0 18px">先生用の ボタン（📝もんだい・💾くばる）が でます。<br>いまの ボードは そのまま つづきます。</p>
+    <button class="btn yes" id="teacherYes">先生モードに する</button>
+    <button class="btn" id="teacherNo">やめる</button>
+  </div>
+</div>
+<div class="dialog-bg" role="dialog" aria-modal="true" id="confirmBg" hidden>
+  <div class="dialog">
+    <p>ぜんぶ かたづけますか？</p>
+    <button class="btn yes" id="confirmYes">かたづける</button>
+    <button class="btn" id="confirmNo">やめる</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   さんすうボード⑩ 数直線
+   ・外わく（ツールバー・ペン・ごみばこ・もどる・しゃしん・くばる・つづきから）は ①〜⑨ と 同じ。
+   ・中の 部品：
+       nline … 数直線（u＝1めもりの 大きさ、s＝はじめの めもりの ばんごう、n＝めもりの かず、g＝めもりの はば px）
+               open:true で めもりの ない「白紙の 数直線」
+       span  … ジャンプ（k:'jump' 弧）・おび（k:'band' 長方形）・やじるし（k:'arrow'）。d＝1 で ＋（あお）、-1 で −（あか）
+               数直線の めもりに すいつき、数は めもりから じどうで 出る（lm：a じどう／q ？／n なし／t じぶんで かいた）
+       pin   … ピン（さした ところの 数を 出す）
+       tag   … ふだ（白紙の 数直線に 数を かく。ジャンプや ピンの 数にも つかわれる）
+       word  … ことばカード ／ text … 先生の もんだいカード
+   ・部品の 位置 x,y は どれも「左上の かど」。数は 分数・小数でも ずれないように「めもりの ばんごう × 1めもり」で 計算する。
+   ・?low=1（さんすうセット ていがくねん から）… 整数と 白紙だけ
+     ?high=1（算数セット 中高学年 から）・?jh=1（数学操作ボード 中学 から）… もどる 先を その 入り口に する
+   ===================================================================== */
+
+const W = 1200, H = 720;          // ボードの きまった大きさ
+const MAX_ITEMS = 200;            // なめらかさを 守るための 安全上限
+const PALM = 45;                  // これより大きい さわり方は 手のひら・そで として むしする（px）
+const PAD = 34;                   // 数直線の はしの やじるしの ぶん
+const AY = 30;                    // 数直線の 部品の 上から、線までの 高さ
+const LINE_H = 112;               // 数直線の 部品の 高さ（下に 数を かく）
+const JL = 46;                    // ジャンプ・やじるしの 上の 数の ところの 高さ
+const PIN_W = 72, PIN_H = 96;     // ピンの 大きさ（さきっぽ ＝ 下の まんなか）
+const FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif';
+const MINUS = '−';
+
+const params = new URLSearchParams(location.search);
+const LOW = params.get('low') === '1';       // ていがくねん：整数と 白紙だけ
+const JH = !LOW && params.get('jh') === '1'; // 中学：負の数を さきに
+const TEACHER = params.get('teacher') === '1';
+if (TEACHER) document.body.classList.add('teacher');
+
+/* ---- 1めもりの 大きさ（p/q）。maj＝何めもりごとに 長い めもり、mid＝なかくらいの めもり ---- */
+const UNITS = [
+  { id: '1', p: 1, q: 1, maj: 10, mid: 5 },
+  { id: '2', p: 2, q: 1, maj: 5, mid: 0 },
+  { id: '5', p: 5, q: 1, maj: 2, mid: 0 },
+  { id: '10', p: 10, q: 1, maj: 10, mid: 5 },
+  { id: '100', p: 100, q: 1, maj: 10, mid: 5 },
+  { id: '1000', p: 1000, q: 1, maj: 10, mid: 5 },
+  { id: '10000', p: 10000, q: 1, maj: 10, mid: 5 },
+  { id: '0.1', p: 1, q: 10, maj: 10, mid: 5, dec: 1 },
+  { id: '0.01', p: 1, q: 100, maj: 10, mid: 5, dec: 2 },
+  ...[2, 3, 4, 5, 6, 8, 10, 12].map(q => ({ id: 'f' + q, p: 1, q, maj: q, mid: q % 2 === 0 && q > 2 ? q / 2 : 0, frac: true })),
+];
+const unitOf = id => UNITS.find(u => u.id === id) || UNITS[0];
+const UNITS_LOW = ['1', '2', '5', '10', '100', '1000'];
+const GAPS = [16, 20, 24, 30, 36, 44, 50, 60, 72, 90, 110, 130, 160];
+
+/* ---- ジャンプなどの いろ（＋＝あお、−＝あか。色だけに たよらず、やじるしの むき と ＋−の しるしでも わかる） ---- */
+const SPAN_COL = { 1: { line: '#1e63d6', fill: '#bbdefb' }, '-1': { line: '#d32f2f', fill: '#ffcdd2' } };
+const PIN_COL = '#8e44ad';
+
+/* ---- ことばカードの いろ ---- */
+const COLORS = [
+  { id: 'k', name: 'くろ',     fill: '#ffffff', line: '#263238' },
+  { id: 'b', name: 'あお',     fill: '#bbdefb', line: '#1e63d6' },
+  { id: 'r', name: 'あか',     fill: '#ffcdd2', line: '#d32f2f' },
+  { id: 'g', name: 'みどり',   fill: '#c8e6c9', line: '#2e7d32' },
+  { id: 'p', name: 'むらさき', fill: '#e1bee7', line: '#8e44ad' },
+];
+const colorOf = id => COLORS.find(c => c.id === id) || COLORS[0];
+const WORDS = LOW ? ['はじめ', 'ふえた', 'へった', 'のこり', 'ぜんぶで', 'ちがい', 'あと', 'まえ', 'ア', 'イ', 'ウ']
+                  : ['はじめ', 'ふえた', 'へった', 'のこり', 'ちがい', '1つ分', 'いくつ分', 'ア', 'イ', 'ウ', 'エ', 'x'];
+
+/* ---- 道具箱に ならべる もの ---- */
+const mkLine = (u, s, n, g, extra = {}) => () => ({ type: 'nline', u, s, n, g, show: 'all', fm: 'imp', plus: false, open: false, ...extra });
+const mkSpan = (k, d, w) => () => ({ type: 'span', k, d, w, lm: 'a', l: '' });
+const TOOLS = {
+  L10:   { name: '0〜10',               make: mkLine('1', 0, 10, 90) },
+  L20:   { name: '0〜20',               make: mkLine('1', 0, 20, 50) },
+  L100:  { name: '0〜100',              make: mkLine('5', 0, 20, 50, { show: 'major' }) },
+  L1000: { name: '0〜1000',             make: mkLine('100', 0, 10, 90) },
+  Ldec:  { name: '小数 0〜3（0.1）',     make: mkLine('0.1', 0, 30, 34, { show: 'major' }) },
+  Lfrac: { name: '分数 0〜2（4等分）',   make: mkLine('f4', 0, 8, 110) },
+  Lneg:  { name: '負の数 −10〜10',       make: mkLine('1', -10, 20, 50) },
+  Lneg5: { name: '負の数 −5〜5',         make: mkLine('1', -5, 10, 90, { plus: true }) },
+  Lopen: { name: 'めもり なし（白紙）',  make: mkLine('1', 0, 20, 50, { open: true }) },
+  jumpP:  { name: '＋ジャンプ', make: mkSpan('jump', 1, 100) },
+  jumpM:  { name: '−ジャンプ', make: mkSpan('jump', -1, 100) },
+  bandP:  { name: 'おび（あお）', make: mkSpan('band', 1, 100) },
+  bandM:  { name: 'おび（あか）', make: mkSpan('band', -1, 100) },
+  arrowP: { name: '＋やじるし', make: mkSpan('arrow', 1, 100) },
+  arrowM: { name: '−やじるし', make: mkSpan('arrow', -1, 100) },
+  pin:    { name: 'ピン',       make: () => ({ type: 'pin', lm: 'a', l: '' }) },
+  tag:    { name: 'ふだ',       make: () => ({ type: 'tag', l: '' }) },
+  word:   { name: 'ことば',     make: () => ({ type: 'word', text: 'ことば', c: 'k' }) },
+};
+const WIDE = new Set(['L10', 'L20', 'L100', 'L1000', 'Ldec', 'Lfrac', 'Lneg', 'Lneg5', 'Lopen']);
+const GROUPS = [
+  { tab: LOW ? 'すうちょくせん' : '数直線', label: LOW ? 'すうちょくせん' : '数直線',
+    tools: LOW ? ['L10', 'L20', 'L100', 'L1000', 'Lopen']
+         : JH ? ['Lneg', 'Lneg5', 'L20', 'Lfrac', 'Ldec', 'Lopen']
+         : ['L10', 'L20', 'L100', 'L1000', 'Ldec', 'Lfrac', 'Lneg', 'Lopen'],
+    hint: LOW ? 'タップで でるよ。せんを えらんで ⚙️ で めもりを かえられるよ。右はしの つまみで のばせるよ。'
+              : 'タップで 出るよ。線を えらんで ⚙️ で 1めもりの 大きさ・はじめの 数・数の 見せかたを かえられる。右はしの つまみで のばせる。' },
+  { tab: LOW ? 'ジャンプ' : 'ジャンプ・ピン', label: LOW ? 'ジャンプ・ピン・ふだ' : 'ジャンプ・おび・やじるし・ピン',
+    tools: LOW ? ['jumpP', 'jumpM', 'bandP', 'bandM', 'pin', 'tag', 'word'] : ['jumpP', 'jumpM', 'bandP', 'bandM', 'arrowP', 'arrowM', 'pin', 'tag', 'word'],
+    hint: LOW ? 'めもりに すいつくよ。はしを ひっぱって のばすと、うえの かずが かわるよ。えらんで もういちど タップすると「？」に なるよ。'
+              : 'めもりに すいつき、数は じどうで 出る。はしの つまみで のばす。えらんで もう一度 タップで「？」。「➕つぎ」で つづけて とべる。ふだは 白紙の 数直線に 数を かく。' },
+];
+if (LOW) {
+  document.title = 'さんすうボード⑩ すうちょくせん';
+  document.getElementById('title').textContent = 'さんすうボード⑩ すうちょくせん';
+}
+
+/* ---- ペンの いろ ---- */
+const PEN_COLORS = [
+  { name: 'くろ', color: '#263238' }, { name: 'あか', color: '#e53935' }, { name: 'あお', color: '#1e63d6' },
+  { name: 'みどり', color: '#2e9d4a' }, { name: 'オレンジ', color: '#f57c00' }, { name: 'むらさき', color: '#8e44ad' },
+];
+const PEN_WIDTH = 6;
+
+/* ---- いまの 状態 ---- */
+let items = [];     // 部品
+let strokes = [];   // ペンの 線 { color, pts: [[x,y], ...] }
+let nextId = 1, zTop = 1;
+let mode = 'move', straight = false, penColor = PEN_COLORS[0].color;
+let selId = 0;      // えらんで いる 部品（つまみ と ミニ ツールバーが でる）
+const vis = { line: true, span: true, pin: true };   // 👁️ ひょうじ（じどうで 出る 数を 見せるか）
+
+/* =========================== はいけい =========================== */
+const BG_KINDS = [ { id: 'plain', name: 'むじ' }, { id: 'grid', name: 'ほうがんし' }, { id: 'note', name: 'さんすうノート' }, { id: 'image', name: 'がぞう' } ];
+const GRID_SIZES = [ { id: 'L', name: 'おおきい', size: 60 }, { id: 'M', name: 'ふつう', size: 30 }, { id: 'S', name: 'ちいさい', size: 20 } ];
+const NOTE_SIZES = [ { id: '12', name: '12マス', size: 100 }, { id: '15', name: '15マス', size: 80 }, { id: '18', name: '18マス', size: 66 } ];
+const BG_COLORS = [
+  { id: 'white', name: 'しろ',     paper: '#ffffff', line: '#c5cae9', bold: '#9fa8da' },
+  { id: 'cream', name: 'クリーム', paper: '#fff8e1', line: '#e6d3a3', bold: '#c9ab66' },
+];
+const bg = {
+  kind: BG_KINDS.some(k => k.id === params.get('bg') && k.id !== 'image') ? params.get('bg') : 'plain',
+  grid: GRID_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : 'M',
+  note: NOTE_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : '15',
+  color: BG_COLORS.some(c => c.id === params.get('color')) ? params.get('color') : 'white',
+  img: null, fade: true,
+};
+function gridCell() {
+  let size = 0;
+  if (bg.kind === 'grid') size = GRID_SIZES.find(g => g.id === bg.grid).size;
+  else if (bg.kind === 'note') size = NOTE_SIZES.find(g => g.id === bg.note).size;
+  else return null;
+  return { size, ox: (W % size) / 2, oy: (H % size) / 2 };
+}
+function drawBg(ctx) {
+  const col = BG_COLORS.find(c => c.id === bg.color) || BG_COLORS[0];
+  ctx.fillStyle = col.paper;
+  ctx.fillRect(0, 0, W, H);
+  if (bg.kind === 'image') {
+    if (!bg.img) return;
+    const k = Math.min(W / bg.img.width, H / bg.img.height);
+    const w = bg.img.width * k, h = bg.img.height * k;
+    ctx.drawImage(bg.img, (W - w) / 2, (H - h) / 2, w, h);
+    if (bg.fade) { ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(0, 0, W, H); }
+    return;
+  }
+  const g = gridCell();
+  if (!g) return;
+  const line = (x1, y1, x2, y2, color, width, dash) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  };
+  const xs = [], ys = [];
+  for (let x = g.ox; x <= W + 0.5; x += g.size) xs.push(x);
+  for (let y = g.oy; y <= H + 0.5; y += g.size) ys.push(y);
+  if (bg.kind === 'grid') {
+    xs.forEach((x, i) => line(x, 0, x, H, (g.size < 50 && i % 5 === 0) ? col.bold : col.line, (g.size < 50 && i % 5 === 0) ? 2 : 1.5));
+    ys.forEach((y, i) => line(0, y, W, y, (g.size < 50 && i % 5 === 0) ? col.bold : col.line, (g.size < 50 && i % 5 === 0) ? 2 : 1.5));
+  } else {
+    for (let i = 0; i < xs.length - 1; i++) line(xs[i] + g.size / 2, ys[0], xs[i] + g.size / 2, ys[ys.length - 1], col.line, 1.5, [4, 5]);
+    for (let i = 0; i < ys.length - 1; i++) line(xs[0], ys[i] + g.size / 2, xs[xs.length - 1], ys[i] + g.size / 2, col.line, 1.5, [4, 5]);
+    xs.forEach(x => line(x, ys[0], x, ys[ys.length - 1], col.bold, 2.5));
+    ys.forEach(y => line(xs[0], y, xs[xs.length - 1], y, col.bold, 2.5));
+  }
+  ctx.setLineDash([]);
+}
+
+/* ---- 画面の 部品 ---- */
+const $ = id => document.getElementById(id);
+const stage = $('stage'), wrap = $('boardwrap'), piecesEl = $('pieces'), trashEl = $('trash'), uiEl = $('ui');
+const ink = $('ink'), ictx = ink.getContext('2d'), toolbox = $('toolbox');
+const bgc = $('bgc'), bctx = bgc.getContext('2d');
+const els = new Map();   // id → 要素
+
+/* =========================== 拡大・縮小 =========================== */
+let scale = 1, ox = 0, oy = 0, wrapRect = null;
+function layout() {
+  wrapRect = wrap.getBoundingClientRect();
+  if (wrapRect.width < 10 || wrapRect.height < 10) return;
+  scale = Math.min(wrapRect.width / W, wrapRect.height / H);
+  ox = (wrapRect.width - W * scale) / 2;
+  oy = (wrapRect.height - H * scale) / 2;
+  stage.style.transform = `translate(${ox}px, ${oy}px) scale(${scale})`;
+  const dpr = window.devicePixelRatio || 1;
+  ink.width = Math.round(W * scale * dpr);
+  ink.height = Math.round(H * scale * dpr);
+  ictx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  bgc.width = ink.width;
+  bgc.height = ink.height;
+  redrawInk();
+  redrawBg();
+}
+new ResizeObserver(layout).observe(wrap);
+window.addEventListener('scroll', () => { wrapRect = wrap.getBoundingClientRect(); });
+function toBoard(cx, cy) { return { x: (cx - wrapRect.left - ox) / scale, y: (cy - wrapRect.top - oy) / scale }; }
+function inBoard(p) { return p.x >= 0 && p.y >= 0 && p.x <= W && p.y <= H; }
+function overTrash(p) { return p.x > W - 16 - 110 - 10 && p.y > H - 16 - 110 - 10 && p.x <= W && p.y <= H; }
+function overToolbox(cx, cy) {
+  const r = toolbox.getBoundingClientRect();
+  return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
+}
+
+/* =========================== 文字 =========================== */
+const measureCtx = document.createElement('canvas').getContext('2d');
+function textW(t, fs) { measureCtx.font = `900 ${fs}px ${FONT}`; return measureCtx.measureText(t).width; }
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function fitFs(t, maxW, fs) { if (!t) return fs; const w = textW(t, fs); return w <= maxW ? fs : Math.max(14, Math.floor(fs * maxW / w)); }
+const svgTag = (w, h, body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${body}</svg>`;
+const svgText = (x, y, t, fs, color, anchor = 'middle') =>
+  `<text x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="central" font-family='${FONT}' font-weight="900" font-size="${fs}" fill="${color}">${esc(t)}</text>`;
+
+/* =========================== 数（分数・小数を ずれなく） =========================== */
+const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; };
+// 数の 見せかた { sign, whole, fn, fd }（fn/fd が あれば 分数）
+// 数直線の めもりの 数：n/d（d は 1めもりの 分母の まま。2/4 を 1/2 に しない）
+function fmtLine(n, d, L, plus) {
+  const U = unitOf(L.u);
+  const sign = n < 0 ? MINUS : (n > 0 && plus ? '+' : '');
+  const a = Math.abs(n);
+  if (U.frac) {
+    if (a === 0) return { sign: '', whole: '0' };
+    if (L.fm === 'mix') {
+      const w = Math.floor(a / d), r = a % d;
+      return r ? { sign, whole: w ? String(w) : '', fn: r, fd: d } : { sign, whole: String(w) };
+    }
+    return { sign, whole: '', fn: a, fd: d };
+  }
+  return { sign, whole: decStr(a, d) };
+}
+// 小数の 文字（d は 1・10・100）。0.10 → 0.1
+function decStr(a, d) {
+  const w = Math.floor(a / d), r = a % d;
+  if (!r) return String(w);
+  const digits = String(d).length - 1;
+  return w + '.' + String(r).padStart(digits, '0').replace(/0+$/, '');
+}
+// ふだ・じぶんで かいた 数を よむ（整数・小数・a/b・−）。よめなければ null
+function parseNum(t) {
+  const s = String(t || '').replace(/[＋+]/g, '').replace(/[−ー－-]/g, '-').replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).trim();
+  let m = s.match(/^(-?)(\d+)\/(\d+)$/);
+  if (m && +m[3] > 0) { const n = (m[1] ? -1 : 1) * +m[2], d = +m[3]; return { n, d, frac: true }; }
+  m = s.match(/^(-?)(\d+)(?:\.(\d{1,4}))?$/);
+  if (m) {
+    const dd = m[3] ? 10 ** m[3].length : 1;
+    return { n: (m[1] ? -1 : 1) * (+m[2] * dd + (m[3] ? +m[3] : 0)), d: dd, dec: !!m[3] };
+  }
+  return null;
+}
+// かいた ことばを 見せかたに（「3/4」は 分数の 形で 出す）
+function textParts(t) {
+  const m = String(t).match(/^([+＋−\-]?)(\d+)\/(\d+)$/);
+  if (m) return { sign: m[1] ? (m[1] === '+' || m[1] === '＋' ? '+' : MINUS) : '', whole: '', fn: +m[2], fd: +m[3] };
+  return { sign: '', whole: String(t) };
+}
+const partsStr = p => p.sign + (p.whole || '') + (p.fd ? (p.whole ? ' ' : '') + p.fn + '/' + p.fd : '');
+// 分数は たてに かさねて かく。もどりは { svg, w }
+function numSvg(cx, cy, p, fs, color) {
+  const t = p.sign + (p.whole || '');
+  if (!p.fd) return { svg: t ? svgText(cx, cy, t, fs, color) : '', w: t ? textW(t, fs) : 0 };
+  const fs2 = Math.round(fs * 0.78);
+  const tw = t ? textW(t, fs) + 3 : 0;
+  const fw = Math.max(textW(String(p.fn), fs2), textW(String(p.fd), fs2)) + 8;
+  const x0 = cx - (tw + fw) / 2, fx = x0 + tw + fw / 2;
+  let svg = t ? svgText(x0, cy, t, fs, color, 'start') : '';
+  svg += svgText(fx, cy - fs2 * 0.62, String(p.fn), fs2, color);
+  svg += `<line x1="${x0 + tw + 2}" y1="${cy}" x2="${x0 + tw + fw - 2}" y2="${cy}" stroke="${color}" stroke-width="2.5"/>`;
+  svg += svgText(fx, cy + fs2 * 0.66, String(p.fd), fs2, color);
+  return { svg, w: tw + fw };
+}
+const partsW = (p, fs) => numSvg(0, 0, p, fs, '#000').w;
+
+/* =========================== 部品の 大きさ =========================== */
+const lineW = L => L.n * L.g + PAD * 2;
+const axisY = L => L.y + AY;
+const tickX = (L, i) => L.x + PAD + i * L.g;
+function arcH(w) { return Math.max(22, Math.min(100, w * 0.38)); }
+function tagW(it) { const p = textParts(it.l || ''); return Math.max(70, Math.ceil(partsW(p, 30)) + 30); }
+function dims(it) {
+  if (it.type === 'nline') return { w: lineW(it), h: LINE_H };
+  if (it.type === 'span') {
+    if (it.k === 'jump') return { w: it.w, h: arcH(it.w) + JL };
+    if (it.k === 'band') return { w: it.w, h: 40 };
+    return { w: it.w, h: JL + 26 };   // arrow
+  }
+  if (it.type === 'pin') return { w: PIN_W, h: PIN_H };
+  if (it.type === 'tag') return { w: tagW(it), h: it.l && textParts(it.l).fd ? 96 : 80 };
+  if (it.type === 'word') return { w: Math.ceil(textW(it.text, 30)) + 28, h: 52 };
+  if (it.type === 'text') { const L = layoutText(it.text, it.fs); return { w: L.w, h: L.h }; }
+  return { w: 40, h: 40 };
+}
+// 数直線の 上の 「さきっぽ」（ジャンプは 下の 線、ピンは 下の はし、ふだは 上の はし）
+const baseY = it => it.y + dims(it).h;
+const pinTip = it => ({ x: it.x + PIN_W / 2, y: it.y + PIN_H });
+const tagTip = it => ({ x: it.x + dims(it).w / 2, y: it.y });
+
+/* =========================== 数直線を さがす・数を よむ =========================== */
+const lines = () => items.filter(o => o.type === 'nline');
+// (bx, by) に いちばん 近い 数直線（よこは 線の はんいの 中、たては maxDy まで）
+function refLine(bx, by, maxDy, except) {
+  let best = null, bd = Infinity;
+  for (const L of lines()) {
+    if (L === except) continue;
+    if (bx < L.x - 10 || bx > L.x + lineW(L) + 10) continue;
+    const dy = Math.abs(axisY(L) - by);
+    if (dy <= maxDy && dy < bd) { best = L; bd = dy; }
+  }
+  return best;
+}
+function refOf(it) {
+  if (it.type === 'span') return refLine(it.x + it.w / 2, baseY(it), 260);
+  if (it.type === 'pin') { const t = pinTip(it); return refLine(t.x, t.y, 150); }
+  if (it.type === 'tag') { const t = tagTip(it); return refLine(t.x, t.y, 4); }
+  return null;
+}
+// 白紙の 数直線に のっている ふだ
+const tagsOn = L => items.filter(o => o.type === 'tag' && refOf(o) === L);
+// すいつく 先の x
+function snapXsOf(L) {
+  if (!L.open) { const a = []; for (let i = 0; i <= L.n; i++) a.push(tickX(L, i)); return a; }
+  return tagsOn(L).map(t => tagTip(t).x);
+}
+const snapTol = L => L.open ? 16 : Math.max(8, Math.min(20, L.g * 0.45));
+// x の ところの 数 { n, d, k(めもりの ばんごう), dec, frac } ／ めもりの 上で なければ null
+function valueAt(L, x) {
+  if (!L.open) {
+    const i = (x - L.x - PAD) / L.g, r = Math.round(i);
+    if (Math.abs(i - r) > 0.03 || r < 0 || r > L.n) return null;
+    const U = unitOf(L.u), k = L.s + r;
+    return { n: k * U.p, d: U.q, k };
+  }
+  for (const t of tagsOn(L)) if (Math.abs(tagTip(t).x - x) < 2) { const v = parseNum(t.l); if (v) return v; }
+  return null;
+}
+// ジャンプ・おび・やじるしの じどうの 数（見せかた）／ 出せなければ null
+function spanAuto(it) {
+  const L = refOf(it);
+  if (!L) return null;
+  const a = valueAt(L, it.x), b = valueAt(L, it.x + it.w);
+  if (!a || !b) return null;
+  const sign = it.k === 'band' ? 0 : it.d;
+  if (!L.open) {
+    const p = fmtLine(b.n - a.n, a.d, L, false);
+    if (sign && b.n !== a.n) p.sign = sign > 0 ? '+' : MINUS;
+    return p;
+  }
+  // 白紙：ふだの 数の ひき算（分母を そろえて やくぶん）
+  let n = b.n * a.d - a.n * b.d, d = a.d * b.d;
+  const g = gcd(n, d); n /= g; d /= g;
+  const s = sign && n ? (sign > 0 ? '+' : MINUS) : '';
+  if (d === 1) return { sign: s, whole: String(Math.abs(n)) };
+  if ((a.dec || b.dec) && 10 ** 4 % d === 0) { const k = 10 ** 4 / d; return { sign: s, whole: decStr(Math.abs(n) * k, 10 ** 4) }; }
+  return { sign: s, whole: '', fn: Math.abs(n), fd: d };
+}
+function pinAuto(it) {
+  const L = refOf(it);
+  if (!L) return null;
+  const v = valueAt(L, pinTip(it).x);
+  if (!v) return null;
+  if (!L.open) return fmtLine(v.n, v.d, L, L.plus);
+  const t = tagsOn(L).find(o => Math.abs(tagTip(o).x - pinTip(it).x) < 2);
+  return t ? textParts(t.l) : null;
+}
+
+/* =========================== 部品の 絵（SVG） =========================== */
+// 数直線：やじるし・めもり・数
+function labelStep(L, U, cands) {
+  // 数が かさならない いちばん こまかい 間かくを えらぶ
+  for (const c of cands) {
+    let maxW = 0;
+    for (let i = 0; i <= L.n; i++) {
+      const k = L.s + i;
+      if (k % c) continue;
+      maxW = Math.max(maxW, partsW(fmtLine(k * U.p, U.q, L, L.plus), 24));
+    }
+    if (maxW + 8 <= c * L.g) return c;
+  }
+  return cands[cands.length - 1];
+}
+function lineSvg(it) {
+  const U = unitOf(it.u), w = lineW(it), ay = AY;
+  let body = '';
+  const leftArrow = it.open || it.s !== 0;
+  const x0 = leftArrow ? 8 : PAD, x1 = w - 8;
+  body += `<line x1="${x0}" y1="${ay}" x2="${x1}" y2="${ay}" stroke="#263238" stroke-width="4" stroke-linecap="round"/>`;
+  body += `<path d="M ${x1 + 2} ${ay} L ${x1 - 16} ${ay - 10} L ${x1 - 16} ${ay + 10} Z" fill="#263238"/>`;
+  if (leftArrow) body += `<path d="M ${x0 - 2} ${ay} L ${x0 + 16} ${ay - 10} L ${x0 + 16} ${ay + 10} Z" fill="#263238"/>`;
+  if (it.open) return svgTag(w, LINE_H, body);
+  for (let i = 0; i <= it.n; i++) {
+    const k = it.s + i, x = PAD + i * it.g;
+    const big = k % U.maj === 0, mid = U.mid && k % U.mid === 0;
+    const len = big ? 15 : mid ? 11 : 7;
+    body += `<line x1="${x}" y1="${ay - len}" x2="${x}" y2="${ay + len}" stroke="#263238" stroke-width="${big ? 3.5 : mid ? 2.8 : 2}"/>`;
+  }
+  if (vis.line && it.show !== 'none') {
+    const ly = ay + (U.frac ? 50 : 38);
+    let show;
+    if (it.show === 'ends') show = k => k === it.s || k === it.s + it.n || k === 0;
+    else {
+      const all = [1, U.mid, U.maj, U.maj * 2, U.maj * 5, U.maj * 10, U.maj * 20, U.maj * 50].filter((c, i, a) => c && a.indexOf(c) === i);
+      const c = labelStep(it, U, it.show === 'major' ? all.filter(c => c >= U.maj) : all);
+      show = k => k % c === 0;
+    }
+    for (let i = 0; i <= it.n; i++) {
+      const k = it.s + i;
+      if (!show(k)) continue;
+      body += numSvg(PAD + i * it.g, ly, fmtLine(k * U.p, U.q, it, it.plus), 24, '#263238').svg;
+    }
+  }
+  return svgTag(w, LINE_H, body);
+}
+// ジャンプ・おび・やじるしの 上の 数
+function spanLabel(it) {
+  if (it.lm === 'n') return null;
+  if (it.lm === 'q') return { sign: '', whole: '？' };
+  if (it.lm === 't') return it.l ? textParts(it.l) : null;
+  return vis.span ? spanAuto(it) : null;
+}
+function spanSvg(it) {
+  const d = dims(it), w = it.w, h = d.h, col = SPAN_COL[it.d] || SPAN_COL[1];
+  const lab = spanLabel(it);
+  let body = '';
+  const label = (cy, fs = 28) => {
+    if (!lab) return '';
+    const r = numSvg(w / 2, cy, lab, fs, col.line);
+    const bw = r.w + 14;
+    return `<rect class="ha" x="${w / 2 - bw / 2}" y="${cy - 20}" width="${bw}" height="40" rx="8" fill="#ffffff" fill-opacity="0.85"/>` + r.svg;
+  };
+  if (it.k === 'jump') {
+    const ah = arcH(w), ex = it.d > 0 ? w - 3 : 3;
+    body += `<path class="hs" d="M 3 ${h} A ${w / 2 - 3} ${ah} 0 0 1 ${w - 3} ${h}" fill="none" stroke="transparent" stroke-width="26"/>`;
+    body += `<path d="M 3 ${h} A ${Math.max(1, w / 2 - 3)} ${ah} 0 0 1 ${w - 3} ${h}" fill="none" stroke="${col.line}" stroke-width="5"/>`;
+    body += `<path d="M ${ex} ${h} L ${ex - 10} ${h - 18} L ${ex + 10} ${h - 18} Z" fill="${col.line}"/>`;
+    body += label(JL / 2 - 2);
+  } else if (it.k === 'band') {
+    body += `<rect class="ha" x="1.5" y="6" width="${Math.max(1, w - 3)}" height="${h - 8}" rx="4" fill="${col.fill}" fill-opacity="0.8" stroke="${col.line}" stroke-width="3"/>`;
+    if (lab) {
+      const fs = Math.min(26, Math.max(14, (w - 6) / Math.max(1, partsW(lab, 26)) * 26));
+      body += numSvg(w / 2, 6 + (h - 8) / 2, lab, Math.floor(fs), '#263238').svg;
+    }
+  } else {
+    const ly = h - 12, a = it.d > 0;
+    body += `<line class="hs" x1="3" y1="${ly}" x2="${w - 3}" y2="${ly}" stroke="transparent" stroke-width="26"/>`;
+    body += `<line x1="${a ? 3 : 18}" y1="${ly}" x2="${a ? w - 18 : w - 3}" y2="${ly}" stroke="${col.line}" stroke-width="6" stroke-linecap="round"/>`;
+    body += a ? `<path d="M ${w} ${ly} L ${w - 22} ${ly - 12} L ${w - 22} ${ly + 12} Z" fill="${col.line}"/>`
+              : `<path d="M 0 ${ly} L 22 ${ly - 12} L 22 ${ly + 12} Z" fill="${col.line}"/>`;
+    body += `<line x1="${a ? 3 : w - 3}" y1="${ly - 9}" x2="${a ? 3 : w - 3}" y2="${ly + 9}" stroke="${col.line}" stroke-width="4"/>`;
+    body += label(JL / 2 - 2);
+  }
+  return svgTag(w, h, body);
+}
+function pinSvg(it) {
+  const c = PIN_W / 2, r = 32;
+  let body = `<path d="M ${c - 14} ${r * 2 - 2} L ${c} ${PIN_H - 2} L ${c + 14} ${r * 2 - 2} Z" fill="${PIN_COL}"/>`;
+  body += `<circle cx="${c}" cy="${r + 2}" r="${r}" fill="${PIN_COL}"/><circle cx="${c}" cy="${r + 2}" r="${r - 6}" fill="#fff"/>`;
+  let lab = null;
+  if (it.lm === 'q') lab = { sign: '', whole: '？' };
+  else if (it.lm === 't') lab = it.l ? textParts(it.l) : null;
+  else if (it.lm === 'a' && vis.pin) lab = pinAuto(it);
+  if (lab) {
+    let fs = lab.fd ? 24 : 28;
+    const w0 = partsW(lab, fs);
+    if (w0 > 50) fs = Math.max(13, Math.floor(fs * 50 / w0));
+    body += numSvg(c, r + 2, lab, fs, '#4a148c').svg;
+  } else if (it.lm !== 'n') body += `<circle cx="${c}" cy="${r + 2}" r="6" fill="${PIN_COL}"/>`;
+  return svgTag(PIN_W, PIN_H, body);
+}
+function tagSvg(it) {
+  const d = dims(it), c = d.w / 2;
+  let body = `<line x1="${c}" y1="0" x2="${c}" y2="20" stroke="#b28704" stroke-width="5"/>`;
+  body += `<rect x="2" y="18" width="${d.w - 4}" height="${d.h - 20}" rx="10" fill="#fff3a0" stroke="#b28704" stroke-width="3"/>`;
+  if (it.l) body += numSvg(c, 18 + (d.h - 20) / 2, textParts(it.l), 30, '#263238').svg;
+  else body += svgText(c, 18 + (d.h - 20) / 2, '□', 28, '#b28704');
+  return svgTag(d.w, d.h, body);
+}
+function wordSvg(it) {
+  const d = dims(it), c = colorOf(it.c);
+  return svgTag(d.w, d.h, `<rect x="1.5" y="1.5" width="${d.w - 3}" height="${d.h - 3}" rx="10" fill="rgba(255,255,255,0.85)" stroke="#c5cae9" stroke-width="2" stroke-dasharray="6 4"/>`
+    + svgText(d.w / 2, d.h / 2, it.text, 30, c.line));
+}
+function itemSvg(it) {
+  if (it.type === 'nline') return lineSvg(it);
+  if (it.type === 'span') return spanSvg(it);
+  if (it.type === 'pin') return pinSvg(it);
+  if (it.type === 'tag') return tagSvg(it);
+  if (it.type === 'word') return wordSvg(it);
+  return '';
+}
+
+/* ---- もんだいカード（①と 同じ。文字の ならべ方は 画面と しゃしんで 同じ） ---- */
+const TEXT_SIZES = [ { id: 44, name: 'おおきい' }, { id: 34, name: 'ふつう' }, { id: 26, name: 'ちいさい' } ];
+const TEXT_MAX = 860;
+function layoutText(text, fs) {
+  measureCtx.font = `900 ${fs}px ${FONT}`;
+  const lines = [];
+  for (const para of String(text).split('\n')) {
+    let line = '';
+    for (const word of (para.match(/[^ 　、。]*[ 　、。]?/g) || []).filter(Boolean)) {
+      if (!line || measureCtx.measureText(line + word).width <= TEXT_MAX) { line += word; continue; }
+      lines.push(line.replace(/[ 　]+$/, ''));
+      line = word;
+    }
+    const chunks = [];
+    let cur = '';
+    for (const ch of line) {
+      if (cur && measureCtx.measureText(cur + ch).width > TEXT_MAX) { chunks.push(cur); cur = ch; }
+      else cur += ch;
+    }
+    chunks.push(cur);
+    lines.push(...chunks);
+  }
+  const lw = Math.max(fs, ...lines.map(l => measureCtx.measureText(l).width));
+  const lh = Math.round(fs * 1.4);
+  return { lines, lh, w: Math.ceil(lw) + 38, h: lines.length * lh + 26 };
+}
+
+/* =========================== 部品の 表示 =========================== */
+function draw(it) {
+  const el = els.get(it.id);
+  if (!el) return;
+  if (it.type === 'text') {
+    const L = layoutText(it.text, it.fs);
+    el.className = 'piece textcard';
+    el.style.width = L.w + 'px'; el.style.height = L.h + 'px';
+    el.style.fontSize = it.fs + 'px'; el.style.lineHeight = L.lh + 'px';
+    el.innerHTML = L.lines.map(l => esc(l) || '&nbsp;').join('<br>');
+  } else {
+    const d = dims(it);
+    el.style.width = d.w + 'px'; el.style.height = d.h + 'px';
+    el.innerHTML = itemSvg(it);
+    el.classList.toggle('thin', it.type === 'span' && it.k !== 'band');
+  }
+  el.classList.toggle('sel', it.id === selId);
+  place(it);
+}
+// 数が かわる かもしれない 部品（ジャンプ・ピン）を かきなおす
+function redrawDeps() { for (const it of items) if (it.type === 'span' || it.type === 'pin') draw(it); }
+function place(it) {
+  const el = els.get(it.id);
+  if (!el) return;
+  el.style.transform = `translate3d(${it.x}px, ${it.y}px, 0)`;
+  el.style.zIndex = (it.type === 'nline' ? 0 : 100000) + it.z;   // 数直線は いつも 下
+}
+function attach(it) {
+  const el = document.createElement('div');
+  el.className = 'piece';
+  el.dataset.id = it.id;
+  els.set(it.id, el);
+  piecesEl.appendChild(el);
+  draw(it);
+}
+function addItem(obj, x, y) {
+  if (items.length >= MAX_ITEMS) { toast(`ボードに おけるのは ${MAX_ITEMS}こ までです`); return null; }
+  const it = { ...obj, id: nextId++, x, y, z: ++zTop };
+  items.push(it);
+  attach(it);
+  clampItem(it);
+  place(it);
+  return it;
+}
+function removeItem(id) {
+  items = items.filter(i => i.id !== id);
+  const el = els.get(id);
+  if (el) el.remove();
+  els.delete(id);
+  if (selId === id) selId = 0;
+}
+function clampItem(it) {
+  const d = dims(it);
+  it.x = Math.max(0, Math.min(W - Math.min(d.w, W), it.x));
+  it.y = Math.max(0, Math.min(H - Math.min(d.h, H), it.y));
+}
+function rebuild() {
+  piecesEl.textContent = '';
+  els.clear();
+  if (!items.some(i => i.id === selId)) selId = 0;
+  for (const it of items) attach(it);
+  redrawInk();
+  renderSel();
+}
+const byId = id => items.find(i => i.id === id);
+
+/* =========================== すいつき =========================== */
+const guideEl = document.createElement('div');
+guideEl.className = 'guide';
+guideEl.hidden = true;
+stage.appendChild(guideEl);
+function showGuide(x) { guideEl.hidden = x === null; if (x !== null) guideEl.style.left = (x - 1.5) + 'px'; }
+function nearestTol(v, xs, tol) {
+  let best = null;
+  for (const x of xs) if (Math.abs(x - v) <= tol && (best === null || Math.abs(x - v) < Math.abs(best - v))) best = x;
+  return best;
+}
+// 部品を ちかくの 数直線の めもりに すいつける。ガイドの x を かえす
+function snapItem(it) {
+  if (it.type === 'span') {
+    const h = dims(it).h, base = it.y + h;
+    const L = refLine(it.x + it.w / 2, base, 260);
+    if (!L) return null;
+    const xs = snapXsOf(L), tol = snapTol(L);
+    let gx = null;
+    const a = nearestTol(it.x, xs, tol), b = nearestTol(it.x + it.w, xs, tol);
+    if (a !== null && (b === null || Math.abs(a - it.x) <= Math.abs(b - it.x - it.w))) { it.x = a; gx = a; }
+    else if (b !== null) { it.x = b - it.w; gx = b; }
+    if (Math.abs(base - axisY(L)) < 30) it.y = axisY(L) - h;
+    return gx;
+  }
+  if (it.type === 'pin') {
+    const t = pinTip(it), L = refLine(t.x, t.y, 150);
+    if (!L) return null;
+    const a = nearestTol(t.x, snapXsOf(L), snapTol(L));
+    if (a !== null) it.x = a - PIN_W / 2;
+    if (Math.abs(t.y - axisY(L)) < 44) it.y = axisY(L) - PIN_H;
+    return a;
+  }
+  if (it.type === 'tag') {
+    const t = tagTip(it), L = refLine(t.x, t.y, 44);
+    if (!L) return null;
+    it.y = axisY(L);
+    if (L.open) return null;
+    const a = nearestTol(t.x, snapXsOf(L), snapTol(L));
+    if (a !== null) it.x = a - dims(it).w / 2;
+    return a;
+  }
+  if (it.type === 'nline') {
+    // ほかの 数直線と 左はしの めもりを そろえる（二重数直線）
+    const xs = lines().filter(o => o !== it).map(o => o.x);
+    const a = nearestTol(it.x, xs, 16);
+    if (a !== null) { it.x = a; return a + PAD; }
+  }
+  return null;
+}
+// 数直線に のっている もの（いっしょに うごく）
+const attachedTo = L => items.filter(o => (o.type === 'span' || o.type === 'pin' || o.type === 'tag') && refOf(o) === L);
+// 数直線を かえる（めもりの はば・はじめの 数 など）とき、のっている ものを めもりに ついて いかせる
+function withAttached(L, fn) {
+  const att = attachedTo(L).map(o => {
+    const idx = x => (x - L.x - PAD) / L.g;
+    if (o.type === 'span') return { o, i0: idx(o.x), i1: idx(o.x + o.w), base: baseY(o) };
+    if (o.type === 'pin') return { o, i0: idx(pinTip(o).x) };
+    return { o, i0: idx(tagTip(o).x) };
+  });
+  fn();
+  const maxN = Math.floor((W - PAD * 2) / L.g);
+  if (L.n > maxN) L.n = maxN;
+  clampItem(L);
+  const X = i => L.x + PAD + i * L.g;
+  for (const a of att) {
+    const o = a.o;
+    if (o.type === 'span') { o.x = X(a.i0); o.w = Math.max(10, X(a.i1) - X(a.i0)); o.y = a.base - dims(o).h; }
+    else if (o.type === 'pin') o.x = X(a.i0) - PIN_W / 2;
+    else o.x = X(a.i0) - dims(o).w / 2;
+  }
+  draw(L);
+  for (const a of att) draw(a.o);
+  redrawDeps();
+}
+
+/* =========================== あたらしい 部品を おく 場所 =========================== */
+function overlapsTrash(l, t, r, b) { return r > W - 150 && b > H - 150; }
+function hitRect(a, b) { return a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t; }
+// えらんで いる もの → その 数直線。なければ いちばん 上の 数直線
+function targetLine() {
+  const s = byId(selId);
+  if (s && s.type === 'nline') return s;
+  if (s) { const L = refOf(s); if (L) return L; }
+  return lines().sort((a, b) => a.y - b.y)[0] || null;
+}
+// ジャンプの はじめの 長さ（めもり いくつ分）
+function defaultTicks(L) {
+  if (L.open) return null;
+  const U = unitOf(L.u);
+  if (L.g >= 60) return 1;
+  for (const c of [U.mid, U.maj]) if (c && c * L.g >= 40 && c * L.g <= 300) return c;
+  return Math.max(1, Math.ceil(40 / L.g));
+}
+function spotFor(obj) {
+  const L = targetLine();
+  if (obj.type === 'nline') {
+    // 上に ジャンプの 入る すきまを あけて。いっぱいの ときは すきまを せまく して さがす
+    const w = lineW(obj), x = Math.max(0, (W - w) / 2);
+    for (const room of [150, 90, 30, 0]) {
+      const rects = lines().map(o => ({ l: o.x, t: o.y - room, r: o.x + lineW(o), b: o.y + LINE_H }));
+      for (let y = Math.min(230, Math.max(120, room + 80)); y <= H - LINE_H - 10; y += 10) {   // 120 より上には おかない（ジャンプが はみ出る）
+        const rc = { l: x, t: y - room, r: x + w, b: y + LINE_H };
+        if (!rects.some(o => hitRect(rc, o))) return { x, y };
+      }
+    }
+    return { x, y: 230 };
+  }
+  if (obj.type === 'span' && L) {
+    const t = defaultTicks(L);
+    obj.w = t ? t * L.g : 120;
+    const h = dims({ ...obj, id: 0 }).h, ay = axisY(L);
+    // えらんで いる ジャンプの さきから つづける
+    const s = byId(selId);
+    let start;
+    const right = obj.k === 'band' || obj.d > 0;
+    if (s && s.type === 'span' && refOf(s) === L) start = (s.k === 'band' || s.d > 0) ? s.x + s.w : s.x;
+    else if (s && (s.type === 'tag' || s.type === 'pin') && refOf(s) === L) {
+      // えらんだ ふだ・ピンから。白紙の 数直線は となりの ふだまでの 長さに する（100 → 60 で −40 が 出る）
+      start = s.type === 'tag' ? tagTip(s).x : pinTip(s).x;
+      if (L.open) {
+        const xs = tagsOn(L).map(t => tagTip(t).x).filter(x => right ? x > start + 5 : x < start - 5);
+        if (xs.length) obj.w = right ? Math.min(...xs) - start : start - Math.max(...xs);
+      }
+    } else {
+      // 0 の めもり（なければ はし）から
+      // −は 右はしから（0 が まんなかに ある ときは 0 から）
+      let i0 = L.open ? 0 : Math.min(L.n, Math.max(0, -L.s));
+      if (obj.d < 0 && obj.k !== 'band' && (L.open || L.s >= 0)) i0 = L.n;
+      start = tickX(L, i0);
+    }
+    const x = right ? start : start - obj.w;
+    return { x, y: (obj.k === 'jump' ? ay : ay - 6) - h - (obj.k === 'arrow' ? 50 : 0) };
+  }
+  if (obj.type === 'pin' && L) {
+    const i = L.open ? Math.floor(L.n / 2) : Math.min(L.n, Math.max(0, -L.s));
+    return { x: tickX(L, i) - PIN_W / 2, y: axisY(L) - PIN_H };
+  }
+  if (obj.type === 'tag' && L) {
+    const used = tagsOn(L).map(t => tagTip(t).x);
+    let i = 0;
+    while (i < L.n && used.some(x => Math.abs(x - tickX(L, i)) < 40)) i += Math.max(1, Math.round(120 / L.g));
+    return { x: tickX(L, Math.min(i, L.n)) - 35, y: axisY(L) };
+  }
+  // ほかは あいて いる ところ
+  const d = dims({ ...obj, id: 0 });
+  const rects = items.map(o => { const e = dims(o); return { l: o.x - 8, t: o.y - 8, r: o.x + e.w + 8, b: o.y + e.h + 8 }; });
+  for (let y = 24; y <= H - d.h - 10; y += 12) {
+    for (let x = 40; x <= W - d.w - 20; x += 40) {
+      const rc = { l: x, t: y, r: x + d.w, b: y + d.h };
+      if (!overlapsTrash(rc.l, rc.t, rc.r, rc.b) && !rects.some(o => hitRect(rc, o))) return { x, y };
+    }
+  }
+  return { x: (W - d.w) / 2, y: (H - d.h) / 2 };
+}
+
+/* =========================== えらんだ 部品の つまみ と ミニ ツールバー =========================== */
+function renderSel() {
+  uiEl.textContent = '';
+  for (const [id, el] of els) el.classList.toggle('sel', id === selId);
+  const it = byId(selId);
+  if (!it || mode !== 'move') return;
+  const d = dims(it);
+  const handle = (x, y, cls, role) => {
+    const h = document.createElement('div');
+    h.className = 'handle ' + cls;
+    h.style.left = x + 'px'; h.style.top = y + 'px';
+    h.dataset.role = role;
+    uiEl.appendChild(h);
+  };
+  if (it.type === 'nline') handle(it.x + d.w - 4, axisY(it), 'end', 'end');
+  else if (it.type === 'span') { const b = baseY(it); handle(it.x, b, '', 'b0'); handle(it.x + it.w, b, '', 'b1'); }
+  if (it.type === 'text') return;
+  const bar = document.createElement('div');
+  bar.className = 'mini';
+  const btn = (label, title, fn, on) => {
+    const b = document.createElement('button');
+    b.innerHTML = label; b.title = title;
+    if (on) b.classList.add('on');
+    b.onclick = e => { e.stopPropagation(); fn(); };
+    bar.appendChild(b);
+    return b;
+  };
+  const sep = () => { const s = document.createElement('span'); s.className = 'sep'; bar.appendChild(s); };
+  if (it.type === 'nline') {
+    btn('⚙️ めもり', '1めもりの 大きさ・はじめの 数・数の 見せかたを かえる', () => openLineDlg(it));
+    if (!it.open) {
+      btn('◀', 'はじめの 数を へらす', () => lineChange(it, () => { it.s -= 1; }));
+      btn('▶', 'はじめの 数を ふやす', () => lineChange(it, () => { it.s += 1; }));
+    }
+    btn('🔍−', 'めもりの はばを せまく', () => lineChange(it, () => { const i = GAPS.indexOf(gapNear(it.g)); it.g = GAPS[Math.max(0, i - 1)]; }));
+    btn('🔍＋', 'めもりの はばを ひろく', () => lineChange(it, () => { const i = GAPS.indexOf(gapNear(it.g)); it.g = GAPS[Math.min(GAPS.length - 1, i + 1)]; }));
+    sep();
+  } else if (it.type === 'span') {
+    btn('⇄', it.k === 'band' ? 'いろを かえる' : 'むきを かえる（＋ ⇄ −）', () => change(it, () => { it.d = -it.d; }));
+    btn('✏️', '数を かく・？に する', () => openLabel(it));
+    btn('➕ つぎ', 'おなじ ながさで つづける', () => nextSpan(it));
+    sep();
+  } else if (it.type === 'pin') {
+    btn(it.lm === 'q' ? '👁 見せる' : '❓ かくす', '数を ？に する／見せる', () => change(it, () => { it.lm = it.lm === 'q' ? 'a' : 'q'; }));
+    btn('✏️', 'ピンに かく', () => openLabel(it));
+    sep();
+  } else if (it.type === 'tag' || it.type === 'word') {
+    btn('✏️', 'かく', () => openLabel(it));
+    sep();
+  }
+  btn('📄', 'コピー', () => copyItem(it));
+  btn('🗑', 'けす', () => { pushUndo(snapshot()); removeItem(it.id); redrawDeps(); renderSel(); });
+  uiEl.appendChild(bar);
+  // ばしょ：ジャンプ・ピンは 上（数直線の 数に かからない ように）、ほかは 下
+  const bw = bar.offsetWidth, bh = bar.offsetHeight;
+  const upFirst = it.type === 'span' || it.type === 'pin';
+  let by = upFirst ? it.y - bh - 12 : it.y + d.h + 12;
+  if (by < 4) by = it.y + d.h + 12;
+  if (by + bh > H - 4) by = Math.max(4, it.y - bh - 12);
+  const bx = Math.max(4, Math.min(W - bw - 4, it.x + (it.type === 'nline' ? PAD : 0)));
+  bar.style.left = bx + 'px'; bar.style.top = by + 'px';
+}
+const gapNear = g => GAPS.reduce((a, b) => Math.abs(b - g) < Math.abs(a - g) ? b : a);
+function lineChange(L, fn) {
+  pushUndo(snapshot());
+  withAttached(L, fn);
+  renderSel();
+}
+function change(it, fn) {
+  pushUndo(snapshot());
+  fn();
+  clampItem(it);
+  draw(it);
+  redrawDeps();
+  renderSel();
+}
+function copyItem(it) {
+  const snap = snapshot();
+  const obj = JSON.parse(JSON.stringify(it));
+  delete obj.id; delete obj.z;
+  const d = dims(it);
+  let x = it.x, y;
+  if (it.type === 'nline') y = it.y + d.h + 150 <= H - d.h ? it.y + d.h + 150 : it.y - d.h - 150;
+  else if (it.type === 'span' || it.type === 'pin') { x = it.x + 30; y = it.y; }
+  else y = it.y + d.h + 24 > H - d.h ? it.y - d.h - 24 : it.y + d.h + 24;
+  const c = addItem(obj, x, y);
+  if (!c) return;
+  snapItem(c);
+  selId = c.id;
+  rebuild();
+  redrawDeps();
+  pushUndo(snap);
+}
+// 「➕ つぎ」：おなじ 長さで、さきっぽから つづける（5×(−4) の ような くりかえし）
+function nextSpan(it) {
+  const snap = snapshot();
+  const right = it.k === 'band' || it.d > 0;
+  const obj = { type: 'span', k: it.k, d: it.d, w: it.w, lm: it.lm === 't' ? 'a' : it.lm, l: '' };
+  const h = dims(it).h;
+  const c = addItem(obj, right ? it.x + it.w : it.x - it.w, it.y);
+  if (!c) return;
+  c.y = it.y + h - dims(c).h;
+  snapItem(c);
+  place(c);
+  selId = c.id;
+  redrawDeps();
+  renderSel();
+  pushUndo(snap);
+}
+
+/* =========================== もどる・やりなおす =========================== */
+const undoStack = [], redoStack = [];
+function snapshot() { return { items: JSON.parse(JSON.stringify(items)), strokes: strokes.map(s => ({ color: s.color, pts: s.pts.slice() })) }; }
+function pushUndo(snap) {
+  scheduleSave();
+  undoStack.push(snap);
+  if (undoStack.length > 50) undoStack.shift();
+  redoStack.length = 0;
+  updateButtons();
+}
+function restore(snap) {
+  scheduleSave();
+  items = JSON.parse(JSON.stringify(snap.items));
+  strokes = snap.strokes.map(s => ({ color: s.color, pts: s.pts.slice() }));
+  zTop = items.reduce((m, i) => Math.max(m, i.z), 1);
+  nextId = items.reduce((m, i) => Math.max(m, i.id + 1), nextId);
+  rebuild();
+  updateButtons();
+}
+function dropGestures() {
+  drags.clear();
+  if (drawing.size) {
+    const live = [...drawing.values()].map(d => d.stroke);
+    strokes = strokes.filter(s => !live.includes(s));
+    drawing.clear();
+  }
+  toolbox.classList.remove('drop-ok');
+  showGuide(null);
+}
+function undo() { if (!undoStack.length) return; dropGestures(); redoStack.push(snapshot()); restore(undoStack.pop()); }
+function redo() { if (!redoStack.length) return; dropGestures(); undoStack.push(snapshot()); restore(redoStack.pop()); }
+function updateButtons() { $('undo').disabled = !undoStack.length; $('redo').disabled = !redoStack.length; }
+
+/* =========================== ドラッグ（部品・つまみ） =========================== */
+const drags = new Map();
+let rafWaiting = false;
+function requestFrame() {
+  if (rafWaiting) return;
+  rafWaiting = true;
+  requestAnimationFrame(() => {
+    rafWaiting = false;
+    let hot = false;
+    for (const d of drags.values()) {
+      if (d.kind === 'item') {
+        if (d.it.type === 'span' || d.it.type === 'pin') draw(d.it); else place(d.it);
+        for (const c of d.carry || []) place(c.it);
+        if (d.it.type === 'tag') redrawDeps();
+      } else draw(d.it);
+      if (d.overTrash) hot = true;
+    }
+    trashEl.classList.toggle('hot', hot);
+  });
+}
+function isPalm(e) { return e.pointerType === 'touch' && (e.width > PALM || e.height > PALM); }
+const grabbed = it => [...drags.values()].some(d => d.it === it);
+
+stage.addEventListener('pointerdown', e => {
+  if (mode !== 'move' || isPalm(e)) return;
+  if (e.target.closest('.mini')) return;
+  const p = toBoard(e.clientX, e.clientY);
+  const h = e.target.closest('.handle');
+  if (h) {
+    const it = byId(selId);
+    if (!it || grabbed(it)) return;
+    e.preventDefault();
+    try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+    drags.set(e.pointerId, { kind: 'handle', role: h.dataset.role, it, snap: snapshot(), moved: false, base: it.type === 'span' ? baseY(it) : 0 });
+    uiEl.querySelectorAll('.mini').forEach(m => { m.hidden = true; });
+    return;
+  }
+  const el = e.target.closest('.piece');
+  if (!el) {
+    if (selId) { selId = 0; renderSel(); }
+    return;
+  }
+  const it = byId(+el.dataset.id);
+  if (!it || grabbed(it)) return;
+  e.preventDefault();
+  try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  const snap = snapshot();
+  const wasSel = selId === it.id;
+  it.z = ++zTop;
+  el.classList.add('lift');
+  // 数直線を うごかす ときは、のっている ジャンプ・ピン・ふだも いっしょに
+  const carry = it.type === 'nline' ? attachedTo(it).map(c => ({ it: c, ox: c.x - it.x, oy: c.y - it.y })) : [];
+  drags.set(e.pointerId, { kind: 'item', it, el, dx: it.x - p.x, dy: it.y - p.y, snap, moved: false, sx: e.clientX, sy: e.clientY, overTrash: false, carry, wasSel });
+  requestFrame();
+});
+stage.addEventListener('pointermove', e => {
+  const d = drags.get(e.pointerId);
+  if (!d) return;
+  const p = toBoard(e.clientX, e.clientY);
+  if (d.kind === 'handle') { d.moved = true; dragHandle(d, p); requestFrame(); return; }
+  if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 4) return;
+  if (!d.moved) { d.moved = true; uiEl.textContent = ''; }
+  const it = d.it;
+  it.x = p.x + d.dx;
+  it.y = p.y + d.dy;
+  clampItem(it);
+  showGuide(snapItem(it));
+  for (const c of d.carry) { c.it.x = it.x + c.ox; c.it.y = it.y + c.oy; }
+  d.overTrash = overTrash(p) || overToolbox(e.clientX, e.clientY);
+  toolbox.classList.toggle('drop-ok', [...drags.values()].some(x => x.moved && x.overTrash && overToolbox(e.clientX, e.clientY)));
+  requestFrame();
+});
+// つまみ：数直線の 右はし（めもりの かず）・ジャンプの はし
+function dragHandle(d, p) {
+  const it = d.it;
+  if (it.type === 'nline') {
+    const maxN = Math.floor((W - it.x - PAD * 2) / it.g);
+    it.n = Math.max(1, Math.min(maxN, Math.round((p.x - it.x - PAD) / it.g)));
+    return;
+  }
+  // ジャンプの はし：めもりに すいつく
+  const L = refLine(it.x + it.w / 2, d.base, 260);
+  let x = p.x, gx = null;
+  if (L) { const s = nearestTol(x, snapXsOf(L), snapTol(L)); if (s !== null) { x = s; gx = s; } }
+  showGuide(gx);
+  const right = it.x + it.w;
+  if (d.role === 'b0') { x = Math.max(0, Math.min(right - 10, x)); it.w = right - x; it.x = x; }
+  else it.w = Math.max(10, Math.min(W - it.x, x - it.x));
+  it.y = d.base - dims(it).h;
+}
+function endDrag(e) {
+  const d = drags.get(e.pointerId);
+  if (!d) return;
+  drags.delete(e.pointerId);
+  showGuide(null);
+  if (d.kind === 'handle') {
+    if (e.type === 'pointercancel') { restore(d.snap); return; }
+    draw(d.it);
+    redrawDeps();
+    if (d.moved) pushUndo(d.snap);
+    renderSel();
+    return;
+  }
+  d.el.classList.remove('lift');
+  toolbox.classList.remove('drop-ok');
+  const it = d.it;
+  if (d.overTrash && it.type === 'text' && !TEACHER) {
+    const o = d.snap.items.find(i => i.id === it.id);
+    it.x = o.x; it.y = o.y;
+    place(it);
+    toast('もんだいカードは けせません');
+  } else if (d.overTrash) {
+    removeItem(it.id);
+    for (const c of d.carry) removeItem(c.it.id);   // 数直線と いっしょに、のっていた ものも きえる
+    pushUndo(d.snap);
+  } else if (d.moved) {
+    selId = it.id;
+    pushUndo(d.snap);
+  } else if (e.type !== 'pointercancel') {
+    // タップ：えらぶ。えらんで いる ジャンプ・ピンを もう一度 タップ → 数 ⇄ ？
+    selId = it.id;
+    if ((it.type === 'span' || it.type === 'pin') && d.wasSel && (it.lm === 'a' || it.lm === 'q')) {
+      pushUndo(d.snap);
+      it.lm = it.lm === 'a' ? 'q' : 'a';
+    } else if (it.type === 'tag' || it.type === 'word') openLabel(it);
+    else if (it.type === 'text' && TEACHER) openText(it);
+  }
+  draw(it);
+  redrawDeps();
+  renderSel();
+  requestFrame();
+}
+stage.addEventListener('pointerup', endDrag);
+stage.addEventListener('pointercancel', endDrag);
+
+/* =========================== 道具箱 =========================== */
+let tabNow = 0;
+const toolDef = type => ({ name: TOOLS[type].name, obj: TOOLS[type].make() });
+// 道具箱の 見本の 絵
+function sampleOf(type) {
+  const s = { ...TOOLS[type].make(), id: 0, x: 0, y: 0 };
+  if (s.type === 'nline') { s.g = Math.max(7, Math.round(200 / s.n)); s.show = 'ends'; }
+  if (s.type === 'span') { s.w = 110; if (s.k !== 'band') { s.lm = 't'; s.l = s.d > 0 ? '+' : MINUS; } }
+  if (s.type === 'tag') s.l = '10';
+  return s;
+}
+function buildToolbox() {
+  toolbox.textContent = '';
+  const tabs = document.createElement('div');
+  tabs.className = 'tabs';
+  GROUPS.forEach((g, i) => {
+    const t = document.createElement('button');
+    t.textContent = g.tab;
+    t.className = i === tabNow ? 'on' : '';
+    t.onclick = () => { tabNow = i; buildToolbox(); };
+    tabs.appendChild(t);
+  });
+  toolbox.appendChild(tabs);
+  const g = GROUPS[tabNow];
+  const lab = document.createElement('div');
+  lab.className = 'label';
+  lab.textContent = g.label;
+  toolbox.appendChild(lab);
+  for (const type of g.tools) {
+    const b = document.createElement('div');
+    b.className = 'tb-item' + (WIDE.has(type) ? ' wide' : '');
+    b.dataset.type = type;
+    const sample = sampleOf(type);
+    const dm = dims(sample);
+    const fit = Math.min((WIDE.has(type) ? 220 : 100) / dm.w, (WIDE.has(type) ? 50 : 46) / dm.h, 1);
+    const th = document.createElement('div');
+    th.className = 'thumb';
+    th.style.width = dm.w * fit + 'px';
+    th.style.height = dm.h * fit + 'px';
+    const el = document.createElement('div');
+    el.className = 'piece';
+    el.style.width = dm.w + 'px'; el.style.height = dm.h + 'px';
+    el.style.transform = `scale(${fit})`;
+    el.innerHTML = itemSvg(sample);
+    th.appendChild(el);
+    b.appendChild(th);
+    const t = document.createElement('div'); t.textContent = TOOLS[type].name; b.appendChild(t);
+    toolbox.appendChild(b);
+  }
+  if (g.hint) { const h = document.createElement('div'); h.className = 'tbhint'; h.textContent = '💡 ' + g.hint; toolbox.appendChild(h); }
+}
+// 道具箱：タップ → いい 場所に 1こ。ひっぱる → すきな 場所に おける
+const tbDrags = new Map();
+toolbox.addEventListener('pointerdown', e => {
+  const b = e.target.closest('.tb-item');
+  if (!b || isPalm(e)) return;
+  e.preventDefault();
+  try { toolbox.setPointerCapture(e.pointerId); } catch (_) {}
+  { const old = tbDrags.get(e.pointerId); if (old && old.ghost) old.ghost.remove(); }
+  tbDrags.set(e.pointerId, { type: b.dataset.type, sx: e.clientX, sy: e.clientY, ghost: null, cx: e.clientX, cy: e.clientY, dm: null });
+});
+toolbox.addEventListener('pointermove', e => {
+  const d = tbDrags.get(e.pointerId);
+  if (!d) return;
+  d.cx = e.clientX; d.cy = e.clientY;
+  if (!d.ghost) {
+    if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 8) return;
+    const obj = { ...toolDef(d.type).obj, id: 0, x: 0, y: 0 };
+    d.dm = dims(obj);
+    d.ghost = document.createElement('div');
+    d.ghost.className = 'piece ghost lift';
+    d.ghost.style.width = d.dm.w + 'px'; d.ghost.style.height = d.dm.h + 'px';
+    d.ghost.innerHTML = itemSvg(obj);
+    document.body.appendChild(d.ghost);
+  }
+  d.ghost.style.transform = `translate3d(${d.cx - Math.min(40, d.dm.w / 2) * scale}px, ${d.cy - d.dm.h * scale / 2}px, 0) scale(${scale})`;
+  trashEl.classList.toggle('hot', overTrash(toBoard(d.cx, d.cy)));
+});
+function endTb(e) {
+  const d = tbDrags.get(e.pointerId);
+  if (!d) return;
+  tbDrags.delete(e.pointerId);
+  trashEl.classList.remove('hot');
+  const obj = toolDef(d.type).obj;
+  let pos;
+  if (!d.ghost) {
+    if (e.type === 'pointercancel') return;
+    pos = spotFor(obj);
+  } else {
+    d.ghost.remove();
+    const p = toBoard(d.cx, d.cy);
+    if (e.type === 'pointercancel' || !inBoard(p) || overTrash(p)) return;
+    pos = { x: p.x - Math.min(40, d.dm.w / 2), y: p.y - d.dm.h / 2 };
+  }
+  const snap = snapshot();
+  const it = addItem(obj, pos.x, pos.y);
+  if (!it) return;
+  snapItem(it);
+  place(it);
+  if (it.type !== 'text') selId = it.id;
+  redrawDeps();
+  renderSel();
+  pushUndo(snap);
+  if (it.type === 'tag' || it.type === 'word') openLabel(it, true);   // ふだ・ことばは すぐ かく
+}
+toolbox.addEventListener('pointerup', endTb);
+toolbox.addEventListener('pointercancel', endTb);
+
+/* =========================== 数・ことばを かく 画面 =========================== */
+let lab = null;   // { it, mode, color, isNew }
+function openLabel(it, isNew = false) {
+  lab = { it, mode: it.lm || 't', color: it.c || 'k', isNew };
+  const isNum = it.type !== 'word';
+  $('labIn').value = isNew ? '' : (it.type === 'word' ? it.text : (it.lm === 't' || it.type === 'tag' ? it.l : ''));
+  $('labTitle').textContent = it.type === 'span' ? (it.k === 'jump' ? 'ジャンプの 数' : it.k === 'band' ? 'おびの 数' : 'やじるしの 数')
+    : it.type === 'pin' ? 'ピンに かく' : it.type === 'tag' ? 'ふだに 数を かこう' : 'ことばカード';
+  $('labNote').textContent = it.type === 'tag' ? '3/4 と かくと 分数の 形で 出ます。白紙の 数直線では、ふだの 数から ジャンプの 数が 出ます。'
+    : isNum ? 'じどう … めもりから 数が 出る ／ ？ … かくす ／ なし … 何も 出さない。 下で かくと、その ことばが 出ます。' : '';
+  // じどう・？・なし
+  const modes = $('labModes'); modes.textContent = '';
+  if (it.type === 'span' || it.type === 'pin') {
+    for (const [m, t] of [['a', '🔢 じどう'], ['q', '？'], ['n', 'なし']]) {
+      const b = document.createElement('button');
+      b.className = 'btn chip' + (lab.mode === m ? ' on' : '');
+      b.textContent = t;
+      b.onclick = () => { lab.mode = m; $('labIn').value = ''; $('labOk').click(); };
+      modes.appendChild(b);
+    }
+  }
+  const mk = (row, list, fn, cls) => {
+    row.textContent = '';
+    for (const t of list) {
+      const b = document.createElement('button');
+      b.className = 'btn ' + (cls || '');
+      b.textContent = t;
+      b.onclick = () => fn(t);
+      row.appendChild(b);
+    }
+  };
+  const put = t => { const i = $('labIn'); i.value = (i.value + t).slice(0, 16); };
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.', '/', '+', MINUS, '⌫', 'けす'];
+  mk($('labKeys'), LOW ? keys.filter(k => k !== '/' && k !== '.') : keys, t => {
+    const i = $('labIn');
+    if (t === '⌫') i.value = [...i.value].slice(0, -1).join('');
+    else if (t === 'けす') i.value = '';
+    else put(t);
+  }, 'key');
+  mk($('labWords'), it.type === 'tag' ? [] : it.type === 'word' ? WORDS : ['？', '□', 'ア', 'イ', 'ウ', 'エ', ...(LOW ? [] : ['x', 'a'])], put, 'chip');
+  $('labColorBox').hidden = it.type !== 'word';
+  renderLabColors();
+  $('labBg').hidden = false;
+}
+function renderLabColors() {
+  const row = $('labColors');
+  row.textContent = '';
+  for (const c of COLORS) {
+    const b = document.createElement('button');
+    b.className = 'btn' + (lab.color === c.id ? ' on' : '');
+    b.title = c.name;
+    b.innerHTML = `<span class="sample" style="background:${c.fill};border-color:${c.line}"></span>`;
+    b.onclick = () => { lab.color = c.id; renderLabColors(); };
+    row.appendChild(b);
+  }
+}
+$('labCancel').onclick = () => { $('labBg').hidden = true; lab = null; };
+$('labOk').onclick = () => {
+  $('labBg').hidden = true;
+  if (!lab) return;
+  const { it } = lab;
+  if (!byId(it.id)) { lab = null; return; }
+  const v = $('labIn').value.trim().replace(/-/g, MINUS).slice(0, 16);
+  const snap = snapshot();
+  if (it.type === 'span' || it.type === 'pin') {
+    if (v) { it.lm = 't'; it.l = v; } else { it.lm = lab.mode === 't' ? 'a' : lab.mode; it.l = ''; }
+  } else if (it.type === 'tag') {
+    const tip = tagTip(it).x;
+    it.l = v;
+    it.x = tip - dims(it).w / 2;
+  } else if (it.type === 'word') {
+    if (!v) { removeItem(it.id); lab = null; pushUndo(snap); renderSel(); return; }
+    it.text = v; it.c = lab.color;
+  }
+  clampItem(it);
+  draw(it);
+  redrawDeps();
+  renderSel();
+  pushUndo(snap);
+  lab = null;
+};
+$('labIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('labOk').click(); } });
+
+/* =========================== 数直線の せってい 画面 =========================== */
+let lineDlg = null;   // { L, snap, changed }
+function openLineDlg(L) {
+  lineDlg = { L, snap: snapshot(), changed: false };
+  renderLineDlg();
+  $('lineBg').hidden = false;
+}
+function unitLabel(U) {
+  if (U.frac) return `<span class="frc">1<b>${U.q}</b></span>`;
+  return U.id === '10000' ? '1万' : U.id;
+}
+function renderLineDlg() {
+  const { L } = lineDlg, U = unitOf(L.u), panel = $('linePanel');
+  panel.textContent = '';
+  const h2 = t => { const e = document.createElement('h2'); e.textContent = t; panel.appendChild(e); };
+  const row = () => { const r = document.createElement('div'); r.className = 'row'; panel.appendChild(r); return r; };
+  // 上に 見出しと「とじる」（ながく なっても いつでも とじられる）
+  const head = document.createElement('div'); head.className = 'head';
+  head.innerHTML = `<b>${LOW ? 'すうちょくせんの せってい' : '数直線の せってい'}</b>`;
+  const hc = document.createElement('button'); hc.className = 'btn on'; hc.textContent = 'とじる'; hc.onclick = closeLineDlg;
+  head.appendChild(hc); panel.appendChild(head);
+  const bt = (r, html, on, fn, title) => {
+    const b = document.createElement('button');
+    b.className = 'btn' + (on ? ' on' : '');
+    b.innerHTML = html; if (title) b.title = title;
+    b.onclick = () => { lineDlg.changed = true; withAttached(L, fn); renderLineDlg(); renderSel(); scheduleSave(); };
+    r.appendChild(b);
+  };
+  const val = (r, html) => { const s = document.createElement('span'); s.className = 'val'; s.innerHTML = html; r.appendChild(s); };
+  let r = row();
+  bt(r, '📏 めもりあり', !L.open, () => { L.open = false; });
+  bt(r, '⬜ めもりなし（白紙）', L.open, () => { L.open = true; });
+  if (!L.open) {
+    h2('1めもりの 大きさ');
+    r = row();
+    for (const u of UNITS) {
+      if (LOW && !UNITS_LOW.includes(u.id)) continue;
+      bt(r, unitLabel(u), u.id === L.u, () => {
+        // はじめの 数が かわらない ように（あらわせない ときは 0 から）
+        const v0n = L.s * U.p * u.q, den = U.q * u.p;
+        L.s = v0n % den === 0 ? v0n / den : 0;
+        L.u = u.id;
+      });
+    }
+    h2('はじめの 数');
+    r = row();
+    bt(r, '◀◀', false, () => { L.s -= U.maj; }, `${U.maj}めもり へらす`);
+    bt(r, '◀', false, () => { L.s -= 1; }, '1めもり へらす');
+    val(r, partsHtml(fmtLine(L.s * U.p, U.q, L, false)));
+    bt(r, '▶', false, () => { L.s += 1; }, '1めもり ふやす');
+    bt(r, '▶▶', false, () => { L.s += U.maj; }, `${U.maj}めもり ふやす`);
+    bt(r, '0 から', L.s === 0, () => { L.s = 0; });
+    if (!LOW) bt(r, '0 が まんなか', L.s === -Math.floor(L.n / 2), () => { L.s = -Math.floor(L.n / 2); });
+  }
+  h2(L.open ? '線の 長さ' : 'めもりの かず ・ はば');
+  r = row();
+  bt(r, '−', false, () => { L.n = Math.max(1, L.n - 1); }, 'めもりを へらす');
+  val(r, `${L.n}`);
+  bt(r, '＋', false, () => { L.n += 1; }, 'めもりを ふやす');
+  const sp = document.createElement('span'); sp.style.width = '24px'; r.appendChild(sp);
+  bt(r, '🔍−', false, () => { const i = GAPS.indexOf(gapNear(L.g)); L.g = GAPS[Math.max(0, i - 1)]; }, 'せまく');
+  bt(r, '🔍＋', false, () => { const i = GAPS.indexOf(gapNear(L.g)); L.g = GAPS[Math.min(GAPS.length - 1, i + 1)]; }, 'ひろく');
+  if (!L.open) {
+    h2('数の 見せかた');
+    r = row();
+    for (const [m, t] of [['all', 'ぜんぶ'], ['major', '大きい めもり だけ'], ['ends', 'はし と 0 だけ'], ['none', 'なし']]) bt(r, t, L.show === m, () => { L.show = m; });
+    if (U.frac) {
+      h2('分数の かきかた');
+      r = row();
+      bt(r, '仮分数（<span class="frc">5<b>4</b></span>）', L.fm === 'imp', () => { L.fm = 'imp'; });
+      bt(r, '帯分数（1<span class="frc">1<b>4</b></span>）', L.fm === 'mix', () => { L.fm = 'mix'; });
+    }
+    if (!LOW) {
+      h2('正の数の ＋');
+      r = row();
+      bt(r, 'つけない（3）', !L.plus, () => { L.plus = false; });
+      bt(r, 'つける（+3）', L.plus, () => { L.plus = true; });
+    }
+  }
+}
+function partsHtml(p) {
+  const t = esc(p.sign + (p.whole || ''));
+  return p.fd ? `${t}<span class="frc">${p.fn}<b>${p.fd}</b></span>` : t;
+}
+function closeLineDlg() {
+  $('lineBg').hidden = true;
+  if (lineDlg && lineDlg.changed) pushUndo(lineDlg.snap);
+  lineDlg = null;
+  renderSel();
+}
+$('lineBg').addEventListener('click', e => { if (e.target === $('lineBg')) closeLineDlg(); });
+
+/* =========================== 👁️ ひょうじ =========================== */
+function renderVis() {
+  const panel = $('visPanel');
+  panel.textContent = '';
+  const rows = [
+    ['line', LOW ? 'すうちょくせんの かず' : '数直線の 数'],
+    ['span', LOW ? 'ジャンプ・おびの かず（じどう）' : 'ジャンプ・おび・やじるしの 数（じどう）'],
+    ['pin', LOW ? 'ピンの かず（じどう）' : 'ピンの 数（じどう）'],
+  ];
+  for (const [k, t] of rows) {
+    const h = document.createElement('h2'); h.textContent = t; panel.appendChild(h);
+    const r = document.createElement('div'); r.className = 'row'; panel.appendChild(r);
+    for (const [v, lbl] of [[true, '👁 見せる'], [false, '🙈 かくす']]) {
+      const b = document.createElement('button');
+      b.className = 'btn' + (vis[k] === v ? ' on' : '');
+      b.textContent = lbl;
+      b.onclick = () => { vis[k] = v; for (const it of items) draw(it); renderSel(); renderVis(); scheduleSave(); };
+      r.appendChild(b);
+    }
+  }
+  const p = document.createElement('p');
+  p.style.cssText = 'font-size:0.9rem;font-weight:bold;color:#5c6bc0;margin:12px 0 0';
+  p.textContent = '「？」や じぶんで かいた 数は、かくしても そのまま 出ます。';
+  panel.appendChild(p);
+  const close = document.createElement('button');
+  close.className = 'btn close on'; close.textContent = 'とじる';
+  close.onclick = () => { $('visBg').hidden = true; };
+  panel.appendChild(close);
+}
+$('visBtn').onclick = () => { renderVis(); $('visBg').hidden = false; };
+$('visBg').addEventListener('click', e => { if (e.target === $('visBg')) $('visBg').hidden = true; });
+
+/* =========================== ペン =========================== */
+const drawing = new Map();
+function strokeSeg(color, a, b) {
+  ictx.strokeStyle = color; ictx.lineWidth = PEN_WIDTH; ictx.lineCap = 'round'; ictx.lineJoin = 'round';
+  ictx.beginPath(); ictx.moveTo(a[0], a[1]); ictx.lineTo(b[0], b[1]); ictx.stroke();
+}
+function drawStroke(ctx, s) {
+  ctx.strokeStyle = s.color; ctx.fillStyle = s.color;
+  ctx.lineWidth = PEN_WIDTH; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const p = s.pts;
+  if (p.length === 1) { ctx.beginPath(); ctx.arc(p[0][0], p[0][1], PEN_WIDTH / 2, 0, Math.PI * 2); ctx.fill(); return; }
+  ctx.beginPath();
+  ctx.moveTo(p[0][0], p[0][1]);
+  for (let i = 1; i < p.length - 1; i++) {
+    const mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2;
+    ctx.quadraticCurveTo(p[i][0], p[i][1], mx, my);
+  }
+  ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+  ctx.stroke();
+}
+function snapLine(ax, ay, x, y) {
+  const dx = x - ax, dy = y - ay, len = Math.hypot(dx, dy);
+  if (len < 1) return { x, y };
+  const a = Math.atan2(dy, dx), step = Math.PI / 4, sa = Math.round(a / step) * step;
+  if (Math.abs(a - sa) > 6 * Math.PI / 180) return { x, y };
+  return { x: ax + Math.cos(sa) * len, y: ay + Math.sin(sa) * len };
+}
+function redrawInk() {
+  ictx.save(); ictx.setTransform(1, 0, 0, 1, 0, 0); ictx.clearRect(0, 0, ink.width, ink.height); ictx.restore();
+  for (const s of strokes) drawStroke(ictx, s);
+}
+ink.addEventListener('pointerdown', e => {
+  if (mode !== 'draw' || isPalm(e)) return;
+  e.preventDefault();
+  try { ink.setPointerCapture(e.pointerId); } catch (_) {}
+  const p = toBoard(e.clientX, e.clientY);
+  const stroke = { color: penColor, pts: [[p.x, p.y]] };
+  drawing.set(e.pointerId, { stroke, snap: snapshot(), straight });
+  strokes.push(stroke);
+  drawStroke(ictx, stroke);
+});
+ink.addEventListener('pointermove', e => {
+  const d = drawing.get(e.pointerId);
+  if (!d) return;
+  if (d.straight) {
+    const p = toBoard(e.clientX, e.clientY), a = d.stroke.pts[0], q = snapLine(a[0], a[1], p.x, p.y);
+    d.stroke.pts = [a, [q.x, q.y]];
+    redrawInk();
+    return;
+  }
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  for (const ev of (evs.length ? evs : [e])) {
+    const p = toBoard(ev.clientX, ev.clientY);
+    const last = d.stroke.pts[d.stroke.pts.length - 1];
+    if (Math.hypot(p.x - last[0], p.y - last[1]) < 1.5) continue;
+    d.stroke.pts.push([p.x, p.y]);
+    strokeSeg(d.stroke.color, last, [p.x, p.y]);
+  }
+});
+function endDraw(e) {
+  const d = drawing.get(e.pointerId);
+  if (!d) return;
+  drawing.delete(e.pointerId);
+  if (e.type === 'pointercancel') strokes = strokes.filter(s => s !== d.stroke);
+  else pushUndo(d.snap);
+  redrawInk();
+}
+ink.addEventListener('pointerup', endDraw);
+ink.addEventListener('pointercancel', endDraw);
+
+/* =========================== ツールバー =========================== */
+function setMode(m) {
+  mode = m;
+  $('modeMove').classList.toggle('on', m === 'move');
+  $('modeDraw').classList.toggle('on', m === 'draw' && !straight);
+  $('modeLine').classList.toggle('on', m === 'draw' && straight);
+  stage.classList.toggle('drawing', m === 'draw');
+  document.querySelectorAll('.pen').forEach(b => b.classList.toggle('on', m === 'draw' && b.dataset.color === penColor));
+  renderSel();
+}
+$('modeMove').onclick = () => setMode('move');
+$('modeDraw').onclick = () => { straight = false; setMode('draw'); };
+$('modeLine').onclick = () => { straight = true; setMode('draw'); };
+for (const c of PEN_COLORS) {
+  const b = document.createElement('button');
+  b.className = 'btn pen';
+  b.dataset.color = c.color;
+  b.title = 'ペン ' + c.name;
+  b.innerHTML = `<span class="dot" style="background:${c.color}"></span>`;
+  b.onclick = () => { penColor = c.color; setMode('draw'); };
+  $('penColors').appendChild(b);
+}
+$('clearInk').onclick = () => { if (!strokes.length) return; pushUndo(snapshot()); strokes = []; redrawInk(); };
+$('undo').onclick = undo;
+$('redo').onclick = redo;
+$('clearAll').onclick = () => { if (items.length || strokes.length) $('confirmBg').hidden = false; };
+$('confirmNo').onclick = () => { $('confirmBg').hidden = true; };
+$('confirmYes').onclick = () => {
+  $('confirmBg').hidden = true;
+  dropGestures();
+  pushUndo(snapshot());
+  items = TEACHER ? [] : items.filter(i => i.type === 'text');   // 子どもは もんだいカードを のこす
+  strokes = [];
+  rebuild();
+};
+document.addEventListener('keydown', e => {
+  if (e.target.closest('textarea, input') && e.key !== 'Escape') return;
+  const mod = e.ctrlKey || e.metaKey;
+  const dlgOpen = [...document.querySelectorAll('.dialog-bg')].some(d => !d.hidden);
+  if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); if (!dlgOpen) undo(); }
+  else if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); if (!dlgOpen) redo(); }
+  else if (e.key === 'Escape') {
+    if (!$('lineBg').hidden) closeLineDlg();
+    ['teacherBg', 'confirmBg', 'bgBg', 'txtBg', 'shareBg', 'labBg', 'visBg'].forEach(id => { $(id).hidden = true; });
+    lab = null;
+  }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && !dlgOpen && selId) {
+    const it = byId(selId);
+    if (it && (it.type !== 'text' || TEACHER)) { pushUndo(snapshot()); removeItem(it.id); redrawDeps(); renderSel(); }
+  }
+});
+
+/* =========================== はいけいを えらぶ 画面 =========================== */
+function redrawBg() { const k = bgc.width / W; bctx.setTransform(k, 0, 0, k, 0, 0); drawBg(bctx); }
+function bgButton(label, on, onclick, sample) {
+  const b = document.createElement('button');
+  b.className = 'btn' + (on ? ' on' : '');
+  b.innerHTML = (sample ? `<span class="sample" style="background:${sample}"></span>` : '') + label;
+  b.onclick = onclick;
+  return b;
+}
+function renderBgPanel() {
+  const kinds = $('bgKinds'); kinds.textContent = '';
+  for (const k of BG_KINDS) {
+    kinds.appendChild(bgButton(k.name, bg.kind === k.id, () => {
+      bg.kind = k.id;
+      if (k.id === 'image' && !bg.img) $('bgFile').click();
+      changeBg();
+    }));
+  }
+  const sizes = $('bgSizes'); sizes.textContent = '';
+  $('bgSizeBox').hidden = !(bg.kind === 'grid' || bg.kind === 'note');
+  if (bg.kind === 'grid' || bg.kind === 'note') {
+    const list = bg.kind === 'grid' ? GRID_SIZES : NOTE_SIZES;
+    $('bgSizeTitle').textContent = bg.kind === 'grid' ? 'マスの おおきさ' : 'よこに ならぶ マスの かず';
+    for (const g of list) sizes.appendChild(bgButton(g.name, bg[bg.kind] === g.id, () => { bg[bg.kind] = g.id; changeBg(); }));
+  }
+  $('bgImgBox').hidden = bg.kind !== 'image';
+  $('bgFade').classList.toggle('on', bg.fade);
+  $('bgFade').disabled = !bg.img;
+  const cols = $('bgColors'); cols.textContent = '';
+  for (const c of BG_COLORS) cols.appendChild(bgButton(c.name, bg.color === c.id, () => { bg.color = c.id; changeBg(); }, c.paper));
+}
+function changeBg() { redrawBg(); renderBgPanel(); scheduleSave(); }
+$('bgBtn').onclick = () => { renderBgPanel(); $('bgBg').hidden = false; };
+$('bgClose').onclick = () => { $('bgBg').hidden = true; };
+$('bgBg').addEventListener('click', e => { if (e.target === $('bgBg')) $('bgBg').hidden = true; });
+$('bgPick').onclick = () => $('bgFile').click();
+$('bgFade').onclick = () => { bg.fade = !bg.fade; changeBg(); };
+$('bgFile').addEventListener('change', async () => {
+  const file = $('bgFile').files[0];
+  $('bgFile').value = '';
+  if (!file) return;
+  let data = null;
+  try { data = await readBoardFromPng(file); } catch (_) { data = null; }
+  if (data) { $('bgBg').hidden = true; openBoardFile(file); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 1800 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    bg.img = c; bg.kind = 'image';
+    changeBg();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('この がぞうは よみこめませんでした'); };
+  img.src = url;
+});
+
+/* =========================== 先生用：もんだいカード =========================== */
+let editing = null, txtSize = 34;
+function openText(it) {
+  editing = it || null;
+  $('txtIn').value = it ? it.text : '';
+  txtSize = it ? it.fs : 34;
+  $('txtDel').hidden = !it;
+  renderTxtSizes();
+  $('txtBg').hidden = false;
+  setTimeout(() => $('txtIn').focus(), 50);
+}
+function renderTxtSizes() {
+  const row = $('txtSizes'); row.textContent = '';
+  for (const s of TEXT_SIZES) {
+    const b = document.createElement('button');
+    b.className = 'btn' + (txtSize === s.id ? ' on' : '');
+    b.textContent = s.name;
+    b.onclick = () => { txtSize = s.id; renderTxtSizes(); };
+    row.appendChild(b);
+  }
+}
+$('addText').onclick = () => openText(null);
+$('txtCancel').onclick = () => { $('txtBg').hidden = true; };
+$('txtOk').onclick = () => {
+  const text = $('txtIn').value.replace(/\s+$/, '');
+  $('txtBg').hidden = true;
+  if (!text) return;
+  const snap = snapshot();
+  if (editing && byId(editing.id)) {
+    editing.text = text; editing.fs = txtSize;
+    draw(editing); clampItem(editing); place(editing);
+  } else {
+    const L = layoutText(text, txtSize);
+    addItem({ type: 'text', text, fs: txtSize }, (W - L.w) / 2, 16);
+  }
+  pushUndo(snap);
+};
+$('txtDel').onclick = () => {
+  $('txtBg').hidden = true;
+  if (!editing) return;
+  pushUndo(snapshot());
+  removeItem(editing.id);
+  renderSel();
+};
+
+/* =========================== 盤面 ⇄ 文字列 =========================== */
+function stateData() {
+  const r = v => Math.round(v * 10) / 10;
+  return {
+    v: 1,
+    b: [bg.kind === 'image' ? 'plain' : bg.kind, bg.grid, bg.note, bg.color],
+    e: [vis.line ? 1 : 0, vis.span ? 1 : 0, vis.pin ? 1 : 0],
+    i: items.map(it => {
+      const o = { ...it, x: r(it.x), y: r(it.y) };
+      if (o.w !== undefined) o.w = r(o.w);
+      delete o.id; delete o.z;
+      return o;
+    }),
+    s: strokes.map(st => [st.color, st.pts.filter((p, k) => k % 2 === 0 || k === st.pts.length - 1).flatMap(p => [Math.round(p[0]), Math.round(p[1])])]),
+  };
+}
+async function packState() {
+  const bytes = new TextEncoder().encode(JSON.stringify(stateData()));
+  const zipped = await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer();
+  let bin = '';
+  new Uint8Array(zipped).forEach(b => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function unpackState(str) {
+  const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  const text = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+  return JSON.parse(text);
+}
+// 文字列から もどした 部品を しらべる（知らない 種類や おかしな 数は すてる）
+function cleanItem(a) {
+  if (!a || typeof a !== 'object') return null;
+  const num = (v, lo, hi) => (typeof v === 'number' && isFinite(v)) ? Math.max(lo, Math.min(hi, v)) : null;
+  const int = (v, lo, hi) => { const n = num(v, lo, hi); return n === null ? null : Math.round(n); };
+  const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+  const x = num(a.x, -50, W), y = num(a.y, -50, H);
+  if (x === null || y === null) return null;
+  const lm = ['a', 'q', 'n', 't'].includes(a.lm) ? a.lm : 'a';
+  if (a.type === 'nline') {
+    const u = UNITS.some(U => U.id === a.u) && (!LOW || UNITS_LOW.includes(a.u)) ? a.u : '1';
+    const g = num(a.g, 12, 200), n = int(a.n, 1, 200), s = int(a.s, -1000000, 1000000);
+    if (g === null || n === null || s === null) return null;
+    return { type: 'nline', x, y, u, s, n: Math.min(n, Math.floor((W - PAD * 2) / g)), g,
+      show: ['all', 'major', 'ends', 'none'].includes(a.show) ? a.show : 'all', fm: a.fm === 'mix' ? 'mix' : 'imp', plus: !!a.plus, open: !!a.open };
+  }
+  if (a.type === 'span') {
+    const w = num(a.w, 10, W);
+    if (w === null || !['jump', 'band', 'arrow'].includes(a.k)) return null;
+    return { type: 'span', x, y, k: a.k, d: a.d === -1 ? -1 : 1, w, lm, l: str(a.l, 16) };
+  }
+  if (a.type === 'pin') return { type: 'pin', x, y, lm, l: str(a.l, 16) };
+  if (a.type === 'tag') return { type: 'tag', x, y, l: str(a.l, 16) };
+  if (a.type === 'word') { const text = str(a.text, 24); return text ? { type: 'word', x, y, text, c: COLORS.some(c => c.id === a.c) ? a.c : 'k' } : null; }
+  if (a.type === 'text') { const text = str(a.text, 400); return text ? { type: 'text', x, y, text, fs: TEXT_SIZES.some(s => s.id === a.fs) ? a.fs : 34 } : null; }
+  return null;
+}
+function applyState(data) {
+  dropGestures();
+  const [kind, grid, note, color] = Array.isArray(data.b) ? data.b : [];
+  if (BG_KINDS.some(k => k.id === kind) && kind !== 'image') bg.kind = kind;
+  if (GRID_SIZES.some(g => g.id === grid)) bg.grid = grid;
+  if (NOTE_SIZES.some(g => g.id === note)) bg.note = note;
+  if (BG_COLORS.some(c => c.id === color)) bg.color = color;
+  if (Array.isArray(data.e)) { vis.line = data.e[0] !== 0; vis.span = data.e[1] !== 0; vis.pin = data.e[2] !== 0; }
+  items = []; strokes = []; selId = 0;
+  for (const a of (Array.isArray(data.i) ? data.i : []).slice(0, MAX_ITEMS)) {
+    const it = cleanItem(a);
+    if (it) items.push({ ...it, id: nextId++, z: ++zTop });
+  }
+  for (const st of (Array.isArray(data.s) ? data.s : []).slice(0, 500)) {
+    if (!Array.isArray(st) || !PEN_COLORS.some(c => c.color === st[0]) || !Array.isArray(st[1])) continue;
+    const pts = [];
+    for (let k = 0; k + 1 < st[1].length; k += 2) {
+      const a = st[1][k], b = st[1][k + 1];
+      if (typeof a === 'number' && typeof b === 'number' && isFinite(a) && isFinite(b)) pts.push([a, b]);
+    }
+    if (pts.length) strokes.push({ color: st[0], pts });
+  }
+  rebuild();
+  for (const it of items) { clampItem(it); place(it); }
+  redrawDeps();
+  redrawBg();
+}
+let startState = null;
+$('resetStart').onclick = () => { if (!startState) return; pushUndo(snapshot()); restore(startState); };
+
+/* =========================== くばる がぞう（PNG の 中に 盤面を 入れる） =========================== */
+const PNG_KEY = 'sansuset10-board';
+const PNG_KEY_OTHERS = { 'sansuset-board': 'さんすうボード① おはじきボード', 'sansuset2-board': 'さんすうボード② かぞえぼう・タイル', 'sansuset3-board': 'さんすうボード③ おかね', 'sansuset4-board': 'さんすうボード④ いろいた・タングラム', 'sansuset5-board': 'さんすうボード⑤ ジオボード', 'sansuset6-board': 'さんすうボード⑥ とけいと じかん', 'sansuset7-board': 'さんすうボード⑦ テープ図・線分図', 'sansuset8-board': 'さんすうボード⑧ いろぼう', 'sansuset9-board': 'さんすうボード⑨ かずのブロック' };
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(bytes) { let c = 0xffffffff; for (const b of bytes) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+async function addBoardToPng(blob, code) {
+  const png = new Uint8Array(await blob.arrayBuffer());
+  const body = new TextEncoder().encode(PNG_KEY + '\0' + code);
+  const chunk = new Uint8Array(12 + body.length);
+  const dv = new DataView(chunk.buffer);
+  dv.setUint32(0, body.length);
+  chunk.set([0x74, 0x45, 0x58, 0x74], 4);
+  chunk.set(body, 8);
+  dv.setUint32(8 + body.length, crc32(chunk.subarray(4, 8 + body.length)));
+  const end = png.length - 12;
+  return new Blob([png.subarray(0, end), chunk, png.subarray(end)], { type: 'image/png' });
+}
+async function readBoardFromPng(file) {
+  const png = new Uint8Array(await file.arrayBuffer());
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (png.length < 20 || sig.some((v, i) => png[i] !== v)) return null;
+  const dv = new DataView(png.buffer);
+  for (let p = 8; p + 12 <= png.length;) {
+    const len = dv.getUint32(p), type = String.fromCharCode(...png.subarray(p + 4, p + 8));
+    if (type === 'tEXt') {
+      const text = new TextDecoder('latin1').decode(png.subarray(p + 8, p + 8 + len));
+      if (text.startsWith(PNG_KEY + '\0')) return unpackState(text.slice(PNG_KEY.length + 1));
+      for (const k in PNG_KEY_OTHERS) if (text.startsWith(k + '\0')) throw new Error(PNG_KEY_OTHERS[k]);
+    }
+    if (type === 'IEND') break;
+    p += 12 + len;
+  }
+  return null;
+}
+async function makeBoardPng() {
+  const code = await packState();
+  const c = await makePhoto();
+  const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+  return addBoardToPng(blob, code);
+}
+function dateLabel() { const n = new Date(); return `${n.getMonth() + 1}月${n.getDate()}日`; }
+function saveBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+let shareBlob = null;
+$('share').onclick = async () => {
+  if (!items.length && !strokes.length) { toast('ボードに なにも ありません'); return; }
+  shareBlob = await makeBoardPng();
+  const prev = $('sharePrev');
+  if (prev.src) URL.revokeObjectURL(prev.src);
+  prev.src = URL.createObjectURL(shareBlob);
+  $('shareImgNote').hidden = bg.kind !== 'image';
+  $('shareBg').hidden = false;
+};
+$('shareSave').onclick = () => { if (!shareBlob) return; saveBlob(shareBlob, `もんだい_数直線_${dateLabel()}.png`); toast('💾 ほぞんしたよ。Classroom などで くばってね'); };
+$('shareClose').onclick = () => { $('shareBg').hidden = true; };
+async function openBoardFile(file) {
+  if (!file) return;
+  let data = null;
+  try { data = await readBoardFromPng(file); }
+  catch (err) {
+    if (Object.values(PNG_KEY_OTHERS).includes(err.message)) { toast(`これは「${err.message}」の がぞうです。そちらで ひらいてね`); return; }
+    data = null;
+  }
+  if (!data) { toast('この がぞうには ボードが 入っていません。はいけいに するときは「🖼はいけい」から えらんでね'); return; }
+  pushUndo(snapshot());
+  bg.img = null;
+  if (bg.kind === 'image') bg.kind = 'plain';
+  applyState(data);
+  startState = snapshot();
+  $('resetStart').hidden = false;
+  toast('📂 もんだいを ひらいたよ');
+}
+$('openBoard').onclick = () => $('boardFile').click();
+$('boardFile').addEventListener('change', () => { const file = $('boardFile').files[0]; $('boardFile').value = ''; openBoardFile(file); });
+document.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', e => { const file = e.dataTransfer.files[0]; if (!file) return; e.preventDefault(); openBoardFile(file); });
+
+/* =========================== しゃしん =========================== */
+function svgImage(svgStr) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => res(null);
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+  });
+}
+function drawTextCard(ctx, it) {
+  const L = layoutText(it.text, it.fs), l = it.x, t = it.y;
+  ctx.fillStyle = '#fffef5'; ctx.strokeStyle = '#3949ab'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.roundRect(l + 1.5, t + 1.5, L.w - 3, L.h - 3, 11); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#263238'; ctx.font = `900 ${it.fs}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  L.lines.forEach((line, i) => ctx.fillText(line, l + 19, t + 13 + L.lh * (i + 0.5)));
+  ctx.textBaseline = 'alphabetic';
+}
+async function makePhoto() {
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  drawBg(ctx);
+  const order = [...items].sort((a, b) => ((b.type === 'nline') - (a.type === 'nline')) || (a.z - b.z));   // 数直線は いちばん 下
+  const imgs = await Promise.all(order.map(it => it.type === 'text' ? null : svgImage(itemSvg(it))));
+  order.forEach((it, i) => {
+    if (it.type === 'text') { drawTextCard(ctx, it); return; }
+    const d = dims(it);
+    if (imgs[i]) ctx.drawImage(imgs[i], it.x, it.y, d.w, d.h);
+  });
+  for (const s of strokes) drawStroke(ctx, s);
+  const now = new Date();
+  ctx.fillStyle = '#9aa0bf'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText(`${now.getMonth() + 1}がつ ${now.getDate()}にち`, W - 20, H - 16);
+  return c;
+}
+$('photo').onclick = async () => {
+  const blob = makePhoto().then(c => new Promise(res => c.toBlob(res, 'image/png')));
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    toast('📷 コピーできたよ。ロイロで Ctrl＋V で はりつけてね');
+  } catch (_) {
+    saveBlob(await addBoardToPng(await blob, await packState()), `数直線_${dateLabel()}.png`);
+    toast('📷 しゃしんを ほぞんしたよ');
+  }
+};
+
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+window.addEventListener('beforeunload', e => { if (leaving) return; if (items.length || strokes.length) { e.preventDefault(); e.returnValue = ''; } });
+document.addEventListener('contextmenu', e => { if (e.target.closest('.stage, .toolbox')) e.preventDefault(); });
+
+/* =========================== はじめる =========================== */
+buildToolbox();
+setMode('move');
+layout();
+
+/* =========================== つづきから（この 端末に 自動で ほぞん） =========================== */
+// ?high=1：「算数セット 中高学年」から、?jh=1：「数学操作ボード 中学」から ひらいた（もどる 先を その 入り口に する）
+const HIGH = !LOW && !JH && params.get('high') === '1';
+const SAVE_KEY = 'ikechan-math-さんすうボード⑩ 数直線' + (LOW ? '-ていがくねん' : HIGH ? '-中高学年' : JH ? '-中学' : '');
+const HUB = LOW ? 'さんすうセット ていがくねん.html' : HIGH ? '算数セット 中高学年.html' : JH ? '数学操作ボード 中学.html' : '';
+const HUB_SEEN = SAVE_KEY + '-seen';
+let hubSeen = false;
+if (HUB) {
+  const a = $('backLink');
+  a.href = HUB + (TEACHER ? '?teacher=1' : '');
+  a.textContent = '🏠 ボードえらび';
+  try { hubSeen = sessionStorage.getItem(HUB_SEEN) === '1'; sessionStorage.setItem(HUB_SEEN, '1'); } catch (_) {}
+}
+let saveTimer = 0, saveDirty = false;
+function scheduleSave() { saveDirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 600); }
+function saveNow() {
+  clearTimeout(saveTimer);
+  if (!saveDirty || !$('resumeBg').hidden) return;
+  try {
+    const d = stateData();
+    if (!d.i.length && !d.s.length) localStorage.removeItem(SAVE_KEY);
+    else localStorage.setItem(SAVE_KEY, JSON.stringify({ ...d, at: Date.now() }));
+  } catch (_) {}
+}
+function loadSaved() {
+  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return d && Array.isArray(d.i) && Array.isArray(d.s) && (d.i.length || d.s.length) ? d : null; }
+  catch (_) { return null; }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveNow(); });
+window.addEventListener('pagehide', saveNow);
+$('resumeYes').onclick = () => {
+  $('resumeBg').hidden = true;
+  const d = loadSaved();
+  if (d) { applyState(d); undoStack.length = 0; redoStack.length = 0; updateButtons(); toast('▶ つづきから はじめるよ'); }
+};
+$('resumeNo').onclick = () => { $('resumeBg').hidden = true; try { localStorage.removeItem(SAVE_KEY); } catch (_) {} };
+
+/* =========================== 先生モードの きりかえ =========================== */
+const SWITCH_KEY = SAVE_KEY + '-switch';
+let leaving = false;
+function switchTeacher(on) {
+  try { dropGestures(); } catch (_) {}
+  saveDirty = true; saveNow();
+  try { sessionStorage.setItem(SWITCH_KEY, '1'); } catch (_) {}
+  const p = new URLSearchParams(location.search);
+  if (on) p.set('teacher', '1'); else p.delete('teacher');
+  leaving = true;
+  const q = p.toString();
+  location.href = location.pathname + (q ? '?' + q : '') + location.hash;
+}
+$('teacherLbl').textContent = TEACHER ? 'せんせい おわる' : 'せんせい';
+$('teacherBtn').classList.toggle('on', TEACHER);
+$('teacherBtn').onclick = () => { if (TEACHER) switchTeacher(false); else $('teacherBg').hidden = false; };
+$('teacherNo').onclick = () => { $('teacherBg').hidden = true; };
+$('teacherYes').onclick = () => { $('teacherBg').hidden = true; switchTeacher(true); };
+let switched = false;
+try { switched = sessionStorage.getItem(SWITCH_KEY) === '1'; sessionStorage.removeItem(SWITCH_KEY); } catch (_) {}
+if (switched) {
+  const d = loadSaved();
+  if (d) applyState(d);
+} else {
+  const sv = loadSaved();
+  if (sv) {
+    const d = new Date(sv.at || Date.now());
+    $('resumeInfo').textContent = `${d.getMonth() + 1}がつ ${d.getDate()}にち ${d.getHours()}じ${String(d.getMinutes()).padStart(2, '0')}ふん の ボード`;
+    if (hubSeen) $('resumeYes').click(); else $('resumeBg').hidden = false;
+  }
+}
+
+/* =========================== ゆびを はなした しらせが こなかった ときの そなえ =========================== */
+(() => {
+  const endAll = (pid, type) => {
+    const ev = { pointerId: pid, type };
+    if (tbDrags.has(pid)) endTb(ev);
+    if (drags.has(pid)) endDrag(ev);
+    if (drawing.has(pid)) endDraw(ev);
+  };
+  const has = pid => tbDrags.has(pid) || drags.has(pid) || drawing.has(pid);
+  window.addEventListener('pointerup', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointerup'); });
+  window.addEventListener('pointercancel', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointercancel'); });
+  for (const el of [toolbox, stage, ink]) el.addEventListener('lostpointercapture', e => {
+    const pid = e.pointerId;
+    setTimeout(() => { if (has(pid)) endAll(pid, 'pointerup'); }, 0);
+  });
+  window.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && e.buttons === 0 && has(e.pointerId)) endAll(e.pointerId, 'pointerup'); });
+  window.addEventListener('pointerdown', e => { if (has(e.pointerId)) endAll(e.pointerId, 'pointercancel'); }, true);
+  const all = () => { for (const pid of new Set([...tbDrags.keys(), ...drags.keys(), ...drawing.keys()])) endAll(pid, 'pointercancel'); };
+  window.addEventListener('blur', all);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') all(); });
+})();
+</script>
+</body>
+</html>
