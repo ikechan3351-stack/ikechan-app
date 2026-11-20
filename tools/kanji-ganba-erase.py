@@ -7,6 +7,7 @@
 - 字の名前のあとに、消す四角を「左,右,上,下」（400×400の中の画素）でいくつでも書く
 - 四角の中で いちばん多い明るい色を「地の色」とし、それと ちがう色の画素を 地の色にする
 - kanji-ganba-slice.py で作った 256色の PNG（フィルターなし）だけを あつかえる
+- 黒板のように 地の色が暗いときは、さいごに --dark をつける（四角の中の ふつうの色を 地の色にする）
 """
 import struct
 import sys
@@ -14,7 +15,8 @@ import zlib
 from pathlib import Path
 
 img = Path(__file__).resolve().parent.parent / 'japanese' / 'kanji-ganba' / 'img' / f'{sys.argv[1]}.png'
-rects = [tuple(int(v) for v in r.split(',')) for r in sys.argv[2:]]
+dark = '--dark' in sys.argv
+rects = [tuple(int(v) for v in r.split(',')) for r in sys.argv[2:] if r != '--dark']
 
 b = img.read_bytes()
 i, chunks = 8, []
@@ -35,7 +37,7 @@ dist = lambda a, c: sum((a[k] - c[k]) ** 2 for k in range(3))
 total = 0
 for x0, x1, y0, y1 in rects:
     cells = [(x, y) for y in range(y0, y1 + 1) for x in range(x0, x1 + 1)]
-    light = [pal[rows[y][x]] for x, y in cells if lum(pal[rows[y][x]]) >= 180]
+    light = [pal[rows[y][x]] for x, y in cells if dark or lum(pal[rows[y][x]]) >= 180]
     bg = tuple(sorted(c[k] for c in light)[len(light) // 2] for k in range(3))
     bi = min(range(len(pal)), key=lambda j: dist(pal[j], bg))
     for x, y in cells:
