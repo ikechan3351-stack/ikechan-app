@@ -89,7 +89,11 @@
   }
   #svg { width: 100%; height: 100%; display: block; }
   .board.drawing { cursor: crosshair; }
-  g.pc { cursor: grab; }
+  /* まわす・うらがえす・すいつく ときは なめらかに うごく（ひっぱって いる あいだは そのまま ついてくる） */
+  g.pc { cursor: grab; transition: transform .28s ease; }
+  g.pc .fl, g.pc polygon { transition: transform .28s ease; }
+  g.pc.drag { transition: none; }
+  @media (prefers-reduced-motion: reduce) { g.pc, g.pc .fl, g.pc polygon { transition: none; } }
   g.pc.sel polygon { stroke: #263238; stroke-width: 4; }
   g.pc.drag polygon { filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3)); }
 
@@ -309,7 +313,8 @@ const svg = $('svg'), board = $('board');
 /* ---------- ブロックの かたち ---------- */
 function verts(p) {
   const a = p.r * D2R, c = Math.cos(a), s = Math.sin(a);
-  return DEF[p.t].pts.map(([x, y]) => { if (p.f) x = -x; return [p.x + x * c - y * s, p.y + x * s + y * c]; });
+  // まわしてから、うらがえし（左右 はんてん）。うらがえしても 角度は そのまま なので、なめらかに ひっくりかえる
+  return DEF[p.t].pts.map(([x, y]) => { let X = x * c - y * s; const Y = x * s + y * c; if (p.f) X = -X; return [p.x + X, p.y + Y]; });
 }
 // すいつく 点：ちょうてん と、長い辺（台形の 下）の まんなか
 function snapPts(p) {
@@ -413,15 +418,41 @@ function renderSil() {
     + (h ? `<g fill="none" stroke="#b0bec5" stroke-width="1.5" vector-effect="non-scaling-stroke">${h}</g>` : '');
   g.querySelectorAll('polygon').forEach(e => e.setAttribute('vector-effect', 'non-scaling-stroke'));
 }
-function pieceSVG(p) {
-  const d = DEF[p.t];
-  let lab = '';
-  if (showFrac && d.tri) lab = `<g pointer-events="none">${fracSVG(p.t, p.t === 'tri' ? 0.24 : 0.3)}</g>`;
-  return `<g class="pc${sel === p.id ? ' sel' : ''}" data-id="${p.id}" transform="translate(${p.x} ${p.y})">`
-    + `<polygon points="${ptsStr(d.pts)}" transform="rotate(${p.r}) scale(${p.f ? -1 : 1} 1)" fill="${d.fill}" stroke="${d.line}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`
-    + lab + `</g>`;
+// ブロック 1こ ＝ <g 位置> の 中に <g うらがえし> → <polygon 角度>。ぶんすうの 字は 位置だけ（いつも まっすぐ）
+// まえに かいた ものを のこして、位置・角度だけ かえるので、CSS の transition で なめらかに うごく
+const NS = 'http://www.w3.org/2000/svg';
+function placePiece(g, p) {
+  g.style.transform = `translate(${p.x}px, ${p.y}px)`;
+  g.firstChild.style.transform = `scale(${p.f ? -1 : 1}, 1)`;
+  g.firstChild.firstChild.style.transform = `rotate(${p.r}deg)`;
 }
-function renderPieces() { $('gPieces').innerHTML = pieces.map(pieceSVG).join(''); }
+function renderPieces() {
+  const gp = $('gPieces');
+  const have = new Map([...gp.children].map(g => [+g.dataset.id, g]));
+  const want = [];
+  for (const p of pieces) {
+    const d = DEF[p.t];
+    let g = have.get(p.id);
+    if (g && g.dataset.t !== p.t) { g.remove(); g = null; }
+    if (!g) {
+      g = document.createElementNS(NS, 'g');
+      g.dataset.id = p.id; g.dataset.t = p.t;
+      g.innerHTML = `<g class="fl"><polygon points="${ptsStr(d.pts)}" fill="${d.fill}" stroke="${d.line}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></g><g class="lab" pointer-events="none"></g>`;
+      gp.appendChild(g);
+    }
+    have.delete(p.id);
+    const held = [...drags.values()].some(dr => dr.p === p && dr.moved);   // ひっぱって いる さいちゅう
+    g.setAttribute('class', 'pc' + (sel === p.id ? ' sel' : '') + (held ? ' drag' : ''));
+    placePiece(g, p);
+    const lab = showFrac && d.tri ? fracSVG(p.t, p.t === 'tri' ? 0.24 : 0.3) : '';
+    if (g.lastChild._lab !== lab) { g.lastChild.innerHTML = lab; g.lastChild._lab = lab; }
+    want.push(g);
+  }
+  for (const g of have.values()) g.remove();
+  // かさなりの じゅんばんが ちがう ときだけ ならべなおす（うごいて いる とちゅうを じゃましない ため）
+  const now = [...gp.children];
+  if (now.some((g, i) => g !== want[i])) want.forEach(g => gp.appendChild(g));
+}
 function strokeD(st) { return st.pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(3) + ' ' + p[1].toFixed(3)).join(''); }
 function renderInk() {
   $('gInk').innerHTML = strokes.map(st => `<path d="${strokeD(st)}" fill="none" stroke="${st.c}" stroke-width="${st.w}" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
@@ -455,11 +486,12 @@ $('rotL').onclick = () => turn(-30);
 $('rotR').onclick = () => turn(30);
 function turn(deg) {
   const p = selected(); if (!p) return;
-  pushUndo(); p.r = ((p.r + deg) % 360 + 360) % 360; snap(p, 0.6); render(); check();
+  // 画面の 上で いつも おなじ むきに まわる（うらがえして いる ときは 角度を ぎゃくに たす）
+  pushUndo(); p.r += p.f ? -deg : deg; snap(p, 0.6); render(); check();
 }
 $('flipB').onclick = () => {
   const p = selected(); if (!p) return;
-  pushUndo(); p.f = !p.f; p.r = (360 - p.r) % 360; snap(p, 0.6); render(); check();
+  pushUndo(); p.f = !p.f; snap(p, 0.6); render(); check();
 };
 $('dupB').onclick = () => {
   const p = selected(); if (!p) return;
@@ -545,13 +577,13 @@ svg.addEventListener('pointermove', e => {
   if (!d.moved) {
     d.moved = true; pushUndo();
     pieces = pieces.filter(q => q !== p); pieces.push(p);   // いちばん 上に
-    sel = p.id; renderPieces();
+    sel = null; renderPieces();   // うごかす ときは ボタンを 出さない（タップした ときだけ 出す）
     $('selbar').hidden = true;
   }
   const [wx, wy] = toWorld(e.clientX, e.clientY);
   p.x = wx + d.dx; p.y = wy + d.dy;
   const g = $('gPieces').querySelector(`g.pc[data-id="${p.id}"]`);
-  if (g) { g.setAttribute('transform', `translate(${p.x} ${p.y})`); g.classList.add('drag'); }
+  if (g) { g.classList.add('drag'); g.style.transform = `translate(${p.x}px, ${p.y}px)`; }
   $('toolbox').classList.toggle('drop-ok', overToolbox(e.clientX, e.clientY));
 });
 function endPointer(e) {
@@ -621,7 +653,7 @@ function tbDown(e) {
 function addPiece(t, x, y) {
   pushUndo();
   const p = { id: nextId++, t, x, y, r: 0, f: false };
-  pieces.push(p); snap(p); sel = p.id;
+  pieces.push(p); snap(p); sel = null;   // 出した ときは ボタンを 出さない
   render(); check();
 }
 
@@ -685,7 +717,7 @@ function check() {
   const pArea = near.reduce((a, p) => a + DEF[p.t].area, 0);
   const ok = near.length && cover / sN > 0.985 && out / sN < 0.02 && Math.abs(pArea - sil.area) < 0.2;
   if (!ok) { solvedKey = ''; updateStatus(null); return; }
-  const key = near.map(p => p.t + p.x.toFixed(2) + p.y.toFixed(2) + p.r + p.f).sort().join('|');
+  const key = near.map(p => p.t + p.x.toFixed(2) + p.y.toFixed(2) + (((Math.round(p.r) % 360) + 360) % 360) + p.f).sort().join('|');
   if (key === solvedKey) return;
   solvedKey = key;
   const n = near.length;
@@ -843,7 +875,7 @@ function saveNow() {
   clearTimeout(saveTimer);
   try {
     if (!pieces.length && !strokes.length) localStorage.removeItem(SAVE_KEY);
-    else localStorage.setItem(SAVE_KEY, JSON.stringify({ pieces, strokes, tab, curPuz: curPuz && !curPuz.startsWith('custom') ? curPuz : null, sc, at: Date.now() }));
+    else localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 2, pieces, strokes, tab, curPuz: curPuz && !curPuz.startsWith('custom') ? curPuz : null, sc, at: Date.now() }));
   } catch (_) { /* ほぞんできなくても 動きつづける */ }
 }
 function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 600); }
@@ -857,6 +889,8 @@ else {
   if (d && Array.isArray(d.pieces) && Array.isArray(d.strokes)) {
     if (d.tab === 'puz' && d.curPuz) { setTab('puz'); loadPuz(d.curPuz); }
     pieces = d.pieces; strokes = d.strokes;
+    // まえの 形式（うらがえしてから まわす）は、角度の 向きを なおす
+    if (!d.v) pieces.forEach(p => { if (p.f) p.r = -p.r; });
     nextId = pieces.reduce((m, p) => Math.max(m, p.id), 0) + 1;
     render(); check();
   }
