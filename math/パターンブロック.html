@@ -92,11 +92,21 @@
   /* まわす・うらがえす・すいつく ときは なめらかに うごく（ひっぱって いる あいだは そのまま ついてくる） */
   g.pc { cursor: grab; transition: transform .28s ease; }
   g.pc .fl, g.pc polygon { transition: transform .28s ease; }
-  g.pc.drag { transition: none; }
+  g.pc.drag, g.pc.drag .fl, g.pc.drag polygon { transition: none; }
   @media (prefers-reduced-motion: reduce) { g.pc, g.pc .fl, g.pc polygon { transition: none; } }
   g.pc.sel polygon { stroke: #263238; stroke-width: 4; }
   g.pc.drag polygon { filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3)); }
 
+  /* ↻ まわす つまみ（ちょうてんの そと。マウスを 近づける／ゆびで さわった ブロックに 出る） */
+  .rots { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+  .rothd { position: absolute; left: 0; top: 0; width: 34px; height: 34px; margin: -17px 0 0 -17px;
+    border-radius: 50%; background: #fff; border: 3px solid #3949ab; color: #3949ab; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 21px; line-height: 1;
+    pointer-events: auto; cursor: grab; touch-action: none; animation: rotin .15s ease-out; }
+  .rothd.on { cursor: grabbing; background: #3949ab; color: #fff; animation: none; }
+  .rothd .tag { position: absolute; left: 100%; top: 50%; transform: translate(6px, -50%); white-space: nowrap; background: #3949ab; color: #fff;
+    font-size: 16px; padding: 2px 8px; border-radius: 8px; pointer-events: none; }
+  @keyframes rotin { from { transform: scale(0.4); opacity: 0; } }
   /* えらんだ ブロックの 上に でる ボタン */
   .selbar {
     position: absolute; display: flex; gap: 4px; background: rgba(255,255,255,0.95); padding: 4px;
@@ -191,7 +201,7 @@
       <button class="btn" id="hintBtn" style="grid-column:1/-1" title="かげに 三角の せんを 出す"><span class="ic">🔍</span>ヒント</button>
     </div>
     <div class="hint-txt" id="howto">
-      ブロックを タップすると、まわす・うらがえす・ふやす・けす が できます。<br>
+      ブロックを タップすると、まわす・うらがえす・ふやす・けす が できます。かどの ↻ を ひっぱっても まわせます。<br>
       道具箱へ もどすと きえます。
     </div>
   </div>
@@ -205,6 +215,7 @@
         <g id="gInk"></g>
       </g>
     </svg>
+    <div class="rots" id="rots"></div>
     <div class="selbar" id="selbar" hidden>
       <button class="btn" id="rotL"><span class="ic">↺</span>まわす</button>
       <button class="btn" id="rotR"><span class="ic">↻</span>まわす</button>
@@ -226,7 +237,7 @@
    パターンブロック
    ・6しゅるいの ブロック（六角形・台形・ひし形・三角形・正方形・ほそいひし形）
    ・ブロックの 辺の 長さは みんな 1（台形の 長い辺だけ 2）。せかいの 長さ 1 ＝ 画面の sc ピクセル
-   ・回すのは 30°ずつ。はなすと、ほかの ブロックの 角（ちょうてん）に すいつく
+   ・回すのは 30°ずつ（ちょうてんの ↻ を ひっぱると なめらかに まわり、はなすと 30°に そろう）。はなすと、ほかの ブロックの 角（ちょうてん）に すいつく
    ・かげパズル：三角のマス（三角形 1こ分）で かげを つくり、ブロックで うめる
    ========================================================================= */
 const $ = id => document.getElementById(id);
@@ -467,6 +478,7 @@ function render() {
 
 /* ---------- えらんだ ブロックの ボタン ---------- */
 function placeSelbar() {
+  if (typeof showRots === 'function') showRots();
   const bar = $('selbar');
   const p = pieces.find(q => q.id === sel);
   if (!p || mode !== 'move' || dragging()) { bar.hidden = true; return; }
@@ -475,8 +487,9 @@ function placeSelbar() {
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
   bar.hidden = false;
   const bw = bar.offsetWidth, bh = bar.offsetHeight, W = board.clientWidth, Hh = board.clientHeight;
-  let top = Math.min(...ys) - bh - 10;
-  if (top < 4) top = Math.max(...ys) + 10;
+  const gap = selRotAll ? 40 : 10;   // ゆびの ↻ つまみが 出て いる ときは、かさならない ように はなす
+  let top = Math.min(...ys) - bh - gap;
+  if (top < 4) top = Math.max(...ys) + gap;
   top = Math.max(4, Math.min(Hh - bh - 4, top));
   bar.style.left = Math.max(bw / 2 + 4, Math.min(W - bw / 2 - 4, cx)) + 'px';
   bar.style.top = top + 'px';
@@ -515,6 +528,7 @@ function pushUndo() {
 $('undo').onclick = () => {
   if (!undoStack.length) return;
   const s = JSON.parse(undoStack.pop());
+  if (rotDrag) { rotDrag = null; }
   pieces = s.pieces; strokes = s.strokes;
   if (!selected()) sel = null;
   render(); check();
@@ -536,6 +550,7 @@ function overToolbox(cx, cy) {
 
 svg.addEventListener('pointerdown', e => {
   if (isPalm(e)) return;
+  selRotAll = e.pointerType !== 'mouse'; hoverRot = null;
   const [wx, wy] = toWorld(e.clientX, e.clientY);
   if (mode === 'draw') {
     pushUndo();
@@ -602,6 +617,100 @@ function endPointer(e) {
 }
 svg.addEventListener('pointerup', endPointer);
 svg.addEventListener('pointercancel', endPointer);
+
+/* ---------- ↻ つまみで まわす（ちょうてんの そと） ----------
+   ・マウス：ブロックの ちょうてんに 近づけると、その ちょうてんの そとに ↻ が 出る。
+   ・ゆび・ペン：タップして えらんだ ブロックの すべての ちょうてんに ↻ が 出る。
+   ↻ を ひっぱると、ブロックの まん中を 中心に なめらかに まわる。はなすと いちばん 近い 30° に ぴたっと おさまる。 */
+const rotsEl = $('rots');
+let hoverRot = null;     // マウスで 近づけた { id, vi }
+let selRotAll = false;   // さいごに ゆび・ペンで さわった（えらんだ ブロックの ちょうてん ぜんぶに 出す）
+let rotDrag = null;      // まわしている { pid, p, vi, last, live, r0, undo }
+const toScreen = ([x, y]) => [x * sc + ox, y * sc + oy];
+function rotPos(p, vi) {
+  const v = toScreen(verts(p)[vi]), c = toScreen([p.x, p.y]);
+  const dx = v[0] - c[0], dy = v[1] - c[1], l = Math.hypot(dx, dy) || 1;
+  return [v[0] + dx / l * 24, v[1] + dy / l * 24];
+}
+function rotTag(live) {
+  const k = Math.round(live / 30);
+  return k ? (k > 0 ? 'みぎに ' : 'ひだりに ') + Math.abs(k * 30) + '°' : '';
+}
+function showRots() {
+  rotsEl.textContent = '';
+  if (mode !== 'move') return;
+  let p = null, vis = [];
+  if (rotDrag) { p = rotDrag.p; vis = [rotDrag.vi]; }
+  else if (dragging()) return;
+  else if (hoverRot) { p = pieces.find(q => q.id === hoverRot.id); vis = [hoverRot.vi]; }
+  else if (selRotAll && sel) { p = selected(); if (p) vis = verts(p).map((_, i) => i); }
+  if (!p) return;
+  for (const vi of vis) {
+    const [x, y] = rotPos(p, vi), h = document.createElement('div');
+    h.className = 'rothd' + (rotDrag ? ' on' : '');
+    h.style.transform = `translate(${x}px, ${y}px)`;
+    h.dataset.id = p.id; h.dataset.vi = vi;
+    const tg = rotDrag ? rotTag(rotDrag.live) : '';
+    h.innerHTML = '↻' + (tg ? `<span class="tag">${tg}</span>` : '');
+    rotsEl.appendChild(h);
+  }
+}
+// マウスを 動かした：近くの ちょうてんを さがす（ボタンを おして いない ときだけ）
+board.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse' || e.buttons || rotDrag || drags.size || mode !== 'move') return;
+  const r = board.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  let best = null;
+  pieces.forEach((p, z) => verts(p).forEach((v, vi) => {
+    const a = toScreen(v), q = rotPos(p, vi);
+    const d = Math.min(Math.hypot(mx - a[0], my - a[1]), Math.hypot(mx - q[0], my - q[1]));
+    if (d < 26 && (!best || d < best.d - 1 || (Math.abs(d - best.d) <= 1 && z > best.z))) best = { id: p.id, vi, d, z };
+  }));
+  const nw = best ? { id: best.id, vi: best.vi } : null;
+  if ((nw && nw.id) !== (hoverRot && hoverRot.id) || (nw && nw.vi) !== (hoverRot && hoverRot.vi)) { hoverRot = nw; selRotAll = false; showRots(); }
+});
+board.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && hoverRot && !rotDrag) { hoverRot = null; showRots(); } });
+const angAt = (p, cx, cy) => { const r = board.getBoundingClientRect(), c = toScreen([p.x, p.y]); return Math.atan2(cy - r.top - c[1], cx - r.left - c[0]) * 180 / Math.PI; };
+const pieceG = p => $('gPieces').querySelector(`g.pc[data-id="${p.id}"]`);
+rotsEl.addEventListener('pointerdown', e => {
+  const h = e.target.closest('.rothd');
+  if (!h || rotDrag || mode !== 'move') return;
+  const p = pieces.find(q => q.id === +h.dataset.id);
+  if (!p) return;
+  e.preventDefault(); e.stopPropagation();
+  try { rotsEl.setPointerCapture(e.pointerId); } catch (_) {}
+  rotDrag = { pid: e.pointerId, p, vi: +h.dataset.vi, last: angAt(p, e.clientX, e.clientY), live: 0, r0: p.r, undo: JSON.stringify({ pieces, strokes }) };
+  pieces = pieces.filter(q => q !== p); pieces.push(p);   // いちばん 上に
+  hoverRot = null;
+  $('selbar').hidden = true;
+  renderPieces();
+  const g = pieceG(p); if (g) g.classList.add('drag');
+  showRots();
+});
+rotsEl.addEventListener('pointermove', e => {
+  const r = rotDrag;
+  if (!r || r.pid !== e.pointerId) return;
+  const a = angAt(r.p, e.clientX, e.clientY);
+  let d = a - r.last; while (d > 180) d -= 360; while (d < -180) d += 360;
+  r.last = a; r.live += d;
+  r.p.r = r.r0 + (r.p.f ? -r.live : r.live);   // 画面の 上で ひっぱった むきに まわる（うらがえして いる ときは ぎゃく）
+  const g = pieceG(r.p); if (g) placePiece(g, r.p);
+  showRots();
+});
+function endRot(e) {
+  const r = rotDrag;
+  if (!r || (e && r.pid !== e.pointerId)) return;
+  rotDrag = null;
+  const k = Math.round(r.live / 30);
+  const g = pieceG(r.p); if (g) g.classList.remove('drag');   // ここから なめらかに 30° に おさまる
+  r.p.r = r.r0 + (r.p.f ? -k : k) * 30;
+  if (k) { undoStack.push(r.undo); if (undoStack.length > 60) undoStack.shift(); snap(r.p, 0.6); }
+  if (e && e.pointerType && e.pointerType !== 'mouse') { sel = r.p.id; selRotAll = true; }
+  render(); check();
+}
+rotsEl.addEventListener('pointerup', endRot);
+rotsEl.addEventListener('pointercancel', endRot);
+rotsEl.addEventListener('lostpointercapture', e => setTimeout(() => { if (rotDrag && rotDrag.pid === e.pointerId) endRot(e); }, 0));
+window.addEventListener('blur', () => { if (rotDrag) endRot(null); });
 
 /* ---------- 道具箱から 出す ---------- */
 function iconSVG(t, size) {

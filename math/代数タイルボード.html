@@ -87,6 +87,16 @@
   .layer { position: absolute; inset: 0; pointer-events: none; }
   .mats { z-index: 0; }
   .tiles { z-index: 2; }
+  /* ↻ まわす つまみ（タイルの かどの そと。マウスを 近づける／ゆびで さわった タイルに 出る） */
+  .rots { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+  .rothd { position: absolute; left: 0; top: 0; width: var(--hs, 34px); height: var(--hs, 34px); margin: calc(var(--hs, 34px) / -2) 0 0 calc(var(--hs, 34px) / -2);
+    border-radius: 50%; background: #fff; border: 3px solid #3949ab; color: #3949ab; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: calc(var(--hs, 34px) * 0.62); line-height: 1;
+    pointer-events: auto; cursor: grab; touch-action: none; animation: rotin .15s ease-out; }
+  .rothd.on { cursor: grabbing; background: #3949ab; color: #fff; animation: none; }
+  .rothd .tag { position: absolute; left: 100%; top: 50%; transform: translate(6px, -50%); white-space: nowrap; background: #3949ab; color: #fff;
+    font-size: 20px; padding: 2px 8px; border-radius: 8px; pointer-events: none; }
+  @keyframes rotin { from { transform: scale(0.4); opacity: 0; } }
   .ink { position: absolute; left: 0; top: 0; width: 1200px; height: 720px; z-index: 3; pointer-events: none; }
   .stage.drawing .ink { pointer-events: auto; cursor: crosshair; }
 
@@ -213,6 +223,7 @@
       <div class="status" id="status"></div>
       <div class="trash" id="trash"><span class="ic">🗑️</span>すてる</div>
       <div class="layer tiles" id="tiles"></div>
+      <div class="rots" id="rots"></div>
       <canvas class="ink" id="ink" width="1200" height="720"></canvas>
     </div>
   </div>
@@ -584,6 +595,7 @@ function render() {
     lay.appendChild(el); els.set(t.id, el);
   }
   update();
+  if (typeof showRots === 'function') showRots();
 }
 
 /* =========================== 道具箱 =========================== */
@@ -604,7 +616,7 @@ function buildToolbox() {
   const n = document.createElement('div');
   n.className = 'tb-note';
   n.innerHTML = '<b>ドラッグ</b>で ボードへ。<br><b>タップ</b>：' + (tapMode === 'flip' ? 'うらがえす（＋⇔−）' : 'まわす') +
-    '<br><b>ながおし</b>：' + (tapMode === 'flip' ? 'まわす' : 'うらがえす') + '<br>道具箱か 🗑️ に もどすと すてる。<br>' +
+    '<br><b>ながおし</b>：' + (tapMode === 'flip' ? 'まわす' : 'うらがえす') + '<br><b>かどの ↻</b>：ひっぱって まわす<br>道具箱か 🗑️ に もどすと すてる。<br>' +
     '<a href="さんすうボード⑨ かずのブロック.html" style="color:#3949ab">小学校：かずのブロック（1・10・100）</a><br>' +
     '<a href="同類項タイル.html" style="color:#3949ab">同類項タイル</a>・<a href="乗法公式タイル.html" style="color:#3949ab">乗法公式タイル</a>';
   tb.appendChild(n);
@@ -653,6 +665,7 @@ function startDrag(e, t, fresh) {
 $('tiles').addEventListener('pointerdown', e => {
   const el = e.target.closest('.tile'); if (!el || drawing) return;
   e.preventDefault();
+  selRotAll = e.pointerType !== 'mouse'; hoverRot = null; selRotId = 0; rotsEl.textContent = '';
   const t = tiles.find(q => q.id === +el.dataset.id); if (!t) return;
   startDrag(e, t, false);
 });
@@ -674,7 +687,7 @@ window.addEventListener('pointerup', e => {
   const over = overDelete(e);
   endLift(); drag = null;
   $('trash').classList.remove('hot'); $('toolbox').classList.remove('drop-ok');
-  if (!moved) { pushHist(); tapAction(t, tapMode); return; }
+  if (!moved) { pushHist(); if (selRotAll && tiles.includes(t)) selRotId = t.id; tapAction(t, tapMode); return; }
   if (over) { tiles = tiles.filter(q => q !== t); render(); update(true); return; }
   dropTile(t);
 });
@@ -766,12 +779,125 @@ $('zeroAll').onclick = () => {
   toast(`ゼロペアを ${gone.size / 2} 組 消したよ`);
 };
 
+/* =========================== ↻ つまみで まわす（かどの そと） ===========================
+   ・マウス：タイルの かどに 近づけると、その かどの そとに ↻ が 出る。
+   ・ゆび・ペン：さわった タイルの 4つの かどに ↻ が 出る（ほかの ところを さわると きえる）。
+   ↻ を ひっぱると、タイルの まん中を 中心に なめらかに まわる。はなすと いちばん 近い 90° に おさまる
+   （90°・270° なら たて⇔よこ が かわる。正方形は 形が かわらない）。 */
+const rotsEl = $('rots');
+let hoverRot = null;     // マウスで 近づけた { id, vi }
+let selRotAll = false;   // さいごに ゆび・ペンで さわった
+let selRotId = 0;        // ゆびで さわった タイル
+let rotDrag = null;      // まわしている { pid, t, vi, last, live, undo }
+const HS = () => Math.max(30, Math.min(60, 36 / scale));
+function tileCorners(t, live = 0) {
+  const d = dims(t), cx = t.x + d.w / 2, cy = t.y + d.h / 2, a = live * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, v]) => { const x = u * d.w / 2, y = v * d.h / 2; return [cx + x * c - y * s, cy + x * s + y * c]; });
+}
+function rotPos(t, vi, live = 0) {
+  const d = dims(t), cx = t.x + d.w / 2, cy = t.y + d.h / 2, v = tileCorners(t, live)[vi];
+  const dx = v[0] - cx, dy = v[1] - cy, l = Math.hypot(dx, dy) || 1, o = HS() * 0.7;
+  return [v[0] + dx / l * o, v[1] + dy / l * o];
+}
+function rotTag(live) { const k = Math.round(live / 90); return k ? (k > 0 ? 'みぎに ' : 'ひだりに ') + Math.abs(k * 90) + '°' : ''; }
+function showRots() {
+  rotsEl.textContent = '';
+  if (drawing) return;
+  let t = null, vis = [], live = 0;
+  if (rotDrag) { t = rotDrag.t; vis = [rotDrag.vi]; live = rotDrag.live; }
+  else if (drag) return;
+  else if (hoverRot) { t = tiles.find(q => q.id === hoverRot.id); vis = [hoverRot.vi]; }
+  else if (selRotId) { t = tiles.find(q => q.id === selRotId); vis = [0, 1, 2, 3]; }
+  if (!t) { if (!rotDrag) { hoverRot = null; selRotId = 0; } return; }
+  const hs = HS();
+  for (const vi of vis) {
+    const [x, y] = rotPos(t, vi, live), h = document.createElement('div');
+    h.className = 'rothd' + (rotDrag ? ' on' : '');
+    h.style.setProperty('--hs', hs + 'px');
+    h.style.transform = `translate(${x}px, ${y}px)`;
+    h.dataset.id = t.id; h.dataset.vi = vi;
+    const tg = rotDrag ? rotTag(live) : '';
+    h.innerHTML = '↻' + (tg ? `<span class="tag">${tg}</span>` : '');
+    rotsEl.appendChild(h);
+  }
+}
+// マウスを 動かした：近くの かどを さがす
+$('stage').addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse' || e.buttons || rotDrag || drag || drawing) return;
+  const p = toStage(e), lim = HS() * 0.9;
+  let best = null;
+  tiles.forEach((t, z) => tileCorners(t).forEach((v, vi) => {
+    const q = rotPos(t, vi), d = Math.min(Math.hypot(p.x - v[0], p.y - v[1]), Math.hypot(p.x - q[0], p.y - q[1]));
+    if (d < lim && (!best || d < best.d - 1 || (Math.abs(d - best.d) <= 1 && z > best.z))) best = { id: t.id, vi, d, z };
+  }));
+  const nw = best ? { id: best.id, vi: best.vi } : null;
+  if ((nw && nw.id) !== (hoverRot && hoverRot.id) || (nw && nw.vi) !== (hoverRot && hoverRot.vi)) { hoverRot = nw; if (nw) selRotId = 0; showRots(); }
+});
+$('stage').addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && hoverRot && !rotDrag) { hoverRot = null; showRots(); } });
+// タイルの ない ところを さわったら、ゆびの つまみを けす
+$('stage').addEventListener('pointerdown', e => {
+  if (selRotId && !e.target.closest('.tile, .rothd')) { selRotId = 0; showRots(); }
+}, true);
+const angAt = (t, e) => { const p = toStage(e), d = dims(t); return Math.atan2(p.y - (t.y + d.h / 2), p.x - (t.x + d.w / 2)) * 180 / Math.PI; };
+const tileTf = (t, a) => `translate(${t.x}px, ${t.y}px)` + (a ? ` rotate(${a}deg)` : '');
+rotsEl.addEventListener('pointerdown', e => {
+  const h = e.target.closest('.rothd');
+  if (!h || rotDrag || drag || drawing) return;
+  const t = tiles.find(q => q.id === +h.dataset.id);
+  if (!t) return;
+  e.preventDefault(); e.stopPropagation();
+  try { rotsEl.setPointerCapture(e.pointerId); } catch (_) {}
+  rotDrag = { pid: e.pointerId, t, vi: +h.dataset.vi, last: angAt(t, e), live: 0, undo: snapState() };
+  hoverRot = null;
+  const el = els.get(t.id); if (el) { el.classList.add('lift'); $('tiles').appendChild(el); }
+  showRots();
+});
+rotsEl.addEventListener('pointermove', e => {
+  const r = rotDrag;
+  if (!r || r.pid !== e.pointerId) return;
+  const a = angAt(r.t, e);
+  let d = a - r.last; while (d > 180) d -= 360; while (d < -180) d += 360;
+  r.last = a; r.live += d;
+  const el = els.get(r.t.id); if (el) el.style.transform = tileTf(r.t, r.live);
+  showRots();
+});
+function endRot(e) {
+  const r = rotDrag;
+  if (!r || (e && r.pid !== e.pointerId)) return;
+  rotDrag = null;
+  const t = r.t, k = Math.round(r.live / 90), d = dims(t);
+  let rest = r.live;   // きまった 向きから みて、まだ ずれて いる 角度（ここから くるっと 0 に もどす）
+  if (k % 2 && d.w !== d.h) {
+    hist.push(r.undo); if (hist.length > 80) hist.shift(); $('undo').disabled = false;
+    const cx = t.x + d.w / 2, cy = t.y + d.h / 2; t.rot = 1 - t.rot;
+    const d2 = dims(t); t.x = cx - d2.w / 2; t.y = cy - d2.h / 2;
+    rest = r.live - k * 90;
+    snapTile(t);
+  } else rest = r.live - k * 90;
+  if (e && e.pointerType && e.pointerType !== 'mouse') { selRotAll = true; selRotId = t.id; }
+  render();
+  const el = els.get(t.id);
+  if (el && Math.abs(rest) > 0.5 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.style.transform = tileTf(t, rest);
+    void el.offsetWidth;
+    el.style.transition = 'transform .22s ease-out';
+    el.style.transform = tileTf(t, 0);
+    setTimeout(() => { el.style.transition = ''; }, 260);
+  }
+  update(true);
+}
+rotsEl.addEventListener('pointerup', endRot);
+rotsEl.addEventListener('pointercancel', endRot);
+rotsEl.addEventListener('lostpointercapture', e => setTimeout(() => { if (rotDrag && rotDrag.pid === e.pointerId) endRot(e); }, 0));
+window.addEventListener('blur', () => { if (rotDrag) endRot(null); });
+
 /* =========================== もどす・リセット =========================== */
 let hist = [];
 const snapState = () => JSON.stringify({ tiles, strokes, mat, task, lockEq, nextId });
 function pushHist() { hist.push(snapState()); if (hist.length > 80) hist.shift(); $('undo').disabled = false; }
 function restore(s, keepLock) {
   const o = JSON.parse(s);
+  rotDrag = null;
   tiles = o.tiles; strokes = o.strokes; mat = o.mat; task = o.task; nextId = o.nextId;
   if (!keepLock) lockEq = o.lockEq;
   drawMats(); render(); redrawInk();
@@ -966,6 +1092,7 @@ const ictx = $('ink').getContext('2d');
 $('drawBtn').onclick = () => {
   drawing = !drawing;
   $('drawBtn').classList.toggle('on', drawing); $('stage').classList.toggle('drawing', drawing);
+  hoverRot = null; selRotId = 0; showRots();
   document.querySelectorAll('.pen, #inkClear').forEach(b => b.hidden = !drawing);
 };
 document.querySelectorAll('.pen').forEach(b => b.onclick = () => {

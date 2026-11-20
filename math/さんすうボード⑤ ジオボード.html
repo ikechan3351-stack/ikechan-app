@@ -859,7 +859,7 @@ function render(t) {
   if (partners && partners.size) busy_glow = true;
   placeSelbar();
   const sel = tool === 'select' && selShape();
-  if (sel && !(anim.move && anim.move.mode === 'drag')) drawHandle(sel);
+  if (sel || rotHover) drawHandles();
   // のびている ゴム（ドラッグ中・すいつき中・ちぢむ とき）
   if (r) {
     const color = r.color;
@@ -1387,9 +1387,9 @@ function placeSelbar() {
   const maxY = Math.max(...pts.map(q => q.y));
   const cx = (Math.min(...pts.map(q => q.x)) + Math.max(...pts.map(q => q.x))) / 2;
   const bw = selbar.offsetWidth / 2, bh = selbar.offsetHeight;
-  // 図形の 下に 出す（上には まわす つまみ）。はみ出す ときは 画面の 中に おさめる
+  // 図形の 下に 出す（かどには まわす つまみ）。はみ出す ときは 画面の 中に おさめる
   selbar.style.left = Math.max(bw + 4, Math.min(W - bw - 4, cx)) + 'px';
-  selbar.style.top = Math.min(H - bh - 4, maxY + 18 * SCALE) + 'px';
+  selbar.style.top = Math.min(H - bh - 4, maxY + (lastPtr !== 'mouse' ? 52 : 18) * SCALE) + 'px';
 }
 
 // ---------- 図形の あたり（えらぶ・ぬる） ----------
@@ -1580,20 +1580,38 @@ function copySelected() {
   toast('コピーしたよ。ひっぱって うごかせるよ');
   requestDraw();
 }
-// まわす ハンドル（えらんだ 図形の 上の まるい つまみ）の いち
-function handlePos(s) {
-  const pts = shapePts(s);
-  const minY = Math.min(...pts.map(q => q.y));
-  const cx = (Math.min(...pts.map(q => q.x)) + Math.max(...pts.map(q => q.x))) / 2;
-  return { x: cx, y: Math.max(26 * SCALE, minY - 48 * SCALE), top: minY };
+// まわす つまみ（↻）：図形の 頂点の そと。
+//  ・マウス：頂点に 近づけると、その 頂点に 1つ 出る（rotHover）。
+//  ・ゆび・ペン：えらんだ 図形の すべての 頂点に 出る。
+let rotHover = null;     // マウスで 近づけた { id, vi }
+let lastPtr = 'mouse';   // さいごに さわった もの
+function handleList() {
+  if (tool !== 'select') return [];
+  if (pointer.id !== null && pointer.kind === 'rotate') return pointer.target ? [{ s: pointer.target, vi: pointer.vi || 0 }] : [];
+  if (anim.move && anim.move.mode === 'drag') return [];
+  if (rotHover) { const s = state.shapes.find(q => q.id === rotHover.id); if (s && rotHover.vi < s.points.length) return [{ s, vi: rotHover.vi }]; }
+  const s = selShape();
+  if (s && lastPtr !== 'mouse') return s.points.map((_, vi) => ({ s, vi }));
+  return [];
 }
-function drawHandle(s) {
-  const h = handlePos(s), r = 20 * SCALE;
-  fx.beginPath(); fx.moveTo(h.x, h.y + r); fx.lineTo(h.x, h.top);
-  fx.strokeStyle = 'rgba(57,73,171,0.6)'; fx.lineWidth = 3 * SCALE; fx.setLineDash([5, 4]); fx.stroke(); fx.setLineDash([]);
+function handlePos(s, vi) {
+  const pts = shapePts(s), v = pts[vi];
+  const cx = pts.reduce((a, q) => a + q.x, 0) / pts.length, cy = pts.reduce((a, q) => a + q.y, 0) / pts.length;
+  const dx = v.x - cx, dy = v.y - cy, l = Math.hypot(dx, dy) || 1, o = 26 * SCALE;
+  return { x: v.x + dx / l * o, y: v.y + dy / l * o };
+}
+function handleAt(x, y, type, list = handleList()) {
+  let best = null; const lim = (type === 'touch' ? 30 : 22) * SCALE;
+  for (const it of list) { const h = handlePos(it.s, it.vi), d = Math.hypot(h.x - x, h.y - y); if (d <= lim && (!best || d < best.d)) best = { ...it, d }; }
+  return best;
+}
+function drawHandles() { for (const { s, vi } of handleList()) drawHandle(s, vi); }
+function drawHandle(s, vi) {
+  const h = handlePos(s, vi), r = 17 * SCALE;
+  const on = pointer.kind === 'rotate' && pointer.id !== null;
   fx.beginPath(); fx.arc(h.x, h.y, r, 0, Math.PI * 2);
-  fx.fillStyle = '#fff'; fx.fill(); fx.lineWidth = 3 * SCALE; fx.strokeStyle = '#3949ab'; fx.stroke();
-  fx.fillStyle = '#3949ab'; fx.font = `bold ${22 * SCALE}px sans-serif`; fx.textAlign = 'center'; fx.textBaseline = 'middle';
+  fx.fillStyle = on ? '#3949ab' : '#fff'; fx.fill(); fx.lineWidth = 3 * SCALE; fx.strokeStyle = '#3949ab'; fx.stroke();
+  fx.fillStyle = on ? '#fff' : '#3949ab'; fx.font = `bold ${20 * SCALE}px sans-serif`; fx.textAlign = 'center'; fx.textBaseline = 'middle';
   fx.fillText('↻', h.x, h.y + 1);
   // まわしている ときは 角度を 見せる
   if (anim.xf && anim.xf.id === s.id && anim.xf.kind === 'rot' && anim.xf.mode === 'drag') {
@@ -1905,13 +1923,15 @@ wrap.addEventListener('pointerdown', e => {
     Object.assign(pointer, { id: e.pointerId, x, y, downX: x, downY: y, type: e.pointerType, moved: false, kind: tool });
     if (anim.move) anim.move = null;
     if (anim.xf) anim.xf = null;
-    const cur = tool === 'select' && selShape();
-    if (cur) {
-      // まわす つまみを つかんだ → 図形の まん中を 中心に まわす
-      const h = handlePos(cur);
-      if (Math.hypot(h.x - x, h.y - y) <= (e.pointerType === 'touch' ? 34 : 24) * SCALE) {
+    const hh = tool === 'select' ? handleAt(x, y, e.pointerType) : null;
+    lastPtr = e.pointerType || 'mouse'; rotHover = null;
+    if (hh) {
+      // まわす つまみを つかんだ → その 図形を えらんで、まん中を 中心に まわす
+      const cur = hh.s;
+      selectedId = cur.id; updateHint();
+      {
         const c0 = xfCenter(cur.points), c = pinXY(c0);
-        pointer.kind = 'rotate'; pointer.target = cur;
+        pointer.kind = 'rotate'; pointer.target = cur; pointer.vi = hh.vi;
         pointer.a0 = Math.atan2(y - c.y, x - c.x); pointer.c = c;
         anim.xf = { id: cur.id, kind: 'rot', x: 0, vx: 0, tx: 0, y: 0, vy: 0, ty: 0, cx: c0.i, cy: c0.j, mode: 'drag' };
         e.preventDefault(); requestDraw(); return;
@@ -2070,6 +2090,17 @@ wrap.addEventListener('pointermove', e => {
       requestDraw();
     }
     return;
+  }
+  // マウスを 頂点に 近づけた → その 頂点に ↻ を 出す
+  if (pointer.id === null && e.pointerType === 'mouse' && !e.buttons && tool === 'select') {
+    const { x, y } = localXY(e);
+    let best = null;
+    for (const s of state.shapes) shapePts(s).forEach((v, vi) => {
+      const h = handlePos(s, vi), d = Math.min(Math.hypot(x - v.x, y - v.y), Math.hypot(x - h.x, y - h.y));
+      if (d < 24 * SCALE && (!best || d <= best.d)) best = { id: s.id, vi, d };   // あとに かいた（上の）図形を えらぶ
+    });
+    const nw = best ? { id: best.id, vi: best.vi } : null;
+    if ((nw && nw.id) !== (rotHover && rotHover.id) || (nw && nw.vi) !== (rotHover && rotHover.vi)) { rotHover = nw; lastPtr = 'mouse'; requestDraw(); }
   }
   if (e.pointerId !== pointer.id) return;
   // まとめて とどいた いちが あれば、いちばん 新しい ものを つかう
@@ -2348,7 +2379,7 @@ function updateButtons() {
 function updateHint(mode) {
   const b = buildShape();
   let h;
-  if (tool === 'select') h = selectedId ? 'ひっぱると うごくよ。上の ↻ を まわすか、ゆび 2ほんで ひねると まわるよ'
+  if (tool === 'select') h = selectedId ? 'ひっぱると うごくよ。かどの ↻ を まわすか、ゆび 2ほんで ひねると まわるよ'
                                         : 'かたちを タップして えらぼう';
   else if (tool === 'cut') h = 'かたちの へりの ピンから、べつの へりの ピンまで 線を ひくと 2つに わかれるよ';
   else if (tool === 'paste') h = pasteFirst ? 'みどりに 光った かたちを タップすると はれるよ。ひっぱって くっつけても いいよ'

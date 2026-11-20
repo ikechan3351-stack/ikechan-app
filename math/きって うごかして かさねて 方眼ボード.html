@@ -532,7 +532,7 @@ function pushUndo() {
 function restore(s) {
   const o = JSON.parse(s);
   S.pieces = o.p; S.nextId = o.n; S.ghosts = o.gh; S.nextG = o.ng;
-  rotAnim = null; rotDrag = null;
+  rotAnim = null; rotDrag = null; rotHover = null;
   if (!S.pieces.find(p => p.id === S.sel)) S.sel = null;
   if (!S.pieces.find(p => p.id === S.pasteA)) S.pasteA = null;
 }
@@ -569,7 +569,7 @@ function draw() {
   drawMaking();
   drawCutLine();
   if (S.tool === 'overlap') drawOverlap();
-  if (handleOn()) drawHandle(selPiece());
+  drawHandles();
 }
 
 // もとの形の 影（うすい 灰色の 点線）。色板が 1まいも のこって いない 形は かかない
@@ -1047,26 +1047,49 @@ function turnSel(k, liveA) {
   if (REDUCED) rotAnim = null;
   after(); startSpring();
 }
-// ↻ つまみ：えらんだ 色板の 上（上に 場所が なければ 下）
-function handleOn() {
-  const p = S.tool === 'move' ? selPiece() : null;
-  return !!p && !p.lock && (!drags.size || (rotDrag && rotDrag.handle));
+// ↻ つまみ：色板の 頂点の そと。
+//  ・マウス：頂点に 近づけると、その 頂点に 1つ 出る（rotHover）。
+//  ・ゆび・ペン：えらんだ 色板の すべての 頂点に 出る（えらんだ 色板の 上の ボタンは つまみと かさならない ように はなす）。
+let rotHover = null;      // マウスで 近づけた { id, vi }
+let lastPtr = 'mouse';    // さいごに さわった もの（mouse / touch / pen）
+function handleList() {
+  if (S.tool !== 'move') return [];
+  if (rotDrag) return rotDrag.handle ? [{ p: rotDrag.piece, vi: rotDrag.vi }] : [];
+  if (drags.size) return [];
+  if (rotHover) { const p = S.pieces.find(q => q.id === rotHover.id); if (p && !p.lock) return [{ p, vi: rotHover.vi }]; }
+  const p = selPiece();
+  if (p && !p.lock && lastPtr !== 'mouse') return p.pts.map((_, vi) => ({ p, vi }));
+  return [];
 }
-function handlePos(p) {
-  const xs = p.pts.map(q => toPx(q[0], q[1])[0]), ys = p.pts.map(q => toPx(q[0], q[1])[1]);
-  const x = (Math.min(...xs) + Math.max(...xs)) / 2, top = Math.min(...ys), bot = Math.max(...ys);
-  const up = top - 46 >= 24;
-  return { x, y: up ? top - 46 : bot + 46, edge: up ? top : bot, up };
+function handleOn() { return handleList().length > 0; }
+// 頂点 vi の そと（まわっている とちゅうは 見た目の 角度で）
+function handlePos(p, vi) {
+  const ra = rotAnim && rotAnim.id === p.id && rotAnim.a ? rotAnim : null;
+  const rot = ([x, y]) => {
+    if (!ra) return [x, y];
+    const [ox, oy] = toPx(ra.cx, ra.cy), c = Math.cos(ra.a), s = Math.sin(ra.a);
+    return [ox + (x - ox) * c - (y - oy) * s, oy + (x - ox) * s + (y - oy) * c];
+  };
+  const [vx, vy] = rot(toPx(p.pts[vi][0], p.pts[vi][1]));
+  const [gx, gy] = centroid(p.pts), [cx, cy] = rot(toPx(gx, gy));
+  const dx = vx - cx, dy = vy - cy, l = Math.hypot(dx, dy) || 1;
+  return { x: vx + dx / l * 26, y: vy + dy / l * 26 };
 }
-function drawHandle(p) {
-  const h = handlePos(p), r = 20;
-  ctx.beginPath(); ctx.moveTo(h.x, h.y + (h.up ? r : -r)); ctx.lineTo(h.x, h.edge);
-  ctx.strokeStyle = 'rgba(57,73,171,0.6)'; ctx.lineWidth = 3; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
-  ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, Math.PI * 2);
-  ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#3949ab'; ctx.stroke();
-  ctx.fillStyle = '#3949ab'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('↻', h.x, h.y + 1);
-  if (rotDrag) drawAngleTag(h.x + r + 8, h.y);
+function drawHandles() {
+  for (const { p, vi } of handleList()) {
+    const h = handlePos(p, vi), r = 17;
+    ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = rotDrag ? '#3949ab' : '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#3949ab'; ctx.stroke();
+    ctx.fillStyle = rotDrag ? '#fff' : '#3949ab'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('↻', h.x, h.y + 1);
+    if (rotDrag) drawAngleTag(h.x + r + 8, h.y);
+  }
+}
+// いちばん 近い つまみ（なければ null）
+function handleAt(px, py, list = handleList()) {
+  let best = null;
+  for (const it of list) { const h = handlePos(it.p, it.vi), d = Math.hypot(px - h.x, py - h.y); if (d < 26 && (!best || d < best.d)) best = { ...it, d }; }
+  return best;
 }
 // まわしている 角度（「みぎに 90°」）
 function shownDeg(a) {
@@ -1086,11 +1109,12 @@ function drawAngleTag(x, y) {
   ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, x + 10, y + 1);
 }
 // まわしはじめ（handle：つまみ／twist：ゆび2本）
-function startRot(p, ids, pos, handle) {
+function startRot(p, ids, pos, handle, vi = 0) {
   rotAnim = null;
   const [cx, cy] = pivot(p);
   rotAnim = { id: p.id, cx, cy, a: 0, v: 0, mode: 'drag' };
-  rotDrag = { ids, pos, handle, piece: p, last: rotAngleNow(pos, ids, cx, cy, handle), a: 0 };
+  rotDrag = { ids, pos, handle, vi, piece: p, last: rotAngleNow(pos, ids, cx, cy, handle), a: 0 };
+  rotHover = null;
   $('selbar').hidden = true;
   draw();
 }
@@ -1147,9 +1171,9 @@ function placeSelbar() {
   const xs = p.pts.map(q => toPx(q[0], q[1])[0]), ys = p.pts.map(q => toPx(q[0], q[1])[1]);
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
   const bw = bar.offsetWidth, bh = bar.offsetHeight;
-  const hp = p.lock ? null : handlePos(p);
-  let top = Math.min(...ys) - bh - 12 - (hp && hp.up ? 56 : 0);
-  if (top < 4) top = Math.max(...ys) + 12 + (hp && !hp.up ? 64 : 0);
+  const gap = !p.lock && lastPtr !== 'mouse' ? 40 : 0;   // 頂点の ↻ つまみと かさならない ように
+  let top = Math.min(...ys) - bh - 12 - gap;
+  if (top < 4) top = Math.max(...ys) + 12 + gap;
   if (top + bh > H - 4) top = Math.max(4, H - bh - 4);
   bar.style.left = Math.max(bw / 2 + 4, Math.min(W - bw / 2 - 4, cx)) + 'px';
   bar.style.top = top + 'px';
@@ -1342,12 +1366,14 @@ cv.addEventListener('pointerdown', e => {
   }
   if (S.tool === 'move') {
     if (rotDrag) return;   // まわしている 間の ほかの ゆびは つかわない
-    // ↻ つまみを つかんだ → まわす
-    const sp = selPiece();
-    if (sp && handleOn() && !drags.size) {
-      const h = handlePos(sp);
-      if (Math.hypot(px - h.x, py - h.y) < 30) { startRot(sp, [e.pointerId], new Map([[e.pointerId, [px, py]]]), true); return; }
+    // ↻ つまみを つかんだ → その 色板を えらんで まわす
+    const hh = !drags.size ? handleAt(px, py) : null;
+    lastPtr = e.pointerType || 'mouse';
+    if (hh) {
+      S.sel = hh.p.id; bringFront(hh.p);
+      startRot(hh.p, [e.pointerId], new Map([[e.pointerId, [px, py]]]), true, hh.vi); return;
     }
+    rotHover = null;
     // 色板を つかんだ まま 2本目の ゆび（色板の 外か 同じ 色板）→ ひねって まわす
     if (drags.size === 1) {
       const [id1, d1] = [...drags][0], p2 = pieceAt(px, py);
@@ -1395,6 +1421,18 @@ cv.addEventListener('pointermove', e => {
     return;
   }
   if (moveRot(e.pointerId, px, py)) return;
+  // マウスを 頂点に 近づけた → その 頂点に ↻ を 出す
+  if (S.tool === 'move' && e.pointerType === 'mouse' && !e.buttons && !drags.size && !rotDrag) {
+    const all = S.pieces.filter(p => !p.lock).flatMap(p => p.pts.map((_, vi) => ({ p, vi })));
+    let best = null;
+    for (let i = all.length - 1; i >= 0; i--) {   // うしろ（上に かいた 色板）から
+      const { p, vi } = all[i], [vx, vy] = toPx(p.pts[vi][0], p.pts[vi][1]), h = handlePos(p, vi);
+      const d = Math.min(Math.hypot(px - vx, py - vy), Math.hypot(px - h.x, py - h.y));
+      if (d < 24 && (!best || d < best.d - 1)) best = { id: p.id, vi, d };
+    }
+    const nw = best ? { id: best.id, vi: best.vi } : null;
+    if ((nw && nw.id) !== (rotHover && rotHover.id) || (nw && nw.vi) !== (rotHover && rotHover.vi)) { rotHover = nw; lastPtr = 'mouse'; draw(); placeSelbar(); }
+  }
   const d = drags.get(e.pointerId);
   if (!d) return;
   d.px = [px, py];
@@ -1458,7 +1496,7 @@ function endPointer(e) {
 let cutDrag = null;
 cv.addEventListener('pointerup', endPointer);
 cv.addEventListener('pointercancel', endPointer);
-cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && hover) { hover = null; draw(); } });
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && hover) { hover = null; draw(); } if (e.pointerType === 'mouse' && rotHover && !rotDrag) { rotHover = null; draw(); } });
 
 /* ---------- 道具・色・はかる ---------- */
 function setTool(t) {
@@ -1524,7 +1562,7 @@ function updateHint() {
       ? (S.making.length >= 3 ? 'つぎの 点を タップ。さいしょの 点（白い まる）に もどると できあがり' : 'つぎの 点を タップ')
       : '点を じゅんに タップして 色板を つくる。点から ゆびを すべらせると 長方形';
   } else if (S.tool === 'move') {
-    h = selPiece() ? 'ひっぱって 動かす。↻ を まわすか、ゆび 2ほんで ひねると まわる。ボタンで うらがえす。色を タップで 色が かわる' : '色板を タップして えらぶ・ひっぱって 動かす';
+    h = selPiece() ? 'ひっぱって 動かす。かどの ↻ を まわすか、ゆび 2ほんで ひねると まわる。ボタンで うらがえす。色を タップで 色が かわる' : '色板を タップして えらぶ・ひっぱって 動かす。かどに 近づけた ↻ で まわす';
   } else if (S.tool === 'cut') {
     h = '色板の 外から 外まで（または へりから へりまで）、格子点を むすぶ 線を ひくと 切れる';
   } else if (S.tool === 'overlap') {
