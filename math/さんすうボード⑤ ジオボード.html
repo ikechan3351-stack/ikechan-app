@@ -1039,9 +1039,10 @@ function shapePts(s) {
   const pts = s.points.map(pinXY), mv = anim.move, xf = anim.xf;
   if (mv && mv.id === s.id) for (const q of pts) { q.x += mv.x; q.y += mv.y; }
   const sp = anim.split;
-  if (sp && (sp.a === s.id || sp.b === s.id)) {
+  const spSide = sp && (sp.side ? sp.side[s.id] : sp.a === s.id ? -1 : sp.b === s.id ? 1 : 0);
+  if (spSide) {
     // きった 直後：切り線の 両がわへ 少し はなれる
-    const d = splitAmp(performance.now()) * geo.sp * 0.22 * (sp.a === s.id ? -1 : 1);
+    const d = splitAmp(performance.now()) * geo.sp * 0.22 * spSide;
     for (const q of pts) { q.x += sp.nx * d; q.y += sp.ny * d; }
   }
   if (xf && xf.id === s.id) {
@@ -1689,28 +1690,76 @@ function splitPoly(P, A, B) {
   if (p1.length < 3 || p2.length < 3 || Math.abs(areaOf(p1)) < EPS || Math.abs(areaOf(p2)) < EPS) return null;
   return [p1, p2];
 }
-function cutAt(A, B) {
-  for (let k = state.shapes.length - 1; k >= 0; k--) {
-    const s = state.shapes[k];
-    if (!s.closed || s.points.length < 3) continue;
-    const r = splitPoly(s.points, A, B);
-    if (!r) continue;
-    pushHist();
-    const piece = JSON.parse(JSON.stringify(s));
-    delete piece.parts; delete piece.partsBase; delete s.parts; delete s.partsBase;
-    s.points = r[0]; piece.points = r[1]; piece.id = nextId++;
-    state.shapes.splice(k + 1, 0, piece);
-    // 分かれた ことが わかるように、切り線の 両がわへ 少し はなして もどす
-    const pa = pinXY(A), pb = pinXY(B);
-    let nx = -(pb.y - pa.y), ny = pb.x - pa.x; const nl = Math.hypot(nx, ny); nx /= nl; ny /= nl;
-    const c2 = bboxCenter(r[1]), cq = pinXY(c2);
-    if ((cq.x - pa.x) * nx + (cq.y - pa.y) * ny < 0) { nx = -nx; ny = -ny; }
-    anim.split = { a: s.id, b: piece.id, nx, ny, t0: performance.now() };
-    toast('2つに わかれたよ。「えらぶ」や「はる」で うごかせるよ');
-    requestDraw();
-    return true;
+// 切り線 A→B が 図形 P の 中を 通る ところ（へりから へりまで）を さがす。
+// かえす もの：{ chords:[[C,D],…] }（C・D は へりの 上の 点）／ はしが ピンで ない ときは bad:true
+const onPin = p => { const r = nearestPinW(p.i, p.j); return r && r.d < 1e-4; };
+function cutChords(P, A, B) {
+  const dx = B.i - A.i, dy = B.j - A.j, ts = [];
+  const pt = t => ({ i: fixNum(A.i + dx * t), j: fixNum(A.j + dy * t) });
+  for (let k = 0; k < P.length; k++) {
+    const p = P[k], q = P[(k + 1) % P.length];
+    const t0 = onSeg(p, A, B); if (t0 !== null) ts.push(t0);          // 頂点が 切り線の 上
+    for (const [X, t] of [[A, 0], [B, 1]]) if (onSeg(X, p, q) !== null) ts.push(t);   // 切り線の はしが へりの 上
+    const ex = q.i - p.i, ey = q.j - p.j, den = dx * ey - dy * ex;
+    if (Math.abs(den) < EPS) continue;                                  // 平行
+    const t = ((p.i - A.i) * ey - (p.j - A.j) * ex) / den, u = ((p.i - A.i) * dy - (p.j - A.j) * dx) / den;
+    if (t > EPS && t < 1 - EPS && u > EPS && u < 1 - EPS) ts.push(t);   // へりを 横ぎる
   }
-  return false;
+  ts.sort((a, b) => a - b);
+  const uniq = ts.filter((t, k) => !k || t - ts[k - 1] > 1e-7);
+  const chords = []; let bad = false;
+  for (let k = 0; k + 1 < uniq.length; k++) {
+    const m = pt((uniq[k] + uniq[k + 1]) / 2);
+    if (!inPolyG(m, P)) continue;
+    if (P.some((p, n) => onSeg(m, p, P[(n + 1) % P.length]) !== null)) continue;   // へりを なぞっている
+    const C = pt(uniq[k]), D = pt(uniq[k + 1]);
+    if (!onPin(C) || !onPin(D)) { bad = true; continue; }
+    chords.push([C, D]);
+  }
+  return { chords, bad };
+}
+// きる：A から B への 線で、線が つきぬけた 図形を ぜんぶ 切る。
+// 切れた → true／ピンの ない ところで へりと まじわった → 'bad'／なにも 切れない → false
+function cutAt(A, B) {
+  const made = [];   // [もとの 図形, 切れた かたちの リスト]
+  let bad = false;
+  for (const s of state.shapes) {
+    if (!s.closed || s.points.length < 3) continue;
+    const r = cutChords(s.points, A, B);
+    if (r.bad) { bad = true; continue; }                // ピンで ない ところを 通る 図形は 切らない
+    let parts = [s.points];
+    for (const [C, D] of r.chords) {
+      for (let n = 0; n < parts.length; n++) {
+        const sp = splitPoly(parts[n], C, D);
+        if (sp) { parts.splice(n, 1, sp[0], sp[1]); break; }
+      }
+    }
+    if (parts.length > 1) made.push([s, parts]);
+  }
+  if (!made.length) return bad ? 'bad' : false;
+  pushHist();
+  // 分かれた ことが わかるように、切り線の 両がわへ 少し はなして もどす
+  const pa = pinXY(A), pb = pinXY(B);
+  let nx = -(pb.y - pa.y), ny = pb.x - pa.x; const nl = Math.hypot(nx, ny); nx /= nl; ny /= nl;
+  const side = {};
+  for (const [s, parts] of made) {
+    const k = state.shapes.indexOf(s), pieces = [];
+    delete s.parts; delete s.partsBase;
+    parts.forEach((P, n) => {
+      const piece = n ? JSON.parse(JSON.stringify(s)) : s;
+      if (n) piece.id = nextId++;
+      piece.points = P; pieces.push(piece);
+      const cq = pinXY(bboxCenter(P));
+      side[piece.id] = (cq.x - pa.x) * nx + (cq.y - pa.y) * ny < 0 ? -1 : 1;
+    });
+    state.shapes.splice(k + 1, 0, ...pieces.slice(1));
+  }
+  anim.split = { side, nx, ny, t0: performance.now() };
+  const n = made.reduce((a, m) => a + m[1].length, 0);
+  toast(bad ? 'ピンの ない ところで へりと まじわる かたちは 切らなかったよ'
+            : `${n}つに わかれたよ。「えらぶ」や「はる」で うごかせるよ`);
+  requestDraw();
+  return true;
 }
 // 分かれた ときの はなれぐあい（0 → はなれる → もどる）
 function splitAmp(t) {
@@ -2165,8 +2214,9 @@ function endPointer(e, canceled) {
   if (pointer.kind === 'pen' || pointer.kind === 'erase') { requestDraw(); return; }
   if (pointer.kind === 'cut') {
     const B = canceled ? null : snapPin(x, y);
-    if (B && !samePt({ i: B.i, j: B.j }, pointer.cutA) && !cutAt(pointer.cutA, B))
-      toast('かたちの へりの ピンから、へりの ピンまで ひこう');
+    const r = B && !samePt({ i: B.i, j: B.j }, pointer.cutA) ? cutAt(pointer.cutA, B) : true;
+    if (r === 'bad') toast('ピンと ピンの あいだで へりと まじわるので 切れないよ。へりの ピンを 通るように ひこう');
+    else if (!r) toast('かたちを つきぬけるように 線を ひこう');
     requestDraw(); return;
   }
   if (pointer.kind === 'paste') {
@@ -2381,7 +2431,7 @@ function updateHint(mode) {
   let h;
   if (tool === 'select') h = selectedId ? 'ひっぱると うごくよ。かどの ↻ を まわすか、ゆび 2ほんで ひねると まわるよ'
                                         : 'かたちを タップして えらぼう';
-  else if (tool === 'cut') h = 'かたちの へりの ピンから、べつの へりの ピンまで 線を ひくと 2つに わかれるよ';
+  else if (tool === 'cut') h = 'ピンから ピンへ、かたちを つきぬけるように 線を ひくと 切れるよ（へりの ピンを 通るように）';
   else if (tool === 'paste') h = pasteFirst ? 'みどりに 光った かたちを タップすると はれるよ。ひっぱって くっつけても いいよ'
                                             : 'はりたい かたちを タップしよう。ひっぱると うごくよ';
   else if (tool === 'write') h = writeMode === 'pen' ? '指や ペンで じゆうに かこう'
