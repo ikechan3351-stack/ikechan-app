@@ -157,6 +157,16 @@
   .layer .textcard { pointer-events: auto; }
 
   /* ながおしの わ（いっぱいに なると うらがえる） */
+  /* ↻ まわす つまみ（頂点の そと。マウスを 近づける／ゆびで さわった ピースに 出る） */
+  .rots { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+  .rothd { position: absolute; left: 0; top: 0; width: var(--hs, 34px); height: var(--hs, 34px); margin: calc(var(--hs, 34px) / -2) 0 0 calc(var(--hs, 34px) / -2);
+    border-radius: 50%; background: #fff; border: 3px solid #3949ab; color: #3949ab; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: calc(var(--hs, 34px) * 0.62); line-height: 1;
+    pointer-events: auto; cursor: grab; touch-action: none; animation: rotin .15s ease-out; }
+  .rothd.on { cursor: grabbing; background: #3949ab; color: #fff; }
+  .rothd .tag { position: absolute; left: 100%; top: 50%; transform: translate(6px, -50%); white-space: nowrap; background: #3949ab; color: #fff;
+    font-size: 20px; padding: 2px 8px; border-radius: 8px; pointer-events: none; }
+  @keyframes rotin { from { transform: scale(0.4); opacity: 0; } }
   .ring { position: absolute; left: 0; top: 0; width: 84px; height: 84px; margin: -42px 0 0 -42px; z-index: 6; pointer-events: none; opacity: 0; }
   .ring circle { fill: rgba(255,255,255,0.75); stroke: #ff6f00; stroke-width: 9; stroke-linecap: round;
                  stroke-dasharray: 220; stroke-dashoffset: 220; transform: rotate(-90deg); transform-origin: 50% 50%; }
@@ -269,6 +279,7 @@
       <svg class="sil" id="sil" viewBox="0 0 1200 720"></svg>
       <div class="layer pieces" id="pieces"></div>
       <canvas class="ink" id="ink"></canvas>
+      <div class="rots" id="rots"></div>
       <div class="ring" id="ring" hidden><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="35"/></svg><span class="ic">うら</span></div>
       <div class="banner" id="banner">🎉 ぴったり！</div>
     </div>
@@ -342,7 +353,7 @@
    ・📘4年「垂直・平行と四角形」：平行四辺形・台形・ひし形の しきつめ（3年と おなじ 三角の マス）。
    ・📘5年「合同な図形」：どんな 三角形・四角形も しきつめられる（ふつうの 方眼。角に しるし）。
    ・🧩タングラム：ふつうの 7まい。★〜★★★。💡ヒントつき。
-   ・ピースは タップで まわる（色板 90°・タングラム 45°）、ながおしで うらがえる。
+   ・ピースは タップで まわる（色板 90°・タングラム 45°）。かどの ↻ を ひっぱっても まわせる。ながおしで うらがえる。
    ・近づけると かど（頂点）どうしが「カチッ」と 弱く すいつく。
    ・ぜんぶ うまって はみ出しも かさなりも ない ときだけ「ぴったり！」（1まいずつの 正解は 出さない）。
    ・ペン・もどる・📷しゃしん・💾くばる／📂ひらく は ①〜③ と おなじ しくみ。
@@ -818,8 +829,9 @@ function overToolbox(cx, cy) {
 /* =========================== ピースの 形と 位置 =========================== */
 const isPiece = it => it.type !== 'text';
 // ピースの いまの 頂点（ボードの 座標）
+const degOf = it => it.r * angOf(it) + (it.live || 0);   // いまの 向き（°）。live は ↻ で まわしている とちゅうの ぶん
 function worldPts(it) {
-  const a = it.r * angOf(it) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  const a = degOf(it) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
   return SHAPES[it.type].local.map(([px, py]) => {
     const qx = it.f ? -px : px;
     return [it.x + qx * c - py * s, it.y + qx * s + py * c];
@@ -857,10 +869,10 @@ function place(it) {
   if (it.type === 'text') {
     el.style.transform = `translate3d(${it.x - it.w / 2}px, ${it.y - it.h / 2}px, 0)`;
   } else {
-    el.style.transform = `translate3d(${it.x}px, ${it.y}px, 0) rotate(${it.r * angOf(it)}deg) scale(${it.f ? -1 : 1}, 1)`;
+    el.style.transform = `translate3d(${it.x}px, ${it.y}px, 0) rotate(${degOf(it)}deg) scale(${it.f ? -1 : 1}, 1)`;
     el.querySelector('.face').setAttribute('fill', pieceColor(it));
     const lbl = el.querySelector('.lbl');
-    if (lbl) lbl.setAttribute('transform', `scale(${it.f ? -1 : 1},1) rotate(${-it.r * angOf(it)})`);
+    if (lbl) lbl.setAttribute('transform', `scale(${it.f ? -1 : 1},1) rotate(${-degOf(it)})`);
   }
   el.style.zIndex = it.z;
 }
@@ -908,6 +920,7 @@ function rebuild() {
   els.clear();
   for (const it of items) attach(it);
   redrawInk();
+  if (typeof showRots === 'function') showRots();
 }
 
 /* =========================== シルエット（もんだいの かげ） =========================== */
@@ -1200,6 +1213,7 @@ function restore(snap) {
 function dropGestures() {
   for (const d of drags.values()) if (d.timer) clearTimeout(d.timer);
   drags.clear();
+  cancelRot();
   if (drawing.size) {
     const live = [...drawing.values()].map(d => d.stroke);
     strokes = strokes.filter(s => !live.includes(s));
@@ -1275,7 +1289,8 @@ stage.addEventListener('pointerdown', e => {
   const snap = snapshot();
   it.z = ++zTop;   // さわったものは いちばん前へ
   el.classList.add('lift');
-  const d = { it, el, dx: it.x - p.x, dy: it.y - p.y, snap, moved: false, sx: e.clientX, sy: e.clientY, timer: 0, overTrash: false };
+  hoverRot = null; selRotId = 0; showRots();
+  const d = { it, el, pt: e.pointerType, dx: it.x - p.x, dy: it.y - p.y, snap, moved: false, sx: e.clientX, sy: e.clientY, timer: 0, overTrash: false };
   drags.set(e.pointerId, d);
   if (isPiece(it) && ![...drags.values()].some(o => o !== d && o.timer)) {
     d.timer = setTimeout(() => {
@@ -1332,10 +1347,122 @@ function endDrag(e) {
   } else if (TEACHER && d.it.type === 'text') {
     openText(d.it);
   }
+  if (isPiece(d.it) && d.pt && d.pt !== 'mouse' && items.includes(d.it)) { selRotId = d.it.id; showRots(); }
   requestFrame();
 }
 stage.addEventListener('pointerup', endDrag);
 stage.addEventListener('pointercancel', endDrag);
+
+/* =========================== ↻ つまみで まわす（頂点の そと） ===========================
+   ・マウス：ピースの 頂点に 近づけると、その 頂点の そとに ↻ が 出る。
+   ・ゆび・ペン：さわった ピースの すべての 頂点に ↻ が 出る（ほかの ところを さわると きえる）。
+   ↻ を ひっぱると、ピースの まん中（重心）を 中心に なめらかに まわる。
+   はなすと、いちばん 近い きまった 角度（タップで まわる 角度：45°・90°・60° など）に ぴたっと おさまる。 */
+const rotsEl = $('rots');
+let hoverRot = null;   // マウスで 近づけた { id, vi（頂点の ばんごう） }
+let selRotId = 0;      // ゆびで さわった ピース（すべての 頂点に つまみ）
+let rotDrag = null;    // まわしている { pid, it, el, hd, vi, last, live, snap }
+const HS = () => Math.max(30, Math.min(60, 36 / scale));   // つまみの 大きさ（画面で だいたい 36px）
+function rotStepDeg(it) { return SHAPES[it.type].step * angOf(it); }
+// 頂点 vi の そとがわ（重心から 頂点の むきに 少し 出た ところ）
+function rotPos(it, vi) {
+  const v = worldPts(it)[vi], dx = v[0] - it.x, dy = v[1] - it.y, l = Math.hypot(dx, dy) || 1, o = HS() * 0.75;
+  return [v[0] + dx / l * o, v[1] + dy / l * o];
+}
+function rotTag(it) {
+  const k = Math.round((it.live || 0) / rotStepDeg(it)), deg = Math.abs(k * rotStepDeg(it));
+  return deg ? (k > 0 ? 'みぎに ' : 'ひだりに ') + deg + '°' : '';
+}
+function showRots() {
+  rotsEl.textContent = '';
+  if (mode !== 'move') return;
+  let it = null, vis = [];
+  if (rotDrag) { it = rotDrag.it; vis = [rotDrag.vi]; }
+  else if (hoverRot) { it = items.find(i => i.id === hoverRot.id); vis = [hoverRot.vi]; }
+  else if (selRotId) { it = items.find(i => i.id === selRotId); if (it) vis = worldPts(it).map((_, i) => i); }
+  if (!it || !isPiece(it)) { if (!rotDrag) { hoverRot = null; selRotId = 0; } return; }
+  const hs = HS();
+  for (const vi of vis) {
+    const [x, y] = rotPos(it, vi), h = document.createElement('div');
+    h.className = 'rothd' + (rotDrag ? ' on' : '');
+    h.style.setProperty('--hs', hs + 'px');
+    h.style.transform = `translate(${x}px, ${y}px)`;
+    h.dataset.id = it.id; h.dataset.vi = vi;
+    h.innerHTML = '↻' + (rotDrag && rotTag(it) ? `<span class="tag">${rotTag(it)}</span>` : '');
+    if (rotDrag) h.style.animation = 'none';
+    rotsEl.appendChild(h);
+  }
+}
+// マウスを 動かした：近くの 頂点を さがす（ボタンを おしていない ときだけ）
+stage.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse' || e.buttons || rotDrag || drags.size || mode !== 'move') return;
+  const p = toBoard(e.clientX, e.clientY), lim = HS() * 0.9;
+  let best = null;
+  for (const it of items) {
+    if (!isPiece(it)) continue;
+    worldPts(it).forEach((v, vi) => {
+      const q = rotPos(it, vi), d = Math.min(Math.hypot(p.x - v[0], p.y - v[1]), Math.hypot(p.x - q[0], p.y - q[1]));
+      if (d < lim && (!best || d < best.d - 1 || (Math.abs(d - best.d) <= 1 && it.z > best.z))) best = { id: it.id, vi, d, z: it.z };
+    });
+  }
+  const nw = best ? { id: best.id, vi: best.vi } : null;
+  if ((nw && nw.id) !== (hoverRot && hoverRot.id) || (nw && nw.vi) !== (hoverRot && hoverRot.vi)) { hoverRot = nw; if (nw) selRotId = 0; showRots(); }
+});
+stage.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && hoverRot && !rotDrag) { hoverRot = null; showRots(); } });
+// ピースの ない ところを さわったら、ゆびの つまみを けす
+stage.addEventListener('pointerdown', e => {
+  if (selRotId && !e.target.closest('.piece, .rothd')) { selRotId = 0; showRots(); }
+}, true);
+const angAt = (it, p) => Math.atan2(p.y - it.y, p.x - it.x) * 180 / Math.PI;
+rotsEl.addEventListener('pointerdown', e => {
+  const h = e.target.closest('.rothd');
+  if (!h || rotDrag || mode !== 'move') return;
+  const it = items.find(i => i.id === +h.dataset.id);
+  if (!it) return;
+  e.preventDefault(); e.stopPropagation();
+  try { rotsEl.setPointerCapture(e.pointerId); } catch (_) {}
+  const el = els.get(it.id);
+  it.z = ++zTop;
+  if (el) { el.classList.remove('glide'); el.classList.add('lift'); }
+  rotDrag = { pid: e.pointerId, it, el, vi: +h.dataset.vi, last: angAt(it, toBoard(e.clientX, e.clientY)), snap: snapshot() };
+  it.live = 0;
+  place(it); showRots();
+});
+rotsEl.addEventListener('pointermove', e => {
+  const r = rotDrag;
+  if (!r || r.pid !== e.pointerId) return;
+  const a = angAt(r.it, toBoard(e.clientX, e.clientY));
+  let d = a - r.last; while (d > 180) d -= 360; while (d < -180) d += 360;
+  r.last = a; r.it.live += d;
+  place(r.it); showRots();
+});
+function endRot(e) {
+  const r = rotDrag;
+  if (!r || (e && r.pid !== e.pointerId)) return;
+  rotDrag = null;
+  const it = r.it, st = rotStepDeg(it), k = Math.round((it.live || 0) / st);
+  if (r.el) r.el.classList.remove('lift');
+  // いまの 見た目の 向き（r＋live）から、きまった 角度へ くるっと おさまる（.glide の トランジション）
+  it.r += k * SHAPES[it.type].step;
+  delete it.live;
+  settle(it);
+  const o = r.snap.items.find(i => i.id === it.id);
+  if (!o || o.r !== it.r || Math.abs(o.x - it.x) > 0.01 || Math.abs(o.y - it.y) > 0.01) pushUndo(r.snap);
+  hoverRot = null;
+  if (e && e.pointerType && e.pointerType !== 'mouse') selRotId = it.id;
+  showRots();
+}
+rotsEl.addEventListener('pointerup', endRot);
+rotsEl.addEventListener('pointercancel', endRot);
+rotsEl.addEventListener('lostpointercapture', e => setTimeout(() => { if (rotDrag && rotDrag.pid === e.pointerId) endRot(e); }, 0));
+window.addEventListener('pointerup', e => { if (rotDrag && rotDrag.pid === e.pointerId) endRot(e); });
+window.addEventListener('blur', () => { if (rotDrag) endRot(null); });
+// もどる・かたづける など：まわしている とちゅうなら、まわす 前に もどす
+function cancelRot() {
+  if (rotDrag) { const it = rotDrag.it; if (rotDrag.el) rotDrag.el.classList.remove('lift'); delete it.live; rotDrag = null; place(it); }
+  hoverRot = null; selRotId = 0;
+  rotsEl.textContent = '';
+}
 
 /* =========================== 道具箱 =========================== */
 function silThumb(sol, size = 64) {
@@ -1474,7 +1601,7 @@ function buildToolbox() {
   const h = document.createElement('div');
   h.className = 'tbhint';
   h.innerHTML = (book === 'kyo' && !usesTray() ? (kyoG === 1 ? '👆 いろいたを' : '👆 上の ピースを') + ' タップ … 1まい でる<br>' : '') +
-    `👆 ピースを タップ … まわる（${book === 'tan' || curProb().set ? '45' : book === 'kyo' && (kyoG === 3 || kyoG === 4) ? '60' : '90'}°）<br>✋ ながおし … うらがえす<br>🧲 ちかづけると カチッと くっつく`;
+    `👆 ピースを タップ … まわる（${book === 'tan' || curProb().set ? '45' : book === 'kyo' && (kyoG === 3 || kyoG === 4) ? '60' : '90'}°）<br>↻ かどの ↻ を ひっぱる … すきな むきに まわす<br>✋ ながおし … うらがえす<br>🧲 ちかづけると カチッと くっつく`;
   toolbox.appendChild(h);
 }
 // いろいたの ボタン：タップ → 1まい出る。ひっぱる → すきな場所に 置ける
@@ -1707,6 +1834,7 @@ function setMode(m) {
   $('modeDraw').classList.toggle('on', m === 'draw' && !straight);
   $('modeLine').classList.toggle('on', m === 'draw' && straight);
   stage.classList.toggle('drawing', m === 'draw');
+  cancelRot();
   document.querySelectorAll('.pen').forEach(b => b.classList.toggle('on', m === 'draw' && b.dataset.color === penColor));
 }
 $('modeMove').onclick = () => setMode('move');
