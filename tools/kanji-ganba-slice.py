@@ -106,6 +106,12 @@ if best and best[0] <= 30:
     lines = best[1]
     xs = [(lines[i][0], lines[i + 1][1]) for i in (0, 2, 4)]
 # 絵が小さいマスがあると 上の方法では3つそろわないことがある。わくの線で見つかれば それでよい
+# 白っぽい絵のマスは 見つからないことがある。左の2列が見つかって 右に場所があれば、同じ はば・同じ すき間で 3列目を足す
+if len(xs) == 2 and xs[1][0] - xs[0][1] > 0:
+    step = xs[1][0] - xs[0][0]
+    third = (xs[1][0] + step, xs[1][1] + step)
+    if third[1] < w:
+        xs = xs + [third]
 if len(xs) != 3 or len(ys) != 2:
     sys.exit(f'マスが 横3×たて2 に見つかりません（横 {xs}・たて {ys}）')
 if '--dry' in sys.argv:
