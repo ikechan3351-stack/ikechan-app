@@ -20,8 +20,15 @@ SIZE = 400      # できあがりの大きさ
 INSET = 16      # わくの線と角の丸みをよけるため、内がわに入る はば
 
 src, chars = Path(sys.argv[1]), sys.argv[2]
+# ひらがな なぞりっこ用：名前を「あ1,あ2,あ3,い1,い2,い3」のように , で区切って書ける
+if ',' in chars:
+    chars = chars.split(',')
 full = sys.argv[4] if len(sys.argv) > 4 and sys.argv[3] == '--full' else ''
 out_dir = Path(__file__).resolve().parent.parent / 'japanese' / 'kanji-ganba' / 'img'
+# --out フォルダ で保存先を かえられる（例：--out japanese/hiragana/img）
+if '--out' in sys.argv:
+    out_dir = Path(sys.argv[sys.argv.index('--out') + 1]).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
 tmp = Path(tempfile.mkdtemp())
 
 
@@ -112,6 +119,15 @@ if len(xs) == 2 and xs[1][0] - xs[0][1] > 0:
     third = (xs[1][0] + step, xs[1][1] + step)
     if third[1] < w:
         xs = xs + [third]
+# うまく見つからない絵は、--xs 左-右,左-右,左-右  --ys 上-下,上-下 で マスの はんいを 手で 指定できる
+def given(opt):
+    if opt not in sys.argv:
+        return None
+    return [tuple(int(v) for v in p.split('-')) for p in sys.argv[sys.argv.index(opt) + 1].split(',')]
+if given('--xs'):
+    xs = given('--xs')
+if given('--ys'):
+    ys = given('--ys')
 if len(xs) != 3 or len(ys) != 2:
     sys.exit(f'マスが 横3×たて2 に見つかりません（横 {xs}・たて {ys}）')
 if '--dry' in sys.argv:
@@ -122,7 +138,7 @@ RADIUS = 10
 lx = xs[0][0] + 3
 inset = INSET
 edge = runs([ink(px[y][lx]) for y in range(h)], h // 6)
-if len(edge) == 2:
+if len(edge) == 2 and not given('--ys'):
     ys = [(max(0, y0 - RADIUS), min(h - 1, y1 + RADIUS)) for y0, y1 in edge]
     # 角の丸みが大きい絵では RADIUS では足りない。たて線のはしから 外へ50画素以内で、
     # マスの はばの6割以上が線になっている「わくの横線」があれば、そこを上下の はしにする
@@ -197,8 +213,16 @@ for k, ((x0, x1), (y0, y1)) in zip(chars, boxes):
     cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
     left, top = cx - side // 2, cy - side // 2
     crop = tmp / 'c.png'
-    subprocess.run(['sips', '-c', str(side), str(side), '--cropOffset', str(top), str(left), str(tmp / 'a.bmp'),
-                    '--out', str(crop)], check=True, capture_output=True)
+    if '--pad' in sys.argv:
+        # --pad：横長・たて長の マスでも 絵が 切れないよう、マスの内がわを まるごと切りぬき、白を足して正方形にする
+        cw, ch = x1 - x0 - inset * 2, y1 - y0 - inset * 2
+        subprocess.run(['sips', '-c', str(ch), str(cw), '--cropOffset', str(y0 + inset), str(x0 + inset), str(tmp / 'a.bmp'),
+                        '--out', str(crop)], check=True, capture_output=True)
+        big = max(cw, ch)
+        subprocess.run(['sips', '-p', str(big), str(big), '--padColor', 'FFFFFF', str(crop)], check=True, capture_output=True)
+    else:
+        subprocess.run(['sips', '-c', str(side), str(side), '--cropOffset', str(top), str(left), str(tmp / 'a.bmp'),
+                        '--out', str(crop)], check=True, capture_output=True)
     subprocess.run(['sips', '-z', str(SIZE), str(SIZE), str(crop)], check=True, capture_output=True)
     if k in full:
         subprocess.run(['sips', '-s', 'format', 'png', str(crop), '--out', str(out_dir / f'{k}.png')], check=True, capture_output=True)
