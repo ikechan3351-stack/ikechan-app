@@ -49,12 +49,18 @@
   /* 50音表 */
   .table { display: grid; grid-template-columns: repeat(10, 1fr); direction: rtl; gap: 6px; width: 100%; max-width: 860px; }
   .col { direction: ltr; display: flex; flex-direction: column; gap: 6px; }
-  .colhead { border: none; border-radius: 14px; background: var(--yellow); font-weight: bold; font-size: .92rem; padding: 6px 2px; box-shadow: 0 3px 0 #e6c24f; }
+  .colhead { border: none; border-radius: 14px; background: var(--yellow); font-weight: bold; font-size: .88rem; line-height: 1.25; padding: 6px 2px; min-height: 2.6em; box-shadow: 0 3px 0 #e6c24f; }
   .colhead:active { transform: translateY(2px); box-shadow: 0 1px 0 #e6c24f; }
   .ji { position: relative; aspect-ratio: 1; border: none; border-radius: 16px; background: #fff4f8; box-shadow: 0 0 0 2px #f7d2df inset; font-family: var(--kj); font-size: clamp(1.4rem, 4.2vw, 2.4rem); padding: 0; }
   .ji.empty { visibility: hidden; }
   .ji.done { background: #fff; box-shadow: 0 0 0 3px var(--pink) inset; }
   .ji .stamp { position: absolute; right: -4px; top: -6px; font-size: clamp(.9rem, 2.2vw, 1.3rem); }
+  .colhead .short { display: none; }
+  @media (max-width: 600px) { .colhead .full { display: none; } .colhead .short { display: inline; font-size: 1rem; } .colhead { min-height: 0; } .table { gap: 4px; } }
+  .kanatabs { display: flex; gap: 8px; justify-content: center; }
+  .ktab { border: none; border-radius: 999px; background: #fff4f8; padding: 10px 26px; font-size: 1.25rem; font-weight: bold; box-shadow: 0 0 0 2px #f6cfdd inset; }
+  .ktab.on { background: var(--pink); color: #fff; box-shadow: 0 4px 0 var(--pink-d); }
+  h3.sec { margin: 6px 0 -4px; align-self: center; font-size: 1.05rem; color: var(--pink-d); border-bottom: 3px dotted #f6b9cf; padding: 0 10px 2px; }
   .count { font-weight: bold; color: var(--pink-d); }
   .tools { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
   select { font-family: var(--ui); font-size: 1rem; padding: 8px; border-radius: 12px; border: 2px solid #f3c2d4; color: var(--text); }
@@ -163,30 +169,80 @@
 <div id="print"></div>
 
 <script src="hiragana/strokes.js"></script>
+<script src="hiragana/strokes-daku.js"></script>
+<script src="hiragana/strokes-kata.js"></script>
 <script>
 'use strict';
 const STROKES = window.KANA_STROKES || {};
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 // ───────── 字と ことば ─────────
-// 行：[行の名前, 字5つ（ないところは ''）]
-const ROWS = [
-  ['あ', 'あいうえお'], ['か', 'かきくけこ'], ['さ', 'さしすせそ'], ['た', 'たちつてと'], ['な', 'なにぬねの'],
-  ['は', 'はひふへほ'], ['ま', 'まみむめも'], ['や', ['や', '', 'ゆ', '', 'よ']], ['ら', 'らりるれろ'], ['わ', ['わ', '', 'を', '', 'ん']],
-].map(([n, s]) => ({ name: n + 'ぎょう', ks: [...s] }));
-const ALL = ROWS.flatMap(r => r.ks.filter(Boolean));
-// 字：[絵, ことば]（ことばの中の その字を 色でしめす）
+// 字のセット：ひらがな／カタカナ。それぞれ「せいおん」「だくおん・はんだくおん」「ちいさい じ」の まとまりに わける
+// 行：[行の名前, 字（ないところは ''。せいおんの や・わ行だけ 5つに そろえる）]
+const gyo = s => [...s].map(c => [c + 'ぎょう', null]);
+const KANA = {
+  hira: {
+    label: 'ひらがな', secs: [
+      ['せいおん', [['あ', 'あいうえお'], ['か', 'かきくけこ'], ['さ', 'さしすせそ'], ['た', 'たちつてと'], ['な', 'なにぬねの'],
+        ['は', 'はひふへほ'], ['ま', 'まみむめも'], ['や', ['や', '', 'ゆ', '', 'よ']], ['ら', 'らりるれろ'], ['わ', ['わ', '', 'を', '', 'ん']]].map(([n, k]) => [n + 'ぎょう', k])],
+      ['だくおん・はんだくおん（゛ ゜）', [['がぎょう', 'がぎぐげご'], ['ざぎょう', 'ざじずぜぞ'], ['だぎょう', 'だぢづでど'], ['ばぎょう', 'ばびぶべぼ'], ['ぱぎょう', 'ぱぴぷぺぽ']]],
+      ['ちいさい じ', [['ちいさい っ', 'っ'], ['ゃ・ゅ・ょ', 'ゃゅょ']]],
+    ],
+  },
+  kata: {
+    label: 'カタカナ', secs: [
+      ['せいおん', [['ア', 'アイウエオ'], ['カ', 'カキクケコ'], ['サ', 'サシスセソ'], ['タ', 'タチツテト'], ['ナ', 'ナニヌネノ'],
+        ['ハ', 'ハヒフヘホ'], ['マ', 'マミムメモ'], ['ヤ', ['ヤ', '', 'ユ', '', 'ヨ']], ['ラ', 'ラリルレロ'], ['ワ', ['ワ', '', 'ヲ', '', 'ン']]].map(([n, k]) => [n + 'ぎょう', k])],
+      ['だくおん・はんだくおん（゛ ゜）', [['ガぎょう', 'ガギグゲゴ'], ['ザぎょう', 'ザジズゼゾ'], ['ダぎょう', 'ダヂヅデド'], ['バぎょう', 'バビブベボ'], ['パぎょう', 'パピプペポ']]],
+      ['ちいさい じ・のばす ぼう', [['ちいさい ッ', 'ッ'], ['ャ・ュ・ョ', 'ャュョ'], ['のばす ぼう', 'ー']]],
+    ],
+  },
+};
+// 行を 1れつに ならべた もの（つぎの行へ すすむときに つかう）
+Object.values(KANA).forEach(set => {
+  set.rows = set.secs.flatMap(([t, rows], si) => rows.map(([name, ks]) => ({ name, ks: [...ks], sec: si })));
+  set.all = set.rows.flatMap(r => r.ks.filter(Boolean));
+});
+let ROWS = KANA.hira.rows, ALL = KANA.hira.all;
+function setKana(id) { S.kana = id; ROWS = KANA[id].rows; ALL = KANA[id].all; }
+const kanaOf = k => Object.keys(KANA).find(id => KANA[id].all.includes(k));
+const SMALL = 'っゃゅょッャュョ';
+// 読み上げ：小さい字と のばす ぼうは 名前で よむ
+const sayName = k => k === 'ー' ? 'のばす ぼう' : SMALL.includes(k) ? 'ちいさい ' + String.fromCharCode(k.charCodeAt(0) + 1) : k;
+// 字：[絵, ことば]（ことばの中の その字を 色でしめす）。ない字は、絵なしで 字だけ 出す
 const WORDS = {
-  'あ': ['🐜', 'あり'], 'い': ['🐶', 'いぬ'], 'う': ['🐰', 'うさぎ'], 'え': ['✏️', 'えんぴつ'], 'お': ['🍙', 'おにぎり'],
-  'か': ['☂️', 'かさ'], 'き': ['🦒', 'きりん'], 'く': ['🐻', 'くま'], 'け': ['🐛', 'けむし'], 'こ': ['🐨', 'こあら'],
+  'あ': ['🐜', 'あり'], 'い': ['🐶', 'いぬ'], 'う': ['🐰', 'うさぎ'], 'え': ['🚉', 'えき'], 'お': ['🍙', 'おにぎり'],
+  'か': ['☂️', 'かさ'], 'き': ['🦒', 'きりん'], 'く': ['🐻', 'くま'], 'け': ['🐛', 'けむし'], 'こ': ['🧊', 'こおり'],
   'さ': ['🐟', 'さかな'], 'し': ['🦌', 'しか'], 'す': ['🍉', 'すいか'], 'せ': ['🧼', 'せっけん'], 'そ': ['🛷', 'そり'],
-  'た': ['🥚', 'たまご'], 'ち': ['🦋', 'ちょうちょ'], 'つ': ['🌙', 'つき'], 'て': ['🧤', 'てぶくろ'], 'と': ['⏰', 'とけい'],
+  'た': ['🥚', 'たまご'], 'ち': ['🗺️', 'ちず'], 'つ': ['🌙', 'つき'], 'て': ['🧤', 'てぶくろ'], 'と': ['⏰', 'とけい'],
   'な': ['🍆', 'なす'], 'に': ['🥕', 'にんじん'], 'ぬ': ['🧸', 'ぬいぐるみ'], 'ね': ['🐱', 'ねこ'], 'の': ['🪚', 'のこぎり'],
   'は': ['🌸', 'はな'], 'ひ': ['🐤', 'ひよこ'], 'ふ': ['🎈', 'ふうせん'], 'へ': ['🐍', 'へび'], 'ほ': ['⭐', 'ほし'],
   'ま': ['🪟', 'まど'], 'み': ['🍊', 'みかん'], 'む': ['🐞', 'むし'], 'め': ['👓', 'めがね'], 'も': ['🍑', 'もも'],
   'や': ['⛰️', 'やま'], 'ゆ': ['⛄', 'ゆきだるま'], 'よ': ['🌃', 'よる'],
   'ら': ['🦁', 'らいおん'], 'り': ['🍎', 'りんご'], 'る': ['🚗', 'くるま'], 'れ': ['🍋', 'れもん'], 'ろ': ['🕯️', 'ろうそく'],
-  'わ': ['🐊', 'わに'], 'を': ['👟', 'くつを はく'], 'ん': ['🍞', 'ぱん'],
+  'わ': ['🐊', 'わに'], 'を': ['👟', 'くつを はく'], 'ん': ['🍢', 'おでん'],
+  'が': ['🏫', 'がっこう'], 'ぎ': ['🥛', 'ぎゅうにゅう'], 'ぐ': ['🌰', 'どんぐり'], 'げ': ['🦎', 'とかげ'], 'ご': ['🍚', 'ごはん'],
+  'ざ': ['🦞', 'ざりがに'], 'じ': ['🚲', 'じてんしゃ'], 'ず': ['🪱', 'みみず'], 'ぜ': ['🌬️', 'かぜ'], 'ぞ': ['🐘', 'ぞう'],
+  'だ': ['🍡', 'だんご'], 'ぢ': ['👃', 'はなぢ'], 'づ': ['📦', 'こづつみ'], 'で': ['🚃', 'でんしゃ'], 'ど': ['🪐', 'どせい'],
+  'ば': ['🦗', 'ばった'], 'び': ['🦐', 'えび'], 'ぶ': ['🍇', 'ぶどう'], 'べ': ['🍱', 'べんとう'], 'ぼ': ['🧢', 'ぼうし'],
+  'ぱ': ['🐼', 'ぱんだ'], 'ぴ': ['✏️', 'えんぴつ'], 'ぷ': ['🍤', 'てんぷら'], 'ぺ': ['🐧', 'ぺんぎん'], 'ぽ': ['🌼', 'たんぽぽ'],
+  'っ': ['🎺', 'らっぱ'], 'ゃ': ['🎃', 'かぼちゃ'], 'ゅ': ['🥒', 'きゅうり'], 'ょ': ['🦋', 'ちょうちょ'],
+  'ア': ['📡', 'アンテナ'], 'イ': ['🐬', 'イルカ'], 'ウ': ['😉', 'ウインク'], 'エ': ['🛗', 'エレベーター'], 'オ': ['🏍️', 'オートバイ'],
+  'カ': ['📷', 'カメラ'], 'キ': ['🥝', 'キウイ'], 'ク': ['🍪', 'クッキー'], 'ケ': ['🍰', 'ケーキ'], 'コ': ['☕', 'コーヒー'],
+  'サ': ['⚽', 'サッカー'], 'シ': ['🦓', 'シマウマ'], 'ス': ['🥄', 'スプーン'], 'セ': ['🎒', 'ランドセル'], 'ソ': ['🍦', 'ソフトクリーム'],
+  'タ': ['🚕', 'タクシー'], 'チ': ['🧀', 'チーズ'], 'ツ': ['🎄', 'ツリー'], 'テ': ['📺', 'テレビ'], 'ト': ['🍅', 'トマト'],
+  'ナ': ['🔪', 'ナイフ'], 'ニ': ['🎾', 'テニス'], 'ヌ': ['🛶', 'カヌー'], 'ネ': ['👔', 'ネクタイ'], 'ノ': ['📓', 'ノート'],
+  'ハ': ['✂️', 'ハサミ'], 'ヒ': ['🦸', 'ヒーロー'], 'フ': ['🍴', 'フォーク'], 'ヘ': ['🚁', 'ヘリコプター'], 'ホ': ['🥞', 'ホットケーキ'],
+  'マ': ['😷', 'マスク'], 'ミ': ['🥛', 'ミルク'], 'ム': ['🐹', 'ハムスター'], 'メ': ['🍈', 'メロン'], 'モ': ['🚝', 'モノレール'],
+  'ヤ': ['🌴', 'ヤシのき'], 'ユ': ['🛸', 'ユーフォー'], 'ヨ': ['⛵', 'ヨット'],
+  'ラ': ['🍜', 'ラーメン'], 'リ': ['🎀', 'リボン'], 'ル': ['💎', 'ルビー'], 'レ': ['🥬', 'レタス'], 'ロ': ['🚀', 'ロケット'],
+  'ワ': ['🧇', 'ワッフル'], 'ン': ['🍞', 'パン'],
+  'ガ': ['🍔', 'ハンバーガー'], 'ギ': ['🎸', 'ギター'], 'グ': ['✊', 'グー'], 'ゲ': ['🎮', 'ゲーム'], 'ゴ': ['🦍', 'ゴリラ'],
+  'ザ': ['🍕', 'ピザ'], 'ジ': ['🧩', 'ジグソーパズル'], 'ズ': ['👖', 'ズボン'], 'ゼ': ['🎁', 'プレゼント'], 'ゾ': ['🐘', 'ゾウ'],
+  'ダ': ['🥗', 'サラダ'], 'デ': ['🏬', 'デパート'], 'ド': ['🍩', 'ドーナツ'],
+  'バ': ['🍌', 'バナナ'], 'ビ': ['🏢', 'ビル'], 'ブ': ['🥦', 'ブロッコリー'], 'ベ': ['🛏️', 'ベッド'], 'ボ': ['🏀', 'ボール'],
+  'パ': ['🍍', 'パイナップル'], 'ピ': ['🎹', 'ピアノ'], 'プ': ['🍮', 'プリン'], 'ペ': ['🐧', 'ペンギン'], 'ポ': ['📮', 'ポスト'],
+  'ッ': ['🤖', 'ロボット'], 'ャ': ['👕', 'シャツ'], 'ュ': ['🧃', 'ジュース'], 'ョ': ['🍫', 'チョコレート'], 'ー': ['🍛', 'カレー'],
 };
 const PENS = [['#e8679a', 'ピンク'], ['#4aa3e0', 'みずいろ'], ['#3fb592', 'みどり'], ['#f08a34', 'オレンジ'], ['#9b6bd6', 'むらさき']];
 const PRAISE = ['じょうず！', 'すごい！', 'きれいに かけたね！', 'ばっちり！', 'はなまる！'];
@@ -199,7 +255,7 @@ const store = Object.assign({ stamps: {}, pen: 0, sound: true }, load());
 
 // ───────── 状態 ─────────
 const Q = new URLSearchParams(location.search);
-const S = { mode: Q.get('mode') === 'teacher' ? 'teacher' : Q.get('mode') === 'student' ? 'student' : '', row: 0, k: 'あ', tab: 'see' };
+const S = { mode: Q.get('mode') === 'teacher' ? 'teacher' : Q.get('mode') === 'student' ? 'student' : '', kana: 'hira', row: 0, k: 'あ', tab: 'see' };
 const teacher = () => S.mode === 'teacher';
 const view = document.getElementById('view');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -253,6 +309,7 @@ modeChip.onclick = () => { S.mode = ''; showStart(); };
 function setURL(p) {
   const u = new URLSearchParams();
   if (S.mode) u.set('mode', S.mode);
+  if (S.kana !== 'hira') u.set('kana', S.kana);
   Object.entries(p || {}).forEach(([k, v]) => u.set(k, v));
   try { history.replaceState(null, '', '?' + u.toString()); } catch (e) {}
 }
@@ -262,7 +319,7 @@ function showStart() {
   cleanup(); drawModeChip(); setURL();
   view.innerHTML = `
     <div class="mascot">🐰</div>
-    <h1>ひらがな なぞりっこ<small>なぞって かいて、ひらがなを おぼえよう</small></h1>
+    <h1>ひらがな なぞりっこ<small>なぞって かいて、ひらがな・カタカナを おぼえよう</small></h1>
     <p class="lead">だれが つかう？</p>
     <div class="start-modes">
       <button class="bigmode st" data-m="student"><span class="ic">🧒</span>ひとりで れんしゅう<small>こえと うさぎさんが<br>おしえてくれるよ</small></button>
@@ -278,26 +335,34 @@ function showStart() {
 // ───────── 50音表 ─────────
 function showTable() {
   cleanup(); drawModeChip(); setURL();
+  const set = KANA[S.kana];
   const n = ALL.filter(k => store.stamps[k]).length;
+  let ri = 0;
+  const secHtml = set.secs.map(([title, rows]) => {
+    const cols = rows.map(() => { const r = set.rows[ri], i = ri++; return `<div class="col">
+      <button class="colhead" data-row="${i}"><span class="full">${r.name}</span><span class="short">${r.ks.find(Boolean)}</span></button>
+      ${r.ks.map(k => k ? `<button class="ji${store.stamps[k] ? ' done' : ''}" data-row="${i}" data-k="${k}">${k}${store.stamps[k] ? '<span class="stamp">🌸</span>' : ''}</button>`
+        : '<span class="ji empty"></span>').join('')}
+    </div>`; }).join('');
+    return `<h3 class="sec">${title}</h3><div class="table" style="grid-template-columns:repeat(${rows.length},minmax(0,1fr));max-width:${rows.length * 88}px">${cols}</div>`;
+  }).join('');
   view.innerHTML = `
+    <div class="kanatabs">${Object.entries(KANA).map(([id, k]) => `<button class="ktab${id === S.kana ? ' on' : ''}" data-kana="${id}">${k.label}</button>`).join('')}</div>
     <p class="lead">れんしゅうする 字を えらんでね</p>
     <p class="sub">うえの <b>〇ぎょう</b> を おすと、その ぎょうを じゅんばんに れんしゅうできるよ</p>
-    <div class="table">${ROWS.map((r, ri) => `<div class="col">
-      <button class="colhead" data-row="${ri}">${r.name}</button>
-      ${r.ks.map(k => k ? `<button class="ji${store.stamps[k] ? ' done' : ''}" data-row="${ri}" data-k="${k}">${k}${store.stamps[k] ? '<span class="stamp">🌸</span>' : ''}</button>`
-        : '<span class="ji empty"></span>').join('')}
-    </div>`).join('')}</div>
-    <p class="count">🌸 かけた字：${n} ／ ${ALL.length}${n === ALL.length ? '　ぜんぶ かけたね！🎉' : ''}</p>
+    ${secHtml}
+    <p class="count">🌸 かけた${set.label}：${n} ／ ${ALL.length}${n === ALL.length ? '　ぜんぶ かけたね！🎉' : ''}</p>
     <div class="tools">
-      <select id="prow">${ROWS.map((r, i) => `<option value="${i}">${r.name}</option>`).join('')}<option value="all">ぜんぶ</option></select>
+      <select id="prow">${ROWS.map((r, i) => `<option value="${i}">${r.name}</option>`).join('')}<option value="all">${set.label} ぜんぶ</option></select>
       <button class="btn" id="printBtn">🖨 プリントを つくる</button>
       ${n ? '<button class="btn" id="resetBtn">🧽 スタンプを けす</button>' : ''}
     </div>`;
+  view.querySelectorAll('.ktab').forEach(b => b.onclick = () => { setKana(b.dataset.kana); showTable(); });
   view.querySelectorAll('.colhead').forEach(b => b.onclick = () => { const r = +b.dataset.row; openChar(r, ROWS[r].ks.find(Boolean)); });
   view.querySelectorAll('.ji[data-k]').forEach(b => b.onclick = () => openChar(+b.dataset.row, b.dataset.k));
   view.querySelector('#printBtn').onclick = () => printSheet(view.querySelector('#prow').value);
   const rb = view.querySelector('#resetBtn');
-  if (rb) rb.onclick = () => { if (confirm('あつめた スタンプを ぜんぶ けしますか？')) { store.stamps = {}; save(); showTable(); } };
+  if (rb) rb.onclick = () => { if (confirm(`あつめた ${set.label}の スタンプを ぜんぶ けしますか？`)) { ALL.forEach(k => delete store.stamps[k]); save(); showTable(); } };
 }
 
 // ───────── れんしゅう画面 ─────────
@@ -316,8 +381,8 @@ function strokeSvg(k, cls, opt = {}) {
 
 function showPractice(tab) {
   cleanup(); drawModeChip();
-  const k = S.k, row = ROWS[S.row], w = WORDS[k] || ['', ''];
-  const wordHtml = esc(w[1]).replace(k, `<b>${k}</b>`);
+  const k = S.k, row = ROWS[S.row], w = WORDS[k] || ['🔤', k];
+  const wordHtml = WORDS[k] ? esc(w[1]).replace(k, `<b>${k}</b>`) : `<b>${k}</b>`;
   const st = STROKES[k];
   view.innerHTML = `
     <div class="row-dots">${row.ks.filter(Boolean).map(c => `<button data-k="${c}" class="${c === k ? 'cur' : ''}${store.stamps[c] ? ' done' : ''}">${c}</button>`).join('')}</div>
@@ -335,7 +400,7 @@ function showPractice(tab) {
       </div>
       <div class="side">
         <div class="bunny"><div class="face">🐰</div><div class="bubble" id="bubble"></div></div>
-        <div class="word"><button id="wordBtn"><span class="em">${w[0]}</span><span class="w">${wordHtml}</span><span class="say" style="display:block">🔊 おすと よむよ</span></button></div>
+        <div class="word"><button id="wordBtn"><span class="em">${w[0]}</span><span class="w">${wordHtml}</span><span class="say" style="display:block">${WORDS[k] ? '🔊 おすと よむよ' : 'あまり つかわない 字だよ'}</span></button></div>
         <div class="pens">ペン：${PENS.map((p, i) => `<button class="pen${store.pen === i ? ' on' : ''}" data-p="${i}" style="background:${p[0]}" aria-label="${p[1]}"></button>`).join('')}</div>
         <div class="acts">
           <button class="btn" id="toTable">🔤 ひょうに もどる</button>
@@ -345,7 +410,7 @@ function showPractice(tab) {
     </div>`;
   document.documentElement.style.setProperty('--pen', PENS[store.pen][0]);
   view.querySelectorAll('.row-dots button').forEach(b => b.onclick = () => openChar(S.row, b.dataset.k, S.tab));
-  view.querySelector('#wordBtn').onclick = () => speak(w[1].replace(/\s+/g, ''));
+  view.querySelector('#wordBtn').onclick = () => speak(WORDS[k] ? w[1].replace(/\s+/g, '') : sayName(k));
   view.querySelector('#toTable').onclick = showTable;
   view.querySelectorAll('.pen').forEach(b => b.onclick = () => {
     store.pen = +b.dataset.p; save();
@@ -371,7 +436,11 @@ function bindWrite(firstTab) {
   // 👀 みる：書きじゅんの アニメーション
   function see() {
     title.textContent = teacher() ? `「${k}」の 書きじゅん` : 'かきじゅんを みてみよう';
-    bubble(teacher() ? '「1かくずつ」で、みんなで そらがき しよう' : `「${k}」は ${st.s.length}かく だよ。よく みててね`);
+    bubble(teacher() ? '「1かくずつ」で、みんなで そらがき しよう'
+      : SMALL.includes(k) ? `ちいさい「${String.fromCharCode(k.charCodeAt(0) + 1)}」は、ますの ちいさい ところに かくよ。ばしょも よく みてね`
+      : k === 'ー' ? 'のばす ぼうは よこに まっすぐ。ひだりから みぎへ かくよ'
+      : /[\u3099\u309A]/.test(k.normalize('NFD')) ? `「${k}」は ${st.s.length}かく。てんてん・まるは さいごに かくよ`
+      : `「${k}」は ${st.s.length}かく だよ。よく みててね`);
     box.innerHTML = strokeSvg(k, 'faint');
     const svg = box.querySelector('svg');
     const inkPaths = [...svg.querySelectorAll('path')].map(p => {
@@ -399,11 +468,11 @@ function bindWrite(firstTab) {
     const one = () => { stop(); if (shown >= inkPaths.length) reset(); draw(shown++); };
     acts.innerHTML = `<button class="btn" id="wSay">🔊 よむ</button><button class="btn" id="wPlay">▶ さいしょから</button><button class="btn" id="wOne">1かくずつ ▶</button>
       <button class="btn main" id="wNext">☝️ なぞって みよう</button>`;
-    acts.querySelector('#wSay').onclick = () => speak(k);
+    acts.querySelector('#wSay').onclick = () => speak(sayName(k));
     acts.querySelector('#wPlay').onclick = playAll;
     acts.querySelector('#wOne').onclick = one;
     acts.querySelector('#wNext').onclick = () => setTab('trace');
-    if (teacher()) reset(); else { speak(k); playAll(); }
+    if (teacher()) reset(); else { speak(sayName(k)); playAll(); }
   }
 
   // 書いた線を うけとる キャンバス
@@ -553,9 +622,9 @@ function printSheet(which) {
   const guide = '<line class="guide" x1="54.5" y1="0" x2="54.5" y2="109"/><line class="guide" x1="0" y1="54.5" x2="109" y2="54.5"/>';
   const box = inner => `<div class="p-box">${inner}</div>`;
   document.getElementById('print').innerHTML = `
-    <div class="p-head"><b>ひらがな なぞりっこ　${which === 'all' ? '' : ROWS[+which].name}</b><span>　がつ　　にち　　なまえ（　　　　　　　　　）</span></div>
+    <div class="p-head"><b>ひらがな なぞりっこ　${which === 'all' ? KANA[S.kana].label : ROWS[+which].name}</b><span>　がつ　　にち　　なまえ（　　　　　　　　　）</span></div>
     ${ks.map(k => `<div class="p-row">
-      <div class="p-info"><div class="e">${WORDS[k][0]}</div><div>${esc(WORDS[k][1])}</div></div>
+      <div class="p-info"><div class="e">${WORDS[k] ? WORDS[k][0] : ''}</div><div>${WORDS[k] ? esc(WORDS[k][1]) : ''}</div></div>
       ${box(strokeSvg(k, 'ink', { nums: true }))}
       ${box(strokeSvg(k, 'trace'))}${box(strokeSvg(k, 'trace'))}${box(strokeSvg(k, 'trace'))}
       ${box(`<svg viewBox="0 0 109 109" xmlns="${SVGNS}">${guide}</svg>`)}${box(`<svg viewBox="0 0 109 109" xmlns="${SVGNS}">${guide}</svg>`)}
@@ -568,6 +637,8 @@ function printSheet(which) {
 drawSoundBtn();
 (function boot() {
   const ji = Q.get('ji'), scene = Q.get('scene');
+  if (KANA[Q.get('kana')]) setKana(Q.get('kana'));
+  if (ji && kanaOf(ji)) setKana(kanaOf(ji));
   if (!S.mode) { showStart(); return; }
   if (ji && STROKES[ji] && rowOf(ji) >= 0) openChar(rowOf(ji), ji, ['see', 'trace', 'write'].includes(scene) ? scene : 'see');
   else if (Q.get('gyo')) { const r = ROWS.findIndex(x => x.name.startsWith(Q.get('gyo'))); if (r >= 0) openChar(r, ROWS[r].ks[0]); else showTable(); }
