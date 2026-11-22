@@ -102,6 +102,11 @@
   .word .w { font-family: var(--kj); font-size: 2rem; letter-spacing: .1em; }
   .word .w b { color: var(--pink-d); }
   .word .say { font-size: .85rem; color: #8a6a7a; }
+  .word .pic { display: block; width: min(100%, 180px); aspect-ratio: 1; margin: 0 auto 4px; border-radius: 16px; background: #fff; object-fit: contain; }
+  .thumbs { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+  .word .thumbs button { width: 52px; height: 52px; padding: 0; border-radius: 12px; background: #fff; overflow: hidden; box-shadow: 0 0 0 2px #f6e3a3; }
+  .word .thumbs button.on { box-shadow: 0 0 0 3px var(--pink-d); }
+  .thumbs img { width: 100%; height: 100%; display: block; }
   .pens { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; font-size: .9rem; font-weight: bold; }
   .pen { width: 34px; height: 34px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px #ddd; padding: 0; }
   .pen.on { box-shadow: 0 0 0 3px var(--text); }
@@ -128,6 +133,9 @@
     .bunny .face { font-size: 2.2rem; }
     .word { display: flex; align-items: center; gap: 10px; padding: 6px 12px; }
     .word .em { font-size: 2.6rem; }
+    .word .pic { width: 84px; margin: 0; }
+    .word .thumbs { flex-direction: column; gap: 4px; margin: 0; }
+    .word .thumbs button { width: 36px; height: 36px; }
     .word .w { font-size: 1.6rem; }
     .wbox { width: min(100%, 56vh); }
   }
@@ -146,6 +154,7 @@
     .p-row { display: flex; gap: 2mm; margin-bottom: 4mm; align-items: center; break-inside: avoid; }
     .p-info { width: 18mm; text-align: center; font-size: 10pt; }
     .p-info .e { font-size: 18pt; }
+    .p-info .e img { width: 16mm; height: 16mm; display: block; margin: 0 auto; }
     .p-box { width: 24mm; height: 24mm; border: 1px solid #999; position: relative; }
     .p-box svg { width: 100%; height: 100%; display: block; }
     .p-box .guide { stroke: #ccc; stroke-width: .5; }
@@ -171,6 +180,7 @@
 <script src="hiragana/strokes.js"></script>
 <script src="hiragana/strokes-daku.js"></script>
 <script src="hiragana/strokes-kata.js"></script>
+<script src="hiragana/pics.js"></script>
 <script>
 'use strict';
 const STROKES = window.KANA_STROKES || {};
@@ -379,10 +389,25 @@ function strokeSvg(k, cls, opt = {}) {
   return `<svg viewBox="0 0 109 109" xmlns="${SVGNS}">${guide}${paths}${nums}</svg>`;
 }
 
+// 絵とことば：絵のある字は 3つの絵から えらべる（PICS・img/字1〜3.png）。まだの字は 絵文字（WORDS）
+const picNo = {};
+const picWord = k => PICS[k] ? PICS[k][picNo[k] || 0] : WORDS[k] ? WORDS[k][1] : '';
+const picSrc = (k, i) => `hiragana/img/${encodeURIComponent(k + (i + 1))}.png`;
+function drawWord(k) {
+  const box = view.querySelector('#word'), word = picWord(k), n = picNo[k] || 0;
+  const wordHtml = word ? esc(word).replace(k, `<b>${k}</b>`) : `<b>${k}</b>`;
+  const pic = PICS[k] ? `<img class="pic" src="${picSrc(k, n)}" alt="${esc(word)}">` : `<span class="em">${WORDS[k] ? WORDS[k][0] : '🔤'}</span>`;
+  box.innerHTML = `<button id="wordBtn">${pic}<span class="w">${wordHtml}</span><span class="say" style="display:block">${word ? '🔊 おすと よむよ' : 'あまり つかわない 字だよ'}</span></button>`
+    + (PICS[k] ? `<div class="thumbs">${PICS[k].map((w, i) => `<button class="${i === n ? 'on' : ''}" data-i="${i}" aria-label="${esc(w)}"><img src="${picSrc(k, i)}" alt=""></button>`).join('')}</div>` : '');
+  box.querySelector('#wordBtn').onclick = () => speak(word ? word.replace(/\s+/g, '') : sayName(k));
+  box.querySelectorAll('.thumbs button').forEach(b => b.onclick = () => {
+    picNo[k] = +b.dataset.i; drawWord(k); speak(picWord(k).replace(/\s+/g, ''));
+  });
+}
+
 function showPractice(tab) {
   cleanup(); drawModeChip();
-  const k = S.k, row = ROWS[S.row], w = WORDS[k] || ['🔤', k];
-  const wordHtml = WORDS[k] ? esc(w[1]).replace(k, `<b>${k}</b>`) : `<b>${k}</b>`;
+  const k = S.k, row = ROWS[S.row];
   const st = STROKES[k];
   view.innerHTML = `
     <div class="row-dots">${row.ks.filter(Boolean).map(c => `<button data-k="${c}" class="${c === k ? 'cur' : ''}${store.stamps[c] ? ' done' : ''}">${c}</button>`).join('')}</div>
@@ -400,7 +425,7 @@ function showPractice(tab) {
       </div>
       <div class="side">
         <div class="bunny"><div class="face">🐰</div><div class="bubble" id="bubble"></div></div>
-        <div class="word"><button id="wordBtn"><span class="em">${w[0]}</span><span class="w">${wordHtml}</span><span class="say" style="display:block">${WORDS[k] ? '🔊 おすと よむよ' : 'あまり つかわない 字だよ'}</span></button></div>
+        <div class="word" id="word"></div>
         <div class="pens">ペン：${PENS.map((p, i) => `<button class="pen${store.pen === i ? ' on' : ''}" data-p="${i}" style="background:${p[0]}" aria-label="${p[1]}"></button>`).join('')}</div>
         <div class="acts">
           <button class="btn" id="toTable">🔤 ひょうに もどる</button>
@@ -410,7 +435,7 @@ function showPractice(tab) {
     </div>`;
   document.documentElement.style.setProperty('--pen', PENS[store.pen][0]);
   view.querySelectorAll('.row-dots button').forEach(b => b.onclick = () => openChar(S.row, b.dataset.k, S.tab));
-  view.querySelector('#wordBtn').onclick = () => speak(WORDS[k] ? w[1].replace(/\s+/g, '') : sayName(k));
+  drawWord(k);
   view.querySelector('#toTable').onclick = showTable;
   view.querySelectorAll('.pen').forEach(b => b.onclick = () => {
     store.pen = +b.dataset.p; save();
@@ -624,7 +649,7 @@ function printSheet(which) {
   document.getElementById('print').innerHTML = `
     <div class="p-head"><b>ひらがな なぞりっこ　${which === 'all' ? KANA[S.kana].label : ROWS[+which].name}</b><span>　がつ　　にち　　なまえ（　　　　　　　　　）</span></div>
     ${ks.map(k => `<div class="p-row">
-      <div class="p-info"><div class="e">${WORDS[k] ? WORDS[k][0] : ''}</div><div>${WORDS[k] ? esc(WORDS[k][1]) : ''}</div></div>
+      <div class="p-info"><div class="e">${PICS[k] ? `<img src="${picSrc(k, picNo[k] || 0)}" alt="">` : WORDS[k] ? WORDS[k][0] : ''}</div><div>${esc(picWord(k))}</div></div>
       ${box(strokeSvg(k, 'ink', { nums: true }))}
       ${box(strokeSvg(k, 'trace'))}${box(strokeSvg(k, 'trace'))}${box(strokeSvg(k, 'trace'))}
       ${box(`<svg viewBox="0 0 109 109" xmlns="${SVGNS}">${guide}</svg>`)}${box(`<svg viewBox="0 0 109 109" xmlns="${SVGNS}">${guide}</svg>`)}
