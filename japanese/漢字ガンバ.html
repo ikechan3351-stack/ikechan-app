@@ -52,6 +52,15 @@
   .grp .ks { font-family: var(--kj); font-size: 1.7rem; letter-spacing: .08em; display: block; }
   .grp .ks.six { font-size: 1.45rem; letter-spacing: 0; }  /* 6字のまとまり（4年・5年・6年）を1行に */
   .grp:active { transform: translateY(2px); box-shadow: 0 1px 0 #2a6ea6; }
+  /* 教科書の単元ごと */
+  .bys .mode { font-size: .98rem; padding: 7px 14px; }
+  .bys .mode:disabled { opacity: .45; }
+  .by-note { margin: -6px 0 0; font-size: .85rem; color: #4d6488; text-align: center; }
+  .term { margin: 4px 0 -4px; align-self: flex-start; font-size: 1.05rem; color: #2a6ea6; border-left: 6px solid var(--sky-d); padding-left: 8px; }
+  .groups.units { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+  .grp .un { display: block; font-size: .95rem; font-weight: bold; line-height: 1.3; }
+  .units .grp .ks { font-size: 1.4rem; letter-spacing: 0; white-space: nowrap; }  /* 10字まで1行に */
+  .units .grp { background: linear-gradient(135deg, #7cc48a, #3e9a55); box-shadow: 0 3px 0 #2c7440; }
   .pick-toggle { border: 2px dashed var(--sky-d); background: #f3f9ff; border-radius: 14px; padding: 8px 16px; font-size: 1rem; font-weight: bold; }
   .picker { display: none; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
   .picker.open { display: flex; }
@@ -1321,6 +1330,28 @@ const GROUPS_BY = { 1: ['一二三四五','六七八九十','百千円王玉','�
   '批宣否認承','私宅窓机片','寸尺枚段層','恩敬尊忠孝','仁誠善聖優','奮激困乱忘','晩暮翌延至','誕幼若我己',
   '創奏劇映展覧','操揮拡縮収','探訪推捨担','退除閉降割','就勤専従納','鋼刻模棒巻','郷域沿諸臨','座頂垂縦並',
   '簡難誤疑異','警厳秘密処','貴純値著遺','班供派系策','暖紅盛蔵存','危敵射姿欲'] };
+// 教科書の単元ごとの新出漢字（光村図書）。[学期, 単元名, 字]
+// 字が11字以上の単元は、unitList() で ①② に分ける
+// ※試作：いまは1年だけ。どの字がどの単元かは、教科書でたしかめること
+const UNITS_BY = { mitsu: {
+  1: [['1学期', 'かんじの はなし', '一二三四五六七八九十'], ['1学期', 'たのしい な、ことばあそび', '日月火水木金土'],
+    ['2学期', 'うみのかくれんぼ', '山川田石大小上下左右'], ['2学期', 'かずと かんじ', '百千円王玉'],
+    ['2学期', 'くじらぐも', '空気天雨白青赤見入出'], ['2学期', 'じどうしゃくらべ', '車本名字文男女子人目耳口手足'],
+    ['2学期', 'おかゆのおなべ', '力立休音早草花竹林森'], ['3学期', 'たぬきの糸車', '糸犬虫貝町村校先生学'],
+    ['3学期', 'ずうっと、ずっと、大すきだよ', '年夕正中']],
+} };
+const BOOK_NAME = { mitsu: '光村' };
+// いまの学年・教科書の単元（なければ null）。11字以上は半分ずつ ①② に分ける
+function unitList() {
+  const src = (UNITS_BY[S.by] || {})[S.grade];
+  if (!src) return null;
+  return src.flatMap(([term, name, ks]) => {
+    const a = [...ks];
+    if (a.length <= 10) return [{ term, name, ks: a }];
+    const h = Math.ceil(a.length / 2);
+    return [{ term, name: name + ' ①', ks: a.slice(0, h) }, { term, name: name + ' ②', ks: a.slice(h) }];
+  });
+}
 // いま えらんでいる学年の字と まとまり（setGrade で切りかえる）
 let ORDER = ORDERS[1], GROUPS = GROUPS_BY[1];
 
@@ -1384,7 +1415,7 @@ const PRAISE = ['できたね！', 'すごい！', 'ばっちり！', 'よく �
 const KANA = 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわん';
 
 // ───────── 状態 ─────────
-const S = { grade: 1, mode: 'student', set: [], course: [], ci: 0, list: [], qi: 0, cardI: 0, done: [] };
+const S = { grade: 1, by: 'naka', mode: 'student', set: [], course: [], ci: 0, list: [], qi: 0, cardI: 0, done: [] };
 const view = document.getElementById('view');
 const $pos = document.getElementById('pos');
 
@@ -1487,7 +1518,18 @@ function home() {
     ${(() => { const ng = nigateList(); return ng.length ? `<div class="nigate"><b>🔁 にがてな字</b><span class="ks">${ng.slice(0, 10).join('')}</span>
       <button class="go" id="ngGo" style="padding:8px 22px;font-size:1rem">れんしゅうする ▶</button><button class="mini" id="ngClr">きろくを けす</button></div>` : ''; })()}
     <p class="lead">れんしゅうする 漢字を えらんでね</p>
-    <div class="groups">${GROUPS.map((g, i) => `<button class="grp" data-g="${i}"><span class="no">${i + 1}</span><span class="ks${g.length > 5 ? ' six' : ''}">${g}</span></button>`).join('')}</div>
+    <div class="modes bys">
+      <button class="mode" data-by="naka">🧩 なかまで</button>
+      <button class="mode" data-by="mitsu"${UNITS_BY.mitsu[S.grade] ? '' : ' disabled'}>📕 教科書（${BOOK_NAME.mitsu}）の じゅんで</button>
+    </div>
+    ${UNITS_BY.mitsu[S.grade] ? '' : `<p class="by-note">教科書の じゅんは、いまは 1年だけ です</p>`}
+    ${(() => {
+      const us = unitList();
+      if (!us) return `<div class="groups">${GROUPS.map((g, i) => `<button class="grp" data-g="${i}"><span class="no">${i + 1}</span><span class="ks${g.length > 5 ? ' six' : ''}">${g}</span></button>`).join('')}</div>`;
+      const terms = [...new Set(us.map(u => u.term))];
+      return terms.map(t => `<h3 class="term">${t}</h3><div class="groups units">${us.map((u, i) => u.term !== t ? '' :
+        `<button class="grp" data-u="${i}"><span class="no">${i + 1}</span><span class="un">${u.name}</span><span class="ks">${u.ks.join('')}</span></button>`).join('')}</div>`).join('');
+    })()}
     <button class="pick-toggle" id="pt">✋ 1字ずつ えらぶ</button>
     <div class="picker" id="picker">
       <div class="kgrid">${ORDER.map(k => `<button class="kbtn" data-k="${k}">${k}</button>`).join('')}</div>
@@ -1500,7 +1542,12 @@ function home() {
     b.classList.toggle('on', +b.dataset.gr === S.grade);
     b.onclick = () => { if (+b.dataset.gr !== S.grade) { setGrade(+b.dataset.gr); home(); } };
   });
-  view.querySelectorAll('.grp').forEach(b => b.onclick = () => { S.set = [...GROUPS[+b.dataset.g]]; menu(); });
+  view.querySelectorAll('.grp[data-g]').forEach(b => b.onclick = () => { S.set = [...GROUPS[+b.dataset.g]]; menu(); });
+  view.querySelectorAll('.grp[data-u]').forEach(b => b.onclick = () => { S.set = [...unitList()[+b.dataset.u].ks]; menu(); });
+  view.querySelectorAll('.mode[data-by]').forEach(b => {
+    b.classList.toggle('on', b.dataset.by === (unitList() ? S.by : 'naka'));
+    b.onclick = () => { setBy(b.dataset.by); home(); };
+  });
   const ngGo = view.querySelector('#ngGo');
   if (ngGo) ngGo.onclick = () => { S.set = nigateList().slice(0, 10); menu(); };
   const ngClr = view.querySelector('#ngClr');
@@ -1517,6 +1564,11 @@ function setGrade(g) {
   S.grade = [1, 2, 3, 4, 5, 6].includes(g) ? g : 1;
   ORDER = ORDERS[S.grade]; GROUPS = GROUPS_BY[S.grade];
   save('grade', S.grade);
+}
+// まとまりの分け方：'naka'＝なかまごと／'mitsu'＝光村の単元ごと（その学年にデータがなければ なかまごとで出す）
+function setBy(by) {
+  S.by = UNITS_BY[by] ? by : 'naka';
+  save('by', S.by);
 }
 function setMode(m) {
   S.mode = m === 'teacher' ? 'teacher' : 'student';
@@ -1950,14 +2002,17 @@ function stepDone() {
 
 // ───────── URLで直接ひらく ─────────
 // ?mode=teacher|student  ?grade=1|2|3|4|5|6  ?g=1〜16（1年）・1〜32（2年）・1〜40（3年・4年）・1〜38（5年・6年）（まとまり）  ?kanji=山川木  ?step=1〜7|all|card
+// ?by=mitsu&u=1〜（光村の単元。①②に分けたあとの番号。いまは1年だけ）
 (function init() {
   const p = new URLSearchParams(location.search);
   setMode(p.get('mode') || load('mode') || 'student');
   const kj = [...(p.get('kanji') || '')].filter(c => K[c]);
   // 学年：?kanji があれば その字の いちばん上の学年、つぎに ?grade、なければ まえに えらんだ学年
   setGrade(kj.length ? Math.max(...kj.map(c => K[c].g)) : parseInt(p.get('grade') || load('grade') || '1', 10));
-  const g = parseInt(p.get('g'), 10);
+  setBy(p.get('by') || load('by') || 'naka');
+  const g = parseInt(p.get('g'), 10), u = parseInt(p.get('u'), 10), us = unitList();
   if (kj.length) S.set = [...new Set(kj)];
+  else if (us && u >= 1 && u <= us.length) S.set = [...us[u - 1].ks];
   else if (g >= 1 && g <= GROUPS.length) S.set = [...GROUPS[g - 1]];
   if (!S.set.length) return home();
   const step = p.get('step');
