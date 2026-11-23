@@ -1,4 +1,4 @@
-// 漢字ガンバ の読み上げ音声（VOICEVOX:ずんだもん）。ことば → voice/○○.m4a
+// 漢字ガンバ の読み上げ音声（VOICEVOX:四国めたん）。ことば → voice/○○.m4a
 // tools/build-kanji-voice.py で 作る。手で なおさない
 const VOICE = {
 "ひとつ": "62d4359a",

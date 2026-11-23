@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""漢字ガンバ の 読み上げ音声を VOICEVOX（ずんだもん）で作る。
+"""漢字ガンバ の 読み上げ音声を VOICEVOX（四国めたん）で作る。
 
-つかいかた：VOICEVOX を起動してから  python3 tools/build-kanji-voice.py
+つかいかた：VOICEVOX を起動してから  python3 tools/build-kanji-voice.py [--redo]
+- --redo：ある ファイルも ぜんぶ 作り直す（声を かえたとき）。
 - 読むことばを tools/kanji-voice-texts.js でひろい、
   japanese/kanji-ganba/voice/<番号>.m4a と japanese/kanji-ganba/voice.js を作る。
 - もうあるファイルは作り直さない。作り直したいことばは、そのファイルを消してから実行する。
@@ -16,7 +17,7 @@ OUT = os.path.join(ROOT, 'japanese', 'kanji-ganba', 'voice')
 JS = os.path.join(ROOT, 'japanese', 'kanji-ganba', 'voice.js')
 LOG = os.path.join(ROOT, 'tools', 'kanji-voice-kana.tsv')
 API = 'http://127.0.0.1:50021'
-SPEAKER = 3  # ずんだもん ノーマル
+SPEAKER = 2  # 四国めたん ノーマル（2026-11-23 ずんだもんから かえた）
 SPEED = 0.95
 
 def post(path, params, body=None):
@@ -132,7 +133,7 @@ def main():
         fid = hashlib.md5(k.encode()).hexdigest()[:8]
         table[k] = fid
         path = os.path.join(OUT, fid + '.m4a')
-        if os.path.exists(path) and k in log and log[k][1] == key(say):
+        if os.path.exists(path) and k in log and log[k][1] == key(say) and '--redo' not in sys.argv:
             return
         q = q_fn()
         make(q, path)
@@ -158,7 +159,7 @@ def main():
     with open(LOG, 'w', encoding='utf-8') as f:
         for k in table: f.write('\t'.join(log[k]) + '\n')
     with open(JS, 'w', encoding='utf-8') as f:
-        f.write('// 漢字ガンバ の読み上げ音声（VOICEVOX:ずんだもん）。ことば → voice/○○.m4a\n')
+        f.write('// 漢字ガンバ の読み上げ音声（VOICEVOX:四国めたん）。ことば → voice/○○.m4a\n')
         f.write('// tools/build-kanji-voice.py で 作る。手で なおさない\n')
         f.write('const VOICE = ' + json.dumps(table, ensure_ascii=False, indent=0) + ';\n')
     print(f'{len(table)}こ（あたらしく {made}こ）')
