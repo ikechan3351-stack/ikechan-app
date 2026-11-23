@@ -45,6 +45,25 @@
   .bigmode .ic { font-size: 2.6rem; display: block; }
   .bigmode.st { background: linear-gradient(135deg, #ffb0c9, var(--pink)); box-shadow: 0 5px 0 var(--pink-d); }
   .bigmode.tc { background: linear-gradient(135deg, #a4e6d3, var(--mint)); box-shadow: 0 5px 0 var(--mint-d); }
+  .bigmode.er { background: linear-gradient(135deg, #ffd98a, #f5a623); box-shadow: 0 5px 0 #d4861a; }
+
+  /* なぞって えを けそう */
+  .ji.nopic { opacity: .3; pointer-events: none; }
+  .er-rounds { display: flex; gap: 10px; justify-content: center; }
+  .er-rounds span { position: relative; width: 64px; height: 64px; border-radius: 16px; background: #fff; box-shadow: 0 0 0 3px #f1e3c4; overflow: hidden; }
+  .er-rounds span img { width: 100%; height: 100%; display: block; opacity: .35; filter: grayscale(1); }
+  .er-rounds span.cur { box-shadow: 0 0 0 4px #f5a623; }
+  .er-rounds span.cur img, .er-rounds span.done img { opacity: 1; filter: none; }
+  .er-rounds span.done::after { content: "✔"; position: absolute; right: 2px; bottom: 0; color: #fff; background: var(--mint-d); border-radius: 50%; width: 22px; height: 22px; font-size: .85rem; line-height: 22px; text-align: center; }
+  .erbox { border-color: #f5c46b; }
+  .sticker { transition: transform .25s ease-in, opacity .25s ease-in; transform-box: fill-box; transform-origin: center; }
+  .sticker.later { opacity: .45; }
+  .sticker.gone { transform: scale(1.8) rotate(25deg); opacity: 0; }
+  .sticker circle { fill: #fff; stroke: #f5a623; stroke-width: .7; }
+  .er-win { position: absolute; inset: 6%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fffdf8ee; border-radius: 18px; pointer-events: none; animation: pop .5s cubic-bezier(.3, 1.6, .5, 1) both; }
+  .er-win img { width: 62%; aspect-ratio: 1; object-fit: contain; }
+  .er-win .w { font-family: var(--kj); font-size: clamp(2rem, 6vw, 3rem); letter-spacing: .1em; }
+  .er-win .w b { color: var(--pink-d); }
 
   /* 50音表 */
   .table { display: grid; grid-template-columns: repeat(10, 1fr); direction: rtl; gap: 6px; width: 100%; max-width: 860px; }
@@ -321,7 +340,9 @@ const store = Object.assign({ stamps: {}, pen: 0, sound: true }, load());
 
 // ───────── 状態 ─────────
 const Q = new URLSearchParams(location.search);
-const S = { mode: Q.get('mode') === 'teacher' ? 'teacher' : Q.get('mode') === 'student' ? 'student' : '', kana: 'hira', row: 0, k: 'あ', tab: 'see' };
+const S = { mode: Q.get('mode') === 'teacher' ? 'teacher' : Q.get('mode') === 'student' ? 'student' : '', kana: 'hira', row: 0, k: 'あ', tab: 'see', play: Q.get('play') === 'erase' ? 'erase' : '' };
+const erase = () => S.play === 'erase';
+const canErase = k => !!(PICS[k] && STROKES[k]);
 const teacher = () => S.mode === 'teacher';
 const view = document.getElementById('view');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -383,14 +404,15 @@ soundBtn.onclick = () => { store.sound = !store.sound; save(); drawSoundBtn(); }
 const modeChip = document.getElementById('modeChip');
 function drawModeChip() {
   modeChip.style.display = S.mode ? '' : 'none';
-  modeChip.textContent = teacher() ? '🧑‍🏫 せんせい' : '🧒 ひとりで';
+  modeChip.textContent = teacher() ? '🧑‍🏫 せんせい' : erase() ? '🧽 えを けそう' : '🧒 ひとりで';
   document.body.classList.toggle('teacher', teacher());
 }
-modeChip.onclick = () => { S.mode = ''; showStart(); };
+modeChip.onclick = () => { S.mode = ''; S.play = ''; showStart(); };
 
 function setURL(p) {
   const u = new URLSearchParams();
   if (S.mode) u.set('mode', S.mode);
+  if (erase()) u.set('play', 'erase');
   if (S.kana !== 'hira') u.set('kana', S.kana);
   Object.entries(p || {}).forEach(([k, v]) => u.set(k, v));
   try { history.replaceState(null, '', '?' + u.toString()); } catch (e) {}
@@ -402,13 +424,15 @@ function showStart() {
   view.innerHTML = `
     <div class="mascot">🐰</div>
     <h1>ひらがな なぞりっこ<small>なぞって かいて、ひらがな・カタカナを おぼえよう</small></h1>
-    <p class="lead">だれが つかう？</p>
+    <p class="lead">どれに する？</p>
     <div class="start-modes">
+      <button class="bigmode er" data-m="erase"><span class="ic">🧽</span>なぞって えを けそう<small>かきじゅんどおりに なぞると<br>えが ポンポン きえるよ</small></button>
       <button class="bigmode st" data-m="student"><span class="ic">🧒</span>ひとりで れんしゅう<small>こえと うさぎさんが<br>おしえてくれるよ</small></button>
       <button class="bigmode tc" data-m="teacher"><span class="ic">🧑‍🏫</span>せんせいと いっしょに<small>電子黒板用。字が大きく、<br>書きじゅんは タップで1画ずつ</small></button>
     </div>`;
   view.querySelectorAll('.bigmode').forEach(b => b.onclick = () => {
-    S.mode = b.dataset.m;
+    S.play = b.dataset.m === 'erase' ? 'erase' : '';
+    S.mode = erase() ? 'student' : b.dataset.m;
     if (store.sound && teacher()) { store.sound = false; save(); drawSoundBtn(); }
     showTable();
   });
@@ -418,17 +442,31 @@ function showStart() {
 function showTable() {
   cleanup(); drawModeChip(); setURL();
   const set = KANA[S.kana];
-  const n = ALL.filter(k => store.stamps[k]).length;
+  if (erase()) store.erase = store.erase || {};
+  const done = k => erase() ? store.erase[k] : store.stamps[k];
+  const n = ALL.filter(k => done(k)).length;
   let ri = 0;
   const secHtml = set.secs.map(([title, rows]) => {
     const cols = rows.map(() => { const r = set.rows[ri], i = ri++; return `<div class="col">
       <button class="colhead" data-row="${i}"><span class="full">${r.name}</span><span class="short">${r.ks.find(Boolean)}</span></button>
-      ${r.ks.map(k => k ? `<button class="ji${PICS[k] ? ' haspic' : ''}${store.stamps[k] ? ' done' : ''}" data-row="${i}" data-k="${k}" aria-label="${k}"><span class="k">${k}</span>${PICS[k] ? `<img src="${picSrc(k, picNo[k] || 0)}" alt="" loading="lazy">` : ''}${store.stamps[k] ? '<span class="stamp">🌸</span>' : ''}</button>`
+      ${r.ks.map(k => k ? `<button class="ji${PICS[k] ? ' haspic' : ''}${erase() && !canErase(k) ? ' nopic' : ''}${done(k) ? ' done' : ''}" data-row="${i}" data-k="${k}" aria-label="${k}"><span class="k">${k}</span>${PICS[k] ? `<img src="${picSrc(k, picNo[k] || 0)}" alt="" loading="lazy">` : ''}${done(k) ? `<span class="stamp">${erase() ? '✨' : '🌸'}</span>` : ''}</button>`
         : '<span class="ji empty"></span>').join('')}
     </div>`; }).join('');
     const hasPic = rows.some(([, ks]) => [...ks].some(k => PICS[k]));
     return `<h3 class="sec">${title}</h3><div class="table${hasPic ? ' pics' : ''}" style="grid-template-columns:repeat(${rows.length},minmax(0,1fr));max-width:${rows.length * 88}px">${cols}</div>`;
   }).join('');
+  if (erase()) {
+    view.innerHTML = `
+    <div class="kanatabs">${Object.entries(KANA).map(([id, k]) => `<button class="ktab${id === S.kana ? ' on' : ''}" data-kana="${id}">${k.label}</button>`).join('')}</div>
+    <h1>🧽 なぞって えを けそう<small>かきじゅんどおりに なぞると、えが きえるよ</small></h1>
+    <p class="lead">けしたい 字を えらんでね</p>
+    ${secHtml}
+    <p class="count">✨ えを けした${set.label}：${n} ／ ${ALL.filter(canErase).length}</p>`;
+    view.querySelectorAll('.ktab').forEach(b => b.onclick = () => { setKana(b.dataset.kana); showTable(); });
+    view.querySelectorAll('.colhead').forEach(b => b.onclick = () => { const r = +b.dataset.row, k = ROWS[r].ks.find(canErase); if (k) showErase(r, k); });
+    view.querySelectorAll('.ji[data-k]').forEach(b => b.onclick = () => canErase(b.dataset.k) && showErase(+b.dataset.row, b.dataset.k));
+    return;
+  }
   view.innerHTML = `
     <div class="kanatabs">${Object.entries(KANA).map(([id, k]) => `<button class="ktab${id === S.kana ? ' on' : ''}" data-kana="${id}">${k.label}</button>`).join('')}</div>
     <button class="btn main gamebtn" id="gameBtn">🎈 ことば ゲームで あそぶ</button>
@@ -750,6 +788,198 @@ function confetti() {
   }
 }
 
+// ───────── なぞって えを けそう ─────────
+// 画の 線に そって その字の 絵の シールを ならべ、書きじゅんどおりに なぞった ところだけ けす。
+// 1字に 絵が 3まい（PICS）なので、同じ字を 3かい かく。なぞっている あいだは その字の 声（あ・あ・あ…）が なる
+const voiceId = k => typeof VOICE !== 'undefined' && (VOICE[k] || VOICE[k.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))]);
+const traceVoice = { k: null, buf: null, off: 0, el: null, src: null, last: 0 };
+function loadTraceVoice(k) {
+  if (traceVoice.k === k) return;
+  Object.assign(traceVoice, { k, buf: null, off: 0, el: null });
+  const id = voiceId(k); if (!id) return;
+  const url = 'hiragana/voice/' + id + '.m4a';
+  traceVoice.el = new Audio(url);                  // うまく いかない ときの かわり
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    fetch(url).then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).then(buf => {
+      if (traceVoice.k !== k) return;
+      // はじめの しずかな ところを とばす（すぐ 声が でるように）
+      const d = buf.getChannelData(0); let i = 0; while (i < d.length && Math.abs(d[i]) < 0.02) i++;
+      traceVoice.buf = buf; traceVoice.off = Math.max(0, i / buf.sampleRate - 0.01);
+    }).catch(() => {});
+  } catch (e) {}
+}
+function traceSay(rate) {
+  if (!store.sound) return;
+  const now = performance.now();
+  if (now - traceVoice.last < 170) return;
+  traceVoice.last = now;
+  try {
+    if (traceVoice.buf && actx) {
+      if (actx.state === 'suspended') actx.resume();
+      if (traceVoice.src) try { traceVoice.src.stop(); } catch (e) {}
+      const s = actx.createBufferSource();
+      s.buffer = traceVoice.buf; s.playbackRate.value = rate;
+      s.connect(actx.destination); s.start(0, traceVoice.off); traceVoice.src = s;
+    } else if (traceVoice.el) {
+      const a = traceVoice.el; a.playbackRate = rate; a.currentTime = 0; a.play().catch(() => {});
+    }
+  } catch (e) {}
+}
+
+function showErase(row, k, round = 0) {
+  cleanup(); S.row = row; S.k = k; drawModeChip(); setURL({ ji: k });
+  store.erase = store.erase || {};
+  loadTraceVoice(k);
+  const words = PICS[k], word = words[round], ink = PENS[store.pen][0];
+  const list = ROWS[row].ks.filter(canErase);
+  view.innerHTML = `
+    <div class="row-dots">${list.map(c => `<button data-k="${c}" class="${c === k ? 'cur' : ''}${store.erase[c] ? ' done' : ''}">${c}</button>`).join('')}</div>
+    <div class="er-rounds">${words.map((w, i) => `<span class="${i < round ? 'done' : i === round ? 'cur' : ''}"><img src="${picSrc(k, i)}" alt="${esc(w)}"></span>`).join('')}</div>
+    <p class="wtitle" id="wtitle">● から なぞって「${esc(word)}」を けそう！</p>
+    <div class="wbox erbox" id="wbox"></div>
+    <p class="msg" id="msg"></p>
+    <div class="acts" id="acts"><button class="btn" id="eRe">🔄 さいしょから</button><button class="btn" id="toTable">🔤 ひょうに もどる</button></div>`;
+  const box = view.querySelector('#wbox'), msg = view.querySelector('#msg'), title = view.querySelector('#wtitle'), acts = view.querySelector('#acts');
+  view.querySelectorAll('.row-dots button').forEach(b => b.onclick = () => showErase(row, b.dataset.k));
+  view.querySelector('#eRe').onclick = () => showErase(row, k, round);
+  view.querySelector('#toTable').onclick = showTable;
+  const say = (t, cls) => { msg.className = 'msg ' + (cls || ''); msg.textContent = t; };
+
+  // 字の 線（うすい）＋ なぞった 色の 線 ＋ 絵の シール
+  box.innerHTML = strokeSvg(k, 'base');
+  const svg = box.querySelector('svg');
+  const paths = [...svg.querySelectorAll('path.stk')];
+  const defs = document.createElementNS(SVGNS, 'defs');
+  defs.innerHTML = '<clipPath id="erClip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath>';
+  svg.appendChild(defs);
+  const lens = paths.map(p => p.getTotalLength());
+  const inks = paths.map((p, i) => { const q = p.cloneNode(); q.setAttribute('class', 'stk ink'); q.style.stroke = ink; q.style.strokeDasharray = `0 ${lens[i] + 1}`; q.style.display = 'none'; svg.appendChild(q); return q; });
+  const R = 7, GAP = 7, src = picSrc(k, round);
+  const stk = paths.map((p, si) => { const L = lens[si], n = Math.max(1, Math.round(L / GAP)); return Array.from({ length: n + 1 }, (_, i) => { const q = p.getPointAtLength(L * i / n); return { x: q.x, y: q.y, at: L * i / n }; }); });
+  // はみ出しを しらべる ための こまかい 点
+  const dense = paths.map((p, si) => { const L = lens[si], n = Math.max(2, Math.ceil(L)); return Array.from({ length: n + 1 }, (_, i) => { const q = p.getPointAtLength(L * i / n); return { x: q.x, y: q.y, at: L * i / n }; }); });
+  const layer = document.createElementNS(SVGNS, 'g'); svg.appendChild(layer);
+  // 1かくめ・なぞる じゅんの シールが うえに くるように、うしろから おく
+  for (let si = stk.length - 1; si >= 0; si--) for (let i = stk[si].length - 1; i >= 0; i--) {
+    const s = stk[si][i], g = document.createElementNS(SVGNS, 'g');
+    g.setAttribute('class', 'sticker');
+    g.innerHTML = `<circle cx="${s.x}" cy="${s.y}" r="${R}"/><image href="${src}" x="${s.x - R}" y="${s.y - R}" width="${2 * R}" height="${2 * R}" clip-path="url(#erClip)"/>`;
+    layer.appendChild(g); s.el = g;
+  }
+  const dot = document.createElementNS(SVGNS, 'circle'); dot.setAttribute('r', '3.2'); dot.setAttribute('class', 'startdot pulse'); dot.setAttribute('stroke', '#fff'); dot.setAttribute('stroke-width', '1.2'); svg.appendChild(dot);
+
+  let cur = 0, idx = 0, busy = false, alive = true;
+  const timers = [], later = (f, t) => timers.push(setTimeout(() => alive && f(), t));
+  const dist = (p, s) => Math.hypot(p[0] - s.x, p[1] - s.y);
+  const mark = () => stk.forEach((a, si) => a.forEach(s => s.el.classList.toggle('later', si > cur)));
+  const place = () => { if (cur < stk.length) { const s = stk[cur][idx]; dot.setAttribute('cx', s.x); dot.setAttribute('cy', s.y); dot.style.display = ''; } else dot.style.display = 'none'; };
+  const showInk = () => { const q = inks[cur]; q.style.display = ''; q.style.strokeDasharray = `${idx ? stk[cur][idx - 1].at : 0} ${lens[cur] + 1}`; };
+  // いま なぞっている あたりの 線から どれだけ はなれているか
+  const offBy = p => {
+    const s = stk[cur], lo = s[Math.max(0, idx - 2)].at - 2, hi = s[Math.min(s.length - 1, idx + 1)].at + 2;
+    return dense[cur].reduce((m, q) => q.at >= lo && q.at <= hi ? Math.min(m, dist(p, q)) : m, 1e9);
+  };
+  mark(); place();
+
+  // 子どもの 指の あと（はなすと きえる）
+  const cv = document.createElement('canvas'); box.appendChild(cv);
+  const ctx = cv.getContext('2d');
+  const fit = () => {
+    const w = cv.clientWidth, h = cv.clientHeight, d = window.devicePixelRatio || 1;
+    if (!w || !h || (cv.width === Math.round(w * d) && cv.height === Math.round(h * d))) return;
+    cv.width = Math.round(w * d); cv.height = Math.round(h * d);
+    ctx.setTransform(d, 0, 0, d, 0, 0); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = ink; ctx.globalAlpha = .55; ctx.lineWidth = Math.max(6, w / 40);
+  };
+  const wipe = () => ctx.clearRect(0, 0, cv.width, cv.height);
+  fit();
+  const ro = window.ResizeObserver ? new ResizeObserver(fit) : null; if (ro) ro.observe(cv);
+  cleanup = () => { alive = false; timers.forEach(clearTimeout); if (ro) ro.disconnect(); if (traceVoice.src) try { traceVoice.src.stop(); } catch (e) {} };
+
+  const at = e => { const b = cv.getBoundingClientRect(); const x = e.clientX - b.left, y = e.clientY - b.top; return [x / b.width * 109, y / b.height * 109, x, y]; };
+  let pid = null, last = null, live = false, off = false, got = false, start = null;
+  function eat(p) {
+    while (cur < stk.length && idx < stk[cur].length && dist(p, stk[cur][idx]) < 9) {
+      stk[cur][idx].el.classList.add('gone'); idx++; got = true;
+      traceSay(1 + 0.3 * idx / stk[cur].length);
+    }
+    if (idx >= stk[cur].length) strokeDone(); else { showInk(); place(); }
+  }
+  function strokeDone() {
+    inks[cur].style.display = ''; inks[cur].style.strokeDasharray = 'none';
+    sfx.stroke(); cur++; idx = 0; live = false; mark(); place();
+    if (cur >= stk.length) roundDone();
+    else say(`${cur}かくめ できた！ つぎは ● から`, 'ok');
+  }
+  cv.onpointerdown = e => {
+    e.preventDefault();
+    if (pid !== null || busy || cur >= stk.length) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    fit(); wipe(); pid = e.pointerId; try { cv.setPointerCapture(pid); } catch (x) {}
+    const p = at(e); last = start = p; got = false; off = false;
+    // ● の 近く（けした ところの おわりの ほうから でも よい）から はじめたら けせる
+    live = dist(p, stk[cur][idx]) < 11 || (idx > 0 && offBy(p) < 9);
+    ctx.beginPath(); ctx.moveTo(p[2], p[3]); ctx.lineTo(p[2], p[3]); ctx.stroke();
+    if (live) eat(p);
+  };
+  cv.onpointermove = e => {
+    if (e.pointerId !== pid) return;
+    e.preventDefault();
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const ev of (evs.length ? evs : [e])) {
+      const p = at(ev);
+      ctx.beginPath(); ctx.moveTo(last[2], last[3]); ctx.lineTo(p[2], p[3]); ctx.stroke(); last = p;
+      if (!live || off || cur >= stk.length) continue;
+      if (offBy(p) > 13) { off = true; sfx.miss(); say('せんから はみでたよ。● から つづけてね', 'try'); continue; }
+      eat(p);
+    }
+  };
+  const end = e => {
+    if (pid === null || (e && e.pointerId !== pid)) return;
+    pid = null; later(wipe, 250);
+    if (busy || cur >= stk.length || off || got) { if (got && !off && cur < stk.length && idx > 0) say('いいね！ ● から つづけよう', 'ok'); return; }
+    // なにも けせなかった ときの ひとこと
+    const s = stk[cur], other = stk.findIndex((a, j) => j > cur && dist(start, a[0]) < 11);
+    sfx.miss();
+    if (idx === 0 && dist(start, s[s.length - 1]) < 11 && dist(last, s[0]) < 14) say('むきが はんたい だよ。● から なぞってね', 'try');
+    else if (other >= 0) say(`それは ${other + 1}かくめ だよ。いまは ${cur + 1}かくめ！`, 'try');
+    else say('みどりの ● から なぞってね', 'try');
+  };
+  cv.onpointerup = end; cv.onpointercancel = end; cv.onlostpointercapture = end;
+
+  function roundDone() {
+    busy = true; sfx.clear();
+    title.textContent = pick(PRAISE);
+    const win = document.createElement('div'); win.className = 'er-win';
+    win.innerHTML = `<img src="${src}" alt=""><div class="w">${esc(word).replace(k, `<b>${k}</b>`)}</div>`;
+    later(() => { box.appendChild(win); speak(word); }, 450);
+    const last3 = round >= words.length - 1;
+    if (!last3) {
+      say(`「${word}」が きえたね！ もう いちど かこう`, 'ok');
+      acts.innerHTML = `<button class="btn" id="toTable">🔤 ひょうに もどる</button><button class="btn main" id="eNext">つぎの え「${esc(words[round + 1])}」へ ▶</button>`;
+      acts.querySelector('#eNext').onclick = () => showErase(row, k, round + 1);
+    } else {
+      const first = !store.erase[k];
+      store.erase[k] = (store.erase[k] || 0) + 1; save();
+      view.querySelector('.er-rounds span.cur').className = 'done';
+      const dotBtn = view.querySelector(`.row-dots button[data-k="${k}"]`); if (dotBtn) dotBtn.classList.add('done');
+      say(first ? `✨「${k}」の え、3まい ぜんぶ けせたね！` : `✨ ${store.erase[k]}かいめの クリア！`, 'ok');
+      later(confetti, 450);
+      const i = list.indexOf(k), nextK = list[i + 1];
+      const nextRow = ROWS.findIndex((r, j) => j > row && r.ks.some(canErase));
+      acts.innerHTML = `<button class="btn" id="eAgain">🔄 もういちど</button>` +
+        `<button class="btn mint" id="eWrite">✍️ みないで かいて みよう</button>` +
+        (nextK ? `<button class="btn main" id="eGo">つぎの 字「${nextK}」へ ▶</button>`
+          : nextRow >= 0 ? `<button class="btn main" id="eGo">${ROWS[nextRow].name}へ ▶</button>`
+          : `<button class="btn main" id="eGo">🔤 ひょうに もどる</button>`);
+      acts.querySelector('#eAgain').onclick = () => showErase(row, k);
+      acts.querySelector('#eWrite').onclick = () => { S.play = ''; openChar(row, k, 'write'); };
+      acts.querySelector('#eGo').onclick = () => nextK ? showErase(row, nextK) : nextRow >= 0 ? showErase(nextRow, ROWS[nextRow].ks.find(canErase)) : showTable();
+    }
+    view.querySelector('#toTable') && (view.querySelector('#toTable').onclick = showTable);
+  }
+}
+
 // ───────── ゲーム（ふうせん あなうめ・もじ ならべ） ─────────
 // 絵（PICS）の ある ことばで あそぶ。1かい 10もん。1かいで せいかいすると ⭐
 const G_LEVELS = [['easy', '⭐ かんたん'], ['mid', '⭐⭐ ふつう'], ['hard', '⭐⭐⭐ むずかしい']];
@@ -966,7 +1196,8 @@ drawSoundBtn();
   if (KANA[Q.get('kana')]) setKana(Q.get('kana'));
   if (ji && kanaOf(ji)) setKana(kanaOf(ji));
   if (!S.mode) { showStart(); return; }
-  if (Q.get('game')) showGameMenu();
+  if (erase()) { S.mode = 'student'; if (ji && canErase(ji) && rowOf(ji) >= 0) showErase(rowOf(ji), ji); else showTable(); }
+  else if (Q.get('game')) showGameMenu();
   else if (ji && STROKES[ji] && rowOf(ji) >= 0) openChar(rowOf(ji), ji, ['see', 'trace', 'write'].includes(scene) ? scene : 'see');
   else if (Q.get('gyo')) { const r = ROWS.findIndex(x => x.name.startsWith(Q.get('gyo'))); if (r >= 0) openChar(r, ROWS[r].ks[0]); else showTable(); }
   else showTable();
