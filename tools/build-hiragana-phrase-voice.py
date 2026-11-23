@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """なぞって えを けそう（ひらがな なぞりっこ）で、なぞっている あいだ 3びょうごとに 鳴らす
-「あひるの、あ」の声を VOICEVOX（ずんだもん）で作る。
+「あひるの、あ」の声を VOICEVOX（四国めたん）で作る。
 
-つかいかた：VOICEVOX を起動してから  python3 tools/build-hiragana-phrase-voice.py
+つかいかた：VOICEVOX を起動してから  python3 tools/build-hiragana-phrase-voice.py [--redo]
+- --redo：ある ファイルも ぜんぶ 作り直す（声を かえたとき）。
 - pics.js の 字と 絵の ことば（1字に3つ）から「ことばの、字」を作る。
   は→ワ・へ→エ と 読まれないよう、ぜんぶ カタカナにして 渡す（カタカナは 字のとおりに 読む）。
 - 小さい字は「らっぱの、ちいさい つ」、ー は「カレーの、のばす ぼう」、を は「くつを はく、を」。
@@ -17,7 +18,7 @@ OUT = os.path.join(ROOT, 'japanese', 'hiragana', 'voice-phrase')
 JS = os.path.join(ROOT, 'japanese', 'hiragana', 'voice-phrase.js')
 TSV = os.path.join(ROOT, 'tools', 'hiragana-phrase-voice.tsv')
 API = 'http://127.0.0.1:50021'
-SPEAKER = 3  # ずんだもん ノーマル
+SPEAKER = 2  # 四国めたん ノーマル（読み上げの ずんだもんと 声を わける）
 SPEED = 0.9
 SMALL = 'っゃゅょッャュョ'
 
@@ -64,10 +65,10 @@ def main():
             fid = hashlib.md5(t.encode()).hexdigest()[:8]
             table[k + '|' + w] = fid
             path = os.path.join(OUT, fid + '.m4a')
-            if not os.path.exists(path):
+            if REDO or not os.path.exists(path):
                 rows.append(f'{k}\t{w}\t{t}\t{make(t, path)}'); made += 1
     with open(JS, 'w', encoding='utf-8') as f:
-        f.write('// なぞって えを けそう：なぞっている あいだの「あひるの、あ」（VOICEVOX:ずんだもん）。「字|ことば」→ voice-phrase/○○.m4a\n')
+        f.write('// なぞって えを けそう：なぞっている あいだの「あひるの、あ」（VOICEVOX:四国めたん）。「字|ことば」→ voice-phrase/○○.m4a\n')
         f.write('// tools/build-hiragana-phrase-voice.py で 作る。手で なおさない\n')
         f.write('const VOICE_PHRASE = ' + json.dumps(table, ensure_ascii=False, indent=0) + ';\n')
     if rows:
@@ -75,4 +76,5 @@ def main():
             f.write('\n'.join(rows) + '\n')
     print(f'{len(table)}こ（あたらしく {made}こ）')
 
+REDO = '--redo' in sys.argv
 main()

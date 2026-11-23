@@ -1,4 +1,4 @@
-// なぞって えを けそう：なぞっている あいだの「あひるの、あ」（VOICEVOX:ずんだもん）。「字|ことば」→ voice-phrase/○○.m4a
+// なぞって えを けそう：なぞっている あいだの「あひるの、あ」（VOICEVOX:四国めたん）。「字|ことば」→ voice-phrase/○○.m4a
 // tools/build-hiragana-phrase-voice.py で 作る。手で なおさない
 const VOICE_PHRASE = {
 "あ|あり": "6fc65449",
