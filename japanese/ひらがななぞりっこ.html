@@ -256,6 +256,7 @@
 <script src="hiragana/strokes-kata.js"></script>
 <script src="hiragana/pics.js"></script>
 <script src="hiragana/voice.js"></script>
+<script src="hiragana/voice-long.js"></script>
 <script>
 'use strict';
 const STROKES = window.KANA_STROKES || {};
@@ -793,14 +794,17 @@ function confetti() {
 // 1字に 絵が 3まい（PICS）なので、同じ字を 3かい かく。なぞっている あいだは その字の 声（あ・あ・あ…）が なる
 const voiceId = k => typeof VOICE !== 'undefined' && (VOICE[k] || VOICE[k.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))]);
 // 読み上げと 同じ <audio> で ならす（iPad の 消音スイッチが オンでも なる。Web Audio だと きえる）。
-// 4つを じゅんばんに つかう
+// 2つを じゅんばんに つかう
 const traceVoice = { k: null, pool: [], n: 0, cur: null, unlocked: false };
-const VOICE_LEAD = 0.13;                           // 音声の はじめの しずかな ところ（VOICEVOX は 約0.1〜0.15びょう）
+// なぞる ときは のばした声（voice-long：あーー）。ない字（っ など）は ふつうの 声
+const longId = k => typeof VOICE_LONG !== 'undefined' && VOICE_LONG[k.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))];
 function loadTraceVoice(k) {
   if (traceVoice.k !== k) {
     traceVoice.k = k; traceVoice.unlocked = false;
-    const id = voiceId(k);
-    traceVoice.pool = id ? Array.from({ length: 4 }, () => { const a = new Audio('hiragana/voice/' + id + '.m4a'); a.preload = 'auto'; return a; }) : [];
+    const lid = longId(k), id = voiceId(k);
+    traceVoice.lead = lid ? 0 : 0.13;              // ふつうの 声は はじめの しずかな ところを とばす
+    const url = lid ? 'hiragana/voice-long/' + lid + '.m4a' : id ? 'hiragana/voice/' + id + '.m4a' : '';
+    traceVoice.pool = url ? Array.from({ length: 2 }, () => { const a = new Audio(url); a.preload = 'auto'; return a; }) : [];
   }
   unlockTraceVoice();
 }
@@ -810,15 +814,14 @@ function unlockTraceVoice() {
   traceVoice.unlocked = true;
   traceVoice.pool.forEach(a => { a.muted = true; const p = a.play(); if (p) p.then(() => { a.pause(); a.muted = false; }).catch(() => { a.muted = false; traceVoice.unlocked = false; }); else { a.pause(); a.muted = false; } });
 }
-// シール 3つごとに 1ど、すこし ゆっくり（「あー」）、さいごまで ならす。まえの 声が なっている あいだは かさねない
-const VOICE_EVERY = 3, VOICE_RATE = 0.8;
+// のばした声を さいごまで ならす。まえの 声が なっている あいだは かさねない（なぞりつづけると「あーー あーー」）
 function traceSay() {
   if (!store.sound || !traceVoice.pool.length) return;
   const c = traceVoice.cur;
   if (c && !c.paused && !c.ended) return;
   try {
     const a = traceVoice.pool[traceVoice.n++ % traceVoice.pool.length];
-    a.muted = false; a.preservesPitch = a.webkitPreservesPitch = true; a.playbackRate = VOICE_RATE; a.currentTime = VOICE_LEAD;
+    a.muted = false; a.currentTime = traceVoice.lead;
     const p = a.play(); if (p) p.catch(() => {});
     traceVoice.cur = a;
   } catch (e) {}
@@ -898,7 +901,7 @@ function showErase(row, k, round = 0) {
   function eat(p) {
     while (cur < stk.length && idx < stk[cur].length && dist(p, stk[cur][idx]) < 9) {
       stk[cur][idx].el.classList.add('gone'); idx++; got = true;
-      if ((idx - 1) % VOICE_EVERY === 0) traceSay();
+      traceSay();
     }
     if (idx >= stk[cur].length) strokeDone(); else { showInk(); place(); }
   }
