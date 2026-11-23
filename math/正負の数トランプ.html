@@ -155,6 +155,32 @@
   .rank { margin: 0; padding-left: 1.4em; font-size: 1.2rem; line-height: 1.9; font-weight: bold; }
   .result-big { font-size: clamp(1.6rem, 5vw, 2.4rem); font-weight: 900; text-align: center; color: var(--accent-dark); margin: 4px 0 10px; }
 
+  /* ===== Lv3：和を答える ===== */
+  .ansbox { margin-top: 10px; border: 3px solid #ffb300; background: #fffde7; border-radius: 14px; padding: 10px 12px; }
+  .ansbox .q1 { font-weight: 900; margin-bottom: 6px; }
+  .ansrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ansdisp {
+    min-width: 4.2em; min-height: 56px; padding: 2px 12px; border-radius: 12px; border: 3px solid #90a4ae; background: #fff;
+    font-size: 2rem; font-weight: 900; text-align: center; line-height: 50px;
+  }
+  .keys { display: grid; grid-template-columns: repeat(6, 52px); gap: 6px; }
+  .keys button { min-height: 50px; border-radius: 10px; border: 2px solid #b0bec5; background: #fff; font-size: 1.3rem; font-weight: 900; cursor: pointer; touch-action: manipulation; }
+  .keys button.sg { background: #ede7f6; }
+  @media (max-width: 520px) { .keys { grid-template-columns: repeat(6, 1fr); } }
+
+  /* ===== チーム交代のおおい ===== */
+  .cover {
+    width: 100%; min-height: calc(var(--cw) * 1.42); border-radius: 14px; border: 3px dashed #00897b; background: #e0f2f1;
+    font-size: 1.3rem; font-weight: 900; color: var(--accent-dark); cursor: pointer; touch-action: manipulation;
+  }
+
+  /* ===== せまい画面では、メッセージ → 式 → 手札 → 数直線 の順にならべる ===== */
+  @container (max-width: 859px) {
+    .col { display: contents; }
+    .o-opps { order: 1; } .o-msg { order: 2; } .o-expr { order: 3; } .o-hand { order: 4; }
+    .o-nl { order: 5; } .o-trip { order: 6; } .o-log { order: 7; } .o-ctrl { order: 8; }
+  }
+
   @media (max-width: 520px) {
     body { padding: 8px 10px 24px; }
     :root { --cw: 54px; --bw: 28px; }
@@ -185,11 +211,11 @@
       <h2 style="margin-top:12px">🎴 ゼロ対ババ抜きのルール</h2>
       <ol class="rules">
         <li>カードを全員に配る</li>
-        <li>たすと <b>0</b> になる2枚（<b>ゼロ対</b>）を すてる。例：(+7)+(−7)=0</li>
+        <li>たすと <b>0</b> になる組（<b>ゼロ対</b>）を すてる。例：(+7)+(−7)=0</li>
         <li>つぎの人の手札から1枚引く。ゼロ対ができたら すてる</li>
         <li>手札がなくなったら あがり。ジョーカーが残った人の負け</li>
       </ol>
-      <p class="note">※ふつうのババ抜きとちがい、♠7 と ♣7（どちらも ＋7）は組にならない。</p>
+      <p class="note" id="lvNote"></p>
     </div>
     <div class="card">
       <h2>⚙️ 設定</h2>
@@ -201,13 +227,24 @@
       <div class="opt"><div class="lbl">レベル</div>
         <div class="seg" id="optLv">
           <button data-v="1">Lv1<small>同じ数の黒と赤</small></button>
-          <button data-v="2" disabled>Lv2<small>じゅんび中</small></button>
-          <button data-v="3" disabled>Lv3<small>じゅんび中</small></button>
+          <button data-v="2">Lv2<small>3まい以上の組もOK</small></button>
+          <button data-v="3">Lv3<small>和を答えてから すてる</small></button>
         </div></div>
-      <div class="opt"><div class="lbl">あいての人数</div>
+      <div class="opt"><div class="lbl">あそびかた</div>
+        <div class="seg" id="optPlay">
+          <button data-v="solo">ひとりで<small>コンピューターと</small></button>
+          <button data-v="team">チーム対抗<small>1台の画面で交代</small></button>
+        </div></div>
+      <div class="opt" id="cpuOpt"><div class="lbl">あいての人数</div>
         <div class="seg" id="optCpu">
           <button data-v="2">2人<small>🐱🐶</small></button>
           <button data-v="3">3人<small>🐱🐶🐰</small></button>
+        </div></div>
+      <div class="opt" id="teamOpt"><div class="lbl">チームの数</div>
+        <div class="seg" id="optTeams">
+          <button data-v="2">2チーム</button>
+          <button data-v="3">3チーム</button>
+          <button data-v="4">4チーム</button>
         </div></div>
       <div class="opt"><div class="lbl">絵札（J・Q・K）</div>
         <div class="seg" id="optFace">
@@ -215,7 +252,7 @@
           <button data-v="1">あり<small>11・12・13 も</small></button>
         </div></div>
       <div class="acts" style="margin-top:14px"><button class="act main big" id="startBtn">▶ はじめる</button></div>
-      <p class="note">先生モード（アドレスに <code>?teacher=1</code>）では、カードと式が大きくなり、あいての手札を見せることもできます。</p>
+      <p class="note">チーム対抗は、電子黒板1台で クラスを2〜4チームに分けて遊ぶ形です。番のチームが前に出て操作します。<br>先生モード（アドレスに <code>?teacher=1</code>）では、カードと式が大きくなり、あいての手札を見せることもできます。</p>
     </div>
   </div>
 
@@ -223,11 +260,11 @@
   <div id="playView" class="play" hidden>
     <div class="grid">
       <div class="col">
-        <div class="card"><div class="opps" id="opps"></div></div>
-        <div class="msg" id="msg" aria-live="polite"></div>
-        <div class="card">
+        <div class="card o-opps"><div class="opps" id="opps"></div></div>
+        <div class="msg o-msg" id="msg" aria-live="polite"></div>
+        <div class="card o-hand">
           <div class="hand-h">
-            <h2>🙂 あなたの手札 <span id="myCnt" class="note"></span></h2>
+            <h2 id="handTitle">🙂 あなたの手札</h2>
             <div class="acts">
               <button class="act" id="sortBtn">↔ 小さい順にならべる</button>
             </div>
@@ -240,24 +277,41 @@
             <button class="act" id="hintBtn">💡 ヒント</button>
             <button class="act go" id="nextBtn">▶ つぎへ</button>
           </div>
+          <!-- Lv3：和を答える -->
+          <div class="ansbox" id="ansBox" hidden>
+            <div class="q1" id="ansQ">えらんだカードの 和は いくつ？</div>
+            <div class="ansrow">
+              <div class="ansdisp" id="ansDisp" aria-live="polite">？</div>
+              <div class="keys" id="keys">
+                <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+                <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+                <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+                <button data-k="0">0</button><button data-k="sg" class="sg" aria-label="符号を変える">＋/−</button><button data-k="bs" aria-label="1文字けす">⌫</button>
+              </div>
+              <div class="acts">
+                <button class="act main" id="ansOk">✔ こたえる</button>
+                <button class="act" id="ansCancel">やめる</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="col">
-        <div class="card">
+        <div class="card o-expr">
           <h2>🧮 式</h2>
           <div class="expr" id="expr"></div>
         </div>
-        <div class="card nl">
+        <div class="card nl o-nl">
           <h2>📏 数直線</h2>
           <div id="nl"></div>
           <div class="nl-cap">黒（＋）は右へ、赤（−）は左へ進む。0 にもどれば ゼロ対</div>
         </div>
-        <div class="card">
+        <div class="trip o-trip" id="tripBox" hidden><h3 id="tripTitle">🔎 あなたのつまずき</h3><ul id="tripList"></ul></div>
+        <div class="card o-log">
           <h2>📝 できごと</h2>
           <ol class="log" id="log" reversed></ol>
         </div>
-        <div class="trip" id="tripBox" hidden><h3>🔎 あなたのつまずき</h3><ul id="tripList"></ul></div>
-        <div class="card">
+        <div class="card o-ctrl">
           <div class="acts">
             <button class="act" id="showOppBtn" hidden>👁 あいての手札を見せる</button>
             <button class="act" id="restartBtn">🔄 最初から</button>
@@ -273,7 +327,7 @@
     <div class="result-big" id="endTitle"></div>
     <h2>あがった順</h2>
     <ol class="rank" id="rank"></ol>
-    <div class="trip" id="endTrip" style="margin-top:10px" hidden><h3>🔎 あなたのつまずき（この回）</h3><ul id="endTripList"></ul></div>
+    <div class="trip" id="endTrip" style="margin-top:10px" hidden><h3 id="endTripTitle">🔎 あなたのつまずき（この回）</h3><ul id="endTripList"></ul></div>
     <p class="note" id="endNote"></p>
     <div class="acts" style="margin-top:12px">
       <button class="act main big" id="againBtn">🔄 もういちど</button>
@@ -340,7 +394,14 @@ function isZeroPairLv1(a, b) {
   return cardValue(a) + cardValue(b) === 0;
 }
 
-// 手札の中の Lv1 ゼロ対を、重ならないように全部さがす（CPU が使う・ヒントにも使う）
+// すてられる組か？　Lv1＝2まいのゼロ対だけ／Lv2・Lv3＝2まい以上で和が0（ジョーカーはだめ）
+function isZeroGroup(cards, lv) {
+  if (cards.length < 2 || cards.some(c => c.s === 'J')) return false;
+  if (lv === 1) return cards.length === 2 && isZeroPairLv1(cards[0], cards[1]);
+  return sumOf(cards) === 0;
+}
+
+// 手札の中の Lv1 ゼロ対を、重ならないように全部さがす
 function findZeroPairs(hand) {
   const pos = {}, neg = {}, pairs = [];
   for (const c of hand) {
@@ -355,17 +416,66 @@ function findZeroPairs(hand) {
   return pairs;
 }
 
-// まちがえた2枚の「つまずきの型」を見分ける
-//   same    … 同じ数・同じ色（ふつうのババ抜きのつもり）  例 (+7)+(+7)
-//   sign    … 同じ符号で数がちがう                      例 (+3)+(+5)
-//   abs     … 符号はちがうが、数（絶対値）がちがう        例 (+7)+(−5)
+// 「＋の何まいかの合計」＝「−の何まいかの合計（の大きさ）」になる組を1つさがす（Lv2 以上）
+//   ＋のカードで作れる合計と、−のカードで作れる合計を表にして、同じ数があれば その組を返す。
+//   まず2まいの組（ゼロ対）を優先し、なければ合計のいちばん小さい組を返す。なければ null
+function findZeroGroup(hand, lv) {
+  const pairs = findZeroPairs(hand);
+  if (pairs.length) return pairs[0];
+  if (lv === 1) return null;
+  const P = hand.filter(c => cardValue(c) > 0), M = hand.filter(c => cardValue(c) < 0);
+  // reach(cards)：合計 → その合計になるカードの組（はじめに見つけたもの）
+  const reach = cards => {
+    const m = new Map([[0, []]]);
+    for (const c of cards) {
+      const v = Math.abs(cardValue(c));
+      for (const [s, set] of [...m.entries()]) if (!m.has(s + v)) m.set(s + v, set.concat([c]));
+    }
+    return m;
+  };
+  const rp = reach(P), rm = reach(M);
+  const common = [...rp.keys()].filter(s => s > 0 && rm.has(s)).sort((a, b) => a - b);
+  if (!common.length) return null;
+  return rp.get(common[0]).concat(rm.get(common[0]));
+}
+function hasZeroGroup(hand, lv) { return findZeroGroup(hand, lv) !== null; }
+
+// 手札から すてられる組を、なくなるまで順にさがす（CPU が使う）
+function findAllZeroGroups(hand, lv) {
+  let rest = hand.slice(); const out = [];
+  for (;;) {
+    const g = findZeroGroup(rest, lv);
+    if (!g) return out;
+    out.push(g);
+    const ids = g.map(c => c.id);
+    rest = rest.filter(c => !ids.includes(c.id));
+  }
+}
+
+// すてられなかった組の「つまずきの型」
+//   same    … 同じ数・同じ色の2まい（ふつうのババ抜きのつもり）  例 (+7)+(+7)
+//   sign    … ぜんぶ同じ符号                                  例 (+3)+(+5)
+//   abs     … 符号はちがうが、和が0にならない                  例 (+7)+(−5)
 //   joker   … ジョーカーをふくむ
-function mistakeType(a, b) {
-  if (a.s === 'J' || b.s === 'J') return 'joker';
-  const va = cardValue(a), vb = cardValue(b);
-  if (va === vb) return 'same';
-  if (Math.sign(va) === Math.sign(vb)) return 'sign';
+function mistakeType(cards) {
+  if (cards.some(c => c.s === 'J')) return 'joker';
+  const v = cards.map(cardValue);
+  if (v.length === 2 && v[0] === v[1]) return 'same';
+  if (v.every(x => x > 0) || v.every(x => x < 0)) return 'sign';
   return 'abs';
+}
+
+// Lv3：答えた和がまちがっていたときの型
+//   sgn     … 符号だけ反対（絶対値の大きい方の符号にしていない） 例 (+3)+(−5) を +2
+//   absadd  … 符号のちがう数の絶対値を たしてしまった           例 (+3)+(−5) を −8
+//   calc    … そのほかの計算まちがい
+function answerType(vals, ans) {
+  const s = vals.reduce((a, b) => a + b, 0);
+  if (s !== 0 && ans === -s) return 'sgn';
+  const mixed = vals.some(x => x > 0) && vals.some(x => x < 0);
+  const absSum = vals.reduce((a, b) => a + Math.abs(b), 0);
+  if (mixed && Math.abs(ans) === absSum) return 'absadd';
+  return 'calc';
 }
 
 // i 番の人の「つぎの人」（手札が残っている人）。いなければ -1
@@ -378,11 +488,19 @@ function nextActive(hands, i) {
 // 手札が残っている人の数
 function activeCount(hands) { return hands.filter(h => h.length > 0).length; }
 
-/* ==== ロジック ここまで ==== */
+// 止まったか？：だれも すてられないまま、のこっている全員が3回ずつ引いたら おわり
+//   （Lv2・Lv3 では、のこりのカードが「4まい以上そろわないと 0 にならない」形になり、永久にすてられなくなることがある）
+function isStalled(quiet, hands) { return quiet >= activeCount(hands) * 3; }
 
-if (typeof module !== 'undefined') { // 作業用テスト（node）から読みこむとき
-  module.exports = { cardValue, makeDeck, shuffle, deal, sumOf, isZeroPairLv1, findZeroPairs, mistakeType, nextActive, activeCount };
+// さいごの順位：あがった順 → のこった人は 手札の少ない順（ジョーカーを持つ人は最下位）
+function finalRanking(finished, hands) {
+  const rest = hands.map((h, i) => i).filter(i => !finished.includes(i) && hands[i].length > 0);
+  const hasJ = i => hands[i].some(c => c.s === 'J');
+  rest.sort((a, b) => (hasJ(a) - hasJ(b)) || (hands[a].length - hands[b].length) || (a - b));
+  return finished.concat(rest);
 }
+
+/* ==== ロジック ここまで ==== */
 
 /* =====================================================================
    ここから画面
@@ -394,27 +512,39 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // つまずきの型の名前と、立ち直りのことば
 const TRIP = {
-  same:  { name: 'ふつうのババ抜き型', tip: '同じ数・同じ色の2枚は、たすと 0 にならない。黒と赤（＋と−）で組にしよう' },
-  sign:  { name: '同じ符号の組み型',   tip: '同じ符号どうしをたすと、0 から遠ざかる。符号のちがう2枚をさがそう' },
-  abs:   { name: '数のずれ型',         tip: '符号がちがっても、数（絶対値）が同じでないと 0 にならない' },
-  joker: { name: 'ジョーカー型',       tip: 'ジョーカーは「ババ」。すてられないので、だれかに引いてもらおう' }
+  same:   { name: 'ふつうのババ抜き型', tip: '同じ数・同じ色の2まいは、たすと 0 にならない。黒と赤（＋と−）で組にしよう' },
+  sign:   { name: '同じ符号の組み型',   tip: '同じ符号どうしをたすと、0 から遠ざかる。符号のちがうカードをまぜよう' },
+  abs:    { name: '数のずれ型',         tip: '＋の合計と −の合計（の大きさ）が同じでないと 0 にならない' },
+  joker:  { name: 'ジョーカー型',       tip: 'ジョーカーは「ババ」。すてられないので、だれかに引いてもらおう' },
+  sgn:    { name: '符号えらび型',       tip: '符号のちがう数の和は、絶対値の大きい方の符号になる' },
+  absadd: { name: '絶対値たし型',       tip: '符号のちがう数をたすときは、絶対値の「差」を求める（打ち消し合う）' },
+  calc:   { name: '計算ミス型',         tip: '数直線の矢印を、0 から順にたどって たしかめよう' }
 };
 
-// 設定（URL でも指定できる：?rule=zero&lv=1&cpu=3&face=1）
+// 設定（URL でも指定できる：?rule=zero&lv=2&play=team&teams=3&cpu=3&face=1）
 const CFG = {
   rule: 'zero',
-  lv: 1,
+  lv: ['1', '2', '3'].includes(params.get('lv')) ? +params.get('lv') : 1,
+  play: params.get('play') === 'team' ? 'team' : 'solo',
   cpu: params.get('cpu') === '3' ? 3 : 2,
+  teams: ['2', '3', '4'].includes(params.get('teams')) ? +params.get('teams') : 2,
   face: params.get('face') === '1'
 };
 const CPU_NAMES = [{ name: 'ネコ', emoji: '🐱' }, { name: 'イヌ', emoji: '🐶' }, { name: 'ウサギ', emoji: '🐰' }];
+const TEAM_NAMES = [{ name: 'チームA', emoji: '🦁' }, { name: 'チームB', emoji: '🐼' }, { name: 'チームC', emoji: '🐧' }, { name: 'チームD', emoji: '🦊' }];
 
 // 対戦の状態
 const G = {
-  names: [], hands: [], turn: 0, step: 'idle', // step: discard（すてる番）/ draw（引く番）/ after（引いたあと）/ cpu / end
-  sel: [], newId: null, sorted: false, revealed: false, showOpp: false,
-  log: [], finished: [], trips: {}, gen: 0, hintIds: [], lastPair: null
+  names: [], hands: [], human: [], me: 0, turn: 0,
+  step: 'idle', // discard（はじめに すてる）/ draw（引く）/ after（引いたあと すてる）/ cpu / end
+  initQueue: [], covered: false,
+  sel: [], newId: null, sorted: false, showOpp: false,
+  log: [], finished: [], trips: {}, gen: 0, hintIds: [], hinted: false, lastGroup: null,
+  ans: '', ansOpen: false,
+  quiet: 0, threwThisTurn: false   // quiet＝だれも すてずに おわった番の数（止まったかの判定に使う）
 };
+const isTeam = () => CFG.play === 'team';
+const who = i => `${G.names[i].emoji}${G.names[i].name}`;
 
 /* ---------- 文字の形 ---------- */
 function fmt(v) { return v > 0 ? '+' + v : v < 0 ? '−' + (-v) : '0'; }
@@ -435,12 +565,17 @@ function cardHTML(c, extra = '') {
 }
 
 /* ---------- 数直線（SVG） ----------
-   vals の順に、0 から矢印を継ぎ足す。showEnd=false のときは終点（答え）をかくす */
-function drawNumberLine(vals, showEnd) {
-  const R = CFG.face ? 13 : 10;
+   vals の順に、0 から矢印を継ぎ足す。showEnd=false のときは終点（答え）をかくす。
+   arrows=false のときは矢印もかかない（Lv3 で答える前） */
+function drawNumberLine(vals, showEnd, arrows = true) {
+  // はば：ふつうは −10〜+10（絵札ありは −13〜+13）。矢印がはみ出すときだけ広げる（矢印をかくすときは広げない＝答えのヒントにしない）
+  const reach = arrows ? vals.map((_, i) => Math.abs(vals.slice(0, i + 1).reduce((a, b) => a + b, 0))) : [];
+  const R = Math.max(CFG.face ? 13 : 10, ...reach);
   const min = -R - 1, max = R + 1;
-  const W = 640, pad = 26, axisY = 46 + Math.max(1, vals.length) * 30, H = axisY + 50;
+  const rows = arrows ? Math.max(1, vals.length) : 1;
+  const W = 640, pad = 26, axisY = 46 + rows * 30, H = axisY + 50;
   const x = v => pad + (v - min) * (W - 2 * pad) / (max - min);
+  const step = R > 20 ? 10 : 5;
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="数直線">`;
   s += `<defs>
     <marker id="ahP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e65100"/></marker>
@@ -449,16 +584,16 @@ function drawNumberLine(vals, showEnd) {
   // 軸と目もり
   s += `<line x1="${pad - 8}" y1="${axisY}" x2="${W - pad + 8}" y2="${axisY}" stroke="#455a64" stroke-width="3"/>`;
   for (let v = min; v <= max; v++) {
-    const big = v % 5 === 0, h = v === 0 ? 14 : big ? 10 : 6;
-    s += `<line x1="${x(v)}" y1="${axisY - h}" x2="${x(v)}" y2="${axisY + h}" stroke="${v === 0 ? '#263238' : '#78909c'}" stroke-width="${v === 0 ? 4 : big ? 2.5 : 1.5}"/>`;
-    // 数字は 0・5ごと・はし だけ（せまい画面でも読める大きさにする）
+    const big = v % step === 0, h = v === 0 ? 14 : big ? 10 : (R > 20 ? 0 : 6);
+    if (h) s += `<line x1="${x(v)}" y1="${axisY - h}" x2="${x(v)}" y2="${axisY + h}" stroke="${v === 0 ? '#263238' : '#78909c'}" stroke-width="${v === 0 ? 4 : big ? 2.5 : 1.5}"/>`;
+    // 数字は 0 と 5ごと（せまい画面でも読める大きさにする）
     if (big && Math.abs(v) <= R) {
       s += `<text x="${x(v)}" y="${axisY + 34}" text-anchor="middle" font-size="${v === 0 ? 26 : 22}" font-weight="900" fill="${v === 0 ? '#263238' : '#546e7a'}">${v > 0 ? '+' + v : v < 0 ? '−' + (-v) : 0}</text>`;
     }
   }
-  // 矢印（1枚＝1本。上へ積みあげる）
+  // 矢印（1まい＝1本。上へ積みあげる）
   let cur = 0;
-  vals.forEach((v, i) => {
+  if (arrows) vals.forEach((v, i) => {
     const y = axisY - 26 - i * 30, col = v > 0 ? '#e65100' : '#1565c0', mk = v > 0 ? 'ahP' : 'ahM';
     if (v !== 0) {
       s += `<line x1="${x(cur)}" y1="${y}" x2="${x(cur + v)}" y2="${y}" stroke="${col}" stroke-width="5" marker-end="url(#${mk})"/>`;
@@ -470,7 +605,7 @@ function drawNumberLine(vals, showEnd) {
     cur += v;
   });
   // 終点（答え）
-  if (vals.length && showEnd) {
+  if (arrows && vals.length && showEnd) {
     const ok = cur === 0, c = ok ? '#2e7d32' : '#ad1457';
     s += `<line x1="${x(cur)}" y1="${axisY - 26 - (vals.length - 1) * 30}" x2="${x(cur)}" y2="${axisY}" stroke="${c}" stroke-width="2" stroke-dasharray="4 4"/>`;
     s += `<circle cx="${x(cur)}" cy="${axisY}" r="9" fill="${c}" stroke="#fff" stroke-width="3"/>`;
@@ -487,10 +622,10 @@ function showExpr(vals, showAns) {
   const right = showAns ? `<span class="ans ${sum === 0 ? '' : 'bad'}"><span class="n ${cls(sum)}">${fmt(sum)}</span></span>` : '<span class="q">？</span>';
   $('#expr').innerHTML = `${left}<span class="op">＝</span>${right}`;
 }
-function showMath(vals, showAns) { showExpr(vals, showAns); drawNumberLine(vals, showAns); }
+function showMath(vals, showAns, arrows = true) { showExpr(vals, showAns); drawNumberLine(vals, showAns, arrows); }
 
 /* ---------- メッセージ・できごと ---------- */
-function say(html, kind = '') { const m = $('#msg'); m.innerHTML = html; m.className = 'msg ' + kind; }
+function say(html, kind = '') { const m = $('#msg'); m.innerHTML = html; m.className = 'msg o-msg ' + kind; }
 function addLog(text, me = false) {
   G.log.unshift({ text, me });
   if (G.log.length > 40) G.log.pop();
@@ -509,68 +644,95 @@ function tripItems() {
   return Object.keys(G.trips).map(k => `<li><b>${TRIP[k].name}</b>（${G.trips[k]}回）… ${TRIP[k].tip}</li>`).join('');
 }
 function renderTrips() {
-  const has = Object.keys(G.trips).length > 0;
-  $('#tripBox').hidden = !has;
+  $('#tripBox').hidden = Object.keys(G.trips).length === 0;
+  $('#tripTitle').textContent = isTeam() ? '🔎 クラスのつまずき' : '🔎 あなたのつまずき';
   $('#tripList').innerHTML = tripItems();
 }
 
 /* ---------- 画面をかく ---------- */
+function myTurn() { return G.step === 'discard' || G.step === 'after'; }
 function render() {
-  // あいて
-  const meTarget = (G.step === 'draw') ? nextActive(G.hands, 0) : -1;
+  const me = G.me;
+  // あいて（じぶん以外）
+  const target = (G.step === 'draw' && !G.covered) ? nextActive(G.hands, me) : -1;
   $('#opps').innerHTML = G.names.map((p, i) => {
-    if (i === 0) return '';
-    const h = G.hands[i], done = h.length === 0;
-    const isT = i === meTarget;
+    if (i === me) return '';
+    const h = G.hands[i], done = h.length === 0, isT = i === target;
     const fan = (G.showOpp && !isT)
       ? `<div class="fan faceup">${h.map(c => cardHTML(c, 'mini')).join('')}</div>`
       : `<div class="fan">${h.map((c, k) => `<div class="tc back ${isT ? 'target' : ''}" ${isT ? `tabindex="0" role="button" aria-label="${k + 1}まいめを引く" data-k="${k}"` : ''}></div>`).join('')}</div>`;
     const place = G.finished.indexOf(i);
     return `<div class="opp ${G.turn === i && G.step === 'cpu' ? 'turn' : ''} ${isT ? 'tgt' : ''} ${done ? 'done' : ''}">
-      <div class="opp-h"><span>${p.emoji} ${p.name}${isT ? ' ← ここから引く' : ''}</span><span class="cnt">${done ? (place >= 0 ? `🎉 ${place + 1}番であがり` : 'あがり') : h.length + 'まい'}</span></div>${fan}</div>`;
+      <div class="opp-h"><span>${who(i)}${isT ? ' ← ここから引く' : ''}</span><span class="cnt">${done ? (place >= 0 ? `🎉 ${place + 1}番であがり` : 'あがり') : h.length + 'まい'}</span></div>${fan}</div>`;
   }).join('');
   // じぶん
-  const hand = G.hands[0] || [];
-  $('#myCnt').textContent = `（${hand.length}まい）`;
-  $('#hand').innerHTML = hand.length
-    ? hand.map(c => cardHTML(c, 'pick' + (G.sel.includes(c.id) ? ' sel' : '') + (c.id === G.newId ? ' new' : '') + (G.hintIds.includes(c.id) ? ' hint' : ''))).join('')
-    : '<span class="empty">手札がなくなりました 🎉</span>';
+  const hand = G.hands[me] || [];
+  $('#handTitle').innerHTML = `${isTeam() ? who(me) + ' の手札' : '🙂 あなたの手札'} <span class="note">（${hand.length}まい）</span>`;
+  if (G.covered) {
+    $('#hand').innerHTML = `<button class="cover" id="coverBtn">${who(me)} の番です。<br>前に出て「ここ」をおして 手札を見よう ▶</button>`;
+  } else {
+    $('#hand').innerHTML = hand.length
+      ? hand.map(c => cardHTML(c, 'pick' + (G.sel.includes(c.id) ? ' sel' : '') + (c.id === G.newId ? ' new' : '') + (G.hintIds.includes(c.id) ? ' hint' : ''))).join('')
+      : '<span class="empty">手札がなくなりました 🎉</span>';
+  }
   // ボタン
-  const myTurn = G.step === 'discard' || G.step === 'after';
-  $('#throwBtn').disabled = !myTurn || G.sel.length !== 2;
-  $('#revealBtn').disabled = !myTurn || G.sel.length === 0;
-  $('#clearBtn').disabled = !myTurn || G.sel.length === 0;
-  $('#hintBtn').disabled = !myTurn;
-  $('#nextBtn').disabled = !myTurn;
-  $('#nextBtn').textContent = G.step === 'discard' ? '▶ すておわった（引く番へ）' : '▶ つぎの人へ';
+  const act = myTurn() && !G.covered && !G.ansOpen;
+  $('#throwBtn').disabled = !act || G.sel.length < 2;
+  $('#throwBtn').textContent = CFG.lv === 3 ? '🧮 和を答えて すてる' : CFG.lv === 2 ? '🗑 すてる（和が0なら）' : '🗑 すてる（たして0なら）';
+  $('#revealBtn').hidden = CFG.lv === 3 && !TEACHER;   // Lv3 は自分で答えるので、生徒には出さない
+  $('#revealBtn').disabled = !act || G.sel.length === 0;
+  $('#clearBtn').disabled = !act || G.sel.length === 0;
+  $('#hintBtn').disabled = !act;
+  $('#nextBtn').disabled = !act;
+  $('#sortBtn').disabled = G.covered;
+  $('#nextBtn').textContent = G.step === 'discard' ? '▶ すておわった' : isTeam() ? '▶ つぎのチームへ' : '▶ つぎの人へ';
   $('#sortBtn').textContent = G.sorted ? '↔ 小さい順にならべる ✓' : '↔ 小さい順にならべる';
   $('#showOppBtn').textContent = G.showOpp ? '🙈 あいての手札をかくす' : '👁 あいての手札を見せる';
+  $('#ansBox').hidden = !G.ansOpen;
+  $('#ansDisp').textContent = G.ans === '' ? '？' : G.ans.replace('-', '−');
 }
 
-function sortHand() { if (G.sorted) G.hands[0].sort((a, b) => cardValue(a) - cardValue(b) || a.s.localeCompare(b.s)); }
+function sortHands() { if (G.sorted) G.hands.forEach(h => h.sort((a, b) => cardValue(a) - cardValue(b) || a.s.localeCompare(b.s))); }
 
 /* ---------- 対戦のはじまり ---------- */
 function startGame() {
   G.gen++;
-  const n = CFG.cpu + 1;
-  G.names = [{ name: 'あなた', emoji: '🙂' }].concat(CPU_NAMES.slice(0, CFG.cpu));
+  if (isTeam()) {
+    G.names = TEAM_NAMES.slice(0, CFG.teams);
+    G.human = G.names.map(() => true);
+  } else {
+    G.names = [{ name: 'あなた', emoji: '🙂' }].concat(CPU_NAMES.slice(0, CFG.cpu));
+    G.human = G.names.map((_, i) => i === 0);
+  }
+  const n = G.names.length;
   G.hands = deal(shuffle(makeDeck(CFG.face)), n);
-  G.sel = []; G.newId = null; G.revealed = false; G.log = []; G.finished = []; G.trips = {}; G.hintIds = []; G.lastPair = null;
-  G.turn = 0;
+  G.sel = []; G.newId = null; G.log = []; G.finished = []; G.trips = {}; G.hintIds = []; G.hinted = false;
+  G.lastGroup = null; G.ans = ''; G.ansOpen = false; G.quiet = 0; G.threwThisTurn = false; G.me = 0; G.turn = 0; G.covered = false;
   $('#log').innerHTML = '';
   renderTrips();
   $('#setupView').hidden = true; $('#endView').hidden = true; $('#playView').hidden = false;
-  addLog(`カードを ${n}人に配った（${G.hands.reduce((t, h) => t + h.length, 0)}まい）`);
-  // CPU は はじめにゼロ対を すてる
-  for (let i = 1; i < n; i++) {
-    const pairs = findZeroPairs(G.hands[i]);
-    pairs.forEach(p => removeCards(i, p));
-    if (pairs.length) addLog(`${G.names[i].emoji}${G.names[i].name} が ゼロ対を ${pairs.length}組 すてた`);
+  addLog(`Lv${CFG.lv}：カードを ${n}${isTeam() ? 'チーム' : '人'}に配った（${G.hands.reduce((t, h) => t + h.length, 0)}まい）`);
+  // CPU は はじめに すてられる組を ぜんぶ すてる
+  for (let i = 0; i < n; i++) {
+    if (G.human[i]) continue;
+    const gs = findAllZeroGroups(G.hands[i], CFG.lv);
+    gs.forEach(g => removeCards(i, g));
+    if (gs.length) addLog(`${who(i)} が ゼロ対を ${gs.length}組 すてた`);
   }
-  sortHand();
-  G.step = 'discard';
+  checkFinish();
+  sortHands();
+  // 人間（チーム）は、順番に はじめの すてる番をする
+  G.initQueue = G.names.map((_, i) => i).filter(i => G.human[i]);
+  beginInitialDiscard();
+}
+
+function beginInitialDiscard() {
+  const i = G.initQueue.shift();
+  G.me = i; G.turn = i; G.step = 'discard'; G.sel = []; G.hintIds = []; G.hinted = false;
+  G.covered = isTeam();
   showMath([], false);
-  say('まず、手札の中の <b>ゼロ対</b>（たすと 0 になる2まい）を さがして すてよう。<br>2まい えらんで「🗑 すてる」。もう ないと思ったら「▶ すておわった」。');
+  const groupWord = CFG.lv === 1 ? '2まい' : '2まい以上の組';
+  say(`${isTeam() ? `<b>${who(i)}</b>：` : ''}まず、手札の中の <b>ゼロ対</b>（たすと 0 になる${groupWord}）を さがして すてよう。<br>えらんで「すてる」。もう ないと思ったら「▶ すておわった」。`);
   render();
 }
 
@@ -584,162 +746,221 @@ function checkFinish() {
   G.hands.forEach((h, i) => {
     if (h.length === 0 && !G.finished.includes(i)) {
       G.finished.push(i);
-      addLog(`🎉 ${G.names[i].emoji}${G.names[i].name} が ${G.finished.length}番で あがり！`, i === 0);
+      addLog(`🎉 ${who(i)} が ${G.finished.length}番で あがり！`, G.human[i]);
     }
   });
   return activeCount(G.hands) <= 1;
 }
 
 /* ---------- じぶんの そうさ ---------- */
+function selCards() { return G.sel.map(id => G.hands[G.me].find(c => c.id === id)).filter(Boolean); }
+
 function onHandTap(id) {
-  if (!(G.step === 'discard' || G.step === 'after')) return;
+  if (!myTurn() || G.covered || G.ansOpen) return;
   const k = G.sel.indexOf(id);
   if (k >= 0) G.sel.splice(k, 1);
-  else { G.sel.push(id); if (G.sel.length > 2) G.sel.shift(); }   // Lv1 は2まいまで
-  G.revealed = false; G.hintIds = [];
-  const cards = selCards();
-  showMath(cards.map(cardValue), false);
+  else { G.sel.push(id); if (CFG.lv === 1 && G.sel.length > 2) G.sel.shift(); }   // Lv1 は2まいまで
+  G.hintIds = [];
+  showMath(selCards().map(cardValue), false, CFG.lv !== 3);   // Lv3 は答える前に矢印を見せない
   render();
 }
-function selCards() { return G.sel.map(id => G.hands[0].find(c => c.id === id)).filter(Boolean); }
 
 function onThrow() {
   const cards = selCards();
-  if (cards.length !== 2) return;
-  const [a, b] = cards, vals = cards.map(cardValue);
+  if (cards.length < 2) return;
+  if (CFG.lv === 3) {
+    if (cards.some(c => c.s === 'J')) { addTrip('joker'); say(`❌ ${TRIP.joker.tip}`, 'ng'); return; }
+    // Lv3：和を答えてもらう
+    G.ans = ''; G.ansOpen = true;
+    say('えらんだカードの <b>和</b> を答えよう。0 になったら すてられる。');
+    render();
+    return;
+  }
+  judge(cards);
+}
+
+// すてられるか判定して、すてる
+function judge(cards) {
+  const vals = cards.map(cardValue);
   showMath(vals, true);
-  if (isZeroPairLv1(a, b)) {
-    G.lastPair = { shiki: exprText(vals), wa: '0' };
-    // すてるアニメーション
-    cards.forEach(c => { const el = document.querySelector(`#hand [data-id="${c.id}"]`); if (el) el.classList.add('out'); });
-    const gen = G.gen;
-    setTimeout(() => {
-      if (gen !== G.gen) return;
-      removeCards(0, cards); G.sel = []; G.newId = null;
-      addLog(`あなた：${cardName(a)} と ${cardName(b)} → ${exprText(vals)}＝0 で すてた`, true);
-      say(`⭕ ${exprText(vals)}＝0。ゼロ対なので すてた！`, 'ok');
-      if (checkFinish()) { render(); return endGame(); }
-      render();
-    }, 380);
+  if (isZeroGroup(cards, CFG.lv)) {
+    discardMine(cards, vals);
   } else {
-    const t = mistakeType(a, b);
+    const t = mistakeType(cards);
     addTrip(t);
-    const sum = vals[0] + vals[1];
+    const sum = vals.reduce((a, b) => a + b, 0);
+    let why = TRIP[t].tip;
+    if (CFG.lv === 1 && sum === 0) why = 'Lv1 では 2まいの組だけ すてられる';
     say(t === 'joker'
       ? `❌ ジョーカーは すてられない。${TRIP.joker.tip}`
-      : `❌ ${exprText(vals)}＝${fmt(sum)}。0 ではないので すてられない。<br>💡 ${TRIP[t].tip}`, 'ng');
+      : `❌ ${exprText(vals)}＝${fmt(sum)}。0 ではないので すてられない。<br>💡 ${why}`, 'ng');
     render();
   }
 }
 
-function onReveal() { const v = selCards().map(cardValue); showMath(v, true); }
+function discardMine(cards, vals) {
+  const me = G.me;
+  G.lastGroup = { shiki: exprText(vals), wa: '0', n: cards.length + 'まい' };
+  cards.forEach(c => { const el = document.querySelector(`#hand [data-id="${c.id}"]`); if (el) el.classList.add('out'); });
+  const gen = G.gen;
+  setTimeout(() => {
+    if (gen !== G.gen) return;
+    removeCards(me, cards); G.sel = []; G.newId = null; G.hintIds = []; G.threwThisTurn = true;
+    addLog(`${who(me)}：${exprText(vals)}＝0 で ${cards.length}まい すてた`, true);
+    say(`⭕ ${exprText(vals)}＝0。ゼロ対なので すてた！`, 'ok');
+    if (checkFinish()) { render(); return endGame(); }
+    render();
+  }, 380);
+}
+
+/* ---------- Lv3：答える ---------- */
+function onKey(k) {
+  if (!G.ansOpen) return;
+  if (k === 'sg') G.ans = G.ans.startsWith('-') ? G.ans.slice(1) : '-' + G.ans;
+  else if (k === 'bs') G.ans = G.ans.slice(0, -1);
+  else if (G.ans.replace('-', '').length < 3) G.ans += k;
+  render();
+}
+function onAnswer() {
+  if (!G.ansOpen || G.ans === '' || G.ans === '-') return;
+  const cards = selCards(), vals = cards.map(cardValue), sum = vals.reduce((a, b) => a + b, 0);
+  const a = parseInt(G.ans, 10);
+  G.ansOpen = false;
+  showMath(vals, true);
+  if (a !== sum) {
+    const t = answerType(vals, a);
+    addTrip(t);
+    say(`❌ ${exprText(vals)} は ${fmt(a)} ではなく <b>${fmt(sum)}</b>。<br>💡 ${TRIP[t].tip}`, 'ng');
+    render();
+    return;
+  }
+  if (sum !== 0) {
+    say(`⭕ 計算は正解！ ${exprText(vals)}＝${fmt(sum)}。でも 0 ではないので すてられない。`);
+    render();
+    return;
+  }
+  discardMine(cards, vals);
+}
 
 function onHint() {
-  const pairs = findZeroPairs(G.hands[0]);
-  if (!pairs.length) { say('💡 いまの手札には ゼロ対が ないよ。「▶」で つぎへ すすもう。'); return; }
+  const g = findZeroGroup(G.hands[G.me], CFG.lv);
+  if (!g) { say('💡 いまの手札には ゼロ対が ないよ。「▶」で つぎへ すすもう。'); return; }
   // 1回目はことばだけ、2回目でカードを光らせる
-  if (G.hintIds.length === 0 && !G._hinted) {
-    G._hinted = true;
-    say('💡 <b>同じ数</b>で、<b>色がちがう</b>（黒と赤）2まいを さがそう。「↔ 小さい順にならべる」と見つけやすいよ。');
+  if (!G.hinted) {
+    G.hinted = true;
+    say(CFG.lv === 1
+      ? '💡 <b>同じ数</b>で、<b>色がちがう</b>（黒と赤）2まいを さがそう。「↔ 小さい順にならべる」と見つけやすいよ。'
+      : '💡 <b>黒（＋）の合計</b> と <b>赤（−）の合計</b> が同じ大きさになれば 0。たとえば ＋2 と ＋3 なら、−5 と組になる。');
   } else {
-    G.hintIds = pairs[0].map(c => c.id);
-    say('💡 光っている2まいを えらんで すててみよう。');
+    G.hintIds = g.map(c => c.id);
+    say('💡 光っているカードを えらんで すててみよう。');
     render();
   }
 }
 
 function onNext() {
-  if (!(G.step === 'discard' || G.step === 'after')) return;
-  if (findZeroPairs(G.hands[0]).length) {
+  if (!myTurn() || G.covered || G.ansOpen) return;
+  if (hasZeroGroup(G.hands[G.me], CFG.lv)) {
     say('🤔 まだ <b>ゼロ対</b> が のこっているよ。さがしてみよう（こまったら 💡ヒント）。', 'ng');
     return;
   }
-  G.sel = []; G.hintIds = []; G._hinted = false; G.newId = null;
+  G.sel = []; G.hintIds = []; G.hinted = false; G.newId = null;
   if (G.step === 'discard') {
-    // はじめの すてる番がおわった → あなたから引く
-    beginMyDraw();
+    if (G.initQueue.length) return beginInitialDiscard();   // つぎのチームの はじめの すてる番
+    beginDraw(firstPlayer());
   } else {
-    afterTurn(0);
+    countQuiet();
+    afterTurn(G.me);
   }
 }
+// さいしょに引く人：0番（手札がなければ つぎの人）
+function firstPlayer() { return G.hands[0].length ? 0 : nextActive(G.hands, 0); }
 
-function beginMyDraw() {
-  if (G.hands[0].length === 0) return afterTurn(0);
-  const t = nextActive(G.hands, 0);
+function beginDraw(i) {
+  if (i < 0 || activeCount(G.hands) <= 1) return endGame();
+  if (!G.human[i]) return afterTurn((i - 1 + G.names.length) % G.names.length);
+  const t = nextActive(G.hands, i);
   if (t < 0) return endGame();
-  G.step = 'draw'; G.turn = 0;
-  say(`あなたの番。<b>${G.names[t].emoji}${G.names[t].name}</b> の カードから 1まい えらんで 引こう。`);
+  G.me = i; G.turn = i; G.step = 'draw'; G.sel = []; G.hinted = false; G.threwThisTurn = false;
+  G.covered = isTeam();
+  say(`${isTeam() ? `<b>${who(i)}</b> の番。` : 'あなたの番。'}<b>${who(t)}</b> の カードから 1まい えらんで 引こう。`);
   showMath([], false);
   render();
 }
 
 function onDraw(k) {
-  if (G.step !== 'draw') return;
-  const t = nextActive(G.hands, 0);
+  if (G.step !== 'draw' || G.covered) return;
+  const me = G.me, t = nextActive(G.hands, me);
   const c = G.hands[t][k];
   if (!c) return;
   G.hands[t].splice(k, 1);
-  G.hands[0].push(c);
+  G.hands[me].push(c);
   G.newId = c.id;
-  sortHand();
-  addLog(`あなた：${G.names[t].emoji}${G.names[t].name} から ${cardName(c)} を引いた`, true);
+  sortHands();
+  addLog(`${who(me)}：${who(t)} から ${cardName(c)} を引いた`, true);
   checkFinish();
   G.step = 'after';
-  const can = findZeroPairs(G.hands[0]).some(p => p.some(x => x.id === c.id));
+  const can = hasZeroGroup(G.hands[me], CFG.lv);
   say(c.s === 'J'
-    ? '😱 ジョーカーを引いてしまった！ だれかに引いてもらおう。「▶ つぎの人へ」'
-    : `${cardName(c)} を引いた。${can ? '<b>ゼロ対</b> が できるかな？ さがして すてよう。' : 'ゼロ対が できなければ「▶ つぎの人へ」。'}`);
-  showMath([cardValue(c)], false);
+    ? `😱 ジョーカーを引いてしまった！ だれかに引いてもらおう。「${$('#nextBtn').textContent.trim()}」`
+    : `${cardName(c)} を引いた。${can ? '<b>ゼロ対</b> が できるかな？ さがして すてよう。' : 'ゼロ対が できなければ「▶」で つぎへ。'}`);
+  showMath([cardValue(c)], false, CFG.lv !== 3);
   if (activeCount(G.hands) <= 1) { render(); return endGame(); }
   render();
 }
 
-/* ---------- CPU の番 ---------- */
+/* ---------- つぎの番へ（CPU は自動で動く） ---------- */
+// 番のおわりに、すてたかどうかを数える
+function countQuiet() { G.quiet = G.threwThisTurn ? 0 : G.quiet + 1; G.threwThisTurn = false; }
+
 async function afterTurn(from) {
   const gen = G.gen;
   if (checkFinish()) return endGame();
+  if (CFG.lv >= 2 && isStalled(G.quiet, G.hands)) return endGame(true);
   let i = nextActive(G.hands, from);
   while (gen === G.gen) {
     if (i < 0 || activeCount(G.hands) <= 1) return endGame();
-    if (i === 0) return beginMyDraw();
+    if (G.human[i]) return beginDraw(i);
     await cpuTurn(i, gen);
     if (gen !== G.gen) return;
+    countQuiet();
     if (activeCount(G.hands) <= 1) return endGame();
+    if (CFG.lv >= 2 && isStalled(G.quiet, G.hands)) return endGame(true);
     i = nextActive(G.hands, i);
   }
 }
 
 async function cpuTurn(i, gen) {
   const wait = TEACHER ? 1400 : 900;
-  G.step = 'cpu'; G.turn = i;
+  G.step = 'cpu'; G.turn = i; G.covered = false; G.threwThisTurn = false;
   const t = nextActive(G.hands, i);
   render();
-  say(`${G.names[i].emoji}${G.names[i].name} の番…`);
+  say(`${who(i)} の番…`);
   await sleep(wait);
   if (gen !== G.gen || t < 0) return;
   // CPU は ランダムに1まい引く
   const k = Math.floor(Math.random() * G.hands[t].length);
   const c = G.hands[t].splice(k, 1)[0];
   G.hands[i].push(c);
-  if (t === 0) {
+  sortHands();
+  if (G.human[t]) {
     G.sel = G.sel.filter(id => id !== c.id);
-    addLog(`${G.names[i].emoji}${G.names[i].name} が あなたの ${cardName(c)} を引いた`, true);
-    say(`${G.names[i].emoji}${G.names[i].name} が あなたの <b>${cardName(c)}</b> を引いた。`);
+    addLog(`${who(i)} が ${who(t)} の ${cardName(c)} を引いた`, true);
+    say(`${who(i)} が ${isTeam() ? who(t) : 'あなた'} の <b>${cardName(c)}</b> を引いた。`);
   } else {
-    addLog(`${G.names[i].emoji}${G.names[i].name} が ${G.names[t].emoji}${G.names[t].name} から 1まい引いた`);
+    addLog(`${who(i)} が ${who(t)} から 1まい引いた`);
   }
   checkFinish();
   render();
   await sleep(wait * 0.6);
   if (gen !== G.gen) return;
-  // ゼロ対があれば すてる（式と数直線も見せる）
-  const pairs = findZeroPairs(G.hands[i]);
-  for (const p of pairs) {
-    removeCards(i, p);
-    const vals = p.map(cardValue);
+  // すてられる組があれば すてる（式と数直線も見せる）
+  for (const g of findAllZeroGroups(G.hands[i], CFG.lv)) {
+    removeCards(i, g); G.threwThisTurn = true;
+    const vals = g.map(cardValue);
     showMath(vals, true);
-    addLog(`${G.names[i].emoji}${G.names[i].name}：${exprText(vals)}＝0 で すてた`);
-    say(`${G.names[i].emoji}${G.names[i].name} が ゼロ対 ${exprText(vals)}＝0 を すてた。`);
+    addLog(`${who(i)}：${exprText(vals)}＝0 で すてた`);
+    say(`${who(i)} が ゼロ対 ${exprText(vals)}＝0 を すてた。`);
     checkFinish();
     render();
     await sleep(wait);
@@ -748,42 +969,68 @@ async function cpuTurn(i, gen) {
 }
 
 /* ---------- おわり ---------- */
-function endGame() {
+function endGame(stalled = false) {
   if (G.step === 'end') return;
-  G.step = 'end'; G.gen++;
-  const loser = G.hands.findIndex(h => h.length > 0);
-  const order = G.finished.slice();
+  G.step = 'end'; G.gen++; G.ansOpen = false;
+  const loser = G.hands.findIndex(h => h.some(c => c.s === 'J'));
+  const order = finalRanking(G.finished, G.hands);
   const me = order.indexOf(0);
-  $('#endTitle').textContent = loser === 0 ? '😢 ジョーカーが のこった…' : `🎉 あなたは ${me + 1}番で あがり！`;
-  $('#rank').innerHTML = order.map(i => `<li>${G.names[i].emoji} ${G.names[i].name}</li>`).join('') +
-    (loser >= 0 ? `<li>${G.names[loser].emoji} ${G.names[loser].name}（🃏 ジョーカー）</li>` : '');
+  if (isTeam()) {
+    $('#endTitle').textContent = `🏆 1番は ${who(order[0])}！` + (loser >= 0 ? `　🃏 は ${who(loser)}` : '');
+  } else {
+    $('#endTitle').textContent = loser === 0 ? '😢 ジョーカーが のこった…' : G.finished.includes(0) ? `🎉 あなたは ${me + 1}番で あがり！` : `あなたは ${me + 1}番`;
+  }
+  $('#rank').innerHTML = order.map(i => {
+    const h = G.hands[i];
+    const tag = G.finished.includes(i) ? '' : h.some(c => c.s === 'J') ? `（🃏 ジョーカー・のこり${h.length}まい）` : `（のこり${h.length}まい）`;
+    return `<li>${who(i)}${tag}</li>`;
+  }).join('');
   const has = Object.keys(G.trips).length > 0;
   $('#endTrip').hidden = !has;
+  $('#endTripTitle').textContent = isTeam() ? '🔎 クラスのつまずき（この回）' : '🔎 あなたのつまずき（この回）';
   $('#endTripList').innerHTML = tripItems();
-  $('#endNote').textContent = has ? '' : 'まちがえずに ゼロ対を すてられました。すばらしい！';
+  // 止まったときは、のこったカード（ジョーカー以外）を ぜんぶ たすと 0 になることを式で見せる
+  const left = G.hands.flat().filter(c => c.s !== 'J').map(cardValue).sort((x, y) => x - y);
+  $('#endNote').innerHTML = (stalled
+    ? 'だれも すてられないまま 全員が3回ずつ引いたので、おわりにしました（あがっていない人は 手札の少ない順。ジョーカーを持っている人が最下位）。<br>' +
+      `のこったカードを ぜんぶ たすと… <b>${exprText(left)}＝0</b>　→ ほんとうは みんなの手札を合わせれば すてられた！<br>`
+    : '') + (has ? '' : 'まちがえずに ゼロ対を すてられました。すばらしい！');
+  if (stalled) showMath(left, true);
   // 勝ち負けの記録
   const rec = Worksheet.appData('results') || [];
-  rec.push({ at: new Date().toISOString(), rule: CFG.rule, lv: CFG.lv, n: G.names.length, place: loser === 0 ? G.names.length : me + 1 });
+  rec.push({ at: new Date().toISOString(), rule: CFG.rule, lv: CFG.lv, play: CFG.play, n: G.names.length, place: isTeam() ? null : (loser === 0 ? G.names.length : me + 1) });
   Worksheet.appData('results', rec.slice(-200));
   $('#playView').hidden = true; $('#endView').hidden = false;
 }
 
 function toSetup() {
-  G.gen++; G.step = 'idle';
+  G.gen++; G.step = 'idle'; G.ansOpen = false;
   $('#playView').hidden = true; $('#endView').hidden = true; $('#setupView').hidden = false;
 }
 
 /* ---------- 設定のボタン ---------- */
+function paintSetup() {
+  $('#cpuOpt').hidden = CFG.play !== 'solo';
+  $('#teamOpt').hidden = CFG.play !== 'team';
+  $('#lvNote').innerHTML = ({
+    1: '※Lv1：同じ数の 黒と赤の2まいだけが組になる。♠7 と ♣7（どちらも ＋7）は組にならない。',
+    2: '※Lv2：3まい以上の組もOK。たとえば ♠3・♣4・♥7 は (+3)+(+4)+(−7)=0 なので すてられる。<br>だれも すてられないまま 全員が3回ずつ引いたら おわり（手札の少ない順。ジョーカーを持っている人が最下位）。',
+    3: '※Lv3：Lv2 と同じ組で、すてる前に えらんだカードの和を自分で答える。正しく答えられて 和が0なら すてられる。<br>だれも すてられないまま 全員が3回ずつ引いたら おわり。'
+  })[CFG.lv];
+}
 function bindSeg(sel, get, set) {
   const box = $(sel);
   const paint = () => box.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === String(get())));
-  box.addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; set(b.dataset.v); paint(); });
+  box.addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; set(b.dataset.v); paint(); paintSetup(); });
   paint();
 }
 bindSeg('#optRule', () => CFG.rule, v => CFG.rule = v);
 bindSeg('#optLv', () => CFG.lv, v => CFG.lv = +v);
+bindSeg('#optPlay', () => CFG.play, v => CFG.play = v);
 bindSeg('#optCpu', () => CFG.cpu, v => CFG.cpu = +v);
+bindSeg('#optTeams', () => CFG.teams, v => CFG.teams = +v);
 bindSeg('#optFace', () => CFG.face ? 1 : 0, v => CFG.face = v === '1');
+paintSetup();
 
 // 約束の見本カード
 $('#demoCards').innerHTML = [{ id: 'dS7', s: 'S', r: 7 }, { id: 'dH7', s: 'H', r: 7 }].map(c => cardHTML(c)).join('') +
@@ -796,38 +1043,55 @@ $('#restartBtn').addEventListener('click', startGame);
 $('#setupBtn').addEventListener('click', toSetup);
 $('#endSetupBtn').addEventListener('click', toSetup);
 $('#throwBtn').addEventListener('click', onThrow);
-$('#revealBtn').addEventListener('click', onReveal);
+$('#revealBtn').addEventListener('click', () => showMath(selCards().map(cardValue), true));
 $('#clearBtn').addEventListener('click', () => { G.sel = []; showMath([], false); render(); });
 $('#hintBtn').addEventListener('click', onHint);
 $('#nextBtn').addEventListener('click', onNext);
-$('#sortBtn').addEventListener('click', () => { G.sorted = !G.sorted; sortHand(); render(); });
+$('#sortBtn').addEventListener('click', () => { G.sorted = !G.sorted; sortHands(); render(); });
 $('#showOppBtn').addEventListener('click', () => { G.showOpp = !G.showOpp; render(); });
-$('#hand').addEventListener('click', e => { const el = e.target.closest('.tc'); if (el) onHandTap(el.dataset.id); });
+$('#hand').addEventListener('click', e => {
+  if (e.target.closest('#coverBtn')) { G.covered = false; render(); return; }
+  const el = e.target.closest('.tc'); if (el) onHandTap(el.dataset.id);
+});
 $('#opps').addEventListener('click', e => { const el = e.target.closest('.tc.back.target'); if (el) onDraw(+el.dataset.k); });
 $('#opps').addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
   const el = e.target.closest('.tc.back.target'); if (el) { e.preventDefault(); onDraw(+el.dataset.k); }
 });
+$('#keys').addEventListener('click', e => { const b = e.target.closest('button'); if (b) onKey(b.dataset.k); });
+$('#ansOk').addEventListener('click', onAnswer);
+$('#ansCancel').addEventListener('click', () => { G.ansOpen = false; say('えらびなおしてもいいよ。'); render(); });
+// キーボード：数字・「-」・Backspace・Enter（Lv3 で答えるとき）
+document.addEventListener('keydown', e => {
+  if (!G.ansOpen || e.target.closest('textarea, input')) return;
+  if (/^[0-9]$/.test(e.key)) onKey(e.key);
+  else if (e.key === '-' || e.key === '+') onKey('sg');
+  else if (e.key === 'Backspace') onKey('bs');
+  else if (e.key === 'Enter') onAnswer();
+  else return;
+  e.preventDefault();
+});
 
 /* ---------- ワークシート ---------- */
 Worksheet.init({
   title: '正負の数トランプ（ゼロ対ババ抜き）',
-  question: 'トランプの黒（＋）と赤（−）。どんな2まいなら、たして 0 になるだろうか？',
+  question: 'トランプの黒（＋）と赤（−）。どんな組なら、たして 0 になるだろうか？',
   predictions: ['同じ数の 黒と赤', '同じ数なら 色は何でもよい', '黒と赤なら 数は何でもよい', 'わからない'],
-  operationNote: 'ゼロ対ババ抜きで遊び、すてた組を「＋ 記録する」で表に残そう。まちがえて すてられなかった組も、式でたしかめよう。',
+  operationNote: 'ゼロ対ババ抜きで遊び、すてた組を「＋ 記録する」で表に残そう。Lv2 では3まい以上の組も記録してみよう。',
   fields: [
     { key: 'shiki', label: 'すてた組（式）', math: false },
+    { key: 'n', label: 'まい数', math: false },
     { key: 'wa', label: '和', math: false }
   ],
   capture: () => {
-    if (!G.lastPair) { say('ゼロ対を すててから 記録しよう。'); return null; }
-    return G.lastPair;
+    if (!G.lastGroup) { say('ゼロ対を すててから 記録しよう。'); return null; }
+    return G.lastGroup;
   },
-  summaryHint: '「たして 0 になるのは、〜と〜の2数」の形で。「反数」ということばも使ってみよう。',
+  summaryHint: '「たして 0 になるのは、〜」の形で。「反数」「絶対値」ということばも使ってみよう。',
   open: false,
   teacher: {
-    hint: 'はじめに「♠7 と ♣7 は組になる？」と聞き、ふつうのババ抜きとのちがいを考えさせる。数直線で「右へ7、左へ7で 0 にもどる」ことを見せるとよい。',
-    answer: '式：(+7)+(−7)=0、(+3)+(−3)=0<br>ことば：符号がちがい、絶対値が等しい2数（たがいに反数）の和は 0 になる。'
+    hint: 'はじめに「♠7 と ♣7 は組になる？」と聞き、ふつうのババ抜きとのちがいを考えさせる。Lv2 では「＋の合計と −の合計の大きさが同じなら 0」に気づかせる。',
+    answer: '式：(+7)+(−7)=0、(+3)+(+4)+(−7)=0<br>ことば：符号がちがい、絶対値が等しい2数（たがいに反数）の和は 0 になる。3まい以上でも、正の数の和と負の数の和の絶対値が等しければ 0 になる。'
   }
 });
 
