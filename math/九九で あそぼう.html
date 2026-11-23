@@ -368,8 +368,27 @@
   <div class="modal-card" id="resultCard"></div>
 </div>
 
+<script src="kuku-voice/voice.js"></script>
 <script>
 'use strict';
+// ===== VOICEVOX（ずんだもん）の 音声ファイル。あれば それを、なければ ブラウザの 声で よむ =====
+// 文 → 音声ファイルの 表は kuku-voice/voice.js（tools/build-voice.py で 作る）
+const vvKey = t => String(t).replace(/[\s、。!！]/g, '');
+let vvAudio = null;
+function vvHas(text) { return typeof KUKU_VOICE !== 'undefined' && !!KUKU_VOICE[vvKey(text)]; }
+function vvStop() { if (vvAudio) { const a = vvAudio; vvAudio = null; a.onended = a.onerror = null; a.pause(); } }
+// 鳴らせたら true。とちゅうで 鳴らせなかったときは fallback() を よぶ
+function vvPlay(text, onend, fallback) {
+  vvStop();
+  if (!vvHas(text)) return false;
+  const a = new Audio('kuku-voice/voice/' + KUKU_VOICE[vvKey(text)] + '.m4a');
+  vvAudio = a;
+  a.onended = () => { if (vvAudio === a) vvAudio = null; if (onend) onend(); };
+  const fail = () => { if (vvAudio !== a) return; vvAudio = null; if (fallback) fallback(); else if (onend) onend(); };
+  a.onerror = fail;
+  a.play().catch(fail);
+  return true;
+}
 const $ = (s) => document.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const R = (kanji, kana) => `<ruby>${kanji}<rt>${kana}</rt></ruby>`;   // ルビつきの 漢字
@@ -482,7 +501,13 @@ const sfx = {
   done:  () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]),
 };
 function speak(text, onend) {
-  if (!settings.voice || !('speechSynthesis' in window)) { if (onend) onend(); return; }
+  if (!settings.voice) { if (onend) onend(); return; }
+  try { speechSynthesis.cancel(); } catch (e) {}
+  if (vvPlay(text, onend, () => ttsSpeak(text, onend))) return;
+  ttsSpeak(text, onend);
+}
+function ttsSpeak(text, onend) {
+  if (!('speechSynthesis' in window)) { if (onend) onend(); return; }
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -491,7 +516,7 @@ function speak(text, onend) {
     speechSynthesis.speak(u);
   } catch (e) { if (onend) onend(); }
 }
-const stopSpeak = () => { try { speechSynthesis.cancel(); } catch (e) {} };
+const stopSpeak = () => { vvStop(); try { speechSynthesis.cancel(); } catch (e) {} };
 
 /* =========================================================
    4. じょうたい（state）：アプリの じょうほうは ぜんぶ ここに ある
@@ -1029,7 +1054,7 @@ function reciteGo(i) {
 function speakOrWait(text, cb) {
   let done = false;
   const once = () => { if (!done) { done = true; cb(); } };
-  if (settings.voice && 'speechSynthesis' in window) {
+  if (settings.voice && (vvHas(text) || 'speechSynthesis' in window)) {
     speak(text, once);
     setTimeout(once, Math.max(2500, text.length * 330));
   } else setTimeout(once, 1300);
@@ -1491,5 +1516,6 @@ reduceMQ.addEventListener?.('change', applyLook);
 // ?teacher=1 で開くと、はじめから先生モードにする
 setMode(new URLSearchParams(location.search).get('teacher') === '1' ? 'teacher' : 'table');
 </script>
+<div style="font-size:.75rem;color:#999;text-align:center;padding:6px 16px 14px;font-family:sans-serif">声：<a href="https://voicevox.hiroshiba.jp/" target="_blank" rel="noopener" style="color:#999">VOICEVOX:ずんだもん</a></div>
 </body>
 </html>

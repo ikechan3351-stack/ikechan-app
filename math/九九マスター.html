@@ -171,7 +171,26 @@
 
 </div>
 
+<script src="kuku-voice/voice.js"></script>
 <script>
+// ===== VOICEVOX（ずんだもん）の 音声ファイル。あれば それを、なければ ブラウザの 声で よむ =====
+// 文 → 音声ファイルの 表は kuku-voice/voice.js（tools/build-voice.py で 作る）
+const vvKey = t => String(t).replace(/[\s、。!！]/g, '');
+let vvAudio = null;
+function vvHas(text) { return typeof KUKU_VOICE !== 'undefined' && !!KUKU_VOICE[vvKey(text)]; }
+function vvStop() { if (vvAudio) { const a = vvAudio; vvAudio = null; a.onended = a.onerror = null; a.pause(); } }
+// 鳴らせたら true。とちゅうで 鳴らせなかったときは fallback() を よぶ
+function vvPlay(text, onend, fallback) {
+  vvStop();
+  if (!vvHas(text)) return false;
+  const a = new Audio('kuku-voice/voice/' + KUKU_VOICE[vvKey(text)] + '.m4a');
+  vvAudio = a;
+  a.onended = () => { if (vvAudio === a) vvAudio = null; if (onend) onend(); };
+  const fail = () => { if (vvAudio !== a) return; vvAudio = null; if (fallback) fallback(); else if (onend) onend(); };
+  a.onerror = fail;
+  a.play().catch(fail);
+  return true;
+}
 (() => {
   const $ = (id) => document.getElementById(id);
 
@@ -209,6 +228,11 @@
   const sndDone = () => beep([[523, 0, 0.15], [659, 0.13, 0.15], [784, 0.26, 0.15], [1047, 0.39, 0.4]]);
 
   function speak(text, onend) {
+    vvStop(); try { speechSynthesis.cancel(); } catch (_) {}
+    if (vvPlay(text, onend, () => ttsSpeak(text, onend))) return;
+    return ttsSpeak(text, onend);
+  }
+  function ttsSpeak(text, onend) {
     try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
@@ -289,7 +313,7 @@
       st.reciting = true;
       reciteFrom(st.selDan, 1);
     });
-    $('btnStop').addEventListener('click', () => { st.reciting = false; try { speechSynthesis.cancel(); } catch (_) {} });
+    $('btnStop').addEventListener('click', () => { st.reciting = false; vvStop(); try { speechSynthesis.cancel(); } catch (_) {} });
   }
   function reciteFrom(dan, b) {
     if (!st.reciting || b > 9 || st.mode !== 'table') return;
@@ -491,7 +515,7 @@
 
   // ===== モード切りかえ =====
   function renderAll() {
-    try { speechSynthesis.cancel(); } catch (_) {}
+    vvStop(); try { speechSynthesis.cancel(); } catch (_) {}
     st.reciting = false;
     stopRound();
     if (st.mode === 'table') renderTable();
@@ -508,5 +532,6 @@
 })();
 </script>
 
+<div style="font-size:.75rem;color:#999;text-align:center;padding:6px 16px 14px;font-family:sans-serif">声：<a href="https://voicevox.hiroshiba.jp/" target="_blank" rel="noopener" style="color:#999">VOICEVOX:ずんだもん</a></div>
 </body>
 </html>

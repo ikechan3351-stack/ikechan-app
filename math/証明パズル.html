@@ -257,8 +257,27 @@
 
 <script src="math-render.js"></script>
 <script src="worksheet.js"></script>
+<script src="shomei-voice/voice.js"></script>
 <script>
 'use strict';
+// ===== VOICEVOX（四国めたん）の 音声ファイル。あれば それを、なければ ブラウザの 声で よむ =====
+// 文 → 音声ファイルの 表は shomei-voice/voice.js（tools/build-voice.py で 作る）
+const vvKey = t => String(t).replace(/[\s、。!！]/g, '');
+let vvAudio = null;
+function vvHas(text) { return typeof SHOMEI_VOICE !== 'undefined' && !!SHOMEI_VOICE[vvKey(text)]; }
+function vvStop() { if (vvAudio) { const a = vvAudio; vvAudio = null; a.onended = a.onerror = null; a.pause(); } }
+// 鳴らせたら true。とちゅうで 鳴らせなかったときは fallback() を よぶ
+function vvPlay(text, onend, fallback) {
+  vvStop();
+  if (!vvHas(text)) return false;
+  const a = new Audio('shomei-voice/voice/' + SHOMEI_VOICE[vvKey(text)] + '.m4a');
+  vvAudio = a;
+  a.onended = () => { if (vvAudio === a) vvAudio = null; if (onend) onend(); };
+  const fail = () => { if (vvAudio !== a) return; vvAudio = null; if (fallback) fallback(); else if (onend) onend(); };
+  a.onerror = fail;
+  a.play().catch(fail);
+  return true;
+}
 /* =====================================================================
    証明の組み立てパズル（中2 図形の証明・三角形の合同）
    ・問題（PROBS）ごとに、図（点の座標を作る geo と、ドラッグのきまり drag）・仮定・結論・カードを持つ。
@@ -989,7 +1008,7 @@ function play() {
   if (st.playing) return stopPlay();
   const texts = rowTexts();
   if (!texts.some(Boolean)) { setMsg('読み上げる行がまだない。', 'bad'); return; }
-  const voice = $('#voice').checked && 'speechSynthesis' in window;
+  const voice = $('#voice').checked;
   st.playing = { i: -1, timer: null };
   $('#play').textContent = '■ とめる';
   const next = () => {
@@ -1004,9 +1023,20 @@ function play() {
     else { st.glow = i - 1; say = texts[i - 1] + (rowTag(i - 1) ? '。…' + rowTag(i - 1) : ''); if (!texts[i - 1]) return next(); }
     drawFig(); renderProof();
     setMsg('🔈 ' + esc(say), 'info');
-    if (voice) {
+    // VOICEVOX の 音声は 部品ごと（「①、②、③より、」＋カードの文＋「…①」）。そろわないときは ブラウザの 声で 1文まるごと
+    const after = () => { if (st.playing) st.playing.timer = setTimeout(next, 400); };
+    let parts = [say];
+    if (i >= 1 && i <= n) {
+      const t = texts[i - 1], pre = '①、②、③より、';
+      parts = t.startsWith(pre) ? [pre, t.slice(pre.length)] : [t];
+      if (rowTag(i - 1)) parts.push('…' + rowTag(i - 1));
+    }
+    if (voice && parts.every(vvHas)) {
+      const go = k => { if (!st.playing) return; if (k >= parts.length) return after(); vvPlay(parts[k], () => go(k + 1), after); };
+      go(0);
+    } else if (voice && 'speechSynthesis' in window) {
       const u = new SpeechSynthesisUtterance(yomi(say)); u.lang = 'ja-JP'; u.rate = 0.95;
-      u.onend = () => { if (st.playing) st.playing.timer = setTimeout(next, 400); };
+      u.onend = after;
       speechSynthesis.cancel(); speechSynthesis.speak(u);
     } else st.playing.timer = setTimeout(next, 2600);
   };
@@ -1014,6 +1044,7 @@ function play() {
 }
 function stopPlay() {
   if (st.playing) { clearTimeout(st.playing.timer); st.playing = null; }
+  vvStop();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   $('#play').textContent = '▶ 読み上げ';
   st.glow = -1;
@@ -1121,5 +1152,6 @@ if (TEACHER) $('#teacherBadge').hidden = false;
 { const q = +params.get('q'); loadProb(q >= 1 && q <= PROBS.length ? q - 1 : 0); }
 renderAll();
 </script>
+<div style="font-size:.75rem;color:#999;text-align:center;padding:6px 16px 14px;font-family:sans-serif">声：<a href="https://voicevox.hiroshiba.jp/" target="_blank" rel="noopener" style="color:#999">VOICEVOX:四国めたん</a></div>
 </body>
 </html>
