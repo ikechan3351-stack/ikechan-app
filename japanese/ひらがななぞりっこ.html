@@ -792,38 +792,35 @@ function confetti() {
 // 画の 線に そって その字の 絵の シールを ならべ、書きじゅんどおりに なぞった ところだけ けす。
 // 1字に 絵が 3まい（PICS）なので、同じ字を 3かい かく。なぞっている あいだは その字の 声（あ・あ・あ…）が なる
 const voiceId = k => typeof VOICE !== 'undefined' && (VOICE[k] || VOICE[k.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))]);
-const traceVoice = { k: null, buf: null, off: 0, el: null, src: null, last: 0 };
+// 読み上げと 同じ <audio> で ならす（iPad の 消音スイッチが オンでも なる。Web Audio だと きえる）。
+// 4つを じゅんばんに つかって、はやく なぞっても とぎれずに 「あ・あ・あ」と なるように する
+const traceVoice = { k: null, pool: [], n: 0, cur: null, last: 0, unlocked: false };
+const VOICE_LEAD = 0.13;                           // 音声の はじめの しずかな ところ（VOICEVOX は 約0.1〜0.15びょう）
 function loadTraceVoice(k) {
-  if (traceVoice.k === k) return;
-  Object.assign(traceVoice, { k, buf: null, off: 0, el: null });
-  const id = voiceId(k); if (!id) return;
-  const url = 'hiragana/voice/' + id + '.m4a';
-  traceVoice.el = new Audio(url);                  // うまく いかない ときの かわり
-  try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    fetch(url).then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).then(buf => {
-      if (traceVoice.k !== k) return;
-      // はじめの しずかな ところを とばす（すぐ 声が でるように）
-      const d = buf.getChannelData(0); let i = 0; while (i < d.length && Math.abs(d[i]) < 0.02) i++;
-      traceVoice.buf = buf; traceVoice.off = Math.max(0, i / buf.sampleRate - 0.01);
-    }).catch(() => {});
-  } catch (e) {}
+  if (traceVoice.k !== k) {
+    traceVoice.k = k; traceVoice.unlocked = false;
+    const id = voiceId(k);
+    traceVoice.pool = id ? Array.from({ length: 4 }, () => { const a = new Audio('hiragana/voice/' + id + '.m4a'); a.preload = 'auto'; return a; }) : [];
+  }
+  unlockTraceVoice();
 }
-function traceSay(rate) {
-  if (!store.sound) return;
+// iPad などは、さわった しゅんかんに 1ど ならした 音しか あとで ならせないので、音を けして 1ど ならしておく
+function unlockTraceVoice() {
+  if (traceVoice.unlocked) return;
+  traceVoice.unlocked = true;
+  traceVoice.pool.forEach(a => { a.muted = true; const p = a.play(); if (p) p.then(() => { a.pause(); a.muted = false; }).catch(() => { a.muted = false; traceVoice.unlocked = false; }); else { a.pause(); a.muted = false; } });
+}
+function traceSay(rate, force) {
+  if (!store.sound || !traceVoice.pool.length) return;
   const now = performance.now();
-  if (now - traceVoice.last < 170) return;
+  if (!force && now - traceVoice.last < 130) return;
   traceVoice.last = now;
   try {
-    if (traceVoice.buf && actx) {
-      if (actx.state === 'suspended') actx.resume();
-      if (traceVoice.src) try { traceVoice.src.stop(); } catch (e) {}
-      const s = actx.createBufferSource();
-      s.buffer = traceVoice.buf; s.playbackRate.value = rate;
-      s.connect(actx.destination); s.start(0, traceVoice.off); traceVoice.src = s;
-    } else if (traceVoice.el) {
-      const a = traceVoice.el; a.playbackRate = rate; a.currentTime = 0; a.play().catch(() => {});
-    }
+    if (traceVoice.cur) traceVoice.cur.pause();
+    const a = traceVoice.pool[traceVoice.n++ % traceVoice.pool.length];
+    a.muted = false; a.playbackRate = rate; a.currentTime = VOICE_LEAD;
+    const p = a.play(); if (p) p.catch(() => {});
+    traceVoice.cur = a;
   } catch (e) {}
 }
 
@@ -894,14 +891,14 @@ function showErase(row, k, round = 0) {
   const wipe = () => ctx.clearRect(0, 0, cv.width, cv.height);
   fit();
   const ro = window.ResizeObserver ? new ResizeObserver(fit) : null; if (ro) ro.observe(cv);
-  cleanup = () => { alive = false; timers.forEach(clearTimeout); if (ro) ro.disconnect(); if (traceVoice.src) try { traceVoice.src.stop(); } catch (e) {} };
+  cleanup = () => { alive = false; timers.forEach(clearTimeout); if (ro) ro.disconnect(); if (traceVoice.cur) traceVoice.cur.pause(); };
 
   const at = e => { const b = cv.getBoundingClientRect(); const x = e.clientX - b.left, y = e.clientY - b.top; return [x / b.width * 109, y / b.height * 109, x, y]; };
   let pid = null, last = null, live = false, off = false, got = false, start = null;
   function eat(p) {
     while (cur < stk.length && idx < stk[cur].length && dist(p, stk[cur][idx]) < 9) {
       stk[cur][idx].el.classList.add('gone'); idx++; got = true;
-      traceSay(1 + 0.3 * idx / stk[cur].length);
+      traceSay(1 + 0.3 * idx / stk[cur].length, idx === 1);
     }
     if (idx >= stk[cur].length) strokeDone(); else { showInk(); place(); }
   }
@@ -915,7 +912,7 @@ function showErase(row, k, round = 0) {
     e.preventDefault();
     if (pid !== null || busy || cur >= stk.length) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    fit(); wipe(); pid = e.pointerId; try { cv.setPointerCapture(pid); } catch (x) {}
+    unlockTraceVoice(); fit(); wipe(); pid = e.pointerId; try { cv.setPointerCapture(pid); } catch (x) {}
     const p = at(e); last = start = p; got = false; off = false;
     // ● の 近く（けした ところの おわりの ほうから でも よい）から はじめたら けせる
     live = dist(p, stk[cur][idx]) < 11 || (idx > 0 && offBy(p) < 9);
@@ -936,7 +933,7 @@ function showErase(row, k, round = 0) {
   };
   const end = e => {
     if (pid === null || (e && e.pointerId !== pid)) return;
-    pid = null; later(wipe, 250);
+    pid = null; later(wipe, 250); unlockTraceVoice();
     if (busy || cur >= stk.length || off || got) { if (got && !off && cur < stk.length && idx > 0) say('いいね！ ● から つづけよう', 'ok'); return; }
     // なにも けせなかった ときの ひとこと
     const s = stk[cur], other = stk.findIndex((a, j) => j > cur && dist(start, a[0]) < 11);
@@ -952,7 +949,7 @@ function showErase(row, k, round = 0) {
     title.textContent = pick(PRAISE);
     const win = document.createElement('div'); win.className = 'er-win';
     win.innerHTML = `<img src="${src}" alt=""><div class="w">${esc(word).replace(k, `<b>${k}</b>`)}</div>`;
-    later(() => { box.appendChild(win); speak(word); }, 450);
+    later(() => { box.appendChild(win); if (traceVoice.cur) traceVoice.cur.pause(); speak(word); }, 450);
     const last3 = round >= words.length - 1;
     if (!last3) {
       say(`「${word}」が きえたね！ もう いちど かこう`, 'ok');
