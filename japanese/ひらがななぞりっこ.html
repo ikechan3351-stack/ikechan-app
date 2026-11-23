@@ -793,8 +793,8 @@ function confetti() {
 // 1字に 絵が 3まい（PICS）なので、同じ字を 3かい かく。なぞっている あいだは その字の 声（あ・あ・あ…）が なる
 const voiceId = k => typeof VOICE !== 'undefined' && (VOICE[k] || VOICE[k.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))]);
 // 読み上げと 同じ <audio> で ならす（iPad の 消音スイッチが オンでも なる。Web Audio だと きえる）。
-// 4つを じゅんばんに つかって、はやく なぞっても とぎれずに 「あ・あ・あ」と なるように する
-const traceVoice = { k: null, pool: [], n: 0, cur: null, last: 0, unlocked: false };
+// 4つを じゅんばんに つかう
+const traceVoice = { k: null, pool: [], n: 0, cur: null, unlocked: false };
 const VOICE_LEAD = 0.13;                           // 音声の はじめの しずかな ところ（VOICEVOX は 約0.1〜0.15びょう）
 function loadTraceVoice(k) {
   if (traceVoice.k !== k) {
@@ -810,15 +810,15 @@ function unlockTraceVoice() {
   traceVoice.unlocked = true;
   traceVoice.pool.forEach(a => { a.muted = true; const p = a.play(); if (p) p.then(() => { a.pause(); a.muted = false; }).catch(() => { a.muted = false; traceVoice.unlocked = false; }); else { a.pause(); a.muted = false; } });
 }
-function traceSay(rate, force) {
+// シール 3つごとに 1ど、すこし ゆっくり（「あー」）、さいごまで ならす。まえの 声が なっている あいだは かさねない
+const VOICE_EVERY = 3, VOICE_RATE = 0.8;
+function traceSay() {
   if (!store.sound || !traceVoice.pool.length) return;
-  const now = performance.now();
-  if (!force && now - traceVoice.last < 130) return;
-  traceVoice.last = now;
+  const c = traceVoice.cur;
+  if (c && !c.paused && !c.ended) return;
   try {
-    if (traceVoice.cur) traceVoice.cur.pause();
     const a = traceVoice.pool[traceVoice.n++ % traceVoice.pool.length];
-    a.muted = false; a.playbackRate = rate; a.currentTime = VOICE_LEAD;
+    a.muted = false; a.preservesPitch = a.webkitPreservesPitch = true; a.playbackRate = VOICE_RATE; a.currentTime = VOICE_LEAD;
     const p = a.play(); if (p) p.catch(() => {});
     traceVoice.cur = a;
   } catch (e) {}
@@ -898,7 +898,7 @@ function showErase(row, k, round = 0) {
   function eat(p) {
     while (cur < stk.length && idx < stk[cur].length && dist(p, stk[cur][idx]) < 9) {
       stk[cur][idx].el.classList.add('gone'); idx++; got = true;
-      traceSay(1 + 0.3 * idx / stk[cur].length, idx === 1);
+      if ((idx - 1) % VOICE_EVERY === 0) traceSay();
     }
     if (idx >= stk[cur].length) strokeDone(); else { showInk(); place(); }
   }
