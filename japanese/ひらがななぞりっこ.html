@@ -335,7 +335,9 @@ if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged 
 // 読み上げ：VOICEVOX（ずんだもん）の音声があれば それを、なければ ブラウザの声で よむ
 let voiceAudio = null;
 function speak(text) {
-  const id = typeof VOICE !== 'undefined' && VOICE[String(text).replace(/\s+/g, '')];
+  const t0 = String(text).replace(/\s+/g, '');
+  // カタカナの ことばは、同じ よみの ひらがなの 音声でも よめる（パンダ → ぱんだ）
+  const id = typeof VOICE !== 'undefined' && (VOICE[t0] || VOICE[t0.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))]);
   if (voiceAudio) { voiceAudio.pause(); voiceAudio = null; }
   if (id) {
     try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) {}
@@ -774,6 +776,8 @@ function decoys(ans, n, level, avoid) {
   pools.forEach(p => shuffle(p).forEach(c => { if (out.length < n && set.all.includes(c) && !ng.has(c)) { out.push(c); ng.add(c); } }));
   return out;
 }
+// ひらがなの 絵の うち、ほんとうは カタカナで 書く ことば（カタカナの ゲームにも 出す）
+const KATA_FROM_HIRA = [['ぱんだ', 'パンダ'], ['らいおん', 'ライオン'], ['ぱじゃま', 'パジャマ'], ['らっぱ', 'ラッパ']];
 function gRangeKs(range) {
   if (range === 'all') return ALL;
   if (range === 'done') return ALL.filter(k => store.stamps[k]);
@@ -782,7 +786,13 @@ function gRangeKs(range) {
 function gPool(type, range, level) {
   const maxLen = type === 'narabe' ? { easy: 3, mid: 5, hard: 99 }[level] : 99;
   const items = [];
-  gRangeKs(range).forEach(k => (PICS[k] || []).forEach((w, n) => { if (toChars(w).length <= maxLen) items.push({ k, w, n }); }));
+  const ks = gRangeKs(range);
+  ks.forEach(k => (PICS[k] || []).forEach((w, n) => { if (toChars(w).length <= maxLen) items.push({ k, w, src: picSrc(k, n) }); }));
+  KATA_FROM_HIRA.forEach(([hw, w]) => {
+    const hk = Object.keys(PICS).find(x => PICS[x].includes(hw)); if (!hk || toChars(w).length > maxLen) return;
+    const src = picSrc(hk, PICS[hk].indexOf(hw));
+    [...new Set(w)].forEach(k => { if (ks.includes(k)) items.push({ k, w, src }); });
+  });
   // 同じ ことばは 1かいだけ
   const seen = new Set();
   return shuffle(items).filter(it => !seen.has(it.w) && seen.add(it.w)).slice(0, G_N);
@@ -836,7 +846,7 @@ function playGame(type, range, level) {
         <button class="btn" id="gQuit">✖ やめる</button>
       </div>
       <div class="g-word" id="gWord"></div>
-      <div class="g-board"><img src="${picSrc(q.k, q.n)}" alt="${esc(q.w)}"><button class="say" id="gSay" aria-label="よむ">🔊</button></div>
+      <div class="g-board"><img src="${q.src}" alt="${esc(q.w)}"><button class="say" id="gSay" aria-label="よむ">🔊</button></div>
       <div id="gPlay"></div>`;
     view.querySelector('#gQuit').onclick = showGameMenu;
     view.querySelector('#gSay').onclick = () => speak(q.w);
