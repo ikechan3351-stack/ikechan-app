@@ -793,38 +793,34 @@ function confetti() {
 // 画の 線に そって その字の 絵の シールを ならべ、書きじゅんどおりに なぞった ところだけ けす。
 // 1字に 絵が 3まい（PICS）なので、同じ字を 3かい かく。さわっている あいだは 3びょうごとに「あひるの、あ」と なる
 const voiceId = k => typeof VOICE !== 'undefined' && (VOICE[k] || VOICE[k.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))]);
-// 読み上げと 同じ <audio> で ならす（iPad の 消音スイッチが オンでも なる。Web Audio だと きえる）
-const traceVoice = { key: null, el: null, last: -1e9, unlocked: false };
+// 読み上げ（speak）と 同じく、ならす たびに <audio> を あたらしく 作る
+// （まえに 作って おいた 音を あとで ならす やり方は、Chromebook で 鳴らないことが あった）
+const traceVoice = { key: null, url: '', cur: null, last: -1e9 };
 const VOICE_EVERY_MS = 3000;
 function loadTraceVoice(k, word) {
   const key = k + '|' + word;
-  if (traceVoice.key !== key) {
-    traceVoice.key = key; traceVoice.unlocked = false; traceVoice.last = -1e9;
-    if (traceVoice.el) traceVoice.el.pause();
-    // 「ことばの、字」の 声（voice-phrase）。ない ときは 字だけの 声
-    const pid = typeof VOICE_PHRASE !== 'undefined' && VOICE_PHRASE[key], id = voiceId(k);
-    const url = pid ? 'hiragana/voice-phrase/' + pid + '.m4a' : id ? 'hiragana/voice/' + id + '.m4a' : '';
-    traceVoice.el = url ? Object.assign(new Audio(url), { preload: 'auto' }) : null;
-  }
-  unlockTraceVoice();
+  if (traceVoice.key === key) return;
+  stopTraceVoice();
+  traceVoice.key = key; traceVoice.last = -1e9;
+  // 「ことばの、字」の 声（voice-phrase）。ない ときは 字だけの 声
+  const pid = typeof VOICE_PHRASE !== 'undefined' && VOICE_PHRASE[key], id = voiceId(k);
+  traceVoice.url = pid ? 'hiragana/voice-phrase/' + pid + '.m4a' : id ? 'hiragana/voice/' + id + '.m4a' : '';
+  if (traceVoice.url) try { fetch(traceVoice.url).catch(() => {}); } catch (e) {}   // さきに よみこんで おく
 }
-// iPad などは、さわった しゅんかんに 1ど ならした 音しか あとで ならせないので、音を けして 1ど ならしておく
-function unlockTraceVoice() {
-  const a = traceVoice.el;
-  if (traceVoice.unlocked || !a) return;
-  traceVoice.unlocked = true;
-  a.muted = true; const p = a.play();
-  if (p) p.then(() => { if (a.muted) { a.pause(); a.currentTime = 0; a.muted = false; } }).catch(() => { a.muted = false; traceVoice.unlocked = false; });
-  else { a.pause(); a.muted = false; }
-}
-// さわりはじめに 1ど、さわりつづけていれば 3びょうごとに ならす（なっている とちゅうでは かさねない）
+function stopTraceVoice() { if (traceVoice.cur) { traceVoice.cur.pause(); traceVoice.cur = null; } }
+// さわりはじめに 1ど、さわりつづけていれば 3びょうごとに ならす（なっている とちゅうでは かさねない）。
+// 読み上げと おなじく「おと」の オン・オフに かかわらず ならす
 function traceSay() {
-  const a = traceVoice.el;
-  if (!store.sound || !a) return;
-  const now = performance.now();
-  if (now - traceVoice.last < VOICE_EVERY_MS || (!a.paused && !a.ended && !a.muted)) return;
+  if (!traceVoice.url) return;
+  const now = performance.now(), c = traceVoice.cur;
+  if (now - traceVoice.last < VOICE_EVERY_MS || (c && !c.paused && !c.ended)) return;
   traceVoice.last = now;
-  try { a.muted = false; a.currentTime = 0; const p = a.play(); if (p) p.catch(() => {}); } catch (e) {}
+  try {
+    if (voiceAudio) { voiceAudio.pause(); voiceAudio = null; }
+    const a = new Audio(traceVoice.url);
+    traceVoice.cur = a;
+    a.play().catch(() => { if (traceVoice.cur === a) traceVoice.cur = null; });
+  } catch (e) {}
 }
 
 function showErase(row, k, round = 0) {
@@ -896,7 +892,7 @@ function showErase(row, k, round = 0) {
   const ro = window.ResizeObserver ? new ResizeObserver(fit) : null; if (ro) ro.observe(cv);
   // さわっている あいだ 3びょうごとに 声（うごかさずに おさえていても なる）
   const tick = setInterval(() => { if (pid !== null && !busy) traceSay(); }, 200);
-  cleanup = () => { alive = false; timers.forEach(clearTimeout); clearInterval(tick); if (ro) ro.disconnect(); if (traceVoice.el) traceVoice.el.pause(); };
+  cleanup = () => { alive = false; timers.forEach(clearTimeout); clearInterval(tick); if (ro) ro.disconnect(); stopTraceVoice(); };
 
   const at = e => { const b = cv.getBoundingClientRect(); const x = e.clientX - b.left, y = e.clientY - b.top; return [x / b.width * 109, y / b.height * 109, x, y]; };
   let pid = null, last = null, live = false, off = false, got = false, start = null;
@@ -916,7 +912,7 @@ function showErase(row, k, round = 0) {
     e.preventDefault();
     if (pid !== null || busy || cur >= stk.length) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    unlockTraceVoice(); traceSay(); fit(); wipe(); pid = e.pointerId; try { cv.setPointerCapture(pid); } catch (x) {}
+    traceSay(); fit(); wipe(); pid = e.pointerId; try { cv.setPointerCapture(pid); } catch (x) {}
     const p = at(e); last = start = p; got = false; off = false;
     // ● の 近く（けした ところの おわりの ほうから でも よい）から はじめたら けせる
     live = dist(p, stk[cur][idx]) < 11 || (idx > 0 && offBy(p) < 9);
@@ -937,7 +933,7 @@ function showErase(row, k, round = 0) {
   };
   const end = e => {
     if (pid === null || (e && e.pointerId !== pid)) return;
-    pid = null; later(wipe, 250); unlockTraceVoice();
+    pid = null; later(wipe, 250);
     if (busy || cur >= stk.length || off || got) { if (got && !off && cur < stk.length && idx > 0) say('いいね！ ● から つづけよう', 'ok'); return; }
     // なにも けせなかった ときの ひとこと
     const s = stk[cur], other = stk.findIndex((a, j) => j > cur && dist(start, a[0]) < 11);
@@ -953,7 +949,7 @@ function showErase(row, k, round = 0) {
     title.textContent = pick(PRAISE);
     const win = document.createElement('div'); win.className = 'er-win';
     win.innerHTML = `<img src="${src}" alt=""><div class="w">${esc(word).replace(k, `<b>${k}</b>`)}</div>`;
-    later(() => { box.appendChild(win); if (traceVoice.el) traceVoice.el.pause(); speak(word); }, 450);
+    later(() => { box.appendChild(win); stopTraceVoice(); speak(word); }, 450);
     const last3 = round >= words.length - 1;
     if (!last3) {
       say(`「${word}」が きえたね！ もう いちど かこう`, 'ok');
