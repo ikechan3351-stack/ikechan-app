@@ -486,7 +486,15 @@ const NOTE_SIZES = [ { id: '12', name: '12マス', size: 100 }, { id: '15', name
 const BG_COLORS = [
   { id: 'white', name: 'しろ',     paper: '#ffffff', line: '#c5cae9', bold: '#9fa8da' },
   { id: 'cream', name: 'クリーム', paper: '#fff8e1', line: '#e6d3a3', bold: '#c9ab66' },
+  // こくばん：数直線は チョークの しろ、ジャンプは あかるい あお・あか
+  { id: 'green', name: 'こくばん', paper: '#2f5d46', line: 'rgba(255,255,255,0.28)', bold: 'rgba(255,255,255,0.5)',
+    ink: '#ffffff', span: { 1: { line: '#7cc4ff', fill: '#bbdefb' }, '-1': { line: '#ff8a80', fill: '#ffcdd2' } } },
 ];
+// 数直線の 線と 数の いろ（こくばんの ときは しろ）
+let plainInk = false;   // 道具ばこの 見本は いつも しろい かみの いろで
+const paperOf = () => plainInk || bg.kind === 'image' ? {} : (BG_COLORS.find(c => c.id === bg.color) || {});
+const inkCol = () => paperOf().ink || '#263238';
+const spanCol = d => { const s = paperOf().span || SPAN_COL; return s[d] || s[1]; };
 const bg = {
   kind: BG_KINDS.some(k => k.id === params.get('bg') && k.id !== 'image') ? params.get('bg') : 'plain',
   grid: GRID_SIZES.some(g => g.id === params.get('size')) ? params.get('size') : 'M',
@@ -746,19 +754,19 @@ function labelStep(L, U, cands) {
   return cands[cands.length - 1];
 }
 function lineSvg(it) {
-  const U = unitOf(it.u), w = lineW(it), ay = AY;
+  const U = unitOf(it.u), w = lineW(it), ay = AY, ink = inkCol();
   let body = '';
   const leftArrow = it.open || it.s !== 0;
   const x0 = leftArrow ? 8 : PAD, x1 = w - 8;
-  body += `<line x1="${x0}" y1="${ay}" x2="${x1}" y2="${ay}" stroke="#263238" stroke-width="4" stroke-linecap="round"/>`;
-  body += `<path d="M ${x1 + 2} ${ay} L ${x1 - 16} ${ay - 10} L ${x1 - 16} ${ay + 10} Z" fill="#263238"/>`;
-  if (leftArrow) body += `<path d="M ${x0 - 2} ${ay} L ${x0 + 16} ${ay - 10} L ${x0 + 16} ${ay + 10} Z" fill="#263238"/>`;
+  body += `<line x1="${x0}" y1="${ay}" x2="${x1}" y2="${ay}" stroke="${ink}" stroke-width="4" stroke-linecap="round"/>`;
+  body += `<path d="M ${x1 + 2} ${ay} L ${x1 - 16} ${ay - 10} L ${x1 - 16} ${ay + 10} Z" fill="${ink}"/>`;
+  if (leftArrow) body += `<path d="M ${x0 - 2} ${ay} L ${x0 + 16} ${ay - 10} L ${x0 + 16} ${ay + 10} Z" fill="${ink}"/>`;
   if (it.open) return svgTag(w, LINE_H, body);
   for (let i = 0; i <= it.n; i++) {
     const k = it.s + i, x = PAD + i * it.g;
     const big = k % U.maj === 0, mid = U.mid && k % U.mid === 0;
     const len = big ? 15 : mid ? 11 : 7;
-    body += `<line x1="${x}" y1="${ay - len}" x2="${x}" y2="${ay + len}" stroke="#263238" stroke-width="${big ? 3.5 : mid ? 2.8 : 2}"/>`;
+    body += `<line x1="${x}" y1="${ay - len}" x2="${x}" y2="${ay + len}" stroke="${ink}" stroke-width="${big ? 3.5 : mid ? 2.8 : 2}"/>`;
   }
   if (vis.line && it.show !== 'none') {
     const ly = ay + (U.frac ? 50 : 38);
@@ -772,7 +780,7 @@ function lineSvg(it) {
     for (let i = 0; i <= it.n; i++) {
       const k = it.s + i;
       if (!show(k)) continue;
-      body += numSvg(PAD + i * it.g, ly, fmtLine(k * U.p, U.q, it, it.plus), 24, '#263238').svg;
+      body += numSvg(PAD + i * it.g, ly, fmtLine(k * U.p, U.q, it, it.plus), 24, ink).svg;
     }
   }
   return svgTag(w, LINE_H, body);
@@ -785,12 +793,12 @@ function spanLabel(it) {
   return vis.span ? spanAuto(it) : null;
 }
 function spanSvg(it) {
-  const d = dims(it), w = it.w, h = d.h, col = SPAN_COL[it.d] || SPAN_COL[1];
+  const d = dims(it), w = it.w, h = d.h, col = spanCol(it.d);
   const lab = spanLabel(it);
   let body = '';
   const label = (cy, fs = 28) => {
     if (!lab) return '';
-    const r = numSvg(w / 2, cy, lab, fs, col.line);
+    const r = numSvg(w / 2, cy, lab, fs, (SPAN_COL[it.d] || SPAN_COL[1]).line);   // しろい 札の 上なので こい いろ
     const bw = r.w + 14;
     return `<rect class="ha" x="${w / 2 - bw / 2}" y="${cy - 20}" width="${bw}" height="40" rx="8" fill="#ffffff" fill-opacity="0.85"/>` + r.svg;
   };
@@ -1425,7 +1433,7 @@ function buildToolbox() {
     el.className = 'piece';
     el.style.width = dm.w + 'px'; el.style.height = dm.h + 'px';
     el.style.transform = `scale(${fit})`;
-    el.innerHTML = itemSvg(sample);
+    plainInk = true; el.innerHTML = itemSvg(sample); plainInk = false;
     th.appendChild(el);
     b.appendChild(th);
     const t = document.createElement('div'); t.textContent = TOOLS[type].name; b.appendChild(t);
@@ -1850,7 +1858,7 @@ function renderBgPanel() {
   const cols = $('bgColors'); cols.textContent = '';
   for (const c of BG_COLORS) cols.appendChild(bgButton(c.name, bg.color === c.id, () => { bg.color = c.id; changeBg(); }, c.paper));
 }
-function changeBg() { redrawBg(); renderBgPanel(); scheduleSave(); }
+function changeBg() { redrawBg(); for (const it of items) if (it.type === 'nline' || it.type === 'span') draw(it); renderBgPanel(); scheduleSave(); }
 $('bgBtn').onclick = () => { renderBgPanel(); $('bgBg').hidden = false; };
 $('bgClose').onclick = () => { $('bgBg').hidden = true; };
 $('bgBg').addEventListener('click', e => { if (e.target === $('bgBg')) $('bgBg').hidden = true; });
