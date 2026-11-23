@@ -18,7 +18,7 @@ OUT = os.path.join(ROOT, 'japanese', 'hiragana', 'voice-phrase')
 JS = os.path.join(ROOT, 'japanese', 'hiragana', 'voice-phrase.js')
 TSV = os.path.join(ROOT, 'tools', 'hiragana-phrase-voice.tsv')
 API = 'http://127.0.0.1:50021'
-SPEAKER = 2  # 四国めたん ノーマル（読み上げの ずんだもんと 声を わける）
+SPEAKER = 2  # 四国めたん ノーマル
 SPEED = 0.9
 SMALL = 'っゃゅょッャュョ'
 

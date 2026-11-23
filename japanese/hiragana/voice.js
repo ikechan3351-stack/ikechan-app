@@ -1,4 +1,4 @@
-// ひらがな なぞりっこ の読み上げ音声（VOICEVOX:ずんだもん）。ことば → voice/○○.m4a
+// ひらがな なぞりっこ の読み上げ音声（VOICEVOX:四国めたん）。ことば → voice/○○.m4a
 // tools/build-hiragana-voice.py で 作る。手で なおさない
 const VOICE = {
 "あ": "8c0c3027",

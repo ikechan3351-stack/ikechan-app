@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""ひらがな なぞりっこ の 読み上げ音声を VOICEVOX（ずんだもん）で作る。
+"""ひらがな なぞりっこ の 読み上げ音声を VOICEVOX（四国めたん）で作る。
 
-つかいかた：VOICEVOX を起動してから  python3 tools/build-hiragana-voice.py
+つかいかた：VOICEVOX を起動してから  python3 tools/build-hiragana-voice.py [--redo]
+- --redo：ある ファイルも ぜんぶ 作り直す（声を かえたとき）。
 - アプリが読むことばを tools/hiragana-voice-texts.js でひろい、
   japanese/hiragana/voice/<番号>.m4a と japanese/hiragana/voice.js を作る。
 - もうあるファイルは作り直さない（ことばを足したときは、足した分だけ作られる）。
@@ -14,7 +15,7 @@ APP = os.path.join(ROOT, 'japanese', 'ひらがななぞりっこ.html')
 OUT = os.path.join(ROOT, 'japanese', 'hiragana', 'voice')
 JS = os.path.join(ROOT, 'japanese', 'hiragana', 'voice.js')
 API = 'http://127.0.0.1:50021'
-SPEAKER = 3  # ずんだもん ノーマル
+SPEAKER = 2  # 四国めたん ノーマル（2026-11-23 ずんだもんから かえた）
 SPEED = 0.95
 
 def post(path, params, body=None):
@@ -54,12 +55,12 @@ def main():
         fid = hashlib.md5(key(t).encode()).hexdigest()[:8]
         table[key(t)] = fid
         path = os.path.join(OUT, fid + '.m4a')
-        if os.path.exists(path):
+        if os.path.exists(path) and '--redo' not in sys.argv:
             continue
         q = make(t, path); made += 1
         print(t, '→', q.get('kana', ''))
     with open(JS, 'w', encoding='utf-8') as f:
-        f.write('// ひらがな なぞりっこ の読み上げ音声（VOICEVOX:ずんだもん）。ことば → voice/○○.m4a\n')
+        f.write('// ひらがな なぞりっこ の読み上げ音声（VOICEVOX:四国めたん）。ことば → voice/○○.m4a\n')
         f.write('// tools/build-hiragana-voice.py で 作る。手で なおさない\n')
         f.write('const VOICE = ' + json.dumps(table, ensure_ascii=False, indent=0) + ';\n')
     print(f'{len(table)}こ（あたらしく {made}こ）')
