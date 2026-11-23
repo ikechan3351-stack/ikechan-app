@@ -844,6 +844,7 @@
   /* =====================================================================
      9. 答える欄（③ の「1回の移動で同じ結果にできる？」と ④ の「どんな移動？」）
      ===================================================================== */
+  const HINT4_MAX = 4;   // ④ どんな移動？ のヒントの段階の数
   const AXES = [['x', 'x軸'], ['y', 'y軸'], ['xa', '直線 x＝□'], ['yb', '直線 y＝□'], ['yx', '直線 y＝x'], ['ymx', '直線 y＝−x']];
   const newAns = () => ({ type: null, tx: '', ty: '', axis: 'x', a: '', cx: '', cy: '', ang: '90', dir: 1, done: false, cand: null, ok: false });
   /** 答えから、移動 T をつくる（足りないときは null と理由） */
@@ -873,6 +874,7 @@
       h += `<div class="chip-row"><button class="chip sm${a.dir === 1 ? ' active' : ''}" data-dr="1">↺ 反時計回り</button><button class="chip sm${a.dir === -1 ? ' active' : ''}" data-dr="-1">↻ 時計回り</button></div>`;
     }
     h += `<button class="go${a.ok ? ' next' : ''}" id="ansGo">${a.ok ? (m3 ? '🔁 ほかの組み合わせへ' : '🎲 つぎの問題') : '✔ こたえる'}</button>`;
+    if (!m3 && !a.ok) h += `<button class="chip sm" id="ansHint" style="margin-top:8px;width:100%">${st.hintLv >= HINT4_MAX ? '💡 ヒントはここまで（もう一度読む）' : `💡 ヒントを見る（${st.hintLv + 1}／${HINT4_MAX}）`}</button>`;
     const box = st.mode === 3 ? $('props') : $('ansBox');
     box.innerHTML = h;
     box.querySelectorAll('[data-at]').forEach(b => b.addEventListener('click', () => { a.type = b.dataset.at; a.cand = null; renderAns(); draw(); }));
@@ -880,6 +882,7 @@
     box.querySelectorAll('[data-ag]').forEach(b => b.addEventListener('click', () => { a.ang = b.dataset.ag; renderAns(); }));
     box.querySelectorAll('[data-dr]').forEach(b => b.addEventListener('click', () => { a.dir = +b.dataset.dr; renderAns(); }));
     box.querySelectorAll('[data-f]').forEach(inp => inp.addEventListener('input', () => { a[inp.dataset.f] = inp.value; }));
+    if ($('ansHint')) $('ansHint').addEventListener('click', hint);
     $('ansGo').addEventListener('click', () => { if (a.ok) { if (m3) { const ks = Object.keys(PRESETS); st.m3.preset = ks[(ks.indexOf(st.m3.preset) + 1) % ks.length]; reset3(); } else newProblem(); } else checkAns(); });
   }
   /** 答えた移動で動かした図形（重ねて見せる） */
@@ -992,6 +995,7 @@
     if (st.hintLv >= 1) h += orientSVG(M, q.tri, '#455a64') + orientSVG(M, q.img, '#00838f');
     if (aux && !st.ans.done) q.tri.forEach((p, i) => { h += M.line(p, q.img[i], `stroke="${COL[i]}" stroke-width="2" stroke-dasharray="3 6"`); });
     if (st.hintLv >= 3 && !st.ans.done) h += hint4SVG();
+    if (st.hintLv >= 4 && !st.ans.done) h += hint4bSVG();
     if (st.ans.done) {
       // 正解したら、移動のようすを見せる
       const pts = q.tri.map(p => apply(q.T, p, st.e4));
@@ -1012,6 +1016,21 @@
       });
     }
     return h;
+  }
+
+  /** ヒント4：答えの手がかりをかく（平行＝方眼の数え方、対称＝軸、回転＝中心と角） */
+  function hint4bSVG() {
+    const q = st.q4, T = q.T, A = q.tri[0], A2 = q.img[0], col = '#ef6c00';
+    if (T.t === 'trans') {
+      const K = { x: A2.x, y: A.y };
+      let h = '';
+      if (Math.abs(T.tx) > 0.01) h += M.line(A, K, `stroke="${col}" stroke-width="4"`) + M.arrowHead(A, K, col) + M.text(add(mul(add(A, K), 0.5), { x: 0, y: 0.45 }), `${T.tx > 0 ? '右へ' : '左へ'}${Math.abs(T.tx)}`, col, 19);
+      if (Math.abs(T.ty) > 0.01) h += M.line(K, A2, `stroke="${col}" stroke-width="4"`) + M.arrowHead(K, A2, col) + M.text(add(mul(add(K, A2), 0.5), { x: 0.4, y: 0 }), `${T.ty > 0 ? '上へ' : '下へ'}${Math.abs(T.ty)}`, col, 19, 'start');
+      return h;
+    }
+    if (T.t === 'reflect') return axisSVG(M, Object.assign({}, T, { tag: '' }), { color: col, w: 4, dash: '12 6' });   // 式は書かない（答えになるので）
+    // 回転：中心と、中心から A・A′ への線
+    return M.line(T.O, A, `stroke="${col}" stroke-width="3"`) + M.line(T.O, A2, `stroke="${col}" stroke-width="3"`) + M.dot(T.O, col, 8, 1) + M.text(add(T.O, { x: -0.45, y: -0.55 }), '中心', col, 19);
   }
 
   /* =====================================================================
@@ -1133,15 +1152,18 @@
   }
   function hint() {
     if (st.mode < 3) return;
-    st.hintLv = Math.min(3, st.hintLv + 1);
+    st.hintLv = Math.min(st.mode === 4 ? HINT4_MAX : 3, st.hintLv + 1);
     bumpRec(r => r.hint = (r.hint || 0) + 1);
     const lv = st.hintLv;
     if (st.mode === 4) {
-      const t = st.q4.T.t;
+      const T = st.q4.T, t = T.t, kindName = { trans: '平行移動', reflect: '対称移動', rotate: '回転移動' }[t];
       const tx = ['', 'A→B→C と A′→B′→C′ のまわる向き（三角形の中の矢印）をくらべよう。<b>反対</b>ならうらがえっている → 対称移動。<b>同じ</b>なら平行移動か回転移動。',
         '対応する点を結ぶ線をかいたよ。3本が<b>平行で同じ長さ</b>なら平行移動。',
-        t === 'trans' ? 'A から A′ へ、右へいくつ、上へいくつ？（方眼を数えよう）' : t === 'reflect' ? 'A と A′ の<b>真ん中</b>の点と、AA′ に垂直な直線をかいたよ。3つとも同じ直線の上にあれば、それが軸。' : 'AA′ と BB′ の<b>垂直二等分線</b>をかいたよ。その交点が回転の中心。'][lv];
-      setMsg('💡 ' + tx); draw(); return;
+        t === 'trans' ? 'A から A′ へ、右へいくつ、上へいくつ？（方眼を数えよう）' : t === 'reflect' ? 'A と A′ の<b>真ん中</b>の点と、AA′ に垂直な直線をかいたよ。3つとも同じ直線の上にあれば、それが軸。' : 'AA′ と BB′ の<b>垂直二等分線</b>をかいたよ。その交点が回転の中心。',
+        `この問題は <b>${kindName}</b> だよ。` + (t === 'trans' ? 'オレンジの矢印で、A から A′ までの横と縦の動きをかいたよ。B・C も同じだけ動いているか確かめよう。'
+          : t === 'reflect' ? 'オレンジの点線が<b>対称の軸</b>。この直線は x軸・y軸・x＝□・y＝□・y＝x・y＝−x のどれかな？ 軸の上の点の座標を読もう。'
+          : `オレンジの点が<b>回転の中心</b>。座標を読もう。中心と A、中心と A′ を結んだ2本の線の間の角が、回転した角度（${[90, 180, 270].map(d => d + '°').join('・')} のどれか）。どちら回りかも見よう。`)][lv];
+      setMsg(`💡 ヒント${lv}：` + tx); renderAns(); draw(); return;
     }
     const pre = st.m3.preset;
     const tx = ['', 'A→B→C と A″→B″→C″ のまわる向きをくらべよう。うらがえっている（反対）なら、1回でするなら対称移動しかない。',
