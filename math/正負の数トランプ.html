@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>正負の数トランプ</title>
+<link rel="stylesheet" href="worksheet.css">
+<style>
+  /* 色のきまり：正の数＝オレンジ、負の数＝青、正解＝緑、まちがい＝赤紫（記号もつける）
+     トランプのマークは本物どおり 黒（♠♣）と 赤（♥♦）。
+     カードのまん中に「＋7」「−7」をオレンジ／青の札で大きく書き、色だけでなく記号でも見分けられるようにする。 */
+  :root {
+    --ink: #263238; --accent: #00897b; --accent-dark: #00695c; --soft: #b2dfdb;
+    --pos: #e65100; --neg: #1565c0; --ok: #2e7d32; --ng: #ad1457;
+    --black: #212121; --red: #c62828;
+    --cw: 66px;            /* カードの横はば（高さは 1.42 倍） */
+    --bw: 34px;            /* あいての うら向きカードの横はば */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #f3faf8 0%, #d9efea 100%);
+    min-height: 100vh; padding: 10px 16px 28px; font-size: 18px;
+  }
+  body.teacher { --cw: 88px; --bw: 42px; font-size: 21px; }
+  button { font-family: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  .topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .back-link { font-size: 0.9rem; color: var(--accent-dark); text-decoration: none; }
+  h1 { margin: 0; flex: 1; text-align: center; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--accent-dark); }
+  .subtitle { margin: -6px 0 0; font-size: 0.95rem; color: #546e7a; text-align: center; }
+  .card { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 0; }
+  .card h2 { margin: 0 0 8px; font-size: 1.05rem; color: var(--accent-dark); }
+  .note { font-size: 0.9rem; color: #546e7a; margin: 6px 0 0; line-height: 1.6; }
+  .teacher-badge { display: inline-block; background: #fff3e0; border: 2px solid #ffb74d; border-radius: 999px; padding: 2px 12px; font-size: .9rem; font-weight: bold; }
+  .links { font-size: .9rem; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .links a { color: var(--accent-dark); }
+
+  /* ===== はじめの画面（ルールと設定） ===== */
+  .setup { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { .setup { grid-template-columns: 1fr 1fr; } }
+  .opt { margin: 10px 0; }
+  .opt .lbl { font-weight: 900; color: var(--accent-dark); margin-bottom: 4px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button {
+    min-height: 48px; padding: 4px 14px; border-radius: 12px; border: 3px solid var(--soft); background: #fff;
+    font-size: 1rem; font-weight: bold; cursor: pointer; touch-action: manipulation;
+  }
+  .seg button small { display: block; font-size: .72rem; font-weight: normal; color: #78909c; }
+  .seg button.on { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .seg button.on small { color: #e0f2f1; }
+  .seg button:disabled { opacity: .45; cursor: not-allowed; }
+  .rules { margin: 0; padding-left: 1.3em; line-height: 1.8; }
+  .rules b { color: var(--accent-dark); }
+  .demo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; font-weight: 900; font-size: 1.2rem; }
+
+  /* ===== ボタン ===== */
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .act {
+    min-height: 52px; padding: 4px 14px; border-radius: 14px; border: 3px solid var(--soft); background: #fff;
+    font-size: 1.02rem; font-weight: 900; cursor: pointer; touch-action: manipulation;
+  }
+  .act.main { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+  .act.go { background: #fff8e1; border-color: #ffb300; }
+  .act:disabled { opacity: .4; cursor: not-allowed; }
+  .act.big { font-size: 1.25rem; min-height: 60px; padding: 4px 26px; }
+
+  /* ===== トランプのカード ===== */
+  .tc {
+    width: var(--cw); height: calc(var(--cw) * 1.42); border-radius: calc(var(--cw) * .12);
+    background: #fff; border: 2px solid #90a4ae; position: relative; flex: none;
+    box-shadow: 0 3px 0 rgba(0,0,0,.18); user-select: none; -webkit-user-select: none;
+    transition: transform .25s ease, opacity .35s ease, box-shadow .15s;
+  }
+  .tc.black { color: var(--black); }
+  .tc.red { color: var(--red); }
+  .tc .corner { position: absolute; font-weight: 900; line-height: 1; text-align: center; font-size: calc(var(--cw) * .2); }
+  .tc .corner.tl { left: 5%; top: 5%; }
+  .tc .corner.br { right: 5%; bottom: 5%; transform: rotate(180deg); }
+  .tc .val {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    min-width: 70%; padding: 3% 4%; border-radius: 8px; text-align: center; color: #fff; font-weight: 900;
+    font-size: calc(var(--cw) * .32); line-height: 1.15; white-space: nowrap;
+  }
+  .tc .val.p { background: var(--pos); }
+  .tc .val.m { background: var(--neg); }
+  .tc .val.z { background: #fff; color: #6a1b9a; border: 2px dashed #8e24aa; }
+  .tc.joker { background: repeating-linear-gradient(45deg, #fff, #fff 6px, #f3e5f5 6px, #f3e5f5 12px); color: #6a1b9a; }
+  .tc.joker .face { position: absolute; left: 0; right: 0; top: 14%; text-align: center; font-size: calc(var(--cw) * .42); }
+  .tc.joker .val { top: 70%; }
+  .tc.pick { cursor: pointer; touch-action: manipulation; }
+  .tc.sel { transform: translateY(-14px); box-shadow: 0 0 0 4px #43a047, 0 8px 12px rgba(0,0,0,.2); }
+  .tc.new::after {
+    content: "NEW"; position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    background: #ffb300; color: #3e2723; font-size: 11px; font-weight: 900; padding: 1px 6px; border-radius: 8px;
+  }
+  .tc.hint { box-shadow: 0 0 0 4px #ffb300, 0 0 14px #ffca28; }
+  .tc.out { opacity: 0; transform: translateY(-40px) scale(.6); }
+  /* うら向き */
+  .tc.back {
+    width: var(--bw); height: calc(var(--bw) * 1.45); border-color: #004d40;
+    background: repeating-linear-gradient(45deg, #00897b, #00897b 5px, #26a69a 5px, #26a69a 10px);
+  }
+  .tc.back.target { cursor: pointer; touch-action: manipulation; }
+  .tc.back.target:hover, .tc.back.target:focus-visible { transform: translateY(-10px); outline: 3px solid #ffb300; }
+  .tc.mini { --cw: 40px; }
+  .tc.mini.back { width: 40px; }
+
+  /* ===== 対戦の画面 ===== */
+  .play { container-type: inline-size; }
+  .grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @container (min-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; } }
+  .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .opps { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  .opp { border: 3px solid #e0e0e0; border-radius: 14px; padding: 6px 8px; background: #fafafa; min-width: 0; }
+  .opp.turn { border-color: #ffb300; background: #fff8e1; }
+  .opp.tgt { border-color: #43a047; background: #f1f8e9; }
+  .opp.done { opacity: .6; }
+  .opp-h { display: flex; justify-content: space-between; align-items: center; font-weight: 900; gap: 6px; }
+  .opp-h .cnt { font-size: .85rem; color: #546e7a; font-weight: bold; }
+  .fan { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; min-height: calc(var(--bw) * 1.45); }
+  .fan.faceup { --cw: 46px; }
+  .msg {
+    font-weight: 900; font-size: 1.1rem; line-height: 1.5; border-radius: 14px; padding: 10px 14px;
+    background: #e0f2f1; border: 3px solid var(--soft); min-height: 3.2em;
+  }
+  .msg.ok { background: #e8f5e9; border-color: #81c784; }
+  .msg.ng { background: #fce4ec; border-color: #f48fb1; }
+  .hand-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .hand-h h2 { margin: 0; }
+  .hand { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 18px; min-height: calc(var(--cw) * 1.42 + 22px); }
+  .hand .empty { color: #90a4ae; align-self: center; }
+
+  /* ===== 式と数直線 ===== */
+  .expr { text-align: center; font-weight: 900; font-size: clamp(28px, 4.4vw, 40px); line-height: 1.3; min-height: 1.3em; }
+  body.teacher .expr { font-size: clamp(34px, 5.4vw, 54px); }
+  .n.p { color: var(--pos); }
+  .n.m { color: var(--neg); }
+  .n.z { color: #6a1b9a; }
+  .expr .q { color: #90a4ae; }
+  .expr .ans { border-bottom: .08em solid var(--ok); padding: 0 .08em; }
+  .expr .ans.bad { border-bottom-color: var(--ng); }
+  .nl svg { width: 100%; height: auto; display: block; }
+  .nl-cap { font-size: .85rem; color: #607d8b; text-align: center; }
+  .log { margin: 0; padding-left: 1.2em; font-size: .92rem; line-height: 1.6; max-height: 12.5em; overflow: auto; }
+  .log li.me { font-weight: bold; }
+
+  /* ===== つまずき・おわり ===== */
+  .trip { border: 3px solid #f48fb1; background: #fff5f8; border-radius: 14px; padding: 8px 12px; }
+  .trip h3 { margin: 0 0 4px; font-size: 1rem; color: var(--ng); }
+  .trip ul { margin: 0; padding-left: 1.2em; line-height: 1.6; font-size: .95rem; }
+  .rank { margin: 0; padding-left: 1.4em; font-size: 1.2rem; line-height: 1.9; font-weight: bold; }
+  .result-big { font-size: clamp(1.6rem, 5vw, 2.4rem); font-weight: 900; text-align: center; color: var(--accent-dark); margin: 4px 0 10px; }
+
+  @media (max-width: 520px) {
+    body { padding: 8px 10px 24px; }
+    :root { --cw: 54px; --bw: 28px; }
+    .opps { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back-link" href="../index.html">← もどる</a>
+    <h1>🃏 正負の数トランプ</h1>
+  </div>
+  <p class="subtitle">黒（♠♣）は ＋、赤（♥♦）は −。たして 0 になる組を すてる「ゼロ対ババ抜き」</p>
+  <div id="teacherBadge" hidden><span class="teacher-badge">👩‍🏫 先生モード</span></div>
+
+  <!-- ===== はじめの画面 ===== -->
+  <div id="setupView" class="setup">
+    <div class="card">
+      <h2>📜 カードの約束</h2>
+      <div class="demo" id="demoCards"></div>
+      <ul class="rules">
+        <li><b>黒</b>（♠ スペード・♣ クラブ）は <b>正の数</b>。♠7 は ＋7</li>
+        <li><b>赤</b>（♥ ハート・♦ ダイヤ）は <b>負の数</b>。♥7 は −7</li>
+        <li>A は 1。絵札をいれると J＝11・Q＝12・K＝13</li>
+        <li>ジョーカーは「ババ」。最後まで持っていた人の負け</li>
+      </ul>
+      <h2 style="margin-top:12px">🎴 ゼロ対ババ抜きのルール</h2>
+      <ol class="rules">
+        <li>カードを全員に配る</li>
+        <li>たすと <b>0</b> になる2枚（<b>ゼロ対</b>）を すてる。例：(+7)+(−7)=0</li>
+        <li>つぎの人の手札から1枚引く。ゼロ対ができたら すてる</li>
+        <li>手札がなくなったら あがり。ジョーカーが残った人の負け</li>
+      </ol>
+      <p class="note">※ふつうのババ抜きとちがい、♠7 と ♣7（どちらも ＋7）は組にならない。</p>
+    </div>
+    <div class="card">
+      <h2>⚙️ 設定</h2>
+      <div class="opt"><div class="lbl">ルール</div>
+        <div class="seg" id="optRule">
+          <button data-v="zero">ゼロ対ババ抜き<small>たして0の組をすてる</small></button>
+          <button data-v="score" disabled>得点ババ抜き<small>じゅんび中</small></button>
+        </div></div>
+      <div class="opt"><div class="lbl">レベル</div>
+        <div class="seg" id="optLv">
+          <button data-v="1">Lv1<small>同じ数の黒と赤</small></button>
+          <button data-v="2" disabled>Lv2<small>じゅんび中</small></button>
+          <button data-v="3" disabled>Lv3<small>じゅんび中</small></button>
+        </div></div>
+      <div class="opt"><div class="lbl">あいての人数</div>
+        <div class="seg" id="optCpu">
+          <button data-v="2">2人<small>🐱🐶</small></button>
+          <button data-v="3">3人<small>🐱🐶🐰</small></button>
+        </div></div>
+      <div class="opt"><div class="lbl">絵札（J・Q・K）</div>
+        <div class="seg" id="optFace">
+          <button data-v="0">なし<small>A〜10</small></button>
+          <button data-v="1">あり<small>11・12・13 も</small></button>
+        </div></div>
+      <div class="acts" style="margin-top:14px"><button class="act main big" id="startBtn">▶ はじめる</button></div>
+      <p class="note">先生モード（アドレスに <code>?teacher=1</code>）では、カードと式が大きくなり、あいての手札を見せることもできます。</p>
+    </div>
+  </div>
+
+  <!-- ===== 対戦の画面 ===== -->
+  <div id="playView" class="play" hidden>
+    <div class="grid">
+      <div class="col">
+        <div class="card"><div class="opps" id="opps"></div></div>
+        <div class="msg" id="msg" aria-live="polite"></div>
+        <div class="card">
+          <div class="hand-h">
+            <h2>🙂 あなたの手札 <span id="myCnt" class="note"></span></h2>
+            <div class="acts">
+              <button class="act" id="sortBtn">↔ 小さい順にならべる</button>
+            </div>
+          </div>
+          <div class="hand" id="hand"></div>
+          <div class="acts" style="margin-top:10px">
+            <button class="act main" id="throwBtn">🗑 すてる（たして0なら）</button>
+            <button class="act" id="revealBtn">👀 答えを見せる</button>
+            <button class="act" id="clearBtn">↩ えらびなおす</button>
+            <button class="act" id="hintBtn">💡 ヒント</button>
+            <button class="act go" id="nextBtn">▶ つぎへ</button>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h2>🧮 式</h2>
+          <div class="expr" id="expr"></div>
+        </div>
+        <div class="card nl">
+          <h2>📏 数直線</h2>
+          <div id="nl"></div>
+          <div class="nl-cap">黒（＋）は右へ、赤（−）は左へ進む。0 にもどれば ゼロ対</div>
+        </div>
+        <div class="card">
+          <h2>📝 できごと</h2>
+          <ol class="log" id="log" reversed></ol>
+        </div>
+        <div class="trip" id="tripBox" hidden><h3>🔎 あなたのつまずき</h3><ul id="tripList"></ul></div>
+        <div class="card">
+          <div class="acts">
+            <button class="act" id="showOppBtn" hidden>👁 あいての手札を見せる</button>
+            <button class="act" id="restartBtn">🔄 最初から</button>
+            <button class="act" id="setupBtn">⚙️ 設定にもどる</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== おわりの画面 ===== -->
+  <div id="endView" class="card" hidden>
+    <div class="result-big" id="endTitle"></div>
+    <h2>あがった順</h2>
+    <ol class="rank" id="rank"></ol>
+    <div class="trip" id="endTrip" style="margin-top:10px" hidden><h3>🔎 あなたのつまずき（この回）</h3><ul id="endTripList"></ul></div>
+    <p class="note" id="endNote"></p>
+    <div class="acts" style="margin-top:12px">
+      <button class="act main big" id="againBtn">🔄 もういちど</button>
+      <button class="act" id="endSetupBtn">⚙️ 設定にもどる</button>
+    </div>
+  </div>
+
+  <div class="links">
+    <a href="正負の数チップ.html">➕ 正負の数チップ（ゼロ対）</a>
+    <a href="数直線ジャンプ.html">🦘 数直線ジャンプ</a>
+    <a href="数直線ツール.html">📏 数直線ツール（小学校）</a>
+    <a href="正負の数ドリル.html">✏️ 正負の数ドリル</a>
+  </div>
+</div>
+
+<script src="math-render.js"></script>
+<script src="worksheet.js"></script>
+<script>
+'use strict';
+
+/* =====================================================================
+   ==== ロジック ここから ====（画面にさわらない計算の部分。作業用テストで確かめる）
+   ===================================================================== */
+
+// マーク：S=♠ C=♣（黒・正）、H=♥ D=♦（赤・負）、J=ジョーカー
+const SUITS = { S: '♠', C: '♣', H: '♥', D: '♦', J: '🃏' };
+
+// カードの値：黒は ＋、赤は −、ジョーカーは 0
+function cardValue(c) {
+  if (c.s === 'J') return 0;
+  return (c.s === 'S' || c.s === 'C') ? c.r : -c.r;
+}
+// 数字の見せ方（A・J・Q・K）
+function rankLabel(r) { return ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' })[r] || String(r); }
+
+// 山札を作る：face=true なら J・Q・K も入れる。ジョーカー1枚
+function makeDeck(face) {
+  const top = face ? 13 : 10, deck = [];
+  for (const s of ['S', 'C', 'H', 'D']) for (let r = 1; r <= top; r++) deck.push({ id: s + r, s, r });
+  deck.push({ id: 'J0', s: 'J', r: 0 });
+  return deck;
+}
+
+// まぜる（rnd を変えるとテストで同じ並びを再現できる）
+function shuffle(arr, rnd = Math.random) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+// 配る：1人ずつ順に配り切る
+function deal(deck, n) {
+  const hands = Array.from({ length: n }, () => []);
+  deck.forEach((c, i) => hands[i % n].push(c));
+  return hands;
+}
+
+// 合計
+function sumOf(cards) { return cards.reduce((t, c) => t + cardValue(c), 0); }
+
+// Lv1 のゼロ対：同じ数の「黒と赤」の2枚（ジョーカーはだめ）
+function isZeroPairLv1(a, b) {
+  if (!a || !b || a.s === 'J' || b.s === 'J') return false;
+  return cardValue(a) + cardValue(b) === 0;
+}
+
+// 手札の中の Lv1 ゼロ対を、重ならないように全部さがす（CPU が使う・ヒントにも使う）
+function findZeroPairs(hand) {
+  const pos = {}, neg = {}, pairs = [];
+  for (const c of hand) {
+    const v = cardValue(c);
+    if (v > 0) (pos[v] = pos[v] || []).push(c);
+    else if (v < 0) (neg[-v] = neg[-v] || []).push(c);
+  }
+  for (const k of Object.keys(pos)) {
+    const p = pos[k], m = neg[k] || [];
+    for (let i = 0; i < Math.min(p.length, m.length); i++) pairs.push([p[i], m[i]]);
+  }
+  return pairs;
+}
+
+// まちがえた2枚の「つまずきの型」を見分ける
+//   same    … 同じ数・同じ色（ふつうのババ抜きのつもり）  例 (+7)+(+7)
+//   sign    … 同じ符号で数がちがう                      例 (+3)+(+5)
+//   abs     … 符号はちがうが、数（絶対値）がちがう        例 (+7)+(−5)
+//   joker   … ジョーカーをふくむ
+function mistakeType(a, b) {
+  if (a.s === 'J' || b.s === 'J') return 'joker';
+  const va = cardValue(a), vb = cardValue(b);
+  if (va === vb) return 'same';
+  if (Math.sign(va) === Math.sign(vb)) return 'sign';
+  return 'abs';
+}
+
+// i 番の人の「つぎの人」（手札が残っている人）。いなければ -1
+function nextActive(hands, i) {
+  const n = hands.length;
+  for (let k = 1; k < n; k++) { const j = (i + k) % n; if (hands[j].length > 0) return j; }
+  return -1;
+}
+
+// 手札が残っている人の数
+function activeCount(hands) { return hands.filter(h => h.length > 0).length; }
+
+/* ==== ロジック ここまで ==== */
+
+if (typeof module !== 'undefined') { // 作業用テスト（node）から読みこむとき
+  module.exports = { cardValue, makeDeck, shuffle, deal, sumOf, isZeroPairLv1, findZeroPairs, mistakeType, nextActive, activeCount };
+}
+
+/* =====================================================================
+   ここから画面
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const params = new URLSearchParams(location.search);
+const TEACHER = params.get('teacher') === '1';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// つまずきの型の名前と、立ち直りのことば
+const TRIP = {
+  same:  { name: 'ふつうのババ抜き型', tip: '同じ数・同じ色の2枚は、たすと 0 にならない。黒と赤（＋と−）で組にしよう' },
+  sign:  { name: '同じ符号の組み型',   tip: '同じ符号どうしをたすと、0 から遠ざかる。符号のちがう2枚をさがそう' },
+  abs:   { name: '数のずれ型',         tip: '符号がちがっても、数（絶対値）が同じでないと 0 にならない' },
+  joker: { name: 'ジョーカー型',       tip: 'ジョーカーは「ババ」。すてられないので、だれかに引いてもらおう' }
+};
+
+// 設定（URL でも指定できる：?rule=zero&lv=1&cpu=3&face=1）
+const CFG = {
+  rule: 'zero',
+  lv: 1,
+  cpu: params.get('cpu') === '3' ? 3 : 2,
+  face: params.get('face') === '1'
+};
+const CPU_NAMES = [{ name: 'ネコ', emoji: '🐱' }, { name: 'イヌ', emoji: '🐶' }, { name: 'ウサギ', emoji: '🐰' }];
+
+// 対戦の状態
+const G = {
+  names: [], hands: [], turn: 0, step: 'idle', // step: discard（すてる番）/ draw（引く番）/ after（引いたあと）/ cpu / end
+  sel: [], newId: null, sorted: false, revealed: false, showOpp: false,
+  log: [], finished: [], trips: {}, gen: 0, hintIds: [], lastPair: null
+};
+
+/* ---------- 文字の形 ---------- */
+function fmt(v) { return v > 0 ? '+' + v : v < 0 ? '−' + (-v) : '0'; }
+function cls(v) { return v > 0 ? 'p' : v < 0 ? 'm' : 'z'; }
+function numHTML(v) { return `<span class="n ${cls(v)}">(${fmt(v)})</span>`; }
+function cardName(c) { return c.s === 'J' ? 'ジョーカー' : SUITS[c.s] + rankLabel(c.r) + '（' + fmt(cardValue(c)) + '）'; }
+function exprText(vals) { return vals.map(v => '(' + fmt(v) + ')').join('+'); }
+
+/* ---------- カードの絵 ---------- */
+function cardHTML(c, extra = '') {
+  if (c.s === 'J') {
+    return `<div class="tc joker ${extra}" data-id="${c.id}" aria-label="ジョーカー"><div class="face">🃏</div><span class="val z">ババ</span></div>`;
+  }
+  const v = cardValue(c), color = v > 0 ? 'black' : 'red', mk = SUITS[c.s], rl = rankLabel(c.r);
+  return `<div class="tc ${color} ${extra}" data-id="${c.id}" aria-label="${cardName(c)}">` +
+    `<span class="corner tl">${rl}<br>${mk}</span><span class="val ${cls(v)}">${fmt(v)}</span>` +
+    `<span class="corner br">${rl}<br>${mk}</span></div>`;
+}
+
+/* ---------- 数直線（SVG） ----------
+   vals の順に、0 から矢印を継ぎ足す。showEnd=false のときは終点（答え）をかくす */
+function drawNumberLine(vals, showEnd) {
+  const R = CFG.face ? 13 : 10;
+  const min = -R - 1, max = R + 1;
+  const W = 640, pad = 26, axisY = 46 + Math.max(1, vals.length) * 30, H = axisY + 50;
+  const x = v => pad + (v - min) * (W - 2 * pad) / (max - min);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="数直線">`;
+  s += `<defs>
+    <marker id="ahP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e65100"/></marker>
+    <marker id="ahM" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1565c0"/></marker>
+  </defs>`;
+  // 軸と目もり
+  s += `<line x1="${pad - 8}" y1="${axisY}" x2="${W - pad + 8}" y2="${axisY}" stroke="#455a64" stroke-width="3"/>`;
+  for (let v = min; v <= max; v++) {
+    const big = v % 5 === 0, h = v === 0 ? 14 : big ? 10 : 6;
+    s += `<line x1="${x(v)}" y1="${axisY - h}" x2="${x(v)}" y2="${axisY + h}" stroke="${v === 0 ? '#263238' : '#78909c'}" stroke-width="${v === 0 ? 4 : big ? 2.5 : 1.5}"/>`;
+    // 数字は 0・5ごと・はし だけ（せまい画面でも読める大きさにする）
+    if (big && Math.abs(v) <= R) {
+      s += `<text x="${x(v)}" y="${axisY + 34}" text-anchor="middle" font-size="${v === 0 ? 26 : 22}" font-weight="900" fill="${v === 0 ? '#263238' : '#546e7a'}">${v > 0 ? '+' + v : v < 0 ? '−' + (-v) : 0}</text>`;
+    }
+  }
+  // 矢印（1枚＝1本。上へ積みあげる）
+  let cur = 0;
+  vals.forEach((v, i) => {
+    const y = axisY - 26 - i * 30, col = v > 0 ? '#e65100' : '#1565c0', mk = v > 0 ? 'ahP' : 'ahM';
+    if (v !== 0) {
+      s += `<line x1="${x(cur)}" y1="${y}" x2="${x(cur + v)}" y2="${y}" stroke="${col}" stroke-width="5" marker-end="url(#${mk})"/>`;
+      s += `<line x1="${x(cur)}" y1="${y - 7}" x2="${x(cur)}" y2="${y + 7}" stroke="${col}" stroke-width="2"/>`;
+      s += `<text x="${(x(cur) + x(cur + v)) / 2}" y="${y - 8}" text-anchor="middle" font-size="22" font-weight="900" fill="${col}">${fmt(v)}</text>`;
+    } else {
+      s += `<circle cx="${x(cur)}" cy="${y}" r="6" fill="none" stroke="#8e24aa" stroke-width="3"/>`;
+    }
+    cur += v;
+  });
+  // 終点（答え）
+  if (vals.length && showEnd) {
+    const ok = cur === 0, c = ok ? '#2e7d32' : '#ad1457';
+    s += `<line x1="${x(cur)}" y1="${axisY - 26 - (vals.length - 1) * 30}" x2="${x(cur)}" y2="${axisY}" stroke="${c}" stroke-width="2" stroke-dasharray="4 4"/>`;
+    s += `<circle cx="${x(cur)}" cy="${axisY}" r="9" fill="${c}" stroke="#fff" stroke-width="3"/>`;
+  }
+  s += '</svg>';
+  $('#nl').innerHTML = s;
+}
+
+/* ---------- 式 ---------- */
+function showExpr(vals, showAns) {
+  if (!vals.length) { $('#expr').innerHTML = '<span class="q" style="font-size:.5em">カードを えらぶと 式が出る</span>'; return; }
+  const sum = vals.reduce((a, b) => a + b, 0);
+  const left = vals.map(numHTML).join('<span class="op">＋</span>');
+  const right = showAns ? `<span class="ans ${sum === 0 ? '' : 'bad'}"><span class="n ${cls(sum)}">${fmt(sum)}</span></span>` : '<span class="q">？</span>';
+  $('#expr').innerHTML = `${left}<span class="op">＝</span>${right}`;
+}
+function showMath(vals, showAns) { showExpr(vals, showAns); drawNumberLine(vals, showAns); }
+
+/* ---------- メッセージ・できごと ---------- */
+function say(html, kind = '') { const m = $('#msg'); m.innerHTML = html; m.className = 'msg ' + kind; }
+function addLog(text, me = false) {
+  G.log.unshift({ text, me });
+  if (G.log.length > 40) G.log.pop();
+  $('#log').innerHTML = G.log.map(l => `<li class="${l.me ? 'me' : ''}">${l.text}</li>`).join('');
+}
+
+/* ---------- つまずきの記録 ---------- */
+function addTrip(type) {
+  G.trips[type] = (G.trips[type] || 0) + 1;
+  const all = Worksheet.appData('trips') || {};
+  all[type] = (all[type] || 0) + 1;
+  Worksheet.appData('trips', all);
+  renderTrips();
+}
+function tripItems() {
+  return Object.keys(G.trips).map(k => `<li><b>${TRIP[k].name}</b>（${G.trips[k]}回）… ${TRIP[k].tip}</li>`).join('');
+}
+function renderTrips() {
+  const has = Object.keys(G.trips).length > 0;
+  $('#tripBox').hidden = !has;
+  $('#tripList').innerHTML = tripItems();
+}
+
+/* ---------- 画面をかく ---------- */
+function render() {
+  // あいて
+  const meTarget = (G.step === 'draw') ? nextActive(G.hands, 0) : -1;
+  $('#opps').innerHTML = G.names.map((p, i) => {
+    if (i === 0) return '';
+    const h = G.hands[i], done = h.length === 0;
+    const isT = i === meTarget;
+    const fan = (G.showOpp && !isT)
+      ? `<div class="fan faceup">${h.map(c => cardHTML(c, 'mini')).join('')}</div>`
+      : `<div class="fan">${h.map((c, k) => `<div class="tc back ${isT ? 'target' : ''}" ${isT ? `tabindex="0" role="button" aria-label="${k + 1}まいめを引く" data-k="${k}"` : ''}></div>`).join('')}</div>`;
+    const place = G.finished.indexOf(i);
+    return `<div class="opp ${G.turn === i && G.step === 'cpu' ? 'turn' : ''} ${isT ? 'tgt' : ''} ${done ? 'done' : ''}">
+      <div class="opp-h"><span>${p.emoji} ${p.name}${isT ? ' ← ここから引く' : ''}</span><span class="cnt">${done ? (place >= 0 ? `🎉 ${place + 1}番であがり` : 'あがり') : h.length + 'まい'}</span></div>${fan}</div>`;
+  }).join('');
+  // じぶん
+  const hand = G.hands[0] || [];
+  $('#myCnt').textContent = `（${hand.length}まい）`;
+  $('#hand').innerHTML = hand.length
+    ? hand.map(c => cardHTML(c, 'pick' + (G.sel.includes(c.id) ? ' sel' : '') + (c.id === G.newId ? ' new' : '') + (G.hintIds.includes(c.id) ? ' hint' : ''))).join('')
+    : '<span class="empty">手札がなくなりました 🎉</span>';
+  // ボタン
+  const myTurn = G.step === 'discard' || G.step === 'after';
+  $('#throwBtn').disabled = !myTurn || G.sel.length !== 2;
+  $('#revealBtn').disabled = !myTurn || G.sel.length === 0;
+  $('#clearBtn').disabled = !myTurn || G.sel.length === 0;
+  $('#hintBtn').disabled = !myTurn;
+  $('#nextBtn').disabled = !myTurn;
+  $('#nextBtn').textContent = G.step === 'discard' ? '▶ すておわった（引く番へ）' : '▶ つぎの人へ';
+  $('#sortBtn').textContent = G.sorted ? '↔ 小さい順にならべる ✓' : '↔ 小さい順にならべる';
+  $('#showOppBtn').textContent = G.showOpp ? '🙈 あいての手札をかくす' : '👁 あいての手札を見せる';
+}
+
+function sortHand() { if (G.sorted) G.hands[0].sort((a, b) => cardValue(a) - cardValue(b) || a.s.localeCompare(b.s)); }
+
+/* ---------- 対戦のはじまり ---------- */
+function startGame() {
+  G.gen++;
+  const n = CFG.cpu + 1;
+  G.names = [{ name: 'あなた', emoji: '🙂' }].concat(CPU_NAMES.slice(0, CFG.cpu));
+  G.hands = deal(shuffle(makeDeck(CFG.face)), n);
+  G.sel = []; G.newId = null; G.revealed = false; G.log = []; G.finished = []; G.trips = {}; G.hintIds = []; G.lastPair = null;
+  G.turn = 0;
+  $('#log').innerHTML = '';
+  renderTrips();
+  $('#setupView').hidden = true; $('#endView').hidden = true; $('#playView').hidden = false;
+  addLog(`カードを ${n}人に配った（${G.hands.reduce((t, h) => t + h.length, 0)}まい）`);
+  // CPU は はじめにゼロ対を すてる
+  for (let i = 1; i < n; i++) {
+    const pairs = findZeroPairs(G.hands[i]);
+    pairs.forEach(p => removeCards(i, p));
+    if (pairs.length) addLog(`${G.names[i].emoji}${G.names[i].name} が ゼロ対を ${pairs.length}組 すてた`);
+  }
+  sortHand();
+  G.step = 'discard';
+  showMath([], false);
+  say('まず、手札の中の <b>ゼロ対</b>（たすと 0 になる2まい）を さがして すてよう。<br>2まい えらんで「🗑 すてる」。もう ないと思ったら「▶ すておわった」。');
+  render();
+}
+
+function removeCards(i, cards) {
+  const ids = cards.map(c => c.id);
+  G.hands[i] = G.hands[i].filter(c => !ids.includes(c.id));
+}
+
+// 手札がなくなった人を「あがり」にする
+function checkFinish() {
+  G.hands.forEach((h, i) => {
+    if (h.length === 0 && !G.finished.includes(i)) {
+      G.finished.push(i);
+      addLog(`🎉 ${G.names[i].emoji}${G.names[i].name} が ${G.finished.length}番で あがり！`, i === 0);
+    }
+  });
+  return activeCount(G.hands) <= 1;
+}
+
+/* ---------- じぶんの そうさ ---------- */
+function onHandTap(id) {
+  if (!(G.step === 'discard' || G.step === 'after')) return;
+  const k = G.sel.indexOf(id);
+  if (k >= 0) G.sel.splice(k, 1);
+  else { G.sel.push(id); if (G.sel.length > 2) G.sel.shift(); }   // Lv1 は2まいまで
+  G.revealed = false; G.hintIds = [];
+  const cards = selCards();
+  showMath(cards.map(cardValue), false);
+  render();
+}
+function selCards() { return G.sel.map(id => G.hands[0].find(c => c.id === id)).filter(Boolean); }
+
+function onThrow() {
+  const cards = selCards();
+  if (cards.length !== 2) return;
+  const [a, b] = cards, vals = cards.map(cardValue);
+  showMath(vals, true);
+  if (isZeroPairLv1(a, b)) {
+    G.lastPair = { shiki: exprText(vals), wa: '0' };
+    // すてるアニメーション
+    cards.forEach(c => { const el = document.querySelector(`#hand [data-id="${c.id}"]`); if (el) el.classList.add('out'); });
+    const gen = G.gen;
+    setTimeout(() => {
+      if (gen !== G.gen) return;
+      removeCards(0, cards); G.sel = []; G.newId = null;
+      addLog(`あなた：${cardName(a)} と ${cardName(b)} → ${exprText(vals)}＝0 で すてた`, true);
+      say(`⭕ ${exprText(vals)}＝0。ゼロ対なので すてた！`, 'ok');
+      if (checkFinish()) { render(); return endGame(); }
+      render();
+    }, 380);
+  } else {
+    const t = mistakeType(a, b);
+    addTrip(t);
+    const sum = vals[0] + vals[1];
+    say(t === 'joker'
+      ? `❌ ジョーカーは すてられない。${TRIP.joker.tip}`
+      : `❌ ${exprText(vals)}＝${fmt(sum)}。0 ではないので すてられない。<br>💡 ${TRIP[t].tip}`, 'ng');
+    render();
+  }
+}
+
+function onReveal() { const v = selCards().map(cardValue); showMath(v, true); }
+
+function onHint() {
+  const pairs = findZeroPairs(G.hands[0]);
+  if (!pairs.length) { say('💡 いまの手札には ゼロ対が ないよ。「▶」で つぎへ すすもう。'); return; }
+  // 1回目はことばだけ、2回目でカードを光らせる
+  if (G.hintIds.length === 0 && !G._hinted) {
+    G._hinted = true;
+    say('💡 <b>同じ数</b>で、<b>色がちがう</b>（黒と赤）2まいを さがそう。「↔ 小さい順にならべる」と見つけやすいよ。');
+  } else {
+    G.hintIds = pairs[0].map(c => c.id);
+    say('💡 光っている2まいを えらんで すててみよう。');
+    render();
+  }
+}
+
+function onNext() {
+  if (!(G.step === 'discard' || G.step === 'after')) return;
+  if (findZeroPairs(G.hands[0]).length) {
+    say('🤔 まだ <b>ゼロ対</b> が のこっているよ。さがしてみよう（こまったら 💡ヒント）。', 'ng');
+    return;
+  }
+  G.sel = []; G.hintIds = []; G._hinted = false; G.newId = null;
+  if (G.step === 'discard') {
+    // はじめの すてる番がおわった → あなたから引く
+    beginMyDraw();
+  } else {
+    afterTurn(0);
+  }
+}
+
+function beginMyDraw() {
+  if (G.hands[0].length === 0) return afterTurn(0);
+  const t = nextActive(G.hands, 0);
+  if (t < 0) return endGame();
+  G.step = 'draw'; G.turn = 0;
+  say(`あなたの番。<b>${G.names[t].emoji}${G.names[t].name}</b> の カードから 1まい えらんで 引こう。`);
+  showMath([], false);
+  render();
+}
+
+function onDraw(k) {
+  if (G.step !== 'draw') return;
+  const t = nextActive(G.hands, 0);
+  const c = G.hands[t][k];
+  if (!c) return;
+  G.hands[t].splice(k, 1);
+  G.hands[0].push(c);
+  G.newId = c.id;
+  sortHand();
+  addLog(`あなた：${G.names[t].emoji}${G.names[t].name} から ${cardName(c)} を引いた`, true);
+  checkFinish();
+  G.step = 'after';
+  const can = findZeroPairs(G.hands[0]).some(p => p.some(x => x.id === c.id));
+  say(c.s === 'J'
+    ? '😱 ジョーカーを引いてしまった！ だれかに引いてもらおう。「▶ つぎの人へ」'
+    : `${cardName(c)} を引いた。${can ? '<b>ゼロ対</b> が できるかな？ さがして すてよう。' : 'ゼロ対が できなければ「▶ つぎの人へ」。'}`);
+  showMath([cardValue(c)], false);
+  if (activeCount(G.hands) <= 1) { render(); return endGame(); }
+  render();
+}
+
+/* ---------- CPU の番 ---------- */
+async function afterTurn(from) {
+  const gen = G.gen;
+  if (checkFinish()) return endGame();
+  let i = nextActive(G.hands, from);
+  while (gen === G.gen) {
+    if (i < 0 || activeCount(G.hands) <= 1) return endGame();
+    if (i === 0) return beginMyDraw();
+    await cpuTurn(i, gen);
+    if (gen !== G.gen) return;
+    if (activeCount(G.hands) <= 1) return endGame();
+    i = nextActive(G.hands, i);
+  }
+}
+
+async function cpuTurn(i, gen) {
+  const wait = TEACHER ? 1400 : 900;
+  G.step = 'cpu'; G.turn = i;
+  const t = nextActive(G.hands, i);
+  render();
+  say(`${G.names[i].emoji}${G.names[i].name} の番…`);
+  await sleep(wait);
+  if (gen !== G.gen || t < 0) return;
+  // CPU は ランダムに1まい引く
+  const k = Math.floor(Math.random() * G.hands[t].length);
+  const c = G.hands[t].splice(k, 1)[0];
+  G.hands[i].push(c);
+  if (t === 0) {
+    G.sel = G.sel.filter(id => id !== c.id);
+    addLog(`${G.names[i].emoji}${G.names[i].name} が あなたの ${cardName(c)} を引いた`, true);
+    say(`${G.names[i].emoji}${G.names[i].name} が あなたの <b>${cardName(c)}</b> を引いた。`);
+  } else {
+    addLog(`${G.names[i].emoji}${G.names[i].name} が ${G.names[t].emoji}${G.names[t].name} から 1まい引いた`);
+  }
+  checkFinish();
+  render();
+  await sleep(wait * 0.6);
+  if (gen !== G.gen) return;
+  // ゼロ対があれば すてる（式と数直線も見せる）
+  const pairs = findZeroPairs(G.hands[i]);
+  for (const p of pairs) {
+    removeCards(i, p);
+    const vals = p.map(cardValue);
+    showMath(vals, true);
+    addLog(`${G.names[i].emoji}${G.names[i].name}：${exprText(vals)}＝0 で すてた`);
+    say(`${G.names[i].emoji}${G.names[i].name} が ゼロ対 ${exprText(vals)}＝0 を すてた。`);
+    checkFinish();
+    render();
+    await sleep(wait);
+    if (gen !== G.gen) return;
+  }
+}
+
+/* ---------- おわり ---------- */
+function endGame() {
+  if (G.step === 'end') return;
+  G.step = 'end'; G.gen++;
+  const loser = G.hands.findIndex(h => h.length > 0);
+  const order = G.finished.slice();
+  const me = order.indexOf(0);
+  $('#endTitle').textContent = loser === 0 ? '😢 ジョーカーが のこった…' : `🎉 あなたは ${me + 1}番で あがり！`;
+  $('#rank').innerHTML = order.map(i => `<li>${G.names[i].emoji} ${G.names[i].name}</li>`).join('') +
+    (loser >= 0 ? `<li>${G.names[loser].emoji} ${G.names[loser].name}（🃏 ジョーカー）</li>` : '');
+  const has = Object.keys(G.trips).length > 0;
+  $('#endTrip').hidden = !has;
+  $('#endTripList').innerHTML = tripItems();
+  $('#endNote').textContent = has ? '' : 'まちがえずに ゼロ対を すてられました。すばらしい！';
+  // 勝ち負けの記録
+  const rec = Worksheet.appData('results') || [];
+  rec.push({ at: new Date().toISOString(), rule: CFG.rule, lv: CFG.lv, n: G.names.length, place: loser === 0 ? G.names.length : me + 1 });
+  Worksheet.appData('results', rec.slice(-200));
+  $('#playView').hidden = true; $('#endView').hidden = false;
+}
+
+function toSetup() {
+  G.gen++; G.step = 'idle';
+  $('#playView').hidden = true; $('#endView').hidden = true; $('#setupView').hidden = false;
+}
+
+/* ---------- 設定のボタン ---------- */
+function bindSeg(sel, get, set) {
+  const box = $(sel);
+  const paint = () => box.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === String(get())));
+  box.addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; set(b.dataset.v); paint(); });
+  paint();
+}
+bindSeg('#optRule', () => CFG.rule, v => CFG.rule = v);
+bindSeg('#optLv', () => CFG.lv, v => CFG.lv = +v);
+bindSeg('#optCpu', () => CFG.cpu, v => CFG.cpu = +v);
+bindSeg('#optFace', () => CFG.face ? 1 : 0, v => CFG.face = v === '1');
+
+// 約束の見本カード
+$('#demoCards').innerHTML = [{ id: 'dS7', s: 'S', r: 7 }, { id: 'dH7', s: 'H', r: 7 }].map(c => cardHTML(c)).join('') +
+  `<span>→ ${numHTML(7)}＋${numHTML(-7)}＝0</span>`;
+
+/* ---------- ボタンとカードのイベント ---------- */
+$('#startBtn').addEventListener('click', startGame);
+$('#againBtn').addEventListener('click', startGame);
+$('#restartBtn').addEventListener('click', startGame);
+$('#setupBtn').addEventListener('click', toSetup);
+$('#endSetupBtn').addEventListener('click', toSetup);
+$('#throwBtn').addEventListener('click', onThrow);
+$('#revealBtn').addEventListener('click', onReveal);
+$('#clearBtn').addEventListener('click', () => { G.sel = []; showMath([], false); render(); });
+$('#hintBtn').addEventListener('click', onHint);
+$('#nextBtn').addEventListener('click', onNext);
+$('#sortBtn').addEventListener('click', () => { G.sorted = !G.sorted; sortHand(); render(); });
+$('#showOppBtn').addEventListener('click', () => { G.showOpp = !G.showOpp; render(); });
+$('#hand').addEventListener('click', e => { const el = e.target.closest('.tc'); if (el) onHandTap(el.dataset.id); });
+$('#opps').addEventListener('click', e => { const el = e.target.closest('.tc.back.target'); if (el) onDraw(+el.dataset.k); });
+$('#opps').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest('.tc.back.target'); if (el) { e.preventDefault(); onDraw(+el.dataset.k); }
+});
+
+/* ---------- ワークシート ---------- */
+Worksheet.init({
+  title: '正負の数トランプ（ゼロ対ババ抜き）',
+  question: 'トランプの黒（＋）と赤（−）。どんな2まいなら、たして 0 になるだろうか？',
+  predictions: ['同じ数の 黒と赤', '同じ数なら 色は何でもよい', '黒と赤なら 数は何でもよい', 'わからない'],
+  operationNote: 'ゼロ対ババ抜きで遊び、すてた組を「＋ 記録する」で表に残そう。まちがえて すてられなかった組も、式でたしかめよう。',
+  fields: [
+    { key: 'shiki', label: 'すてた組（式）', math: false },
+    { key: 'wa', label: '和', math: false }
+  ],
+  capture: () => {
+    if (!G.lastPair) { say('ゼロ対を すててから 記録しよう。'); return null; }
+    return G.lastPair;
+  },
+  summaryHint: '「たして 0 になるのは、〜と〜の2数」の形で。「反数」ということばも使ってみよう。',
+  open: false,
+  teacher: {
+    hint: 'はじめに「♠7 と ♣7 は組になる？」と聞き、ふつうのババ抜きとのちがいを考えさせる。数直線で「右へ7、左へ7で 0 にもどる」ことを見せるとよい。',
+    answer: '式：(+7)+(−7)=0、(+3)+(−3)=0<br>ことば：符号がちがい、絶対値が等しい2数（たがいに反数）の和は 0 になる。'
+  }
+});
+
+/* ---------- はじめ ---------- */
+if (TEACHER) {
+  document.body.classList.add('teacher');
+  $('#teacherBadge').hidden = false;
+  $('#showOppBtn').hidden = false;
+}
+showMath([], false);
+// URL で ?rule=zero が書かれていれば、設定をとばして すぐ始める
+if (params.get('rule') === 'zero') startGame();
+</script>
+</body>
+</html>
