@@ -233,7 +233,8 @@
       <div id="scoreRules" hidden>
       <h2 style="margin-top:12px">💯 得点ババ抜きのルール</h2>
       <ol class="rules">
-        <li>1人に <b>5まい</b> ずつ配る（<b>ジョーカーは 0点</b>で 1まい入る）。手札の合計が 自分の点数</li>
+        <li>つかうのは <b>つづいた数字5種類</b>（1〜5、2〜6 など）の 20まいと <b>ジョーカー1まい（0点）</b></li>
+        <li>1人に <b>5まい</b> ずつ配る。<b>ジョーカーは かならず だれかに配られる</b>（のこりの数字のカードは 使わない）。手札の合計が 自分の点数</li>
         <li>自分の番では、<b>つぎの人</b>の うら向きの手札から1まい引く（<b>たし算</b>）</li>
         <li>すぐに、つぎの人が あなたの手札から <b>うら向きのまま</b> 1まい引き返す（取られる＝<b>ひき算</b>）。いつも5まい</li>
         <li>全員が <b>3回</b> ずつやったら おわり。合計点が いちばん大きい人の勝ち</li>
@@ -265,6 +266,12 @@
             <button data-v="high">大きい人の勝ち<small>ふつう</small></button>
             <button data-v="zero">0に近い人の勝ち<small>発展・絶対値</small></button>
           </div></div>
+        <div class="opt"><div class="lbl">つかう数字</div>
+          <div class="seg" id="optLow">
+            <button data-v="1">1〜5</button><button data-v="2">2〜6</button><button data-v="3">3〜7</button>
+            <button data-v="4">4〜8</button><button data-v="5">5〜9</button><button data-v="6">6〜10</button>
+            <button data-v="0">おまかせ</button>
+          </div></div>
       </div>
       <div class="opt"><div class="lbl">あそびかた</div>
         <div class="seg" id="optPlay">
@@ -282,7 +289,7 @@
           <button data-v="3">3チーム</button>
           <button data-v="4">4チーム</button>
         </div></div>
-      <div class="opt"><div class="lbl">絵札（J・Q・K）</div>
+      <div class="opt" id="faceOpt"><div class="lbl">絵札（J・Q・K）</div>
         <div class="seg" id="optFace">
           <button data-v="0">なし<small>A〜10</small></button>
           <button data-v="1">あり<small>11・12・13 も</small></button>
@@ -587,7 +594,8 @@ const CFG = {
   teams: ['2', '3', '4'].includes(params.get('teams')) ? +params.get('teams') : 2,
   face: params.get('face') === '1',
   calc: params.get('calc') === 'self' ? 'self' : 'auto',     // 得点ババ抜き：点数の計算
-  win: params.get('win') === 'zero' ? 'zero' : 'high'        // 得点ババ抜き：勝ち方
+  win: params.get('win') === 'zero' ? 'zero' : 'high',       // 得点ババ抜き：勝ち方
+  low: ['0', '1', '2', '3', '4', '5', '6'].includes(params.get('low')) ? +params.get('low') : 1   // 得点ババ抜き：つかう数字 low〜low+4（0＝おまかせ）
 };
 if (params.get('rule') === 'score') CFG.rule = 'score';
 const ROUNDS = 3;   // 得点ババ抜きの周回数
@@ -656,7 +664,7 @@ function cardHTML(c, extra = '') {
 function drawNumberLine(vals, showEnd, arrows = true) {
   // はば：ふつうは −10〜+10（絵札ありは −13〜+13）。矢印がはみ出すときだけ広げる（矢印をかくすときは広げない＝答えのヒントにしない）
   const reach = arrows ? vals.map((_, i) => Math.abs(vals.slice(0, i + 1).reduce((a, b) => a + b, 0))) : [];
-  const R = Math.max(CFG.face ? 13 : 10, ...reach);
+  const R = Math.max(CFG.rule === 'score' ? Math.max(5, (G.low || 6) + 4) : CFG.face ? 13 : 10, ...reach);
   const min = -R - 1, max = R + 1;
   const rows = arrows ? Math.max(1, vals.length) : 1;
   const W = 640, pad = 26, axisY = 46 + rows * 30, H = axisY + 50;
@@ -1105,7 +1113,7 @@ function toSetup() {
 function paintSetup() {
   const sc = CFG.rule === 'score';
   $('#zeroRules').hidden = sc; $('#scoreRules').hidden = !sc;
-  $('#lvOpt').hidden = sc; $('#scoreOpts').hidden = !sc;
+  $('#lvOpt').hidden = sc; $('#scoreOpts').hidden = !sc; $('#faceOpt').hidden = sc;
   $('#cpuOpt').hidden = CFG.play !== 'solo';
   $('#teamOpt').hidden = CFG.play !== 'team';
   $('#lvNote').innerHTML = ({
@@ -1128,6 +1136,7 @@ bindSeg('#optTeams', () => CFG.teams, v => CFG.teams = +v);
 bindSeg('#optFace', () => CFG.face ? 1 : 0, v => CFG.face = v === '1');
 bindSeg('#optCalc', () => CFG.calc, v => CFG.calc = v);
 bindSeg('#optWin', () => CFG.win, v => CFG.win = v);
+bindSeg('#optLow', () => CFG.low, v => CFG.low = +v);
 paintSetup();
 
 // 約束の見本カード
@@ -1197,14 +1206,18 @@ function startScore() {
     G.human = G.names.map((_, i) => i === 0);
   }
   const n = G.names.length;
-  G.hands = dealScore(shuffle(makeDeck(CFG.face)), n, 5);   // ジョーカー（0点）も1まい入れる（対戦版と同じ）
+  // つづいた数字5種類（low〜low+4）×4マーク＝20まい ＋ ジョーカー1まい（対戦版と同じ）。
+  // ジョーカーは かならず配る：数字から 5n−1 まいを取り、ジョーカーを足して まぜて配る（のこりの数字は使わない）
+  G.low = CFG.low || (1 + Math.floor(Math.random() * 6));
+  const nums = shuffle(makeDeck(false).filter(c => c.s !== 'J' && c.r >= G.low && c.r <= G.low + 4));
+  G.hands = dealScore(shuffle(nums.slice(0, 5 * n - 1).concat([{ id: 'J0', s: 'J', r: 0 }])), n, 5);
   G.sel = []; G.newId = null; G.log = []; G.finished = []; G.trips = {}; G.hintIds = []; G.hinted = false;
   G.lastGroup = null; G.ans = ''; G.ansOpen = false; G.me = 0; G.turn = 0; G.covered = false;
   G.turnNo = 0; G.pending = null;
   $('#log').innerHTML = '';
   renderTrips();
   $('#setupView').hidden = true; $('#endView').hidden = true; $('#playView').hidden = false;
-  addLog(`得点ババ抜き：1${isTeam() ? 'チーム' : '人'} 5まいずつ配った（${CFG.win === 'zero' ? '0に近い人' : '合計が大きい人'}の勝ち）`);
+  addLog(`得点ババ抜き：数字 ${G.low}〜${G.low + 4} と 🃏ジョーカーで、1${isTeam() ? 'チーム' : '人'} 5まいずつ配った（${CFG.win === 'zero' ? '0に近い人' : '合計が大きい人'}の勝ち）`);
   sortHands();
   scoreNextTurn();
 }
@@ -1247,7 +1260,7 @@ function showOp(start, v, sub, showAns) {
 // 数直線：はじめの点（start）から、たす＝カードの向き、ひく＝カードと反対の向き（点線）に 矢印をかく
 function drawOpLine(start, v, sub, showEnd, arrow) {
   const move = sub ? -v : v, end = start + move;
-  const base = CFG.face ? 13 : 10;
+  const base = Math.max(5, (G.low || 6) + 4);   // 得点ババ抜きは つかう数字の いちばん大きい数
   const R = Math.max(base, Math.ceil(Math.max(Math.abs(start), arrow ? Math.abs(end) : 0) / 5) * 5);
   const min = -R - 1, max = R + 1;
   const W = 640, pad = 26, axisY = 92, H = axisY + 50;
@@ -1536,7 +1549,7 @@ function ensureWorksheet() {
     if (TEACHER) q.set('teacher', '1');
     q.set('rule', CFG.rule); q.set('lv', CFG.lv); q.set('play', CFG.play); q.set('cpu', CFG.cpu); q.set('teams', CFG.teams);
     if (CFG.face) q.set('face', '1');
-    q.set('calc', CFG.calc); q.set('win', CFG.win);
+    q.set('calc', CFG.calc); q.set('win', CFG.win); q.set('low', CFG.low);
     location.search = q.toString();
     return false;
   }
