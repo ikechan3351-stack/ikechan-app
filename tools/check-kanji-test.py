@@ -31,7 +31,7 @@ for g, name in enumerate(['RAW', 'RAW2', 'RAW3', 'RAW4', 'RAW5', 'RAW6'], start=
 # 光村の単元（UNITS_BY.mitsu）。11字以上は ①② に分ける（アプリの unitList() と同じ）
 m = re.search(r'const UNITS_BY = \{ mitsu: \{(.*?)\n\} \};', html, re.S)
 units = {}
-for gm in re.finditer(r'(\d):\s*\[(.*?)\]\],?\s*(?=\n\s*\d:|\Z)', m.group(1), re.S):
+for gm in re.finditer(r'(\d):\s*\[(.*?)\]\],?\s*(?=\n\s*(?://[^\n]*\n\s*)?\d:|\Z)', m.group(1), re.S):
     g = int(gm.group(1))
     lst = []
     for name, ks in re.findall(r"\['[^']*',\s*'([^']*)',\s*'([^']*)'\]", gm.group(2) + ']'):
