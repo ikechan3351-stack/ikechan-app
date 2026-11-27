@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>体育ノート（マット運動）</title>
+<!--
+  体育ノート：わざの動画をとって・はって、お手本とくらべて、ふりかえる。
+  動画は この端末のブラウザの中（IndexedDB）だけに ほぞんする。インターネットには あげない。
+  URL： ?teacher=1 先生用（提示）／ ?waza=zenten わざに直接／ ?band=1〜3 学年のまとまり／ ?m=… 先生のお手本リンク
+  わざを ふやすときは、下の WAZA に1行足す。とび箱・鉄棒も同じ形で足せる。
+-->
+<style>
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+:root{--main:#e65100;--main2:#ef6c00;--soft:#fff3e0;--ink:#3e2723;--sub:#795548;--line:#ffcc80;--ok:#2e7d32;--blue:#1565c0}
+body{margin:0;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic","Meiryo",system-ui,sans-serif;
+  background:linear-gradient(160deg,#fff8e1 0%,#ffe0b2 100%);min-height:100vh;color:var(--ink);font-size:18px;line-height:1.6}
+body.teacher{font-size:22px}
+rt{font-size:.55em}
+button{font-family:inherit;cursor:pointer;touch-action:manipulation}
+.wrap{max-width:980px;margin:0 auto;padding:10px 14px 40px}
+.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.back-link{font-size:16px;color:var(--main);text-decoration:none}
+h1{margin:4px 0 0;font-size:1.6rem;color:var(--main);text-align:center}
+.subtitle{margin:0 0 10px;text-align:center;color:var(--sub)}
+.badge{display:inline-block;background:var(--blue);color:#fff;border-radius:999px;padding:2px 12px;font-size:.8rem;font-weight:bold;vertical-align:middle}
+.card{background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 4px 12px rgba(0,0,0,.10);margin-bottom:14px}
+.card h2{margin:0 0 8px;font-size:1.2rem;color:var(--main);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2 .sp{flex:1}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.go{min-height:52px;border:none;border-radius:14px;background:var(--main2);color:#fff;font-size:1.05rem;font-weight:bold;padding:8px 20px;box-shadow:0 3px 0 rgba(0,0,0,.2)}
+.go:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.2)}
+.go.blue{background:var(--blue)} .go.green{background:var(--ok)} .go.red{background:#c62828}
+.go.sub{background:#eee;color:#555;box-shadow:none}
+.go:disabled{opacity:.4;cursor:default}
+.small{font-size:.85rem;color:var(--sub)}
+.note{font-size:.9rem;color:var(--sub);margin:6px 0 0}
+.err{background:#ffebee;color:#b71c1c;border-radius:10px;padding:8px 12px;font-weight:bold}
+
+/* 学年タブ */
+.tabs{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px}
+.tab{min-height:52px;border:3px solid var(--line);background:#fff;color:var(--sub);border-radius:14px;padding:4px 20px;font-size:1.1rem;font-weight:bold}
+.tab[aria-pressed="true"]{background:var(--main2);border-color:var(--main2);color:#fff}
+.bandsub{text-align:center;color:var(--sub);margin:-4px 0 10px;font-size:.95rem}
+
+/* わざカード */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.wz{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:#fff;border:3px solid transparent;border-radius:16px;padding:12px 14px;box-shadow:0 4px 12px rgba(0,0,0,.10);color:var(--ink);font-size:1rem;min-height:110px}
+.wz:hover,.wz:focus-visible{border-color:var(--main2);outline:none}
+.wz .ico{font-size:2rem;line-height:1.1}
+.wz .nm{font-weight:bold;font-size:1.15rem;line-height:1.5}
+.wz .st{font-size:.85rem;color:var(--sub);margin-top:auto}
+.tagm{display:inline-block;background:#fff8c4;border:1px solid #f0c94a;color:#8a5a00;border-radius:999px;font-size:.75rem;padding:0 8px;margin-left:4px}
+
+/* わざのページ */
+.wtitle{display:flex;align-items:center;gap:12px;margin:6px 0 12px}
+.wtitle .ico{font-size:2.6rem}
+.wtitle h2{margin:0;font-size:1.7rem;color:var(--main)}
+ol.pts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+ol.pts li{display:flex;gap:10px;align-items:flex-start;background:var(--soft);border-radius:12px;padding:8px 12px}
+ol.pts .no{flex:none;width:34px;height:34px;border-radius:50%;background:var(--main2);color:#fff;font-weight:bold;display:flex;align-items:center;justify-content:center}
+ol.pts li.hide{cursor:pointer;color:transparent;background:repeating-linear-gradient(45deg,#ffe0b2 0 12px,#ffecb3 12px 24px)}
+ol.pts li.hide .tx{visibility:hidden}
+ol.pts li.hide::after{content:"タップで ひらく";color:var(--sub);position:absolute;margin-left:46px}
+ol.pts li{position:relative}
+.safety{background:#e3f2fd;color:#0d47a1;border-radius:12px;padding:8px 12px;font-size:.92rem;margin-top:10px}
+
+/* 動画の一覧 */
+.clips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.clip{min-height:52px;border:3px solid var(--line);background:#fff;border-radius:12px;padding:4px 12px;font-size:.95rem;color:var(--ink);text-align:left;line-height:1.35}
+.clip[aria-pressed="true"]{border-color:var(--blue);background:#e3f2fd}
+.clip small{display:block;color:var(--sub);font-size:.78rem}
+.empty{color:var(--sub);text-align:center;padding:14px;border:2px dashed var(--line);border-radius:12px}
+
+/* プレーヤー */
+.pl{background:#263238;border-radius:14px;overflow:hidden}
+.stage{position:relative;background:#000;display:flex;justify-content:center;align-items:center;min-height:180px}
+.stage video{display:block;max-width:100%;max-height:56vh;width:auto;height:auto}
+.stage iframe{display:block;width:100%;aspect-ratio:16/9;border:0;max-height:56vh}
+.stage .err{margin:20px}
+body.teacher .stage video,body.teacher .stage iframe{max-height:66vh}
+.ctr{padding:8px;color:#fff;display:flex;flex-direction:column;gap:6px}
+.crow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pb,.spd,.tg{min-height:46px;min-width:46px;border:none;border-radius:10px;background:#455a64;color:#fff;font-size:1rem;font-weight:bold;padding:4px 10px}
+.pb.big{min-width:64px;font-size:1.3rem;background:var(--main2)}
+.pb small{font-size:.7rem}
+.spd[aria-pressed="true"],.tg[aria-pressed="true"]{background:#ffb300;color:#3e2723}
+.seek{flex:1;min-width:120px;height:30px;accent-color:#ffb300}
+.tm{font-variant-numeric:tabular-nums;font-size:.9rem;min-width:7.5em;text-align:right}
+.plnote{color:#ffe0b2;font-size:.9rem;padding:6px 10px}
+
+/* ふりかえり */
+.ev{display:flex;flex-direction:column;gap:8px}
+.evr{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px dashed var(--line);padding-bottom:8px}
+.evr .tx{flex:1;min-width:200px}
+.evb{display:flex;gap:6px}
+.evb button{min-width:58px;min-height:52px;border:3px solid #ddd;background:#fff;border-radius:12px;font-size:1.05rem;font-weight:bold;color:#777;line-height:1.1;padding:2px 6px}
+.evb button small{display:block;font-size:.62rem;font-weight:normal}
+.evb button[aria-pressed="true"][data-v="3"]{background:#e8f5e9;border-color:var(--ok);color:var(--ok)}
+.evb button[aria-pressed="true"][data-v="2"]{background:#e3f2fd;border-color:var(--blue);color:var(--blue)}
+.evb button[aria-pressed="true"][data-v="1"]{background:#fff3e0;border-color:var(--main);color:var(--main)}
+textarea{width:100%;min-height:80px;font:inherit;font-size:18px;border:2px solid var(--line);border-radius:12px;padding:8px 10px}
+
+/* くらべる */
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cmp .lab{font-weight:bold;color:var(--main);margin:0 0 4px}
+.cmp .stage video,.cmp .stage iframe{max-height:48vh}
+.syncbar{position:sticky;bottom:0;background:#fff;border-radius:14px;box-shadow:0 -2px 12px rgba(0,0,0,.15);padding:10px;margin-top:10px}
+@media (max-width:720px){ .cmp{grid-template-columns:1fr} }
+
+/* ダイアログ */
+dialog{border:none;border-radius:18px;padding:0;max-width:min(760px,96vw);width:100%;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.dlg{padding:16px 18px}
+.dlg h2{margin:0 0 10px;color:var(--main);font-size:1.3rem}
+.camwrap{position:relative;background:#000;border-radius:12px;overflow:hidden;display:flex;justify-content:center}
+.camwrap video{max-width:100%;max-height:55vh;display:block}
+.count{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8rem;font-weight:bold;color:#fff;text-shadow:0 0 20px #000;pointer-events:none}
+.rectime{position:absolute;top:8px;left:8px;background:#c62828;color:#fff;border-radius:999px;padding:2px 12px;font-weight:bold}
+.chip{min-height:46px;border:3px solid #ccc;background:#fff;color:#555;border-radius:12px;padding:2px 12px;font-size:1rem;font-weight:bold}
+.chip[aria-pressed="true"]{background:var(--main2);border-color:var(--main2);color:#fff}
+.inp{flex:1;min-width:220px;font:inherit;font-size:16px;padding:10px 12px;border:2px solid var(--line);border-radius:12px}
+.opt{border:2px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:10px}
+.opt h3{margin:0 0 6px;font-size:1.05rem}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#333;color:#fff;border-radius:999px;padding:10px 22px;font-weight:bold;opacity:0;transition:opacity .3s;pointer-events:none;z-index:50;max-width:90vw;text-align:center}
+#toast.on{opacity:1}
+.foot{margin-top:18px;font-size:.88rem;color:var(--sub);text-align:center}
+.foot button{background:none;border:none;color:var(--blue);text-decoration:underline;font-size:.9rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a class="back-link" href="../index.html">← アプリ一覧にもどる</a></div>
+  <h1>🤸 <ruby>体育<rt>たいいく</rt></ruby>ノート <span id="modeBadge" class="badge" hidden>先生用（提示）</span></h1>
+  <p class="subtitle" id="sportName">マット<ruby>運動<rt>うんどう</rt></ruby></p>
+  <div id="dbErr" class="err" hidden></div>
+  <main id="app"></main>
+  <div class="foot" id="foot"></div>
+</div>
+
+<input type="file" id="fileIn" accept="video/*" hidden>
+
+<!-- カメラでとる -->
+<dialog id="recDlg">
+  <div class="dlg">
+    <h2 id="recTitle">📹 カメラで とる</h2>
+    <div id="recLive">
+      <div class="camwrap"><video id="camV" playsinline muted autoplay></video><div class="count" id="camCount"></div><div class="rectime" id="camTime" hidden></div></div>
+      <div id="camErr" class="err" hidden style="margin-top:8px"></div>
+      <div class="row" style="margin:10px 0">
+        <span>まつ じかん：</span>
+        <button class="chip" data-wait="0">すぐ</button>
+        <button class="chip" data-wait="3">3びょう</button>
+        <button class="chip" data-wait="10">10びょう</button>
+        <button class="chip" id="camSwitch" hidden>🔄 カメラを かえる</button>
+      </div>
+      <div class="row">
+        <button class="go red" id="camGo">🔴 とる</button>
+        <button class="go" id="camStop" hidden>⏹ とめる</button>
+        <button class="go sub" id="camClose">やめる</button>
+      </div>
+      <p class="note">1かいに 60びょう まで とれます。ともだちに とって もらうと、からだ ぜんぶが うつって よく わかるよ。</p>
+    </div>
+    <div id="recReview" hidden>
+      <div class="camwrap"><video id="camR" playsinline controls></video></div>
+      <div class="row" style="margin-top:10px">
+        <button class="go green" id="camSave">✅ ほぞんする</button>
+        <button class="go" id="camRetry">🔁 とりなおす</button>
+        <button class="go sub" id="camClose2">やめる</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- お手本を入れる -->
+<dialog id="modelDlg">
+  <div class="dlg">
+    <h2>⭐ お<ruby>手本<rt>てほん</rt></ruby>を <ruby>入<rt>い</rt></ruby>れる</h2>
+    <div class="opt">
+      <h3>📁 <ruby>動画<rt>どうが</rt></ruby>ファイルから</h3>
+      <div class="row"><button class="go" id="mdFile">ファイルを えらぶ</button></div>
+      <p class="note">Googleドライブや ダウンロードフォルダに ある 動画を えらべます。スロー再生も つかえます。</p>
+    </div>
+    <div class="opt">
+      <h3>🔗 リンクから（YouTube・Googleドライブ・動画のURL）</h3>
+      <div class="row"><input class="inp" id="mdUrl" type="url" placeholder="https://… をはりつける" autocomplete="off"><button class="go" id="mdUrlGo">入れる</button></div>
+      <p class="note" id="mdUrlMsg">Googleドライブは「リンクを知っている全員」が見られる ように しておいてね。</p>
+    </div>
+    <div class="opt">
+      <h3>📹 カメラで とる</h3>
+      <div class="row"><button class="go" id="mdCam">カメラを ひらく</button></div>
+    </div>
+    <div class="row">
+      <button class="go red" id="mdDel" hidden>🗑 お手本を けす</button>
+      <span style="flex:1"></span>
+      <button class="go sub" id="mdClose">とじる</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- たしかめ -->
+<dialog id="cfDlg">
+  <div class="dlg">
+    <p id="cfMsg" style="font-size:1.15rem;font-weight:bold;margin:4px 0 14px"></p>
+    <div class="row"><button class="go red" id="cfYes">はい</button><button class="go sub" id="cfNo">やめる</button></div>
+  </div>
+</dialog>
+
+<!-- 先生用：お手本リンク -->
+<dialog id="linkDlg">
+  <div class="dlg">
+    <h2>🔗 お手本つきリンク</h2>
+    <p id="linkMsg"></p>
+    <textarea id="linkTx" readonly></textarea>
+    <div class="row" style="margin-top:10px"><button class="go" id="linkCopy">📋 コピーする</button><button class="go sub" id="linkClose">とじる</button></div>
+  </div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ===== わざのデータ =====
+   {漢字|よみ} と書くと、ふりがな（ruby）になる。読み上げでは よみ を使う。
+   g:[いちばん下の学年, いちばん上の学年] */
+const SPORT='マット運動';
+const BANDS=[
+  {id:1,label:'1・2年生',g:[1,2],sub:'マットを つかった {運動|うんどう}あそび'},
+  {id:2,label:'3・4年生',g:[3,4],sub:'マット{運動|うんどう}'},
+  {id:3,label:'5・6年生',g:[5,6],sub:'マット{運動|うんどう}'}
+];
+const WAZA=[
+// 1・2年生
+{id:'yurikago',ico:'🥚',name:'ゆりかご',g:[1,2],pts:['せなかを まるくして、ひざを かかえる','あごを ひいて、おへそを {見|み}る','うしろ・まえへ ゆらゆら ころがる','いきおいを つけて、{足|あし}のうらで {立|た}つ']},
+{id:'maekoro',ico:'🔄',name:'{前|まえ}ころがり',g:[1,2],pts:['{手|て}を マットに ぱっと つく','あごを ひいて、おへそを {見|み}る','せなかを まるくして ころがる','{足|あし}を おしりに ひきよせて {立|た}つ']},
+{id:'ushirokoro',ico:'🔃',name:'{後|うし}ろころがり',g:[1,2],pts:['しゃがんで、せなかを まるくする','{手|て}は {耳|みみ}の よこで うさぎの {耳|みみ}','おしり → せなか → {手|て}の じゅんに つく','{手|て}で マットを おして、{足|あし}から おりる']},
+{id:'maruta',ico:'🪵',name:'{丸太|まるた}ころがり',g:[1,2],pts:['{手|て}と {足|あし}を まっすぐ のばす','からだを 1{本|ぽん}の ぼうに する','まっすぐ よこに ころがる']},
+{id:'kaeru',ico:'🐸',name:'かえるの {足|あし}うち',g:[1,2],pts:['{手|て}を かたはばに ついて、ゆびを ひらく','{手|て}と {手|て}の あいだを {見|み}る','こしを {高|たか}く あげて、{足|あし}を パチンと うつ','{足|あし}から やわらかく おりる']},
+{id:'kabenobori',ico:'🧗',name:'かべのぼり {逆立|さかだ}ち',g:[1,2],pts:['かべに せなかを むけて {手|て}を つく','{足|あし}で かべを すこしずつ のぼる','うでを のばして、{手|て}と {手|て}の あいだを {見|み}る','おりる ときは {足|あし}から ゆっくり']},
+{id:'bridge',ico:'🌉',name:'ブリッジ',g:[1,2],pts:['あおむけに ねて、{手|て}を {耳|みみ}の よこに つく','{足|あし}は こしはばに ひらく','おなかを {上|うえ}へ ぐっと もちあげる','うでと {足|あし}を のばす']},
+// 3・4年生（5・6年生でも つかうものは g を6まで）
+{id:'zenten',ico:'🔄',name:'{前転|ぜんてん}',g:[3,6],pts:['{手|て}を かたはばに ついて、ゆびを {前|まえ}に むける','あごを ひいて、おへそを {見|み}る','こしを {高|たか}く あげ、せなかを まるくして まわる','かかとを おしりに ひきよせ、{手|て}を {前|まえ}に {出|だ}して {立|た}つ']},
+{id:'kaikyakuzenten',ico:'🦀',name:'{開脚前転|かいきゃくぜんてん}',g:[3,6],pts:['{前転|ぜんてん}と おなじように まるくなって まわる','おしりが ついたら、{足|あし}を {大|おお}きく ひらく','ひざを のばして、かかとで マットを たたく','{手|て}を {足|あし}の ちかくに つき、つよく おして {立|た}つ']},
+{id:'koten',ico:'🔃',name:'{後転|こうてん}',g:[3,6],pts:['しゃがんで あごを ひき、せなかを まるくする','{手|て}は {耳|みみ}の よこで、{手|て}のひらを {上|うえ}に むける','おしり → せなか → {手|て}の じゅんに まわる','{手|て}で しっかり マットを おして、{足|あし}を つく']},
+{id:'kaikyakukoten',ico:'🦋',name:'{開脚後転|かいきゃくこうてん}',g:[3,6],pts:['{後転|こうてん}と おなじように まるく まわる','{足|あし}が {頭|あたま}を こえたら、{足|あし}を {大|おお}きく ひらく','ひざを のばして、{手|て}で マットを おす','{足|あし}を ひらいたまま {立|た}つ']},
+{id:'kabetoritsu',ico:'🧱',name:'かべ{倒立|とうりつ}',g:[3,4],pts:['{手|て}を かたはばに、かべから すこし はなして つく','{足|あし}を ふりあげて、かかとを かべに つける','うでを のばして、{手|て}と {手|て}の あいだを {見|み}る','おなかに {力|ちから}を {入|い}れて、からだを まっすぐ']},
+{id:'atamatoritsu',ico:'🔺',name:'{頭倒立|あたまとうりつ}',g:[3,4],pts:['{両手|りょうて}と {頭|あたま}で {三角形|さんかくけい}を つくる','こしを {頭|あたま}の {上|うえ}まで ゆっくり あげる','ひざを まげたまま {足|あし}を うかせる','なれたら {足|あし}を まっすぐ {上|うえ}に のばす']},
+{id:'hojobridge',ico:'🤝',name:'{補助倒立|ほじょとうりつ}ブリッジ',g:[3,4],pts:['ともだちに ささえて もらって {倒立|とうりつ}する','{足|あし}を {前|まえ}の ほうへ ゆっくり たおす','{足|あし}の うらで マットに つく','うでを のばしたまま ブリッジに なる']},
+{id:'sokuten',ico:'⭐',name:'{側方倒立回転|そくほうとうりつかいてん}',g:[3,6],pts:['{手|て} → {手|て} → {足|あし} → {足|あし}の じゅんに、1{本|ぽん}の {線|せん}の {上|うえ}に つく','うでを のばして、{手|て}と {手|て}の あいだを {見|み}る','こしを {高|たか}く あげ、{足|あし}を {大|おお}きく ひらいて まわる','さいごは からだを おこして、{手|て}を {上|うえ}に あげる']},
+// 5・6年生
+{id:'shinshitsuzenten',ico:'📏',name:'{伸膝前転|しんしつぜんてん}',g:[5,6],pts:['ひざを のばしたまま、こしを {高|たか}く あげる','せなかを まるくして、{頭|あたま}の うしろから つく','{足|あし}が おりて くるとき、からだを {前|まえ}に たおす','{足|あし}の ちかくに {手|て}を つき、いきおいよく おして {立|た}つ']},
+{id:'toritsuzenten',ico:'🤸',name:'{倒立前転|とうりつぜんてん}',g:[5,6],pts:['うでを のばして {倒立|とうりつ}の しせいに なる','からだを すこし {前|まえ}に たおし、うでを ゆっくり まげる','あごを ひいて、{頭|あたま}の うしろを つく','せなかを まるくして まわり、{立|た}ちあがる']},
+{id:'tobizenten',ico:'🦘',name:'とび{前転|ぜんてん}',g:[5,6],pts:['{両足|りょうあし}で ふみきって、{前|まえ}へ とびこむ','こしを {高|たか}く あげて {手|て}を つく','うでで ふわっと うけとめて、あごを ひく','まるくなって まわり、{立|た}つ']},
+{id:'shinshitsukoten',ico:'📐',name:'{伸膝後転|しんしつこうてん}',g:[5,6],pts:['ひざを のばしたまま、おしりを ついて うしろへ たおれる','{足|あし}が {頭|あたま}を こえたら、{手|て}で つよく おす','ひざを のばしたまま、{足|あし}を つく','うでを のばして {立|た}ちあがる']},
+{id:'hojotoritsu',ico:'🙌',name:'{補助倒立|ほじょとうりつ}',g:[5,6],pts:['{足|あし}を {前後|ぜんご}に ひらいて かまえる','{手|て}を かたはばに つき、ふり{足|あし}を {大|おお}きく ふりあげる','うでを のばして、{手|て}と {手|て}の あいだを {見|み}る','ともだちに {足|あし}を もって もらい、からだを まっすぐ']},
+{id:'toritsubridge',ico:'🌈',name:'{倒立|とうりつ}ブリッジ',g:[5,6],pts:['{倒立|とうりつ}の しせいから、{足|あし}を ゆっくり {前|まえ}へ たおす','{手|て}と {手|て}の あいだを {見|み}つづける','{足|あし}の うらで マットに つき、ブリッジに なる','できる{人|ひと}は、ブリッジから {立|た}ちあがる']},
+{id:'rondat',ico:'💫',name:'ロンダート',g:[5,6],pts:['{助走|じょそう}して、ホップで いきおいを つける','{側方倒立回転|そくほうとうりつかいてん}の ように {手|て}を つく','さかさの とき {両足|りょうあし}を そろえ、からだを ひねる','{両足|りょうあし}を そろえて {着地|ちゃくち}する']},
+{id:'atamahaneoki',ico:'🚀',name:'{頭|あたま}はねおき',g:[5,6],pts:['{両手|りょうて}と {頭|あたま}の {前|まえ}を マットに つく','こしが {頭|あたま}の {上|うえ}を こえるまで がまん','{足|あし}を ななめ{上|うえ}へ いきおいよく けりだす','{手|て}で マットを おして、{足|あし}から {立|た}つ']}
+];
+const EVAL=[[3,'◎','できた'],[2,'○','だいたい'],[1,'△','もう少し']];
+
+/* ===== 小さな道具 ===== */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rb=s=>esc(s).replace(/\{([^|}]+)\|([^}]+)\}/g,'<ruby>$1<rt>$2</rt></ruby>');
+const plain=s=>s.replace(/\{([^|}]+)\|([^}]+)\}/g,'$2');      // 読み上げ用
+const kanji=s=>s.replace(/\{([^|}]+)\|([^}]+)\}/g,'$1');      // ファイル名用
+const W=id=>WAZA.find(w=>w.id===id);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const md=t=>{const d=new Date(t);return `${d.getMonth()+1}/${d.getDate()}`;};
+const ymd=t=>{const d=new Date(t);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2600);}
+function ask(msg){return new Promise(res=>{const d=$('cfDlg');$('cfMsg').textContent=msg;const done=v=>{d.close();$('cfYes').onclick=$('cfNo').onclick=null;res(v);};$('cfYes').onclick=()=>done(true);$('cfNo').onclick=()=>done(false);d.oncancel=()=>done(false);d.showModal();});}
+function speak(text){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='ja-JP';u.rate=.9;speechSynthesis.speak(u);}catch(e){}}
+const ls={get(k,d){try{const v=localStorage.getItem('ikechan-pe-'+k);return v===null?d:v;}catch(e){return d;}},set(k,v){try{localStorage.setItem('ikechan-pe-'+k,v);}catch(e){}}};
+
+/* ===== 保存（IndexedDB：ブラウザの中の大きな入れもの） =====
+   meta：動画の日付・ふりかえり ／ blobs：動画そのもの ／ models：お手本 */
+const DB={
+  db:null,
+  open(){return new Promise((res,rej)=>{
+    if(!window.indexedDB) return rej(new Error('no idb'));
+    const r=indexedDB.open('ikechan-pe-note',1);
+    r.onupgradeneeded=()=>{const d=r.result;
+      d.createObjectStore('meta',{keyPath:'id'});
+      d.createObjectStore('blobs',{keyPath:'id'});
+      d.createObjectStore('models',{keyPath:'waza'});};
+    r.onsuccess=()=>{this.db=r.result;res();};
+    r.onerror=()=>rej(r.error);});},
+  run(store,mode,fn){return new Promise((res,rej)=>{
+    const t=this.db.transaction(store,mode);const q=fn(t.objectStore(store));
+    t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});},
+  get(s,k){return this.run(s,'readonly',o=>o.get(k));},
+  all(s){return this.run(s,'readonly',o=>o.getAll());},
+  put(s,v){return this.run(s,'readwrite',o=>o.put(v));},
+  del(s,k){return this.run(s,'readwrite',o=>o.delete(k));}
+};
+let META=[],MODELS={};
+function clipsOf(w){return META.filter(m=>m.waza===w).sort((a,b)=>a.date-b.date);}
+function saveErr(e){
+  console.error(e);
+  if(e&&e.name==='QuotaExceededError') toast('ようりょうが いっぱいです。いらない 動画を けしてね');
+  else toast('ほぞんできませんでした');
+}
+let persisted=false;
+function persist(){if(persisted)return;persisted=true;try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}}
+
+/* ===== リンクの読みとり ===== */
+function parseLink(s){
+  s=(s||'').trim();
+  let u;try{u=new URL(s);}catch(e){return null;}
+  if(!/^https?:$/.test(u.protocol)) return null;
+  const h=u.hostname.replace(/^www\.|^m\./,'');
+  let id=null;
+  if(h==='youtu.be') id=u.pathname.slice(1).split('/')[0];
+  else if(/(^|\.)youtube(-nocookie)?\.com$/.test(h)){
+    id=u.searchParams.get('v');
+    const m=u.pathname.match(/^\/(shorts|embed|live)\/([\w-]{6,})/);if(m) id=m[2];
+  }
+  if(id&&/^[\w-]{6,}$/.test(id)) return {kind:'yt',id,url:s};
+  if(h==='drive.google.com'||h==='docs.google.com'){
+    const m=u.pathname.match(/\/file\/d\/([\w-]+)/);const d=m?m[1]:u.searchParams.get('id');
+    if(d) return {kind:'drive',id:d,url:s};
+  }
+  return {kind:'url',url:s};
+}
+
+/* ===== 動画プレーヤー ===== */
+let PLAYERS=[];
+function killPlayers(){PLAYERS.forEach(p=>{try{p.destroy();}catch(e){}});PLAYERS=[];}
+let ytReady=null;
+function loadYT(){
+  if(window.YT&&YT.Player) return Promise.resolve();
+  if(ytReady) return ytReady;
+  ytReady=new Promise((res,rej)=>{
+    window.onYouTubeIframeAPIReady=()=>res();
+    const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';
+    s.onerror=()=>{ytReady=null;rej();};document.head.append(s);
+  });
+  return ytReady;
+}
+// MediaRecorder でとった webm は長さが わからないことがあるので、いちど おわりまで とばして 長さを 出す
+function fixDuration(v){return new Promise(res=>{
+  if(isFinite(v.duration)&&v.duration>0) return res();
+  const h=()=>{if(isFinite(v.duration)){v.removeEventListener('durationchange',h);v.currentTime=0;res();}};
+  v.addEventListener('durationchange',h);v.currentTime=1e101;
+  setTimeout(()=>{v.removeEventListener('durationchange',h);res();},3000);
+});}
+function buildPlayer(host,src){
+  const box=document.createElement('div');box.className='pl';
+  box.innerHTML=`<div class="stage"></div>
+  <div class="ctr">
+    <div class="crow">
+      <button class="pb big" data-p="toggle" aria-label="さいせい・とめる">▶</button>
+      <button class="pb" data-p="head" aria-label="はじめから">⏮</button>
+      <button class="pb" data-p="back" aria-label="コマもどし">◀<small>コマ</small></button>
+      <button class="pb" data-p="fwd" aria-label="コマおくり"><small>コマ</small>▶</button>
+      <input class="seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="ばしょ">
+      <span class="tm">-</span>
+    </div>
+    <div class="crow">
+      <button class="spd" data-r="0.25">🐢🐢 0.25ばい</button>
+      <button class="spd" data-r="0.5">🐢 0.5ばい</button>
+      <button class="spd" data-r="1" aria-pressed="true">🐇 ふつう</button>
+      <button class="tg" data-p="loop" aria-pressed="false">🔁 くりかえし</button>
+      <button class="tg" data-p="mirror" aria-pressed="false">↔ はんてん</button>
+    </div>
+  </div>`;
+  host.innerHTML='';host.append(box);
+  const stage=box.querySelector('.stage'),ctr=box.querySelector('.ctr'),seek=box.querySelector('.seek'),tm=box.querySelector('.tm'),tog=box.querySelector('[data-p="toggle"]');
+  let loop=false,mirror=false,rate=1,start=0,raf=0,dragging=false;
+  const STEP=1/30;
+  let api;
+  const noop=()=>{};
+  if(src.kind==='blob'||src.kind==='url'){
+    const v=document.createElement('video');
+    v.playsInline=true;v.muted=true;v.preload='auto';
+    const url=src.kind==='blob'?URL.createObjectURL(src.blob):src.url;
+    v.src=url;stage.append(v);
+    v.addEventListener('loadedmetadata',()=>fixDuration(v).then(update),{once:true});
+    v.addEventListener('error',()=>{stage.innerHTML='<p class="err">動画を ひらけませんでした。ちがう ファイルや リンクを ためしてね。</p>';});
+    ['play','pause','seeked','timeupdate'].forEach(e=>v.addEventListener(e,update));
+    v.addEventListener('play',tick);
+    v.addEventListener('ended',()=>{if(loop){v.currentTime=start;v.play().catch(noop);}});
+    api={ok:true,
+      play(){v.playbackRate=rate;v.play().catch(noop);},pause(){v.pause();},paused:()=>v.paused,
+      setRate(r){v.playbackRate=r;},step(d){v.pause();v.currentTime=clamp(v.currentTime+d,0,api.dur()||0);},
+      seek(t){v.currentTime=t;},cur:()=>v.currentTime||0,dur:()=>isFinite(v.duration)?v.duration:0,
+      flip(m){v.style.transform=m?'scaleX(-1)':'';},
+      destroy(){v.pause();v.removeAttribute('src');v.load();if(src.kind==='blob')URL.revokeObjectURL(url);}};
+  }else if(src.kind==='yt'){
+    const d=document.createElement('div');stage.append(d);
+    let yp=null,ready=false;
+    loadYT().then(()=>{
+      yp=new YT.Player(d,{videoId:src.id,host:'https://www.youtube-nocookie.com',
+        playerVars:{playsinline:1,rel:0,modestbranding:1},
+        events:{onReady:()=>{ready=true;yp.mute();update();},
+          onStateChange:e=>{if(e.data===0&&loop){yp.seekTo(start,true);yp.playVideo();}if(e.data===1)tick();update();}}});
+    }).catch(()=>{stage.innerHTML='<p class="err">YouTube に つながりませんでした。学校の せっていで 見られないのかも しれません。</p>';});
+    api={ok:true,
+      play(){if(ready){yp.setPlaybackRate(rate);yp.playVideo();}},pause(){ready&&yp.pauseVideo();},
+      paused:()=>!ready||yp.getPlayerState()!==1,
+      setRate(r){ready&&yp.setPlaybackRate(r);},
+      step(d){if(!ready)return;yp.pauseVideo();yp.seekTo(Math.max(0,yp.getCurrentTime()+d*3),true);setTimeout(update,200);},
+      seek(t){ready&&yp.seekTo(t,true);setTimeout(update,200);},cur:()=>ready?yp.getCurrentTime():0,dur:()=>ready?yp.getDuration():0,
+      flip(m){stage.style.transform=m?'scaleX(-1)':'';},
+      destroy(){try{yp&&yp.destroy();}catch(e){}}};
+  }else{ // Googleドライブ：プレーヤーの中のボタンでしか うごかせない
+    const f=document.createElement('iframe');f.src='https://drive.google.com/file/d/'+encodeURIComponent(src.id)+'/preview';
+    f.allow='autoplay';f.allowFullscreen=true;stage.append(f);
+    ctr.innerHTML='<div class="plnote">Googleドライブの リンクでは スロー再生や コマおくりが つかえません。動画を ダウンロードして「ファイルから」入れると つかえます。</div>';
+    api={ok:false,play:noop,pause:noop,paused:()=>true,setRate:noop,step:noop,seek:noop,cur:()=>0,dur:()=>0,flip:noop,destroy:noop};
+  }
+  function fmt(t){return (t||0).toFixed(1);}
+  function update(){
+    if(!api||!api.ok) return;
+    const D=api.dur(),C=api.cur();
+    tog.textContent=api.paused()?'▶':'⏸';
+    if(!dragging){seek.max=D||1;seek.value=C;}
+    tm.textContent=D?`${fmt(C)} / ${fmt(D)} びょう`:'-';
+  }
+  function tick(){cancelAnimationFrame(raf);const f=()=>{update();if(!api.paused()) raf=requestAnimationFrame(f);};raf=requestAnimationFrame(f);}
+  if(api.ok){
+    ctr.addEventListener('click',e=>{
+      const b=e.target.closest('button');if(!b) return;
+      if(b.dataset.r){pub.setRate(+b.dataset.r);return;}
+      const p=b.dataset.p;
+      if(p==='toggle') api.paused()?api.play():api.pause();
+      else if(p==='head'){api.pause();api.seek(start);}
+      else if(p==='back') api.step(-STEP);
+      else if(p==='fwd') api.step(STEP);
+      else if(p==='loop'){loop=!loop;b.setAttribute('aria-pressed',loop);}
+      else if(p==='mirror'){mirror=!mirror;b.setAttribute('aria-pressed',mirror);api.flip(mirror);}
+      setTimeout(update,30);
+    });
+    seek.addEventListener('pointerdown',()=>{dragging=true;api.pause();});
+    seek.addEventListener('input',()=>{api.seek(+seek.value);tm.textContent=`${fmt(+seek.value)} / ${fmt(api.dur())} びょう`;});
+    const up=()=>{dragging=false;update();};
+    seek.addEventListener('change',up);seek.addEventListener('pointerup',up);
+  }
+  const pub={
+    ok:api.ok,
+    play:()=>api.play(),pause:()=>{api.pause();setTimeout(update,30);},
+    setRate(r){rate=r;api.setRate(r);box.querySelectorAll('.spd').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.r===r));},
+    toStart(){api.pause();api.seek(start);setTimeout(update,60);},
+    markStart(){start=api.cur();return start;},
+    destroy(){cancelAnimationFrame(raf);api.destroy();}
+  };
+  PLAYERS.push(pub);
+  return pub;
+}
+function modelSrc(m){return m.kind==='blob'?{kind:'blob',blob:m.blob}:m;}
+async function clipSrc(id){const r=await DB.get('blobs',id);return r?{kind:'blob',blob:r.blob}:null;}
+
+/* ===== カメラでとる ===== */
+const Rec={
+  stream:null,mr:null,chunks:[],devs:[],di:-1,wait:+ls.get('wait',3),timer:0,cd:0,blob:null,onSave:null,url:null,
+  async open(title,onSave){
+    this.onSave=onSave;$('recTitle').textContent=title;
+    this.showLive();$('recDlg').showModal();
+    document.querySelectorAll('[data-wait]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.wait===this.wait));
+    await this.start();
+  },
+  showLive(){$('recLive').hidden=false;$('recReview').hidden=true;$('camGo').hidden=false;$('camStop').hidden=true;$('camTime').hidden=true;$('camCount').textContent='';$('camGo').disabled=true;},
+  async start(){
+    this.stopTracks();$('camErr').hidden=true;
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){return this.err('この ブラウザでは カメラが つかえません。「動画を えらぶ」を つかってね。');}
+    const v={width:{ideal:1280},height:{ideal:720}};
+    if(this.di>=0&&this.devs[this.di]) v.deviceId={exact:this.devs[this.di].deviceId};
+    try{this.stream=await navigator.mediaDevices.getUserMedia({video:v,audio:false});}
+    catch(e){return this.err(e&&e.name==='NotAllowedError'?'カメラを つかう きょかが ありません。アドレスバーの 🎥 から「許可」に してね。わからない ときは 先生に きいてね。':'カメラが ひらけませんでした。ほかの アプリで つかって いないか たしかめてね。');}
+    if(!$('recDlg').open){this.stopTracks();return;}
+    $('camV').srcObject=this.stream;$('camGo').disabled=false;
+    try{
+      this.devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+      const cur=this.stream.getVideoTracks()[0].getSettings().deviceId;
+      this.di=Math.max(0,this.devs.findIndex(d=>d.deviceId===cur));
+    }catch(e){}
+    $('camSwitch').hidden=this.devs.length<2;
+  },
+  err(msg){$('camErr').textContent=msg;$('camErr').hidden=false;$('camGo').disabled=true;},
+  stopTracks(){if(this.stream){this.stream.getTracks().forEach(t=>t.stop());this.stream=null;}$('camV').srcObject=null;},
+  go(){
+    if(!this.stream) return;
+    $('camGo').hidden=true;$('camStop').hidden=false;
+    let n=this.wait;
+    const step=()=>{
+      if(n<=0){$('camCount').textContent='';this.record();return;}
+      $('camCount').textContent=n;n--;this.cd=setTimeout(step,1000);
+    };
+    step();
+  },
+  pickMime(){
+    const list=['video/mp4;codecs=avc1','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
+    return list.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
+  },
+  record(){
+    if(!window.MediaRecorder) return this.err('この ブラウザでは ろくがが できません。');
+    const mime=this.pickMime();
+    try{this.mr=new MediaRecorder(this.stream,mime?{mimeType:mime,videoBitsPerSecond:2500000}:{});}
+    catch(e){return this.err('ろくがを はじめられませんでした。');}
+    this.chunks=[];
+    this.mr.ondataavailable=e=>{if(e.data&&e.data.size)this.chunks.push(e.data);};
+    this.mr.onstop=()=>{
+      clearInterval(this.timer);
+      if(this.cancelled){this.cancelled=false;return;}
+      const type=(this.mr.mimeType||mime||'video/webm').split(';')[0];
+      this.blob=new Blob(this.chunks,{type});
+      this.review();
+    };
+    this.mr.start(500);
+    const t0=Date.now();$('camTime').hidden=false;$('camTime').textContent='● 0びょう';
+    this.timer=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);$('camTime').textContent=`● ${s}びょう`;if(s>=60)this.stop();},250);
+  },
+  stop(){
+    clearTimeout(this.cd);$('camCount').textContent='';
+    if(this.mr&&this.mr.state==='recording') this.mr.stop();
+    else this.showLive(),$('camGo').disabled=!this.stream;
+  },
+  review(){
+    this.stopTracks();
+    $('recLive').hidden=true;$('recReview').hidden=false;
+    if(this.url) URL.revokeObjectURL(this.url);
+    this.url=URL.createObjectURL(this.blob);
+    const r=$('camR');r.src=this.url;
+    r.addEventListener('loadedmetadata',()=>fixDuration(r),{once:true});
+  },
+  close(){
+    clearTimeout(this.cd);clearInterval(this.timer);
+    if(this.mr&&this.mr.state==='recording'){this.cancelled=true;this.mr.stop();}
+    this.stopTracks();
+    const r=$('camR');r.pause();r.removeAttribute('src');
+    if(this.url){URL.revokeObjectURL(this.url);this.url=null;}
+    if($('recDlg').open) $('recDlg').close();
+  }
+};
+$('camGo').onclick=()=>Rec.go();
+$('camStop').onclick=()=>Rec.stop();
+$('camClose').onclick=$('camClose2').onclick=()=>Rec.close();
+$('recDlg').addEventListener('cancel',e=>{e.preventDefault();Rec.close();});
+$('camRetry').onclick=()=>{Rec.showLive();Rec.start();};
+$('camSave').onclick=async()=>{const b=Rec.blob,f=Rec.onSave;Rec.close();if(b&&f) await f(b);};
+$('camSwitch').onclick=()=>{if(Rec.devs.length<2)return;Rec.di=(Rec.di+1)%Rec.devs.length;Rec.start();};
+document.querySelectorAll('[data-wait]').forEach(b=>b.onclick=()=>{Rec.wait=+b.dataset.wait;ls.set('wait',Rec.wait);document.querySelectorAll('[data-wait]').forEach(x=>x.setAttribute('aria-pressed',x===b));});
+
+/* ===== ファイルをえらぶ ===== */
+let fileCb=null;
+function pickFile(cb){fileCb=cb;$('fileIn').value='';$('fileIn').click();}
+$('fileIn').onchange=async()=>{
+  const f=$('fileIn').files[0];if(!f||!fileCb) return;
+  if(f.type&&!f.type.startsWith('video/')){toast('動画の ファイルを えらんでね');return;}
+  const cb=fileCb;fileCb=null;await cb(f);
+};
+
+/* ===== 動画・お手本の 出し入れ ===== */
+async function addClip(waza,blob){
+  const id='c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const meta={id,waza,date:Date.now(),eval:[],memo:'',size:blob.size,type:blob.type||'video/webm'};
+  try{await DB.put('blobs',{id,blob});await DB.put('meta',meta);}
+  catch(e){DB.del('blobs',id).catch(()=>{});return saveErr(e);}
+  META.push(meta);persist();toast('ほぞんしました！ ふりかえりを しよう');
+  go({w:waza,c:id});
+}
+async function setModel(waza,m){
+  try{await DB.put('models',{waza,...m});}catch(e){return saveErr(e);}
+  MODELS[waza]={waza,...m};persist();toast('お手本を 入れました');render();
+}
+let modelFor=null;
+function openModelDlg(waza){
+  modelFor=waza;$('mdUrl').value='';$('mdUrlMsg').textContent='Googleドライブは「リンクを知っている全員」が見られる ように しておいてね。';
+  $('mdDel').hidden=!MODELS[waza];$('modelDlg').showModal();
+}
+$('mdClose').onclick=()=>$('modelDlg').close();
+$('mdFile').onclick=()=>{const w=modelFor;$('modelDlg').close();pickFile(f=>setModel(w,{kind:'blob',blob:f,name:f.name}));};
+$('mdCam').onclick=()=>{const w=modelFor;$('modelDlg').close();Rec.open('📹 お手本を とる',b=>setModel(w,{kind:'blob',blob:b}));};
+$('mdUrlGo').onclick=()=>{
+  const p=parseLink($('mdUrl').value);
+  if(!p){$('mdUrlMsg').textContent='⚠ https:// から はじまる リンクを はりつけてね';return;}
+  $('modelDlg').close();setModel(modelFor,p);
+};
+$('mdDel').onclick=async()=>{
+  const w=modelFor;$('modelDlg').close();
+  if(!await ask('お手本を けしますか？')) return;
+  await DB.del('models',w).catch(()=>{});delete MODELS[w];render();
+};
+
+/* ===== 画面の切りかえ（#w=わざ&c=動画 ／ #w=わざ&cmp=左:右） ===== */
+const P=new URLSearchParams(location.search);
+let TEACHER=P.get('teacher')==='1'||P.get('mode')==='teacher';
+let band=+(P.get('band')||ls.get('band',2));if(!BANDS.find(b=>b.id===band)) band=2;
+const g=+P.get('grade');if(g>=1&&g<=6) band=g<=2?1:g<=4?2:3;
+function readHash(){const h=new URLSearchParams(location.hash.slice(1));return {w:h.get('w'),c:h.get('c'),cmp:h.get('cmp')};}
+function go(s){
+  const h=new URLSearchParams();
+  if(s.w) h.set('w',s.w);if(s.c) h.set('c',s.c);if(s.cmp) h.set('cmp',s.cmp);
+  const str=h.toString();
+  if(location.hash.slice(1)===str) render();else location.hash=str;
+}
+window.addEventListener('hashchange',render);
+
+function render(){
+  killPlayers();speechSynthesis&&speechSynthesis.cancel&&speechSynthesis.cancel();
+  document.body.classList.toggle('teacher',TEACHER);$('modeBadge').hidden=!TEACHER;
+  const s=readHash();
+  if(s.w&&W(s.w)){ s.cmp&&!TEACHER?renderCompare(s.w,s.cmp):renderWaza(s.w,s.c); }
+  else renderHome();
+  renderFoot();
+  window.scrollTo(0,0);
+}
+
+function bandOf(w){return BANDS.filter(b=>w.g[0]<=b.g[1]&&w.g[1]>=b.g[0]);}
+function renderHome(){
+  const b=BANDS.find(x=>x.id===band);
+  const list=WAZA.filter(w=>w.g[0]<=b.g[1]&&w.g[1]>=b.g[0]);
+  let h=`<div class="tabs" role="group" aria-label="学年">${BANDS.map(x=>`<button class="tab" data-band="${x.id}" aria-pressed="${x.id===band}">${x.label}</button>`).join('')}</div>
+  <p class="bandsub">${rb(b.sub)}　れんしゅうする わざを えらぼう</p>`;
+  if(TEACHER) h+=`<div class="card"><h2>👩‍🏫 先生用の 画面です</h2>
+    <p style="margin:0">わざを えらぶと、お手本と ポイントを 大きく 映せます。ポイントは タップすると 1つずつ ひらきます。</p>
+    <p class="note">お手本を YouTube や Googleドライブの リンクで 入れておくと、「お手本つきリンク」を 作って 子どもに 配れます。子どもが その リンクを ひらくと、お手本が 入った 状態に なります。</p>
+    <div class="row" style="margin-top:8px"><button class="go blue" data-act="mklink">🔗 お手本つきリンクを つくる</button></div></div>`;
+  h+=`<div class="grid">${list.map(w=>{
+    const cs=clipsOf(w.id),last=cs[cs.length-1];
+    const nOk=last?last.eval.filter(v=>v===3).length:0;
+    const st=TEACHER?'':cs.length?`📹 ${cs.length}本　さいごは ◎ ${nOk}/${w.pts.length}`:'まだ 動画が ないよ';
+    return `<button class="wz" data-act="open" data-id="${w.id}"><span class="ico">${w.ico}</span><span class="nm">${rb(w.name)}${MODELS[w.id]?'<span class="tagm">⭐お手本</span>':''}</span><span class="st">${st}</span></button>`;
+  }).join('')}</div>
+  <div class="safety">⚠ <ruby>頭<rt>あたま</rt></ruby>や くびを つかう わざ・さかさに なる わざは、先生が いる ときに、マットの 上で れんしゅうしよう。</div>`;
+  $('app').innerHTML=h;
+}
+
+function ptsHtml(w,hidden){
+  return `<ol class="pts">${w.pts.map((p,i)=>`<li class="${hidden?'hide':''}" data-act="reveal"><span class="no">${i+1}</span><span class="tx">${rb(p)}</span></li>`).join('')}</ol>`;
+}
+async function renderWaza(id,clipId){
+  const w=W(id),cs=clipsOf(id),model=MODELS[id];
+  const sel=TEACHER?null:(cs.find(c=>c.id===clipId)||cs[cs.length-1]||null);
+  const bandLabel=bandOf(w).map(b=>b.label).join('・');
+  let h=`<div class="row"><button class="go sub" data-act="home">← わざ いちらん</button></div>
+  <div class="wtitle"><span class="ico">${w.ico}</span><div><h2>${rb(w.name)}</h2><span class="small">${bandLabel}</span></div></div>
+  <div class="card"><h2>📝 ポイント<span class="sp"></span>
+    ${TEACHER?'<button class="go sub" data-act="revealall">ぜんぶ ひらく</button>':''}
+    <button class="go sub" data-act="speak">🔊 よみあげ</button></h2>
+    ${ptsHtml(w,TEACHER)}</div>
+  <div class="card"><h2>⭐ お<ruby>手本<rt>てほん</rt></ruby><span class="sp"></span><button class="go sub" data-act="model">${model?'お手本を かえる':'お手本を 入れる'}</button></h2>
+    ${model?'<div id="pModel"></div>':'<p class="empty">お手本が まだ ありません。<br>「お手本を 入れる」から、ファイル・リンク・カメラで 入れられます。</p>'}</div>`;
+  if(!TEACHER){
+    h+=`<div class="card"><h2>📹 じぶんの <ruby>動画<rt>どうが</rt></ruby></h2>
+      <div class="row"><button class="go red" data-act="rec">📹 カメラで とる</button><button class="go" data-act="file">📁 動画を えらぶ</button></div>
+      ${cs.length?`<div class="clips">${cs.map((c,i)=>{const n=c.eval.filter(v=>v===3).length;
+        return `<button class="clip" data-act="clip" data-id="${c.id}" aria-pressed="${sel&&sel.id===c.id}">${i+1}かいめ<small>${md(c.date)}　◎ ${n}/${w.pts.length}</small></button>`;}).join('')}</div>`
+      :'<p class="empty" style="margin-top:10px">まだ 動画が ありません。ともだちに とって もらおう！</p>'}
+      ${sel?`<div id="pClip"></div>`:''}
+    </div>`;
+    if(sel){
+      const idx=cs.indexOf(sel);
+      h+=`<div class="card"><h2>🪞 ふりかえり（${idx+1}かいめ・${md(sel.date)}）<span class="sp"></span><button class="go sub" data-act="speak">🔊</button></h2>
+        <p class="note" style="margin:0 0 8px">動画を ゆっくり 見て、ポイントが できたか えらぼう。</p>
+        <div class="ev">${w.pts.map((p,i)=>`<div class="evr"><span class="tx"><b>${i+1}</b>　${rb(p)}</span><span class="evb">${EVAL.map(([v,mk,lb])=>
+          `<button data-act="ev" data-i="${i}" data-v="${v}" aria-pressed="${sel.eval[i]===v}">${mk}<small>${lb}</small></button>`).join('')}</span></div>`).join('')}</div>
+        <p style="margin:12px 0 4px;font-weight:bold">✏ <ruby>気<rt>き</rt></ruby>づいたこと・つぎの めあて</p>
+        <textarea id="memo" placeholder="れい：あごを ひくと、まっすぐ まわれた。つぎは 手で つよく おしたい。">${esc(sel.memo||'')}</textarea>
+        <div class="row" style="margin-top:12px">
+          ${model?'<button class="go blue" data-act="cmpModel">🆚 お手本と くらべる</button>':''}
+          ${idx>0?'<button class="go blue" data-act="cmpPrev">🆚 まえの じぶんと くらべる</button>':''}
+          <button class="go sub" data-act="dl">💾 ダウンロード</button>
+          <button class="go sub" data-act="asModel">⭐ お手本に する</button>
+          <button class="go sub" data-act="delClip">🗑 けす</button>
+        </div>
+        <p class="note">「ダウンロード」すると、ロイロノートや Google Classroom で 先生に 出せます。</p></div>`;
+    }
+  }
+  $('app').innerHTML=h;
+  const myToken=renderToken=(renderToken||0)+1;
+  if(model) buildPlayer($('pModel'),modelSrc(model));
+  if(sel){
+    const src=await clipSrc(sel.id);
+    if(myToken!==renderToken) return;
+    if(src) buildPlayer($('pClip'),src);else $('pClip').innerHTML='<p class="err">動画が 見つかりません。</p>';
+    const memo=$('memo');let t=0;
+    const save=()=>{clearTimeout(t);if(sel.memo===memo.value)return;sel.memo=memo.value;DB.put('meta',sel).catch(saveErr);};
+    memo.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(save,600);});
+    memo.addEventListener('blur',save);
+  }
+}
+let renderToken=0;
+
+async function renderCompare(id,cmp){
+  const w=W(id),cs=clipsOf(id);
+  const [a,b]=cmp.split(':');
+  const label=k=>k==='model'?'⭐ お手本':`📹 ${cs.findIndex(c=>c.id===k)+1}かいめ（${md((cs.find(c=>c.id===k)||{}).date)}）`;
+  const back=b==='model'?a:b;
+  $('app').innerHTML=`<div class="row"><button class="go sub" data-act="backclip" data-id="${esc(back)}">← もどる</button></div>
+  <div class="wtitle"><span class="ico">${w.ico}</span><div><h2>${rb(w.name)}　くらべる</h2></div></div>
+  <p class="note" style="margin:-6px 0 10px">それぞれ うごく はじめの ところに あわせて「🚩 ここを スタート」を おすと、「いっしょに さいせい」で そろって うごくよ。</p>
+  <div class="cmp">
+    <div><p class="lab">${label(a)}</p><div id="cA"></div><div class="row" style="margin-top:6px"><button class="go sub" data-act="mark" data-k="0">🚩 ここを スタート</button><span class="small" id="mk0"></span></div></div>
+    <div><p class="lab">${label(b)}</p><div id="cB"></div><div class="row" style="margin-top:6px"><button class="go sub" data-act="mark" data-k="1">🚩 ここを スタート</button><span class="small" id="mk1"></span></div></div>
+  </div>
+  <div class="syncbar"><div class="row">
+    <button class="go" data-act="syncplay">▶ いっしょに さいせい</button>
+    <button class="go sub" data-act="syncpause">⏸ とめる</button>
+    <button class="go sub" data-act="synchead">⏮ スタートへ</button>
+    <span style="flex:1"></span>
+    <button class="chip" data-act="syncrate" data-r="0.25">🐢🐢 0.25</button>
+    <button class="chip" data-act="syncrate" data-r="0.5">🐢 0.5</button>
+    <button class="chip" data-act="syncrate" data-r="1" aria-pressed="true">🐇 ふつう</button>
+  </div></div>`;
+  const myToken=renderToken=(renderToken||0)+1;
+  const srcOf=async k=>k==='model'?(MODELS[id]&&modelSrc(MODELS[id])):await clipSrc(k);
+  const sa=await srcOf(a),sb=await srcOf(b);
+  if(myToken!==renderToken) return;
+  CMP=[sa?buildPlayer($('cA'),sa):null,sb?buildPlayer($('cB'),sb):null];
+  if(!sa) $('cA').innerHTML='<p class="err">動画が 見つかりません</p>';
+  if(!sb) $('cB').innerHTML='<p class="err">動画が 見つかりません</p>';
+}
+let CMP=[];
+
+function renderFoot(){
+  const n=META.length;
+  let h=`動画は この パソコンの ブラウザの 中だけに ほぞんされます（インターネットには あがりません）。ブラウザの「閲覧履歴データの削除」を すると きえます。`;
+  h+=`<br>ほぞんした 動画：${n}本 <span id="usage"></span>　`;
+  h+=TEACHER?'<button data-act="mode">🧒 子ども用の 画面に する</button>':'<button data-act="mode">👩‍🏫 先生用（電子黒板）の 画面に する</button>';
+  $('foot').innerHTML=h;
+  if(navigator.storage&&navigator.storage.estimate) navigator.storage.estimate().then(e=>{const u=$('usage');if(u&&e.usage>=1048576) u.textContent=`（やく ${Math.round(e.usage/1048576)}MB）`;}).catch(()=>{});
+}
+
+/* ===== ボタンの はたらき ===== */
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-act],[data-band]');if(!t) return;
+  if(t.dataset.band){band=+t.dataset.band;ls.set('band',band);render();return;}
+  const s=readHash(),w=s.w&&W(s.w),act=t.dataset.act;
+  const cs=w?clipsOf(w.id):[];
+  const sel=w?(cs.find(c=>c.id===s.c)||cs[cs.length-1]):null;
+  switch(act){
+    case 'open': go({w:t.dataset.id});break;
+    case 'home': go({});break;
+    case 'mode':
+      TEACHER=!TEACHER;
+      {const q=new URLSearchParams(location.search);q.delete('mode');TEACHER?q.set('teacher','1'):q.delete('teacher');
+       history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+location.hash);}
+      render();break;
+    case 'reveal': t.classList.remove('hide');break;
+    case 'revealall': document.querySelectorAll('ol.pts li').forEach(li=>li.classList.remove('hide'));break;
+    case 'speak': speak(plain(w.name)+'の ポイント。'+w.pts.map((p,i)=>`${i+1}、${plain(p)}`).join('。'));break;
+    case 'model': openModelDlg(w.id);break;
+    case 'rec': Rec.open('📹 カメラで とる',b=>addClip(w.id,b));break;
+    case 'file': pickFile(f=>addClip(w.id,f));break;
+    case 'clip': go({w:w.id,c:t.dataset.id});break;
+    case 'ev':{
+      const i=+t.dataset.i,v=+t.dataset.v;
+      sel.eval[i]=sel.eval[i]===v?0:v;
+      for(let k=0;k<w.pts.length;k++) if(sel.eval[k]==null) sel.eval[k]=0;
+      t.parentNode.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.v===sel.eval[i]));
+      DB.put('meta',sel).catch(saveErr);
+      const n=sel.eval.filter(x=>x===3).length,btn=document.querySelector(`.clip[data-id="${sel.id}"] small`);
+      if(btn) btn.textContent=`${md(sel.date)}　◎ ${n}/${w.pts.length}`;
+      if(n===w.pts.length&&v===3) toast('🎉 ぜんぶ ◎！ すごい！');
+      break;}
+    case 'cmpModel': go({w:w.id,c:sel.id,cmp:`model:${sel.id}`});break;
+    case 'cmpPrev':{const i=cs.indexOf(sel);go({w:w.id,c:sel.id,cmp:`${cs[i-1].id}:${sel.id}`});break;}
+    case 'backclip': go({w:w.id,c:t.dataset.id==='model'?'':t.dataset.id});break;
+    case 'dl':{
+      const r=await DB.get('blobs',sel.id);if(!r) return toast('動画が 見つかりません');
+      const ext=/mp4/.test(r.blob.type)?'mp4':/quicktime/.test(r.blob.type)?'mov':'webm';
+      const a=document.createElement('a');a.href=URL.createObjectURL(r.blob);
+      a.download=`${kanji(w.name)}_${cs.indexOf(sel)+1}かいめ_${ymd(sel.date)}.${ext}`;
+      document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+      break;}
+    case 'asModel':{
+      if(!await ask('この 動画を お手本に しますか？'+(MODELS[w.id]?'（いまの お手本と 入れかわります）':''))) return;
+      const r=await DB.get('blobs',sel.id);if(r) setModel(w.id,{kind:'blob',blob:r.blob});
+      break;}
+    case 'delClip':{
+      if(!await ask(`${cs.indexOf(sel)+1}かいめの 動画を けしますか？ もとに もどせません。`)) return;
+      try{await DB.del('blobs',sel.id);await DB.del('meta',sel.id);}catch(err){return saveErr(err);}
+      META=META.filter(m=>m.id!==sel.id);toast('けしました');go({w:w.id});
+      break;}
+    case 'mark':{
+      const k=+t.dataset.k,p=CMP[k];if(!p||!p.ok) return;
+      const st=p.markStart();$('mk'+k).textContent=`スタート：${st.toFixed(1)}びょう`;break;}
+    case 'syncplay': CMP.forEach(p=>p&&p.ok&&p.play());break;
+    case 'syncpause': CMP.forEach(p=>p&&p.pause());break;
+    case 'synchead': CMP.forEach(p=>p&&p.ok&&p.toStart());break;
+    case 'syncrate':{
+      const r=+t.dataset.r;CMP.forEach(p=>p&&p.setRate(r));
+      document.querySelectorAll('[data-act="syncrate"]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.r===r));break;}
+    case 'mklink': makeLink();break;
+  }
+});
+
+/* ===== 先生のお手本リンク（?m=…） =====
+   リンクで入れたお手本だけを まとめて URL に入れる。ファイルの お手本は 大きすぎて 入らない。 */
+const b64e=s=>btoa(unescape(encodeURIComponent(s))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const b64d=s=>decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/'))));
+function makeLink(){
+  const obj={};let files=0;
+  WAZA.forEach(w=>{const m=MODELS[w.id];if(!m)return;if(m.kind==='blob')files++;else obj[w.id]=m.url;});
+  const n=Object.keys(obj).length;
+  if(!n){toast('リンクで 入れた お手本が ありません');return;}
+  const url=location.origin+location.pathname+'?band='+band+'&m='+b64e(JSON.stringify(obj));
+  $('linkMsg').textContent=`お手本 ${n}こ 入りの リンクです。Google Classroom や ロイロノートで 子どもに 配ってください。`+(files?`（ファイルで 入れた お手本 ${files}こは リンクに 入りません）`:'');
+  $('linkTx').value=url;$('linkDlg').showModal();
+}
+$('linkCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('linkTx').value);toast('コピーしました');}catch(e){$('linkTx').select();document.execCommand('copy');toast('コピーしました');}};
+$('linkClose').onclick=()=>$('linkDlg').close();
+async function importLink(){
+  const m=P.get('m');if(!m) return;
+  let obj;try{obj=JSON.parse(b64d(m));}catch(e){toast('お手本リンクが こわれています');return;}
+  let n=0;
+  for(const [id,url] of Object.entries(obj||{})){
+    if(!W(id)) continue;const p=parseLink(url);if(!p) continue;
+    try{await DB.put('models',{waza:id,...p});MODELS[id]={waza:id,...p};n++;}catch(e){}
+  }
+  const q=new URLSearchParams(location.search);q.delete('m');
+  history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+location.hash);
+  if(n) toast(`先生の お手本を ${n}こ 入れました`);
+}
+
+/* ===== はじめ ===== */
+(async()=>{
+  try{
+    await DB.open();
+    META=(await DB.all('meta'))||[];
+    (await DB.all('models')||[]).forEach(m=>MODELS[m.waza]=m);
+    await importLink();
+  }catch(e){
+    console.error(e);
+    $('dbErr').textContent='この ブラウザでは 動画を ほぞんできません（シークレットモードでは つかえません）。';
+    $('dbErr').hidden=false;
+  }
+  const wz=P.get('waza');
+  if(wz&&W(wz)&&!location.hash) location.hash='w='+wz;
+  render();
+})();
+</script>
+</body>
+</html>
